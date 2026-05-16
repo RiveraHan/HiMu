@@ -41,3 +41,13 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Supabase
+supabase/.temp/
+supabase/.branches/
+supabase/functions/**/node_modules/
+src/types/database.ts
+
+docs/
+
+reference/
