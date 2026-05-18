@@ -1,10 +1,10 @@
+import { createClient } from "@supabase/supabase-js";
 import * as SecureStorage from "expo-secure-store";
-import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY;
 
-if (!supabaseUrl || supabaseKey)
+if (!supabaseUrl || !supabaseKey)
   throw new Error("Missing Supabase enviroment variables");
 
 const SecureStoreAdapter = {
@@ -21,4 +21,4 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     persistSession: true,
     detectSessionInUrl: true,
   },
-})
+});
