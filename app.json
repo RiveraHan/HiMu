@@ -13,7 +13,10 @@
       "entitlements": {
         "com.apple.developer.networking.wifi-info": true
       },
-      "bundleIdentifier": "com.himu.app"
+      "bundleIdentifier": "com.himu.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -68,11 +71,21 @@
           "enableBackgroundPlayback": true,
           "enableBackgroundRecording": false
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "db7a0b3a-fd89-42ac-93cc-8e5807d87fa9"
+      }
+    },
+    "owner": "riverahans-organization"
   }
 }
