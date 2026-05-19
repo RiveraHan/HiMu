@@ -2,6 +2,7 @@ import {
   GoogleSignin,
   statusCodes,
 } from "@react-native-google-signin/google-signin";
+import { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { Alert } from "react-native";
 import { supabase } from "./supabase";
 
@@ -67,7 +68,9 @@ export const authApi = {
     return data.session;
   },
 
-  onAuthStateChange: (callback: (event: string, session: unknown) => void) => {
+  onAuthStateChange: (
+    callback: (event: AuthChangeEvent, session: Session | null) => void,
+  ) => {
     return supabase.auth.onAuthStateChange(callback);
   },
 };
