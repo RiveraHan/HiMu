@@ -7,7 +7,7 @@
 
 create table if not exists public.profiles (
   id uuid references auth.users(id) on delete cascade primary key,
-  username text unique not null,
+  username text unique,
   display_name text,
   avatar_url text,
   bio text,
@@ -203,11 +203,11 @@ create table if not exists public.music_preferences (
 create or replace function public.handle_new_user() 
 returns trigger as $$
 begin
-  insert into public.profiles (id, username, display_name)
+  insert into public.profiles (id, display_name, avatar_url)
   values (
     new.id,
-    new.raw_user_meta_data->>'preferred_username',
-    new.raw_user_meta_data->>'name'
+    new.raw_user_meta_data->>'name',
+    new.raw_user_meta_data->>'picture'
   );
   return new;
 end;
