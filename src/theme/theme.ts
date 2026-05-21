@@ -1,7 +1,9 @@
 export const darkTheme = {
   colors: {
     // Surfaces & backgrounds
-    background: "#131318",
+    // background is intentionally darker than `surface` (per Stitch design): the screen body
+    // is #0D0D12 so glass cards and surface tints can sit on a deeper canvas.
+    background: "#0D0D12",
     onBackground: "#e4e1e9",
     surface: "#131318",
     surfaceDim: "#131318",
@@ -113,9 +115,15 @@ export const darkTheme = {
       letterSpacing: 0.1 * 12,
     },
   },
-  // From design-system.json §elevation.level2.shadow
+  // boxShadow strings (RN 0.81+ supports `boxShadow` natively, cross-platform).
   shadows: {
+    // Level 2 (modals/overlays) — from design-system.json §elevation.level2.shadow.
     modal: "0 20px 40px rgba(0,0,0,0.4)",
+    // Brand glow — used on the login monogram and other primary-tinted halos.
+    glow: "0 0 15px rgba(129, 140, 248, 0.4)",
+    // Primary CTA shadow — used on solid `primary-container` buttons.
+    // Matches Tailwind `shadow-lg shadow-primary-container/20`.
+    primaryButton: "0 10px 15px -3px rgba(129, 140, 248, 0.2)",
   },
   // From design-system.json §components.list.ghostOpacity
   opacity: {
