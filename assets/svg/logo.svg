@@ -1,4 +1,3 @@
 <svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M40 60V140M160 60V140M40 100H160M70 140V100C70 83.4315 83.4315 70 100 70C116.569 70 130 83.4315 130 100V140" stroke="#818CF8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="100" cy="100" r="85" stroke="#818CF8" stroke-width="1" stroke-dasharray="4 4" opacity="0.2"/>
+  <path d="M55 50V150M145 50V150M55 100H145M85 150V100C85 83.4315 98.4315 70 115 70C131.569 70 145 83.4315 145 100V150" stroke="#818CF8" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
