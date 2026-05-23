@@ -73,7 +73,7 @@ function Particle({
   );
 }
 
-export default function Atmosphere() {
+export function Atmosphere() {
   const particles = useMemo<ParticleConfig[]>(
     () =>
       Array.from({ length: PARTICLE_COUNT }, () => ({

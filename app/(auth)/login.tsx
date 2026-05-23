@@ -1,9 +1,6 @@
 import { authApi } from "@/src/api/auth";
-import Atmosphere from "@/src/components/Atmosphere";
-import { GlassCard } from "@/src/components/GlassCard";
-import { GoogleIcon } from "@/src/components/icons/GoogleIcon";
-import { Logo } from "@/src/components/icons/Logo";
-import { SpotifyIcon } from "@/src/components/icons/SpotifyIcon";
+import { Atmosphere, GlassCard } from "@/src/components";
+import { GoogleIcon, Logo, SpotifyIcon } from "@/src/components/icons";
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
