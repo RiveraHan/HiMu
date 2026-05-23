@@ -1,6 +1,7 @@
 import { GlassView } from "@/src/components";
 import { View, type ViewProps } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+
 interface Props extends ViewProps {
   level?: 1 | 2 | 3;
 }

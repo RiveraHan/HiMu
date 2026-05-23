@@ -52,7 +52,7 @@ export function Button({
     return (
       <Pressable
         onPress={onPress}
-        disabled={disabled}
+        disabled={isDisabled}
         testID={testID}
         style={({ pressed }) => [
           isDisabled && styles.disabled,
@@ -71,7 +71,7 @@ export function Button({
     return (
       <Pressable
         onPress={onPress}
-        disabled={disabled}
+        disabled={isDisabled}
         testID={testID}
         style={({ pressed }) => [
           isDisabled && styles.disabled,
