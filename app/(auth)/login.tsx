@@ -1,8 +1,8 @@
 import { authApi } from "@/src/api/auth";
-import { Atmosphere, GlassCard } from "@/src/components";
+import { Atmosphere, Button, Text } from "@/src/components";
 import { GoogleIcon, Logo, SpotifyIcon } from "@/src/components/icons";
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 export default function LoginScreen() {
@@ -42,35 +42,31 @@ export default function LoginScreen() {
           <View style={styles.logoWrapper}>
             <Logo size={96} />
           </View>
-          <Text style={styles.title}>Welcome to HiMu</Text>
-          <Text style={styles.subtitle}>Your sonic journey begins here.</Text>
+          <Text variant="h1">Welcome to HiMu</Text>
+          <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.7}>
+            Your sonic journey begins here.
+          </Text>
         </View>
 
         {/* Methods */}
         <View style={styles.methods}>
-          <Pressable
+          <Button
+            variant="glass"
+            label="Continue with Spotify"
+            loadingLabel="Signing in..."
+            loading={loading}
+            leftIcon={<SpotifyIcon size={24} />}
             onPress={showComingSoon}
-            disabled={loading}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <GlassCard level={1} style={styles.oauthCard}>
-              <SpotifyIcon size={24} />
-              <Text style={styles.oauthLabel}>Continue with Spotify</Text>
-            </GlassCard>
-          </Pressable>
+          />
 
-          <Pressable
+          <Button
+            variant="glass"
+            loading={loading}
+            leftIcon={<GoogleIcon size={24} />}
+            label="Continue with Google"
+            loadingLabel="Signing in..."
             onPress={handleGoogleSignIn}
-            disabled={loading}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <GlassCard level={1} style={styles.oauthCard}>
-              <GoogleIcon size={24} />
-              <Text style={styles.oauthLabel} numberOfLines={1}>
-                {loading ? "Signing in..." : "Continue with Google"}
-              </Text>
-            </GlassCard>
-          </Pressable>
+          />
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -78,23 +74,18 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <Pressable
+          <Button
+            variant="primary"
             onPress={showComingSoon}
-            disabled={loading}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.primaryButtonText}>Sign in with Email</Text>
-          </Pressable>
+            label="Sign in with Email"
+          />
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerLine}>
+          <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
             New to HiMu?{" "}
-            <Text onPress={showComingSoon} style={styles.footerLink}>
+            <Text onPress={showComingSoon} color="primary">
               Create an account
             </Text>
           </Text>
@@ -138,50 +129,10 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  title: {
-    ...theme.typography.h1,
-    color: theme.colors.onSurface,
-    textAlign: "center",
-    letterSpacing: -0.05 * 32,
-  },
-  subtitle: {
-    ...theme.typography.bodyLg,
-    color: theme.colors.onSurfaceVariant,
-    textAlign: "center",
-    opacity: 0.7,
-  },
   methods: {
     gap: theme.spacing.gutter,
   },
-  oauthCard: {
-    height: 64,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: theme.spacing.stackSm,
-    borderRadius: theme.borderRadius.md,
-    padding: 0,
-  },
-  primaryButton: {
-    height: 64,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.primaryContainer,
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: theme.shadows.primaryButton,
-  },
-  primaryButtonText: {
-    ...theme.typography.labelCaps,
-    color: theme.colors.onPrimaryContainer,
-  },
-  oauthLabel: {
-    ...theme.typography.labelCaps,
-    color: theme.colors.onSurface,
-    flexShrink: 1,
-  },
-  pressed: {
-    transform: [{ scale: 0.95 }],
-  },
+
   divider: {
     flexDirection: "row",
     alignItems: "center",
@@ -206,15 +157,6 @@ const styles = StyleSheet.create((theme) => ({
     marginTop: "auto",
     alignItems: "center",
     gap: theme.spacing.stackSm,
-  },
-  footerLine: {
-    ...theme.typography.bodyMd,
-    color: theme.colors.onSurfaceVariant,
-    textAlign: "center",
-    opacity: 0.6,
-  },
-  footerLink: {
-    color: theme.colors.primary,
   },
   legal: {
     flexDirection: "row",
