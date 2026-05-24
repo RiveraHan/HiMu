@@ -1,4 +1,4 @@
-import { GlassView } from "@/src/components";
+import { GlassView } from "./GlassView";
 import { View, type ViewProps } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 

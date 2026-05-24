@@ -1,0 +1,60 @@
+import type { ReactNode } from "react";
+import { Pressable } from "react-native";
+import { StyleSheet } from "react-native-unistyles";
+
+const SIZES = { sm: 36, md: 44, lg: 52 } as const;
+
+type Props = {
+  icon: ReactNode;
+  onPress?: () => void;
+  disabled?: boolean;
+  size: keyof typeof SIZES;
+  accessibilityLabel?: string;
+  testID?: string;
+};
+
+export function IconButton({
+  icon,
+  onPress,
+  disabled = false,
+  size = "md",
+  accessibilityLabel,
+  testID,
+}: Props) {
+  const dimension = SIZES[size];
+  const hitSlop = size === "sm" ? 4 : 0;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={hitSlop}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      style={({ pressed }) => [
+        styles.base,
+        { width: dimension, height: dimension },
+        disabled && styles.disabled,
+        pressed && styles.pressed,
+      ]}
+    >
+      {icon}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  base: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: theme.borderRadius.full,
+    borderCurve: "continuous",
+  },
+  pressed: {
+    transform: [{ scale: 0.95 }],
+  },
+  disabled: {
+    opacity: 0.4,
+  },
+}));

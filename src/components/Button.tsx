@@ -1,7 +1,8 @@
-import { GlassCard, Text } from "@/src/components";
 import { ReactNode } from "react";
-import { Pressable, StyleProp, ViewStyle } from "react-native";
+import { Platform, Pressable, StyleProp, ViewStyle } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { GlassCard } from "./GlassCard";
+import { Text } from "./Text";
 
 type Variant = "primary" | "glass" | "ghost";
 
@@ -111,8 +112,11 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.md,
     borderCurve: "continuous",
     backgroundColor: theme.colors.primaryContainer,
-    boxShadow: theme.shadows.primaryButton,
     paddingHorizontal: theme.spacing.gutter,
+    ...Platform.select({
+      android: { elevation: 6 },
+      default: { boxShadow: theme.shadows.primaryButton },
+    }),
   },
   glassCard: {
     height: 64,
