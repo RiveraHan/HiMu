@@ -1,7 +1,7 @@
-import { View } from 'react-native'
 import { Image } from "expo-image";
-import { Text } from './Text'
+import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { Text } from "./Text";
 
 const SIZES = { xs: 24, sm: 32, md: 48, lg: 64, xl: 96 } as const;
 
@@ -10,44 +10,37 @@ type Props = {
   size?: keyof typeof SIZES;
   fallback: string;
   testID?: string;
-}
+};
 
-export function Avatar({
-  src,
-  size = 'md',
-  fallback,
-  testID,
-}: Props) {
-
+export function Avatar({ src, size = "md", fallback, testID }: Props) {
   const dimension = SIZES[size];
-
 
   if (src) {
     return (
       <Image
-       source={src}
-       style={[styles.img, { width: dimension, height: dimension }]}
-      contentFit="cover"
-      transition={200}
-      testID={testID}
-
+        source={src}
+        style={[styles.img, { width: dimension, height: dimension }]}
+        contentFit="cover"
+        transition={200}
+        testID={testID}
       />
-    )
+    );
   }
 
   return (
     <View
-     style={[styles.fallback, { width: dimension, height: dimension }]}
-     testID={testID}
+      style={[styles.fallback, { width: dimension, height: dimension }]}
+      testID={testID}
     >
       <Text
-      variant={size === 'xl' ? 'h1': size === 'lg' ? 'h2' : 'bodyMd'}
-      color='onPrimaryContainer'
-      >{fallback.slice(0, 1).toUpperCase()}</Text>
+        variant={size === "xl" ? "h1" : size === "lg" ? "h2" : "bodyMd"}
+        color="onPrimaryContainer"
+      >
+        {fallback.slice(0, 1).toUpperCase()}
+      </Text>
     </View>
-  )
+  );
 }
-
 
 const styles = StyleSheet.create((theme) => ({
   img: {
@@ -56,7 +49,7 @@ const styles = StyleSheet.create((theme) => ({
   fallback: {
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.primaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  }
-}))
+    alignItems: "center",
+    justifyContent: "center",
+  },
+}));

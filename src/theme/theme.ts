@@ -71,6 +71,7 @@ export const darkTheme = {
     pageMargin: 24,
     gutter: 16,
     cardPadding: 20,
+    stackXs: 4,
     stackSm: 8,
     stackMd: 16,
     stackLg: 32,
