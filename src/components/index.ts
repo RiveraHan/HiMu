@@ -6,4 +6,5 @@ export * from "./GlassCard";
 export * from "./GlassView";
 export * from "./IconButton";
 export * from "./Text";
+export * from "./TrackCard";
 
