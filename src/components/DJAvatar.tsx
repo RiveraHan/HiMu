@@ -9,6 +9,7 @@ type Props = {
   src?: string | null;
   fallback: string;
   name: string;
+  subtitle?: string;
   isLive?: boolean;
   size?: keyof typeof LABEL_WIDTH;
   onPress?: () => void;
@@ -19,6 +20,7 @@ export function DJAvatar({
   src,
   fallback,
   name,
+  subtitle,
   isLive = false,
   size = "md",
   onPress,
@@ -41,6 +43,18 @@ export function DJAvatar({
       >
         {name}
       </Text>
+
+      {subtitle && (
+        <Text
+          variant="bodyMd"
+          color="onSurfaceVariant"
+          opacity={0.6}
+          numberOfLines={1}
+          style={[styles.subtitle, { width: LABEL_WIDTH[size] }]}
+        >
+          {subtitle}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -66,6 +80,9 @@ const styles = StyleSheet.create((theme) => ({
     borderColor: theme.colors.surface,
   },
   name: {
+    textAlign: "center",
+  },
+  subtitle: {
     textAlign: "center",
   },
 }));
