@@ -36,7 +36,9 @@ export function TrackCard({
       style={isRow ? styles.coverRow : styles.coverTile}
     />
   ) : (
-    <View>
+    <View
+      style={[isRow ? styles.coverRow : styles.coverTile, styles.coverFallback]}
+    >
       <Image
         source="sf:music.note"
         style={styles.fallbackIcon}
@@ -67,7 +69,11 @@ export function TrackCard({
         >
           {artist}
         </Text>
-        {isPlaying && <Text>NOW PLAYING</Text>}
+        {isPlaying && (
+          <Text variant="labelCaps" color="primary">
+            NOW PLAYING
+          </Text>
+        )}
       </View>
     </Pressable>
   );
@@ -97,10 +103,10 @@ const styles = StyleSheet.create((theme) => ({
     height: 64,
     borderRadius: theme.borderRadius.sm,
     borderCurve: "continuous",
-    backdropFilter: theme.colors.glassTint,
+    backgroundColor: theme.colors.glassTint,
   },
   coverFallback: {
-    alignContent: "center",
+    alignItems: "center",
     justifyContent: "center",
   },
   fallbackIcon: {
