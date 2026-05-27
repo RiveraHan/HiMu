@@ -5,6 +5,7 @@ export * from "./DJAvatar";
 export * from "./GlassCard";
 export * from "./GlassView";
 export * from "./IconButton";
+export * from "./PlaylistCard";
 export * from "./Text";
 export * from "./TrackCard";
 
