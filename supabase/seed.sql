@@ -7,9 +7,9 @@
 -- DJ & CREATOR AVATARS (dicebear placeholders)
 -- ===========================
 
-UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/bottts-neutral/png?seed=nova&size=128' WHERE slug = 'nova';
-UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/bottts-neutral/png?seed=axon&size=128' WHERE slug = 'axon';
-UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/bottts-neutral/png?seed=sage&size=128' WHERE slug = 'sage';
+UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/personas/png?seed=nova&size=128&backgroundColor=b6e3f4' WHERE slug = 'nova';
+UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/personas/png?seed=axon&size=128&backgroundColor=c0aede' WHERE slug = 'axon';
+UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/personas/png?seed=sage&size=128&backgroundColor=d1d4f9' WHERE slug = 'sage';
 
 UPDATE public.creators SET avatar_url = 'https://api.dicebear.com/9.x/avataaars/png?seed=luna&size=128' WHERE slug = 'luna-voss';
 UPDATE public.creators SET avatar_url = 'https://api.dicebear.com/9.x/avataaars/png?seed=marcus&size=128' WHERE slug = 'marcus-chen';
