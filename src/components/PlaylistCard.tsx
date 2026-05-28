@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
+import { Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Text } from "./Text";
 
 type Props = {
@@ -20,6 +21,7 @@ export function PlaylistCard({
   onPress,
   testID,
 }: Props) {
+  const { theme } = useUnistyles();
   const countLabel = trackCount === 1 ? "1 TRACK" : `${trackCount} TRACKS`;
 
   return (
@@ -38,11 +40,7 @@ export function PlaylistCard({
         />
       ) : (
         <View style={[styles.cover, styles.coverFallback]}>
-          <Image
-            source="sf:music.note"
-            style={styles.fallbackIcon}
-            tintColor={styles.fallbackIcon.color}
-          />
+          <Music size={28} color={theme.colors.onSurfaceVariant} />
         </View>
       )}
 
@@ -75,11 +73,6 @@ const styles = StyleSheet.create((theme) => ({
   coverFallback: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  fallbackIcon: {
-    width: 28,
-    height: 28,
-    color: theme.colors.onSurfaceVariant,
   },
   meta: {
     gap: 2,

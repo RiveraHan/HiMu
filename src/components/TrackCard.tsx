@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
+import { Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Text } from "./Text";
 
 type Props = {
@@ -25,6 +26,7 @@ export function TrackCard({
   onLongPress,
   testID,
 }: Props) {
+  const { theme } = useUnistyles();
   const isRow = variant === "row";
 
   const coverNode = cover ? (
@@ -39,11 +41,7 @@ export function TrackCard({
     <View
       style={[isRow ? styles.coverRow : styles.coverTile, styles.coverFallback]}
     >
-      <Image
-        source="sf:music.note"
-        style={styles.fallbackIcon}
-        tintColor={styles.fallbackIcon.color}
-      />
+      <Music size={28} color={theme.colors.onSurfaceVariant} />
     </View>
   );
   return (
@@ -108,11 +106,6 @@ const styles = StyleSheet.create((theme) => ({
   coverFallback: {
     alignItems: "center",
     justifyContent: "center",
-  },
-  fallbackIcon: {
-    width: 28,
-    height: 28,
-    color: theme.colors.onSurfaceVariant,
   },
   metaTile: {
     gap: 2,
