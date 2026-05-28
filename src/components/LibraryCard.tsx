@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
@@ -44,6 +45,14 @@ export function LibraryCard({
         <View style={[styles.cover, styles.coverFallback]} />
       )}
 
+      {/* Gradient scrim: transparent at top → dark at bottom, so any cover
+          stays legible. */}
+      <LinearGradient
+        colors={["rgba(0,0,0,0.1)", "rgba(0,0,0,0.45)", "rgba(0,0,0,0.8)"]}
+        locations={[0, 0.55, 1]}
+        style={styles.cover}
+      />
+
       <View style={styles.overlay}>
         <Text variant="labelCaps" color="primary">
           {label}
@@ -64,6 +73,8 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: theme.borderRadius.xl,
     borderCurve: "continuous",
     overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
   },
   pressed: {
     transform: [{ scale: 0.97 }],
@@ -79,7 +90,6 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "flex-end",
     padding: theme.spacing.cardPadding,
     gap: theme.spacing.stackXs,
-    backgroundColor: "rgba(0,0,0,0.4)",
   },
   bottom: {
     flexDirection: "row",
