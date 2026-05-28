@@ -1,17 +1,18 @@
 import { useAuthStore } from "@/src/stores/auth-store";
-import { Redirect } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { Redirect, Tabs } from "expo-router";
+import { Home, MessageCircle, Sparkles, UserCircle2 } from "lucide-react-native";
 import { ActivityIndicator, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function Applayout() {
   const session = useAuthStore((state) => state.session);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const { theme } = useUnistyles();
 
   if (isLoading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator color="#bdc2ff" />
+        <ActivityIndicator color={theme.colors.primary} />
       </View>
     );
   }
@@ -19,24 +20,53 @@ export default function Applayout() {
   if (!session) return <Redirect href="/(auth)/login" />;
 
   return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf="house" />
-        <Label>Inicio</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="discover">
-        <Icon sf="sparkles" />
-        <Label>Descubrir</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="community">
-        <Icon sf="bubble.left.and.bubble.right" />
-        <Label>Comunidad</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf="person.circle" />
-        <Label>Perfil</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.outlineVariant,
+          borderTopWidth: StyleSheet.hairlineWidth,
+        },
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Inicio",
+          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="discover"
+        options={{
+          title: "Descubrir",
+          tabBarIcon: ({ color, size }) => (
+            <Sparkles color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: "Comunidad",
+          tabBarIcon: ({ color, size }) => (
+            <MessageCircle color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Perfil",
+          tabBarIcon: ({ color, size }) => (
+            <UserCircle2 color={color} size={size} />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
 
