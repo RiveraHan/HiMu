@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native-unistyles";
 import { Avatar } from "./Avatar";
 import { Text } from "./Text";
 
-const LABEL_WIDTH = { md: 64, lg: 88 } as const;
+const LABEL_WIDTH = { md: 80, lg: 104 } as const;
 
 type Props = {
   src?: string | null;
