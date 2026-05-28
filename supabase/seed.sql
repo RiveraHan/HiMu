@@ -4,15 +4,17 @@
 -- This file seeds: avatar URLs, playlists, playlist_tracks, communities, live_sessions.
 
 -- ===========================
--- DJ & CREATOR AVATARS (dicebear placeholders)
+-- DJ & CREATOR AVATARS (photographic portraits)
+-- Stitch uses detailed character portraits, not flat illustrations — pravatar
+-- gives the closest "face-in-circle" framing. Swap for real generated art later.
 -- ===========================
 
-UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/personas/png?seed=nova&size=128&backgroundColor=b6e3f4' WHERE slug = 'nova';
-UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/personas/png?seed=axon&size=128&backgroundColor=c0aede' WHERE slug = 'axon';
-UPDATE public.djs SET avatar_url = 'https://api.dicebear.com/9.x/personas/png?seed=sage&size=128&backgroundColor=d1d4f9' WHERE slug = 'sage';
+UPDATE public.djs SET avatar_url = 'https://i.pravatar.cc/256?img=15' WHERE slug = 'nova';
+UPDATE public.djs SET avatar_url = 'https://i.pravatar.cc/256?img=33' WHERE slug = 'axon';
+UPDATE public.djs SET avatar_url = 'https://i.pravatar.cc/256?img=12' WHERE slug = 'sage';
 
-UPDATE public.creators SET avatar_url = 'https://api.dicebear.com/9.x/avataaars/png?seed=luna&size=128' WHERE slug = 'luna-voss';
-UPDATE public.creators SET avatar_url = 'https://api.dicebear.com/9.x/avataaars/png?seed=marcus&size=128' WHERE slug = 'marcus-chen';
+UPDATE public.creators SET avatar_url = 'https://i.pravatar.cc/256?img=5' WHERE slug = 'luna-voss';
+UPDATE public.creators SET avatar_url = 'https://i.pravatar.cc/256?img=8' WHERE slug = 'marcus-chen';
 
 -- ===========================
 -- PLAYLISTS (public, no user_id)
