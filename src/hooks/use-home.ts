@@ -32,17 +32,23 @@ export function useLiveDJIds() {
     },
   });
 }
-export function useFavoriteTrackCount() {
+export function useFavoritesPreview() {
   return useQuery({
-    queryKey: [...queryKeys.tracks.all, "count"],
+    queryKey: [...queryKeys.tracks.all, "favorites-preview"],
     queryFn: async () => {
-      const { count, error } = await supabase
+      // One round-trip: exact total count + first few covers for the stack.
+      const { data, count, error } = await supabase
         .from("tracks")
-        .select("*", { count: "exact", head: true });
+        .select("id, album_art_url", { count: "exact" })
+        .not("album_art_url", "is", null)
+        .limit(3);
 
       if (error) throw error;
 
-      return count ?? 0;
+      return {
+        count: count ?? 0,
+        covers: data.map((t) => t.album_art_url).filter(Boolean) as string[],
+      };
     },
   });
 }
