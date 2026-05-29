@@ -1,13 +1,49 @@
 import { useAuthStore } from "@/src/stores/auth-store";
+import { BlurView } from "expo-blur";
 import { Redirect, Tabs } from "expo-router";
-import { Home, MessageCircle, Sparkles, UserCircle2 } from "lucide-react-native";
-import { ActivityIndicator, View } from "react-native";
+import {
+  Compass,
+  Home,
+  type LucideIcon,
+  Sparkles,
+  User,
+} from "lucide-react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  View
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
+function TabIcon({ Icon, focused }: { Icon: LucideIcon; focused: boolean }) {
+  const { theme } = useUnistyles();
+  return (
+    <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
+      <Icon
+        size={24}
+        color={focused ? theme.colors.primary : theme.colors.onSurfaceVariant}
+        opacity={focused ? 1 : 0.4}
+      />
+    </View>
+  );
+}
+
+function TabBarBackground() {
+  return (
+    <View style={styles.barBg}>
+      {process.env.EXPO_OS === "ios" && (
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+      )}
+    </View>
+  );
+}
+
 export default function Applayout() {
+  const insets = useSafeAreaInsets();
+  const { theme } = useUnistyles();
   const session = useAuthStore((state) => state.session);
   const isLoading = useAuthStore((state) => state.isLoading);
-  const { theme } = useUnistyles();
 
   if (isLoading) {
     return (
@@ -23,46 +59,59 @@ export default function Applayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.outlineVariant,
-          borderTopWidth: StyleSheet.hairlineWidth,
+          position: "absolute",
+          marginHorizontal: "6%",
+          bottom: insets.bottom + 8,
+          height: 64,
+          borderRadius: theme.borderRadius.full,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.colors.glassBorder,
+          backgroundColor: "transparent",
+          ...Platform.select({
+            ios: { boxShadow: theme.shadows.modal },
+            android: { elevation: 0 },
+          }),
         },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
+        tabBarIconStyle: {
+          flex: 1,
+        },
+        tabBarItemStyle: {
+          height: 64,
+        },
+        tabBarBackground: TabBarBackground,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Inicio",
-          tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={Home} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="discover"
         options={{
-          title: "Descubrir",
-          tabBarIcon: ({ color, size }) => (
-            <Sparkles color={color} size={size} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={Compass} focused={focused} />
           ),
         }}
       />
       <Tabs.Screen
         name="community"
         options={{
-          title: "Comunidad",
-          tabBarIcon: ({ color, size }) => (
-            <MessageCircle color={color} size={size} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={Sparkles} focused={focused} />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Perfil",
-          tabBarIcon: ({ color, size }) => (
-            <UserCircle2 color={color} size={size} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon Icon={User} focused={focused} />
           ),
         }}
       />
@@ -76,5 +125,21 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.colors.background,
+  },
+  barBg: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: theme.borderRadius.full,
+    overflow: "hidden",
+    backgroundColor: "rgba(26,28,30,0.92)",
+  },
+  tabIcon: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 44,
+    height: 44,
+  },
+  tabIconActive: {
+    backgroundColor: "rgba(189,194,255,0.16)",
+    borderRadius: theme.borderRadius.full,
   },
 }));
