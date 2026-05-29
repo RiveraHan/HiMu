@@ -1,63 +1,294 @@
-import { authApi } from "@/src/api/auth";
+import {
+  Avatar,
+  DJAvatar,
+  IconButton,
+  LibraryCard,
+  Text,
+} from "@/src/components";
 import { useCurrentUser } from "@/src/hooks/use-auth";
-import { Stack } from "expo-router";
-import { Pressable, ScrollView, Text } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import {
+  useDJs,
+  useFavoritesPreview,
+  useLiveDJIds,
+} from "@/src/hooks/use-home";
+import { Image } from "expo-image";
+import { Play, Plus, Settings } from "lucide-react-native";
+import { Pressable, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default function HomeScreen() {
+  const { theme } = useUnistyles();
+  const insets = useSafeAreaInsets();
   const user = useCurrentUser();
+  const { data: djs } = useDJs();
+  const { data: liveDJIds } = useLiveDJIds();
+  const { data: favorites } = useFavoritesPreview();
 
   return (
-    <>
-      <Stack.Screen options={{ title: "Inicio" }} />
+    <View style={styles.root}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 64 + theme.spacing.stackLg },
+        ]}
         contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
       >
-        <Text selectable style={styles.title}>
-          HiMu
-        </Text>
-        <Text selectable style={styles.email}>
-          Welcome, {user?.email ?? "anonymous"}
-        </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerSide} />
 
-        <Pressable onPress={() => authApi.signOut()} style={styles.signOutBtn}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </Pressable>
+          <Text variant="labelCaps" style={styles.headerTitle}>
+            HIMU
+          </Text>
+
+          <View style={[styles.headerSide, styles.headerRight]}>
+            <Pressable
+              onPress={() => {}}
+              accessibilityLabel="Profile"
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Avatar
+                src={user?.user_metadata?.avatar_url}
+                fallback={user?.email ?? "U"}
+                size="sm"
+              />
+            </Pressable>
+            <IconButton
+              icon={
+                <Settings size={22} color={theme.colors.onSurfaceVariant} />
+              }
+              onPress={() => {}}
+              accessibilityLabel="Settings"
+              size="sm"
+            />
+          </View>
+        </View>
+
+        {/* Greeting */}
+        <View style={styles.greeting}>
+          <Text variant="h1">{getGreeting()}</Text>
+          <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
+            Your sonic environment awaits.
+          </Text>
+        </View>
+
+        {/* Your DJs */}
+        {djs && djs.length > 0 && (
+          <View style={styles.section}>
+            <Text variant="h2">Your DJs</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.horizontalScroll}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {djs.map((dj) => (
+                <DJAvatar
+                  key={dj.id}
+                  src={dj.avatar_url}
+                  fallback={dj.name}
+                  name={dj.name}
+                  subtitle={dj.genre_specialties?.[0]}
+                  isLive={liveDJIds?.has(dj.id) ?? false}
+                  onPress={() => {}}
+                />
+              ))}
+              {/* New DJ slot */}
+              <Pressable
+                onPress={() => {}}
+                style={({ pressed }) => [
+                  styles.newDJSlot,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <View style={styles.newDJCircle}>
+                  <Svg
+                    width={48}
+                    height={48}
+                    style={StyleSheet.absoluteFillObject}
+                  >
+                    <Circle
+                      cx={24}
+                      cy={24}
+                      r={23}
+                      stroke={theme.colors.outlineVariant}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 4"
+                      fill="transparent"
+                    />
+                  </Svg>
+                  <Plus size={24} color={theme.colors.onSurfaceVariant} />
+                </View>
+                <Text
+                  variant="bodyMd"
+                  numberOfLines={1}
+                  style={styles.newDJLabel}
+                >
+                  New DJ
+                </Text>
+                <Text
+                  variant="bodyMd"
+                  color="onSurfaceVariant"
+                  opacity={0.6}
+                  style={styles.newDJLabel}
+                >
+                  Create
+                </Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Personalized Library */}
+        <View style={styles.section}>
+          <Text variant="h2">Personalized Library</Text>
+
+          <LibraryCard
+            cover="https://picsum.photos/800/400?random=70"
+            label="GENERATED"
+            title="AI Mixes"
+            onPress={() => {}}
+            right={
+              <View style={styles.playButton}>
+                <Play
+                  size={22}
+                  color={theme.colors.onSurface}
+                  fill={theme.colors.onSurface}
+                />
+              </View>
+            }
+          />
+
+          <LibraryCard
+            cover="https://picsum.photos/800/400?random=71"
+            label="CURATED"
+            title="Favorites"
+            onPress={() => {}}
+            right={
+              favorites && favorites.count > 0 ? (
+                <View style={styles.favoritesRight}>
+                  <View style={styles.avatarStack}>
+                    {favorites.covers.map((cover, i) => (
+                      <Image
+                        key={cover}
+                        source={cover}
+                        style={[
+                          styles.stackAvatar,
+                          i > 0 && styles.stackOverlap,
+                        ]}
+                        contentFit="cover"
+                      />
+                    ))}
+                  </View>
+                  <Text variant="labelCaps" style={styles.countBadge}>
+                    +{favorites.count}
+                  </Text>
+                </View>
+              ) : null
+            }
+          />
+        </View>
       </ScrollView>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  scrollView: {
+  root: {
     flex: 1,
     backgroundColor: theme.colors.background,
   },
   content: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: theme.spacing.pageMargin,
+    paddingHorizontal: theme.spacing.pageMargin,
+    paddingTop: theme.spacing.stackLg * 2,
     gap: theme.spacing.stackLg,
   },
-  title: {
-    ...theme.typography.display,
-    color: theme.colors.onSurface,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  email: {
-    ...theme.typography.bodyMd,
-    color: theme.colors.onSurfaceVariant,
+  headerSide: {
+    flex: 1,
   },
-  signOutBtn: {
-    backgroundColor: theme.colors.primaryContainer,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: theme.spacing.stackSm,
+  },
+  headerTitle: {
+    letterSpacing: 4,
+  },
+  greeting: {
+    gap: theme.spacing.stackXs,
+  },
+  section: {
+    gap: theme.spacing.stackMd,
+  },
+  horizontalScroll: {
+    marginHorizontal: -theme.spacing.pageMargin,
+  },
+  horizontalList: {
+    paddingHorizontal: theme.spacing.pageMargin,
+    gap: theme.spacing.gutter,
+  },
+  newDJSlot: {
+    alignItems: "center",
+    gap: theme.spacing.stackXs,
+  },
+  newDJCircle: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  newDJLabel: {
+    textAlign: "center",
+    width: 80,
+  },
+  playButton: {
+    width: 48,
+    height: 48,
     borderRadius: theme.borderRadius.full,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.colors.glassTintStrong,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
   },
-  signOutText: {
-    ...theme.typography.bodyLg,
-    color: theme.colors.onPrimaryContainer,
+  favoritesRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackSm,
+  },
+  avatarStack: {
+    flexDirection: "row",
+  },
+  stackAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 2,
+    borderColor: theme.colors.surface,
+  },
+  stackOverlap: {
+    marginLeft: -12,
+  },
+  countBadge: {
+    fontVariant: ["tabular-nums"],
+  },
+  pressed: {
+    transform: [{ scale: 0.97 }],
   },
 }));
