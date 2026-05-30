@@ -40,7 +40,7 @@ export const usePlayerStore = create<State>((set) => ({
     set({ currentTrack, queue, index, positionSec: 0 }),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setProgress: (positionSec, durationSec) => set({ positionSec, durationSec }),
-  setIndex: (index) => ({ index }),
+  setIndex: (index) => set({ index }),
   reset: () =>
     set({
       currentTrack: null,
