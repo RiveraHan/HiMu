@@ -58,7 +58,8 @@ export function useRecommendedTracks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
-        .select("id, title, artist, album_art_url, genre")
+        .select("id, title, artist, audio_url, album_art_url, duration, genre")
+        .not("audio_url", "is", null)
         .order("created_at", { ascending: false })
         .limit(4);
 
