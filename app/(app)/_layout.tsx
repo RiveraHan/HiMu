@@ -1,3 +1,4 @@
+import { MiniPlayer } from "@/src/components/MiniPlayer";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { BlurView } from "expo-blur";
 import { Redirect, Tabs } from "expo-router";
@@ -56,7 +57,8 @@ export default function Applayout() {
   if (!session) return <Redirect href="/(auth)/login" />;
 
   return (
-    <Tabs
+    <View style={{flex: 1}}>
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -116,6 +118,8 @@ export default function Applayout() {
         }}
       />
     </Tabs>
+    <MiniPlayer/>
+    </View>
   );
 }
 

@@ -1,3 +1,4 @@
+import { usePlayer } from "@/src/audio/use-player";
 import {
   Avatar,
   DJAvatar,
@@ -10,37 +11,53 @@ import {
   useDJs,
   useFavoritesPreview,
   useLiveDJIds,
+  useRecommendedTracks,
 } from "@/src/hooks/use-home";
+import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { PlayerTrack } from "@/src/stores/player-store";
 import { Image } from "expo-image";
 import { Play, Plus, Settings } from "lucide-react-native";
 import { Pressable, ScrollView, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 export default function HomeScreen() {
   const { theme } = useUnistyles();
-  const insets = useSafeAreaInsets();
   const user = useCurrentUser();
   const { data: djs } = useDJs();
   const { data: liveDJIds } = useLiveDJIds();
   const { data: favorites } = useFavoritesPreview();
+  const { data: recommended } = useRecommendedTracks();
+  const { load } = usePlayer();
+  const paddingBottom = useTabBarPadding();
+
+  function getGreeting(): string {
+    const hour = new Date().getHours();
+
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  }
+
+  function playAiMixes() {
+    const queue: PlayerTrack[] = (recommended ?? [])
+      .filter((t): t is typeof t & { audio_url: string } => t.audio_url != null)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        audio_url: t.audio_url,
+        album_art_url: t.album_art_url,
+        duration: t.duration,
+      }));
+    if (!queue.length) return;
+    load(queue[0], queue, 0);
+  }
 
   return (
     <View style={styles.root}>
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + 64 + theme.spacing.stackLg },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom }]}
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
@@ -158,7 +175,7 @@ export default function HomeScreen() {
             cover="https://picsum.photos/800/400?random=70"
             label="GENERATED"
             title="AI Mixes"
-            onPress={() => {}}
+            onPress={playAiMixes}
             right={
               <View style={styles.playButton}>
                 <Play
