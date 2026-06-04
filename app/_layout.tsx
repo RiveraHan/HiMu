@@ -1,9 +1,10 @@
 import { QueryProvider } from "@/src/api/query-provider";
+import { PlayerProvider } from "@/src/audio/player-provider";
 import { useAuthInit } from "@/src/hooks/use-auth";
+import "@/src/theme";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import "@/src/theme";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   useAuthInit();
@@ -15,7 +16,9 @@ export default function RootLayout() {
     <QueryProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthInitializer>
-          <Stack screenOptions={{ headerShown: false }} />
+          <PlayerProvider>
+            <Stack screenOptions={{ headerShown: false }} />
+          </PlayerProvider>
         </AuthInitializer>
         <StatusBar style="light" />
       </GestureHandlerRootView>
