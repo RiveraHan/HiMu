@@ -17,7 +17,17 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthInitializer>
           <PlayerProvider>
-            <Stack screenOptions={{ headerShown: false }} />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(app)" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen
+                name="player"
+                options={{
+                  presentation: "modal",
+                  animation: "slide_from_bottom",
+                }}
+              />
+            </Stack>
           </PlayerProvider>
         </AuthInitializer>
         <StatusBar style="light" />
