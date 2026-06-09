@@ -9,4 +9,4 @@ export * from "./LibraryCard";
 export * from "./PlaylistCard";
 export * from "./Text";
 export * from "./TrackCard";
-
+export * from './player/SeekBar';
