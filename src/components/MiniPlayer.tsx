@@ -1,6 +1,7 @@
 import { usePlayer } from "@/src/audio/use-player";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { Image } from "expo-image";
+import { useRouter } from "expo-router";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,6 +12,7 @@ import { Text } from "./Text";
 export function MiniPlayer() {
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const router = useRouter();
   const track = usePlayerStore((state) => state.currentTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const positionSec = usePlayerStore((state) => state.positionSec);
@@ -25,7 +27,7 @@ export function MiniPlayer() {
 
   return (
     <Pressable
-      onPress={() => {}}
+      onPress={() => router.push("/player")}
       style={({ pressed }) => [
         styles.root,
         { bottom },
