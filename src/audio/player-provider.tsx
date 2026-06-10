@@ -1,3 +1,4 @@
+import { useAuthStore } from "@/src/stores/auth-store";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import {
   setAudioModeAsync,
@@ -28,6 +29,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const status = useAudioPlayerStatus(player);
 
   const store = usePlayerStore;
+  const session = useAuthStore((s) => s.session);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -36,6 +38,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       interruptionMode: "duckOthers",
     });
   }, []);
+
+  // Stop playback and clear the player when the user logs out
+  useEffect(() => {
+    if (session) return;
+    if (store.getState().currentTrack) {
+      player.pause();
+      store.getState().reset();
+    }
+  }, [session, player, store]);
 
   const load: PlayerControls["load"] = useCallback(
     (track, queue, index) => {
@@ -55,25 +66,43 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [player]);
 
   const next = useCallback(() => {
-    const { queue, index } = store.getState();
-    const ni = index + 1;
+    const { queue, index, repeatMode, shuffle, shuffleOrder } =
+      store.getState();
 
-    if (ni < queue.length) load(queue[ni], queue, ni);
-    else player.pause();
+    const order = shuffle ? shuffleOrder : queue.map((_, i) => i);
+
+    const post = order.indexOf(index);
+
+    let nextPost = post + 1;
+
+    if (nextPost >= order.length) {
+      if (repeatMode === "all") nextPost = 0;
+      else return player.pause(); // off/one for end of queue
+    }
+
+    const nextIndex = order[nextPost];
+    load(queue[nextIndex], queue, nextIndex); // match queue conserve shuffleOrder
   }, [player, store, load]);
 
   const prev = useCallback(() => {
-    const { queue, index, positionSec } = store.getState();
+    const { queue, index, positionSec, shuffle, shuffleOrder, repeatMode } =
+      store.getState();
 
-    if (positionSec > 3) {
-      player.seekTo(0);
-      return;
+    if (positionSec > 3) return player.seekTo(0); // seek to start if past 3s
+
+    const order = shuffle ? shuffleOrder : queue.map((_, i) => i);
+
+    const post = order.indexOf(index);
+
+    let prePost = post - 1;
+
+    if (prePost < 0) {
+      if (repeatMode === "all") prePost = order.length - 1;
+      else return player.seekTo(0);
     }
 
-    const pi = index - 1;
-
-    if (pi >= 0) load(queue[pi], queue, pi);
-    else player.seekTo(0);
+    const prevIndex = order[prePost];
+    load(queue[prevIndex], queue, prevIndex);
   }, [player, store, load]);
 
   const seek = useCallback((sec: number) => player.seekTo(sec), [player]);
@@ -83,7 +112,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     store.getState().setIsPlaying(status.playing);
     store.getState().setProgress(status.currentTime, status.duration);
 
-    if (status.didJustFinish) next();
+    if (status.didJustFinish) {
+      if (store.getState().repeatMode === "one") {
+        player.seekTo(0);
+        player.play();
+      } else {
+        next();
+      }
+    }
   }, [
     status.playing,
     status.currentTime,
@@ -91,6 +127,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     status.didJustFinish,
     next,
     store,
+    player,
   ]);
 
   const value = useMemo<PlayerControls>(

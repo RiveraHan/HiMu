@@ -11,6 +11,7 @@ import {
   Pause,
   Play,
   Repeat,
+  Repeat1,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -28,6 +29,10 @@ export default function PlayerScreen() {
   const positionSec = usePlayerStore((state) => state.positionSec);
   const durationSec = usePlayerStore((state) => state.durationSec);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
+  const shuffle = usePlayerStore((state) => state.shuffle);
+  const repeatMode = usePlayerStore((state) => state.repeatMode);
+  const toggleShuffle = usePlayerStore((state) => state.toggleShuffle);
+  const cycleRepeat = usePlayerStore((state) => state.cycleRepeat);
 
   const { seek, prev, toggle, next } = usePlayer();
 
@@ -96,7 +101,9 @@ export default function PlayerScreen() {
             </Text>
           </View>
           <Pressable
-            onPress={() => {}}
+            onPress={() => {
+              // TODO: abrir menú de opciones (cola, compartir, ir al artista)
+            }}
             style={({ pressed }) => [
               styles.glassBtn,
               pressed && styles.pressed,
@@ -158,13 +165,19 @@ export default function PlayerScreen() {
             </View>
           </View>
 
+          {/*Shuffle*/}
           <View style={styles.controls}>
             <Pressable
+              onPress={toggleShuffle}
               style={styles.ctrlSm}
               accessibilityLabel="Shuffle"
-              disabled
             >
-              <Shuffle size={24} color={theme.colors.onSurfaceVariant} />
+              <Shuffle
+                size={24}
+                color={
+                  shuffle ? theme.colors.primary : theme.colors.onSurfaceVariant
+                }
+              />
             </Pressable>
             <Pressable
               onPress={prev}
@@ -211,12 +224,25 @@ export default function PlayerScreen() {
                 fill={theme.colors.onSurface}
               />
             </Pressable>
+
+            {/*Repeat*/}
             <Pressable
+              onPress={cycleRepeat}
               style={styles.ctrlSm}
               accessibilityLabel="Repeat"
-              disabled
             >
-              <Repeat size={24} color={theme.colors.onSurfaceVariant} />
+              {repeatMode === "one" ? (
+                <Repeat1 size={24} color={theme.colors.primary} />
+              ) : (
+                <Repeat
+                  size={24}
+                  color={
+                    repeatMode === "all"
+                      ? theme.colors.primary
+                      : theme.colors.onSurfaceVariant
+                  }
+                />
+              )}
             </Pressable>
           </View>
         </View>
