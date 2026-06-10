@@ -203,7 +203,7 @@ export default function PlayerScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={toggle}
+              onPress={withHaptic(toggle, Haptics.ImpactFeedbackStyle.Medium)}
               style={({ pressed }) => [
                 styles.playBtn,
                 pressed && styles.playPressed,
@@ -226,7 +226,7 @@ export default function PlayerScreen() {
             </Pressable>
 
             <Pressable
-              onPress={next}
+              onPress={withHaptic(next)}
               style={styles.ctrlMd}
               accessibilityLabel="Next"
             >
@@ -239,7 +239,7 @@ export default function PlayerScreen() {
 
             {/*Repeat*/}
             <Pressable
-              onPress={cycleRepeat}
+              onPress={withHaptic(cycleRepeat)}
               style={styles.ctrlSm}
               accessibilityLabel="Repeat"
             >

@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { useState } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -35,6 +36,7 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
   }, [positionSec, durationSec]);
 
   const commitSeek = (p: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const seconds = p * durationSec;
     onSeek(seconds);
   };
