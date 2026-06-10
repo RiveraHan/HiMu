@@ -16,6 +16,7 @@ import {
   SkipForward,
   Sparkle,
 } from "lucide-react-native";
+import { useEffect } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -30,14 +31,16 @@ export default function PlayerScreen() {
 
   const { seek, prev, toggle, next } = usePlayer();
 
-  if (!track) return router.canDismiss() ? router.dismiss() : null;
+  useEffect(() => {
+    if (!track && router.canDismiss()) router.dismiss();
+  }, [track]);
+
+  if (!track) return null;
 
   const close = () =>
     router.canDismiss() ? router.dismiss() : router.replace("/");
 
   const remaining = Math.max(durationSec - positionSec, 0);
-
-  console.log("render player screen", track.album_art_url);
 
   return (
     <View style={styles.root}>
@@ -138,7 +141,11 @@ export default function PlayerScreen() {
               onSeek={seek}
             />
             <View style={styles.times}>
-              <Text variant="labelCaps" style={styles.time}>
+              <Text
+                variant="labelCaps"
+                style={styles.time}
+                color="onSurfaceVariant"
+              >
                 {formatTime(positionSec)}
               </Text>
               <Text
@@ -275,6 +282,7 @@ const styles = StyleSheet.create((theme) => ({
 
   art: {
     width: "100%",
+    maxWidth: 340,
     aspectRatio: 1,
     borderRadius: theme.borderRadius.xl,
     borderCurve: "continuous",
