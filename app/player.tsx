@@ -2,6 +2,7 @@ import { usePlayer } from "@/src/audio/use-player";
 import { SeekBar, Text } from "@/src/components";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
+import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -44,6 +45,17 @@ export default function PlayerScreen() {
 
   const close = () =>
     router.canDismiss() ? router.dismiss() : router.replace("/");
+
+  // Wraps a control with light haptic feedback (no-op on unsupported devices)
+  const withHaptic =
+    (
+      action: () => void,
+      style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light,
+    ) =>
+    () => {
+      Haptics.impactAsync(style);
+      action();
+    };
 
   const remaining = Math.max(durationSec - positionSec, 0);
 
@@ -168,7 +180,7 @@ export default function PlayerScreen() {
           {/*Shuffle*/}
           <View style={styles.controls}>
             <Pressable
-              onPress={toggleShuffle}
+              onPress={withHaptic(toggleShuffle)}
               style={styles.ctrlSm}
               accessibilityLabel="Shuffle"
             >
@@ -180,7 +192,7 @@ export default function PlayerScreen() {
               />
             </Pressable>
             <Pressable
-              onPress={prev}
+              onPress={withHaptic(prev)}
               style={styles.ctrlMd}
               accessibilityLabel="Previous track"
             >
