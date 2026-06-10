@@ -16,6 +16,8 @@ type State = {
   isPlaying: boolean;
   positionSec: number;
   durationSec: number;
+  shuffle: boolean;
+  repeatMode: "off" | "all" | "one";
 
   setNowPlaying: (
     track: PlayerTrack,
@@ -26,6 +28,8 @@ type State = {
   setProgress: (positionSec: number, durationSec: number) => void;
   setIndex: (index: number) => void;
   reset: () => void;
+  toggleShuffle: () => void;
+  cycleRepeat: () => void;
 };
 
 export const usePlayerStore = create<State>((set) => ({
@@ -35,6 +39,8 @@ export const usePlayerStore = create<State>((set) => ({
   isPlaying: false,
   positionSec: 0,
   durationSec: 0,
+  shuffle: false,
+  repeatMode: "off",
 
   setNowPlaying: (currentTrack, queue, index) =>
     set({ currentTrack, queue, index, positionSec: 0 }),
@@ -49,5 +55,17 @@ export const usePlayerStore = create<State>((set) => ({
       isPlaying: false,
       positionSec: 0,
       durationSec: 0,
+      shuffle: false,
+      repeatMode: "off",
     }),
+  toggleShuffle: () => set((state) => ({ shuffle: !state.shuffle })),
+  cycleRepeat: () =>
+    set((state) => ({
+      repeatMode:
+        state.repeatMode === "off"
+          ? "all"
+          : state.repeatMode === "all"
+            ? "one"
+            : "off",
+    })),
 }));
