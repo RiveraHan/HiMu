@@ -39,7 +39,7 @@ export default function HomeScreen() {
     return "Good evening";
   }
 
-  function playAiMixes() {
+  function playAIMixes() {
     const queue: PlayerTrack[] = (recommended ?? [])
       .filter((t): t is typeof t & { audio_url: string } => t.audio_url != null)
       .map((t) => ({
@@ -49,6 +49,7 @@ export default function HomeScreen() {
         audio_url: t.audio_url,
         album_art_url: t.album_art_url,
         duration: t.duration,
+        genre: t.genre,
       }));
     if (!queue.length) return;
     load(queue[0], queue, 0);
@@ -175,7 +176,7 @@ export default function HomeScreen() {
             cover="https://picsum.photos/800/400?random=70"
             label="GENERATED"
             title="AI Mixes"
-            onPress={playAiMixes}
+            onPress={playAIMixes}
             right={
               <View style={styles.playButton}>
                 <Play

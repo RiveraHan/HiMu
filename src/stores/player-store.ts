@@ -8,6 +8,7 @@ export type PlayerTrack = {
   audio_url: string;
   album_art_url: string | null;
   duration: number | null;
+  genre?: string | null;
 };
 
 type State = {
