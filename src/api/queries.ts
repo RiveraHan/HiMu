@@ -27,5 +27,9 @@ export const queryKeys = {
   },
   stats: {
     vibeCheck: ["stats", "vibe-check"] as const,
+    listening: ["stats", "listening"] as const,
+  },
+  profile: {
+    me: ["profile", "me"] as const,
   },
 };
