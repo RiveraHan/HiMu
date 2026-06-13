@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 import { Text } from "./Text";
 
-const SIZES = { xs: 24, sm: 32, md: 48, lg: 64, xl: 96 } as const;
+const SIZES = { xs: 24, sm: 32, md: 48, lg: 64, xl: 96, "2xl": 128 } as const;
 
 type Props = {
   src?: string | null;
@@ -33,7 +33,13 @@ export function Avatar({ src, size = "md", fallback, testID }: Props) {
       testID={testID}
     >
       <Text
-        variant={size === "xl" ? "h1" : size === "lg" ? "h2" : "bodyMd"}
+        variant={
+          size === "2xl" || size === "xl"
+            ? "h1"
+            : size === "lg"
+              ? "h2"
+              : "bodyMd"
+        }
         color="onPrimaryContainer"
       >
         {fallback.slice(0, 1).toUpperCase()}
