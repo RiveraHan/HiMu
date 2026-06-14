@@ -1,0 +1,69 @@
+import { ReactNode } from "react";
+import { Pressable } from "react-native";
+import { Text } from "../Text";
+import { ChevronRight } from "lucide-react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+
+type Props = {
+  icon: ReactNode;
+  label: string;
+  right?: ReactNode;
+  onPress?: () => void;
+  destructive?: boolean;
+};
+
+export function SettingRow({
+  icon,
+  label,
+  right,
+  onPress,
+  destructive,
+}: Props) {
+  const { theme } = useUnistyles();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      {icon}
+      <Text
+        variant="bodyMd"
+        color={destructive ? "error" : "onSurface"}
+        style={styles.label}
+      >
+        {label}
+      </Text>
+      {(right ?? !destructive) ? (
+        <ChevronRight
+          size={16}
+          color={theme.colors.onSurfaceVariant}
+          opacity={0.5}
+        />
+      ) : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackMd,
+    padding: theme.spacing.stackMd,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.glassTint,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
+  },
+  pressed: {
+    backgroundColor: theme.colors.glassTintStrong,
+  },
+
+  label: {
+    flex: 1,
+  },
+}));
