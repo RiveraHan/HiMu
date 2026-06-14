@@ -9,4 +9,11 @@ export * from "./LibraryCard";
 export * from "./PlaylistCard";
 export * from "./Text";
 export * from "./TrackCard";
-export * from './player/SeekBar';
+
+// Player
+export * from "./player/SeekBar";
+
+// Profile
+export * from "./profile/SettingsRow";
+export * from "./profile/IdentityCard";
+export * from "./profile/StatCard";
