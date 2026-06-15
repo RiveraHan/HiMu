@@ -37,13 +37,14 @@ export function SettingRow({
       >
         {label}
       </Text>
-      {(right ?? !destructive) ? (
-        <ChevronRight
-          size={16}
-          color={theme.colors.onSurfaceVariant}
-          opacity={0.5}
-        />
-      ) : null}
+      {right ??
+        (onPress && !destructive ? (
+          <ChevronRight
+            size={20}
+            color={theme.colors.onSurfaceVariant}
+            opacity={0.5}
+          />
+        ) : null)}
     </Pressable>
   );
 }
