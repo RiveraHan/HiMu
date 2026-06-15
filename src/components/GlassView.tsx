@@ -27,7 +27,7 @@ export function GlassView({
 
   return (
     <BlurView
-      tint='systemMaterial'
+      tint='systemThickMaterialDark'
       intensity={intensity}
       style={[styles.base, levelStyle, style]}
       {...androidBlurProps}
