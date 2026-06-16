@@ -7,7 +7,7 @@ export type UserPreferences = {
   };
   notifications: {
     push: boolean;
-    emailNewsletter: boolean;
+    emailNewsletters: boolean;
   };
 };
 
@@ -18,7 +18,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   },
   notifications: {
     push: true,
-    emailNewsletter: false,
+    emailNewsletters: false,
   },
 };
 
@@ -49,9 +49,9 @@ export function mergePreferences(stored: unknown): UserPreferences {
       push:
         preferences.notifications?.push ??
         DEFAULT_PREFERENCES.notifications.push,
-      emailNewsletter:
-        preferences.notifications?.emailNewsletter ??
-        DEFAULT_PREFERENCES.notifications.emailNewsletter,
+      emailNewsletters:
+        preferences.notifications?.emailNewsletters ??
+        DEFAULT_PREFERENCES.notifications.emailNewsletters,
     },
   };
 }
