@@ -17,3 +17,9 @@ export * from "./player/SeekBar";
 export * from "./profile/SettingsRow";
 export * from "./profile/IdentityCard";
 export * from "./profile/StatCard";
+
+// Settings
+export * from "./settings/Toggle";
+export * from "./settings/SettingsSection";
+export * from "./settings/SettingsToggleRow";
+export * from "./settings/SettingsInfoRow";
