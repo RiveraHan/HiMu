@@ -8,7 +8,7 @@ export function useSettings() {
   const user = useCurrentUser();
 
   return useQuery({
-    queryKey: queryKeys.profile.me,
+    queryKey: queryKeys.settings.me,
     enabled: !!user,
     queryFn: async (): Promise<UserPreferences> => {
       const { data, error } = await supabase
