@@ -15,7 +15,7 @@ import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
 import { useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import {
   Bell,
   CircleStar,
@@ -199,9 +199,7 @@ export default function ProfileScreen() {
             <SettingRow
               icon={<User size={20} color={theme.colors.onSurfaceVariant} />}
               label="Account Details"
-              onPress={() => {
-                // TODO: Navigate to account details
-              }}
+              onPress={() => router.push("/account-settings")}
             />
             <SettingRow
               icon={<Bell size={20} color={theme.colors.onSurfaceVariant} />}

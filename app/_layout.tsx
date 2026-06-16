@@ -27,6 +27,7 @@ export default function RootLayout() {
                   animation: "slide_from_bottom",
                 }}
               />
+              <Stack.Screen name="account-settings" />
             </Stack>
           </PlayerProvider>
         </AuthInitializer>
