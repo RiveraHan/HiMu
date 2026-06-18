@@ -24,7 +24,7 @@ export const AI_FREQUENCIES = ["low", "optimal", "high"] as const;
 export type AiFrequency = (typeof AI_FREQUENCIES)[number];
 
 export type MusicPreferences = {
-  genre: string[];
+  genres: string[];
   excludeMoods: string[];
   vibeMapping: { organicElectronic: number; melancholicEuphoric: number };
   aiFrequency: AiFrequency;
@@ -32,7 +32,7 @@ export type MusicPreferences = {
 };
 
 export const DEFAULT_MUSIC_PREFERENCES: MusicPreferences = {
-  genre: [],
+  genres: [],
   excludeMoods: [],
   vibeMapping: { organicElectronic: 0.5, melancholicEuphoric: 0.5 },
   aiFrequency: "optimal",
@@ -59,7 +59,7 @@ export function mergeMusicPreferences(row: unknown): MusicPreferences {
   const freq = r.ai_frequency;
 
   return {
-    genre: strArray(r.genres),
+    genres: strArray(r.genres),
     excludeMoods: strArray(r.moods),
     vibeMapping: {
       organicElectronic: num(
