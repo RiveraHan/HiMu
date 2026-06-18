@@ -14,12 +14,19 @@ export * from "./TrackCard";
 export * from "./player/SeekBar";
 
 // Profile
-export * from "./profile/SettingsRow";
 export * from "./profile/IdentityCard";
+export * from "./profile/SettingsRow";
 export * from "./profile/StatCard";
 
 // Settings
-export * from "./settings/Toggle";
+export * from "./settings/SettingsInfoRow";
 export * from "./settings/SettingsSection";
 export * from "./settings/SettingsToggleRow";
-export * from "./settings/SettingsInfoRow";
+export * from "./settings/Toggle";
+
+// Preferences
+export * from "./preferences/Chip";
+export * from "./preferences/PrefSection";
+export * from "./preferences/Segmented";
+export * from "./preferences/VibeSlider";
+
