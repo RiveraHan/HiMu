@@ -35,4 +35,7 @@ export const queryKeys = {
   settings: {
     me: ["settings", "me"] as const,
   },
+  musicPreferences: {
+    me: ["music-preferences", "me"] as const,
+  }
 };
