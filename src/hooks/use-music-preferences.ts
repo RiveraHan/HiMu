@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "../api/queries";
-import { supabase } from "../api/supabase";
+import { queryKeys } from "@/src/api/queries";
+import { supabase } from "@/src/api/supabase";
 import {
   mergeMusicPreferences,
   MusicPreferences,
-} from "../types/music-preferences";
+} from "@/src/types/music-preferences";
 import { useCurrentUser } from "./use-auth";
 
 export function useMusicPreferences() {
@@ -12,6 +12,7 @@ export function useMusicPreferences() {
 
   return useQuery({
     queryKey: queryKeys.musicPreferences.me,
+    enabled: !!user,
     queryFn: async (): Promise<MusicPreferences> => {
       const { data, error } = await supabase
         .from("music_preferences")
@@ -36,7 +37,7 @@ export function useUpdateMusicPreferences() {
         {
           user_id: user!.id,
           genres: next.genres,
-          moods: next.excludeMoods,
+          moods: next.excludedMoods,
           vibe_mapping: {
             organic_electronic: next.vibeMapping.organicElectronic,
             melancholic_euphoric: next.vibeMapping.melancholicEuphoric,
