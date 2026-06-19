@@ -14,7 +14,7 @@ type Props<T extends string> = {
   disabled?: boolean;
 };
 
-export function Segement<T extends string>({
+export function Segmented<T extends string>({
   options,
   value,
   onChange,
@@ -51,14 +51,14 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     padding: theme.spacing.stackXs,
     borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.onSurfaceVariant,
+    backgroundColor: theme.colors.surfaceVariant,
     gap: theme.spacing.stackXs,
   },
   segment: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: theme.spacing.stackSm,
+    paddingVertical: theme.spacing.stackSm,
     borderRadius: theme.borderRadius.full,
   },
   segmentActive: {

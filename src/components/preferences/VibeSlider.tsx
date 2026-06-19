@@ -5,8 +5,8 @@ import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 type Props = {
-  leftLabel: number;
-  rightLabel: number;
+  leftLabel: string;
+  rightLabel: string;
   value: number;
   onCommit: (value: number) => void;
   disabled?: boolean;
