@@ -1,4 +1,5 @@
-import { GlassCard, Text } from "@/src/components";
+import { GlassCard } from "@/src/components/GlassCard";
+import { Text } from "@/src/components/Text";
 import { ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
