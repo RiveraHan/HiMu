@@ -24,6 +24,7 @@ import {
   Disc3,
   Headphones,
   LogOut,
+  SlidersHorizontal,
   User,
 } from "lucide-react-native";
 import { useCallback } from "react";
@@ -200,6 +201,16 @@ export default function ProfileScreen() {
               icon={<User size={20} color={theme.colors.onSurfaceVariant} />}
               label="Account Details"
               onPress={() => router.push("/account-settings")}
+            />
+            <SettingRow
+              icon={
+                <SlidersHorizontal
+                  size={20}
+                  color={theme.colors.onSurfaceVariant}
+                />
+              }
+              label="Music Preferences"
+              onPress={() => router.push("/preferences")}
             />
             <SettingRow
               icon={<Bell size={20} color={theme.colors.onSurfaceVariant} />}

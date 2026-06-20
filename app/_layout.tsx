@@ -28,6 +28,7 @@ export default function RootLayout() {
                 }}
               />
               <Stack.Screen name="account-settings" />
+              <Stack.Screen name="preferences" />
             </Stack>
           </PlayerProvider>
         </AuthInitializer>
