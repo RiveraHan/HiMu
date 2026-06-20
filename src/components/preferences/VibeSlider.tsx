@@ -40,10 +40,10 @@ export function VibeSlider({
         disabled={disabled}
       />
       <View style={styles.labels}>
-        <Text variant="labelCaps" color="onSurfaceVariant">
+        <Text variant="labelCaps" color="onSurfaceVariant" opacity={0.7}>
           {leftLabel}
         </Text>
-        <Text variant="labelCaps" color="onSurfaceVariant">
+        <Text variant="labelCaps" color="onSurfaceVariant" opacity={0.7}>
           {rightLabel}
         </Text>
       </View>
