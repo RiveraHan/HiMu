@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { router, useFocusEffect } from "expo-router";
 import {
   Bell,
+  ChevronRight,
   CircleStar,
   Clock,
   Crown,
@@ -98,24 +99,41 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/*Stats*/}
-        <View style={styles.statsRow}>
-          <StatCard
-            icon={<Clock size={20} color={theme.colors.tertiary} />}
-            value={formatHours(stats?.hours ?? 0)}
-            label="HOURS"
-          />
-          <StatCard
-            icon={<Disc3 size={20} color={theme.colors.primary} />}
-            value={formatCount(stats?.tracks ?? 0)}
-            label="TRACKS"
-          />
-          <StatCard
-            icon={<Headphones size={20} color={theme.colors.error} />}
-            value={formatCount(stats?.following ?? 0)}
-            label="DJS"
-          />
-        </View>
+        {/*Stats → Vibe Check*/}
+        <Pressable
+          onPress={() => router.push("/vibe-check")}
+          accessibilityRole="button"
+          accessibilityLabel="Open Vibe Check"
+          style={({ pressed }) => [styles.section, pressed && styles.pressed]}
+        >
+          <View style={styles.sectionHeader}>
+            <Text
+              variant="labelCaps"
+              color="onSurfaceVariant"
+              style={styles.sectionLabel}
+            >
+              VIBE CHECK
+            </Text>
+            <ChevronRight size={16} color={theme.colors.onSurfaceVariant} />
+          </View>
+          <View style={styles.statsRow}>
+            <StatCard
+              icon={<Clock size={20} color={theme.colors.tertiary} />}
+              value={formatHours(stats?.hours ?? 0)}
+              label="HOURS"
+            />
+            <StatCard
+              icon={<Disc3 size={20} color={theme.colors.primary} />}
+              value={formatCount(stats?.tracks ?? 0)}
+              label="TRACKS"
+            />
+            <StatCard
+              icon={<Headphones size={20} color={theme.colors.error} />}
+              value={formatCount(stats?.following ?? 0)}
+              label="DJS"
+            />
+          </View>
+        </Pressable>
 
         {/*Listening Identity*/}
         <View style={styles.section}>
