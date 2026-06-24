@@ -12,6 +12,7 @@ export const queryKeys = {
     all: ["tracks"] as const,
     details: (id: string) => ["tracks", id] as const,
     myMood: (mood: string) => ["tracks", "mood", mood] as const,
+    byDj: (id: string) => ["tracks", "dj", id] as const,
   },
   playlists: {
     all: ["playlists"] as const,
@@ -37,5 +38,5 @@ export const queryKeys = {
   },
   musicPreferences: {
     me: ["music-preferences", "me"] as const,
-  }
+  },
 };
