@@ -1,0 +1,106 @@
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { Text } from "../Text";
+
+const HERO_HEIGHT = 380;
+
+type Props = {
+  name: string;
+  avatarUrl?: string | null;
+  isLive?: boolean;
+  tagline?: string;
+};
+
+export function DjHero({ name, avatarUrl, isLive, tagline }: Props) {
+  const { theme } = useUnistyles();
+
+  return (
+    <View style={styles.hero}>
+      {avatarUrl ? (
+        <Image
+          source={avatarUrl}
+          style={styles.image}
+          contentFit="cover"
+          transition={200}
+        />
+      ) : (
+        <View style={[styles.image, styles.fallback]} />
+      )}
+
+      <LinearGradient
+        colors={["transparent", theme.colors.background]}
+        style={styles.scrim}
+      />
+
+      <View style={styles.overlay}>
+        <View style={styles.badges}>
+          {isLive && (
+            <View style={styles.liveBadge}>
+              <View style={styles.liveDot} />
+              <Text variant="labelCaps" color="onSurface">
+                LIVE
+              </Text>
+            </View>
+          )}
+          {!!tagline && (
+            <Text variant="labelCaps" color="onSurfaceVariant">
+              {tagline}
+            </Text>
+          )}
+        </View>
+        <Text variant="display">{name}</Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  hero: {
+    height: HERO_HEIGHT,
+    justifyContent: "flex-end",
+    borderRadius: theme.borderRadius.lg,
+    overflow: "hidden",
+    borderCurve: "continuous",
+  },
+  image: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    backgroundColor: theme.colors.surfaceContainerHigh,
+  },
+  fallback: {
+    backgroundColor: theme.colors.surfaceContainerHigh,
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    top: "35%",
+  },
+  overlay: {
+    padding: theme.spacing.pageMargin,
+    gap: theme.spacing.stackSm,
+  },
+  badges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackSm,
+  },
+  liveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackXs,
+    paddingHorizontal: theme.spacing.stackSm,
+    paddingVertical: theme.spacing.stackXs,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.glassTintStrong,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.error,
+  },
+}));
