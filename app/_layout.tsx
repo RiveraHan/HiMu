@@ -1,5 +1,6 @@
 import { QueryProvider } from "@/src/api/query-provider";
 import { PlayerProvider } from "@/src/audio/player-provider";
+import { MiniPlayer } from "@/src/components/MiniPlayer";
 import { useAuthInit } from "@/src/hooks/use-auth";
 import "@/src/theme";
 import { Stack } from "expo-router";
@@ -30,7 +31,9 @@ export default function RootLayout() {
               <Stack.Screen name="account-settings" />
               <Stack.Screen name="preferences" />
               <Stack.Screen name="vibe-check" />
+              <Stack.Screen name="dj/[id]" />
             </Stack>
+            <MiniPlayer />
           </PlayerProvider>
         </AuthInitializer>
         <StatusBar style="light" />

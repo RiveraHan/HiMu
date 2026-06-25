@@ -148,7 +148,7 @@ export default function VibeCheckScreen() {
                 name={dj.name}
                 specialty={dj.genre_specialties?.[0]}
                 avatarUrl={dj.avatar_url}
-                disabled // TODO: navegate to perfil DJ
+                onPress={() => router.push(`/dj/${dj.id}`)}
               />
             ))}
           </GlassCard>

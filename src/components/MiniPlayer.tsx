@@ -1,7 +1,7 @@
 import { usePlayer } from "@/src/audio/use-player";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,17 +13,26 @@ export function MiniPlayer() {
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
   const router = useRouter();
+  const segments = useSegments();
   const track = usePlayerStore((state) => state.currentTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const positionSec = usePlayerStore((state) => state.positionSec);
   const durationSec = usePlayerStore((state) => state.durationSec);
   const { next, prev, toggle } = usePlayer();
 
-  if (!track) return null;
+  // Global chrome: hide on the full-screen player modal and on auth screens.
+  if (!track || segments[0] === "player" || segments[0] === "(auth)") {
+    return null;
+  }
 
   const pct = durationSec > 0 ? (positionSec / durationSec) * 100 : 0;
 
-  const bottom = insets.bottom + 8 + 64 + theme.spacing.stackSm;
+  // On tab screens sit above the floating tab bar; on pushed detail screens
+  // (no tab bar) sit just above the safe area.
+  const onTabs = segments[0] === "(app)";
+  const bottom = onTabs
+    ? insets.bottom + 8 + 64 + theme.spacing.stackSm
+    : insets.bottom + theme.spacing.stackSm;
 
   return (
     <Pressable

@@ -178,9 +178,7 @@ export default function ProfileScreen() {
               {djs.slice(0, 2).map((dj) => (
                 <Pressable
                   key={dj.id}
-                  onPress={() => {
-                    //TODO: navegate perfil
-                  }}
+                  onPress={() => router.push(`/dj/${dj.id}`)}
                   style={({ pressed }) => [
                     styles.djCardWrap,
                     pressed && styles.pressed,
