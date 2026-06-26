@@ -17,7 +17,7 @@ export function FocusOrb({ active }: { active: boolean }) {
   useEffect(() => {
     if (active && !reduced) {
       breath.value = withRepeat(
-        withTiming(1.08, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1.08, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
         -1,
         true,
       );
