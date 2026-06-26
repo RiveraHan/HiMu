@@ -10,7 +10,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 
-export function FocusOrb({ active }: { active: boolean }) {
+export function FocusOrb({
+  active,
+  size = 320,
+}: {
+  active: boolean;
+  size?: number;
+}) {
   const breath = useSharedValue(1);
   const reduced = useReducedMotion();
 
@@ -34,11 +40,18 @@ export function FocusOrb({ active }: { active: boolean }) {
   }));
 
   return (
-    <View style={styles.wrap} pointerEvents="none">
-      <Animated.View style={[styles.ringOuter, outerStyle]} />
-      <Animated.View style={[styles.ringMiddle, middleStyle]} />
-      <View style={styles.coreGlow} />
-      <View style={styles.core}>
+    <View
+      style={[styles.wrap, { width: size, height: size }]}
+      pointerEvents="none"
+    >
+      <Animated.View
+        style={[styles.ringOuter, { margin: size * 0.03 }, outerStyle]}
+      />
+      <Animated.View
+        style={[styles.ringMiddle, { margin: size * 0.097 }, middleStyle]}
+      />
+      <View style={[styles.coreGlow, { width: size * 0.4, height: size * 0.4 }]} />
+      <View style={[styles.core, { width: size * 0.2, height: size * 0.2 }]}>
         <View style={styles.dot} />
       </View>
     </View>
@@ -47,35 +60,27 @@ export function FocusOrb({ active }: { active: boolean }) {
 
 const styles = StyleSheet.create((theme) => ({
   wrap: {
-    width: 320,
-    height: 320,
     alignItems: "center",
     justifyContent: "center",
   },
   ringOuter: {
     ...StyleSheet.absoluteFillObject,
-    margin: 10,
     borderRadius: theme.borderRadius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(189,194,255,0.06)",
   },
   ringMiddle: {
     ...StyleSheet.absoluteFillObject,
-    margin: 31,
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
     borderColor: "rgba(189,194,255,0.10)",
   },
   coreGlow: {
     position: "absolute",
-    width: 128,
-    height: 128,
     borderRadius: theme.borderRadius.full,
     backgroundColor: "rgba(129,140,248,0.10)",
   },
   core: {
-    width: 64,
-    height: 64,
     borderRadius: theme.borderRadius.full,
     backgroundColor: "rgba(42,41,47,0.40)",
     borderWidth: StyleSheet.hairlineWidth,
