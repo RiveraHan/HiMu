@@ -10,7 +10,7 @@ export function useFocusTimer({
   defaultMinutes = 45,
   onComplete,
 }: Options = {}) {
-  const [durationSec, setDurationSec] = useState(defaultMinutes * 50);
+  const [durationSec, setDurationSec] = useState(defaultMinutes * 60);
   const [remainingSec, setRemainingSec] = useState(defaultMinutes * 60);
   const [status, setStatus] = useState<FocusStatus>("idle");
 
