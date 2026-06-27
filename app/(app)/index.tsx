@@ -6,6 +6,7 @@ import {
   LibraryCard,
   Text,
 } from "@/src/components";
+import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import {
   useDJs,
@@ -16,7 +17,8 @@ import {
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack } from "@/src/stores/player-store";
 import { Image } from "expo-image";
-import { Play, Plus, Settings } from "lucide-react-native";
+import { router } from "expo-router";
+import { ChevronRight, Play, Plus, Settings } from "lucide-react-native";
 import { Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -92,7 +94,6 @@ export default function HomeScreen() {
             />
           </View>
         </View>
-
         {/* Greeting */}
         <View style={styles.greeting}>
           <Text variant="h1">{getGreeting()}</Text>
@@ -100,6 +101,25 @@ export default function HomeScreen() {
             Your sonic environment awaits.
           </Text>
         </View>
+
+        {/* Focus Mode entry */}
+        <Pressable
+          onPress={() => router.push("/focus-mode")}
+          accessibilityRole="button"
+          accessibilityLabel="Start a focus session"
+          style={({ pressed }) => [styles.focusEntry, pressed && styles.pressed]}
+        >
+          <View style={styles.focusOrbSlot}>
+            <FocusOrb active size={56} />
+          </View>
+          <View style={styles.focusText}>
+            <Text variant="bodyLg">Focus Mode</Text>
+            <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
+              Music + a timer to lock in
+            </Text>
+          </View>
+          <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />
+        </Pressable>
 
         {/* Your DJs */}
         {djs && djs.length > 0 && (
@@ -250,6 +270,28 @@ const styles = StyleSheet.create((theme) => ({
   },
   greeting: {
     gap: theme.spacing.stackXs,
+  },
+  focusEntry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.gutter,
+    padding: theme.spacing.stackMd,
+    borderRadius: theme.borderRadius.lg,
+    borderCurve: "continuous",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
+    backgroundColor: theme.colors.glassTint,
+    overflow: "hidden",
+  },
+  focusOrbSlot: {
+    width: 56,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  focusText: {
+    flex: 1,
+    gap: 2,
   },
   section: {
     gap: theme.spacing.stackMd,

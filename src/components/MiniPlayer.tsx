@@ -21,7 +21,12 @@ export function MiniPlayer() {
   const { next, prev, toggle } = usePlayer();
 
   // Global chrome: hide on the full-screen player modal and on auth screens.
-  if (!track || segments[0] === "player" || segments[0] === "(auth)") {
+  if (
+    !track ||
+    segments[0] === "player" ||
+    segments[0] === "(auth)" ||
+    segments[0] === "focus-mode"
+  ) {
     return null;
   }
 

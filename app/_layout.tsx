@@ -32,6 +32,7 @@ export default function RootLayout() {
               <Stack.Screen name="preferences" />
               <Stack.Screen name="vibe-check" />
               <Stack.Screen name="dj/[id]" />
+              <Stack.Screen name="focus-mode" options={{ animation: "fade" }} />
             </Stack>
             <MiniPlayer />
           </PlayerProvider>
