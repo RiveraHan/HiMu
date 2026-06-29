@@ -9,7 +9,7 @@
 A cross-platform mobile music app built around AI DJ personas. Every DJ has its own
 character, signature genres, and curated catalog — stream their tracks through a
 full-screen player with background playback, follow the ones you like, and watch
-your habits come to life in a personal *Vibe Check*.
+your habits come to life in a personal _Vibe Check_.
 
 [![Expo SDK 54](https://img.shields.io/badge/Expo_SDK-54-000020?logo=expo&logoColor=white)](https://expo.dev)
 [![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?logo=react&logoColor=black)](https://reactnative.dev)
@@ -19,6 +19,8 @@ your habits come to life in a personal *Vibe Check*.
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
+
+[![RepoRanker](https://reporanker.com/badge/RiveraHan/HiMu)](https://reporanker.com/repos/RiveraHan/HiMu)
 
 > **Status:** Actively in development. AI-generated tracks and DJ voice, plus
 > subscriptions, are experimental and currently disabled.
@@ -42,10 +44,10 @@ your habits come to life in a personal *Vibe Check*.
 
 > The images below are the product **design** (built with [Stitch](https://stitch.withgoogle.com/)) — not screenshots of the running app.
 
-| Home | Discover | DJ profile |
-|:---:|:---:|:---:|
-| <img src="assets/design/home.png" width="230" /> | <img src="assets/design/discover.png" width="230" /> | <img src="assets/design/dj-profile.png" width="230" /> |
-| **Player** | **Vibe Check** | **Live session** |
+|                        Home                        |                        Discover                        |                        DJ profile                        |
+| :------------------------------------------------: | :----------------------------------------------------: | :------------------------------------------------------: |
+|  <img src="assets/design/home.png" width="230" />  |  <img src="assets/design/discover.png" width="230" />  |  <img src="assets/design/dj-profile.png" width="230" />  |
+|                     **Player**                     |                     **Vibe Check**                     |                     **Live session**                     |
 | <img src="assets/design/player.png" width="230" /> | <img src="assets/design/vibe-check.png" width="230" /> | <img src="assets/design/live-session.png" width="230" /> |
 
 ---
@@ -53,26 +55,31 @@ your habits come to life in a personal *Vibe Check*.
 ## Features
 
 **🎧 Listening**
+
 - Full-screen player with album art, a scrubbable progress bar, and queue navigation
 - Background audio playback (lock screen / control center) on iOS and Android
 - A persistent global mini-player that follows you across every screen
 - Browse and discover DJs from Home and Discover
 
 **🎙️ DJ personas**
+
 - Rich DJ profiles: sonic philosophy, curated genres, and full track list
 - "Live now" indicators for DJs currently on air
 - Resident DJ badges
 
 **📊 Insights & personalization**
+
 - **Vibe Check** — personal listening stats: top DJs, top genres, and trends over time
 - Music preferences that tailor your feed
 - A community space
 
 **🔐 Accounts**
+
 - Google Sign-In with secure, chunked session storage (Expo SecureStore)
 - Profile and account settings
 
 **🛠️ Platform**
+
 - iOS, Android, and Web (react-native-web) from a single codebase
 - React Native New Architecture + React Compiler, with typed routes
 - Dark, glassmorphic UI: Unistyles v3, Expo Blur, linear gradients, Manrope type, Reanimated 4
@@ -81,19 +88,19 @@ your habits come to life in a personal *Vibe Check*.
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Framework | Expo SDK 54 · React Native 0.81 · React 19 |
-| Language | TypeScript 5.9 |
-| Navigation | Expo Router 6 (file-based, typed routes) |
-| Server state | TanStack Query v5 |
-| Client state | Zustand 5 |
-| Backend | Supabase — Postgres (RLS), Auth, Realtime, Storage |
-| Auth | Google Sign-In (`@react-native-google-signin`) + Supabase JWT |
-| Audio | `expo-audio` (background playback) |
-| Styling | react-native-unistyles v3 · Expo Blur · expo-linear-gradient |
-| Animation | Reanimated 4 · Gesture Handler |
-| Icons & type | lucide-react-native · Manrope |
+| Layer        | Technology                                                    |
+| ------------ | ------------------------------------------------------------- |
+| Framework    | Expo SDK 54 · React Native 0.81 · React 19                    |
+| Language     | TypeScript 5.9                                                |
+| Navigation   | Expo Router 6 (file-based, typed routes)                      |
+| Server state | TanStack Query v5                                             |
+| Client state | Zustand 5                                                     |
+| Backend      | Supabase — Postgres (RLS), Auth, Realtime, Storage            |
+| Auth         | Google Sign-In (`@react-native-google-signin`) + Supabase JWT |
+| Audio        | `expo-audio` (background playback)                            |
+| Styling      | react-native-unistyles v3 · Expo Blur · expo-linear-gradient  |
+| Animation    | Reanimated 4 · Gesture Handler                                |
+| Icons & type | lucide-react-native · Manrope                                 |
 
 ---
 
@@ -143,8 +150,8 @@ npm run db:types     # regenerate src/types/database.ts
 npm run ios          # or: npm run android
 ```
 
-In Supabase, enable the **Google** provider under *Auth → Providers* and add the deep
-link `com.himu.app://callback` under *Auth → URL Configuration*.
+In Supabase, enable the **Google** provider under _Auth → Providers_ and add the deep
+link `com.himu.app://callback` under _Auth → URL Configuration_.
 
 ---
 
@@ -152,13 +159,13 @@ link `com.himu.app://callback` under *Auth → URL Configuration*.
 
 Copy `.env.example` to `.env` and fill in the required values:
 
-| Variable | Required | Description |
-|---|:---:|---|
-| `EXPO_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
-| `EXPO_PUBLIC_SUPABASE_KEY` | ✅ | Supabase anon / public key |
-| `EXPO_PUBLIC_API_URL` | ✅ | Supabase REST endpoint |
-| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | ✅ | Google OAuth web client ID |
-| `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | ✅ | Google OAuth iOS client ID |
+| Variable                           | Required | Description                |
+| ---------------------------------- | :------: | -------------------------- |
+| `EXPO_PUBLIC_SUPABASE_URL`         |    ✅    | Supabase project URL       |
+| `EXPO_PUBLIC_SUPABASE_KEY`         |    ✅    | Supabase anon / public key |
+| `EXPO_PUBLIC_API_URL`              |    ✅    | Supabase REST endpoint     |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` |    ✅    | Google OAuth web client ID |
+| `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` |    ✅    | Google OAuth iOS client ID |
 
 > `.env.example` also lists optional keys for experimental AI features that are
 > **currently disabled** — they aren't needed to run the app.
@@ -197,14 +204,14 @@ HiMu/
 
 ## Scripts
 
-| Script | Action |
-|---|---|
-| `npm start` | Start the Expo dev server |
-| `npm run ios` / `npm run android` | Build and run a native development client |
-| `npm run web` | Run in the browser |
-| `npm run lint` | Lint with `eslint-config-expo` |
-| `npm run db:push` | Apply Supabase migrations |
-| `npm run db:types` | Regenerate `src/types/database.ts` from the linked project |
+| Script                            | Action                                                     |
+| --------------------------------- | ---------------------------------------------------------- |
+| `npm start`                       | Start the Expo dev server                                  |
+| `npm run ios` / `npm run android` | Build and run a native development client                  |
+| `npm run web`                     | Run in the browser                                         |
+| `npm run lint`                    | Lint with `eslint-config-expo`                             |
+| `npm run db:push`                 | Apply Supabase migrations                                  |
+| `npm run db:types`                | Regenerate `src/types/database.ts` from the linked project |
 
 ---
 
