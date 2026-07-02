@@ -10,9 +10,15 @@ export const queryKeys = {
   },
   tracks: {
     all: ["tracks"] as const,
+    recommended: ["tracks", "recommended"] as const,
+    aiMix: ["tracks", "ai-mix"] as const,
+    focus: ["tracks", "focus"] as const,
     details: (id: string) => ["tracks", id] as const,
     myMood: (mood: string) => ["tracks", "mood", mood] as const,
     byDj: (id: string) => ["tracks", "dj", id] as const,
+  },
+  generationJobs: {
+    detail: (jobId: string | null) => ["generation-job", jobId] as const,
   },
   playlists: {
     all: ["playlists"] as const,
@@ -29,6 +35,7 @@ export const queryKeys = {
   stats: {
     vibeCheck: ["stats", "vibe-check"] as const,
     listening: ["stats", "listening"] as const,
+    djsHeard: ["stats", "djs-heard"] as const,
   },
   profile: {
     me: ["profile", "me"] as const,

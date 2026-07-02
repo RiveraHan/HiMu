@@ -8,15 +8,9 @@ import {
 } from "@/src/components";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useCurrentUser } from "@/src/hooks/use-auth";
-import {
-  useDJs,
-  useFavoritesPreview,
-  useLiveDJIds,
-  useRecommendedTracks,
-} from "@/src/hooks/use-home";
+import { useAIMixTracks, useDJs, useLiveDJIds } from "@/src/hooks/use-home";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
-import { PlayerTrack } from "@/src/stores/player-store";
-import { Image } from "expo-image";
+import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus, Settings } from "lucide-react-native";
 import { Pressable, ScrollView, View } from "react-native";
@@ -28,9 +22,9 @@ export default function HomeScreen() {
   const user = useCurrentUser();
   const { data: djs } = useDJs();
   const { data: liveDJIds } = useLiveDJIds();
-  const { data: favorites } = useFavoritesPreview();
-  const { data: recommended } = useRecommendedTracks();
+  const { data: aiMix } = useAIMixTracks();
   const { load } = usePlayer();
+  const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const paddingBottom = useTabBarPadding();
 
   function getGreeting(): string {
@@ -42,7 +36,7 @@ export default function HomeScreen() {
   }
 
   function playAIMixes() {
-    const queue: PlayerTrack[] = (recommended ?? [])
+    const pool: PlayerTrack[] = (aiMix ?? [])
       .filter((t): t is typeof t & { audio_url: string } => t.audio_url != null)
       .map((t) => ({
         id: t.id,
@@ -53,8 +47,14 @@ export default function HomeScreen() {
         duration: t.duration,
         genre: t.genre,
       }));
-    if (!queue.length) return;
-    load(queue[0], queue, 0);
+    if (!pool.length) return;
+    // Fisher–Yates shuffle so each tap gives a different mix across all DJs.
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    setRepeatMode("all"); // continuous, looping session
+    load(pool[0], pool, 0);
   }
 
   return (
@@ -102,25 +102,6 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* Focus Mode entry */}
-        <Pressable
-          onPress={() => router.push("/focus-mode")}
-          accessibilityRole="button"
-          accessibilityLabel="Start a focus session"
-          style={({ pressed }) => [styles.focusEntry, pressed && styles.pressed]}
-        >
-          <View style={styles.focusOrbSlot}>
-            <FocusOrb active size={56} />
-          </View>
-          <View style={styles.focusText}>
-            <Text variant="bodyLg">Focus Mode</Text>
-            <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-              Music + a timer to lock in
-            </Text>
-          </View>
-          <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />
-        </Pressable>
-
         {/* Your DJs */}
         {djs && djs.length > 0 && (
           <View style={styles.section}>
@@ -139,7 +120,7 @@ export default function HomeScreen() {
                   name={dj.name}
                   subtitle={dj.genre_specialties?.[0]}
                   isLive={liveDJIds?.has(dj.id) ?? false}
-                  onPress={() => {}}
+                  onPress={() => router.push(`/dj/${dj.id}`)}
                 />
               ))}
               {/* New DJ slot */}
@@ -193,7 +174,7 @@ export default function HomeScreen() {
           <Text variant="h2">Personalized Library</Text>
 
           <LibraryCard
-            cover="https://picsum.photos/800/400?random=70"
+            cover={`${process.env.EXPO_PUBLIC_MEDIA_BASE}/covers/hero/ai-mixes.jpg?v=1`}
             label="GENERATED"
             title="AI Mixes"
             onPress={playAIMixes}
@@ -207,36 +188,29 @@ export default function HomeScreen() {
               </View>
             }
           />
-
-          <LibraryCard
-            cover="https://picsum.photos/800/400?random=71"
-            label="CURATED"
-            title="Favorites"
-            onPress={() => {}}
-            right={
-              favorites && favorites.count > 0 ? (
-                <View style={styles.favoritesRight}>
-                  <View style={styles.avatarStack}>
-                    {favorites.covers.map((cover, i) => (
-                      <Image
-                        key={cover}
-                        source={cover}
-                        style={[
-                          styles.stackAvatar,
-                          i > 0 && styles.stackOverlap,
-                        ]}
-                        contentFit="cover"
-                      />
-                    ))}
-                  </View>
-                  <Text variant="labelCaps" style={styles.countBadge}>
-                    +{favorites.count}
-                  </Text>
-                </View>
-              ) : null
-            }
-          />
         </View>
+
+        {/* Focus Mode entry */}
+        <Pressable
+          onPress={() => router.push("/focus-mode")}
+          accessibilityRole="button"
+          accessibilityLabel="Start a focus session"
+          style={({ pressed }) => [
+            styles.focusEntry,
+            pressed && styles.pressed,
+          ]}
+        >
+          <View style={styles.focusOrbSlot}>
+            <FocusOrb active size={56} />
+          </View>
+          <View style={styles.focusText}>
+            <Text variant="bodyLg">Focus Mode</Text>
+            <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
+              Music + a timer to lock in
+            </Text>
+          </View>
+          <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -326,27 +300,6 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.glassTintStrong,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.glassBorder,
-  },
-  favoritesRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.stackSm,
-  },
-  avatarStack: {
-    flexDirection: "row",
-  },
-  stackAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: 2,
-    borderColor: theme.colors.surface,
-  },
-  stackOverlap: {
-    marginLeft: -12,
-  },
-  countBadge: {
-    fontVariant: ["tabular-nums"],
   },
   pressed: {
     transform: [{ scale: 0.97 }],

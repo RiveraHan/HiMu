@@ -347,43 +347,10 @@ create index idx_follows_user on public.follows(user_id);
 create index idx_follows_creator on public.follows(creator_id);
 
 -- ===========================
--- SAMPLE DATA (optional, for development)
+-- SAMPLE DATA
 -- ===========================
-
-insert into public.djs (name, slug, character, voice_style, genre_specialties, mood_tags, is_premium)
-values 
-  ('Nova', 'nova', 'Curiosa, observadora, con un toque de melancolía poética', 'Femenina suave', '{"Ambient","Lo-Fi","Indie"}', '{"Relax","Focus","Dreamy"}', false),
-  ('Axon', 'axon', 'Energético, analítico, siempre buscando el drop perfecto', 'Masculina profunda', '{"Techno","House","Electro"}', '{"Energize","Workout","Party"}', true),
-  ('Sage', 'sage', 'Sabia, tranquila, conexión con la naturaleza', 'Andrógina etérea', '{"Classical","Nature Sounds","Meditation"}', '{"Sleep","Meditate","Nature"}', true);
-
-insert into public.dj_generation_configs (dj_id, provider, model, base_prompt, is_instrumental, temperature, max_duration)
-values 
-  ((select id from public.djs where slug = 'nova'), 'minimax', 'music-2.6-free', 'Lo-fi ambient, soft piano, gentle pads, melancholic, poetic atmosphere, quiet luxury', true, 0.60, 120),
-  ((select id from public.djs where slug = 'axon'), 'minimax', 'music-2.6-free', 'Techno house, driving bassline, energetic drop, 128 BPM, club atmosphere', true, 1.20, 180),
-  ((select id from public.djs where slug = 'sage'), 'minimax', 'music-2.6-free', 'Classical meditation, nature sounds, ethereal strings, forest ambiance, calming', true, 0.50, 300);
-
-insert into public.creators (name, slug, bio, verified)
-values 
-  ('Luna Voss', 'luna-voss', 'Productora electrónica de Berlín. Fusionando melodías etéreas con beats analógicos.', true),
-  ('Marcus Chen', 'marcus-chen', 'Compositor de música de cámara neo-clásica. Piano y cuerdas.', false);
-
-insert into public.tracks (title, artist, album, album_art_url, audio_url, duration, bpm, genre, mood_tags, energy_level, is_ai_generated, dj_id)
-select 
-  'Midnight Drift ' || i,
-  'Nova',
-  'Ethereal Sessions',
-  'https://picsum.photos/400/400?random=' || i,
-  'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-' || (i % 16 + 1) || '.mp3',
-  180 + (i * 30),
-  80 + i * 5,
-  'Ambient',
-  '{"Relax","Focus"}',
-  3,
-  true,
-  (select id from public.djs where slug = 'nova')
-from generate_series(1, 10) as i;
-
-insert into public.tracks (title, artist, album, album_art_url, audio_url, duration, bpm, genre, mood_tags, energy_level, is_ai_generated, creator_id)
-values 
-  ('Neon Rain', 'Luna Voss', 'Digital Dreams', 'https://picsum.photos/400/400?random=100', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', 245, 128, 'Electronica', '{"Energize","Focus"}', 7, false, (select id from public.creators where slug = 'luna-voss')),
-  ('Glass Cathedral', 'Marcus Chen', 'Stillness', 'https://picsum.photos/400/400?random=101', 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', 312, 72, 'Neo-Classical', '{"Sleep","Relax"}', 2, false, (select id from public.creators where slug = 'marcus-chen'));
+-- No sample content is seeded here. DJs, tracks, covers, avatars and playlists
+-- are produced by the AI pipeline in scripts/generate/. After a fresh reset run:
+--   npm run gen:seed && npm run gen:avatars && npm run gen:covers
+--   (then, once Cloudflare billing is on:)
+--   npm run gen:music && npm run gen:cleanup && npm run gen:playlists

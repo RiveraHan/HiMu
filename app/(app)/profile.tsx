@@ -10,7 +10,11 @@ import {
   Text,
 } from "@/src/components";
 import { useDJs } from "@/src/hooks/use-home";
-import { useListeningTotals, useProfile } from "@/src/hooks/use-profile";
+import {
+  useDjsHeard,
+  useListeningTotals,
+  useProfile,
+} from "@/src/hooks/use-profile";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
@@ -36,6 +40,7 @@ export default function ProfileScreen() {
   const paddingBottom = useTabBarPadding();
   const { data: profile } = useProfile();
   const { data: stats } = useListeningTotals();
+  const { data: djsHeard } = useDjsHeard();
   const { data: djs } = useDJs();
   const { theme } = useUnistyles();
   const { flushListeningStats } = usePlayer();
@@ -44,6 +49,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       queryClient.invalidateQueries({ queryKey: queryKeys.stats.listening });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats.djsHeard });
     }, [queryClient]),
   );
 
@@ -129,7 +135,7 @@ export default function ProfileScreen() {
             />
             <StatCard
               icon={<Headphones size={20} color={theme.colors.error} />}
-              value={formatCount(stats?.following ?? 0)}
+              value={formatCount(djsHeard ?? 0)}
               label="DJS"
             />
           </View>
@@ -159,23 +165,11 @@ export default function ProfileScreen() {
                 color="onSurfaceVariant"
                 style={styles.sectionLabel}
               >
-                TOP DJS
+                YOUR DJS
               </Text>
-              {djs.length > 2 && (
-                <Pressable
-                  onPress={() => {
-                    // TODO: navigate to the full list of DJs
-                  }}
-                  hitSlop={8}
-                >
-                  <Text variant="labelCaps" color="primary">
-                    VIEW ALL
-                  </Text>
-                </Pressable>
-              )}
             </View>
             <View style={styles.djGrid}>
-              {djs.slice(0, 2).map((dj) => (
+              {djs.map((dj) => (
                 <Pressable
                   key={dj.id}
                   onPress={() => router.push(`/dj/${dj.id}`)}

@@ -2,6 +2,8 @@ import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useQuery } from "@tanstack/react-query";
 
+const FOCUS_MOODS = ["Focus", "Relax", "Dreamy", "Meditate", "Nature", "Sleep"];
+
 export function useDJs() {
   return useQuery({
     queryKey: queryKeys.djs.all,
@@ -32,29 +34,9 @@ export function useLiveDJIds() {
     },
   });
 }
-export function useFavoritesPreview() {
-  return useQuery({
-    queryKey: [...queryKeys.tracks.all, "favorites-preview"],
-    queryFn: async () => {
-      // One round-trip: exact total count + first few covers for the stack.
-      const { data, count, error } = await supabase
-        .from("tracks")
-        .select("id, album_art_url", { count: "exact" })
-        .not("album_art_url", "is", null)
-        .limit(3);
-
-      if (error) throw error;
-
-      return {
-        count: count ?? 0,
-        covers: data.map((t) => t.album_art_url).filter(Boolean) as string[],
-      };
-    },
-  });
-}
 export function useRecommendedTracks() {
   return useQuery({
-    queryKey: queryKeys.tracks.all,
+    queryKey: queryKeys.tracks.recommended,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
@@ -62,6 +44,44 @@ export function useRecommendedTracks() {
         .not("audio_url", "is", null)
         .order("created_at", { ascending: false })
         .limit(4);
+
+      if (error) throw error;
+
+      return data;
+    },
+  });
+}
+
+export function useAIMixTracks() {
+  return useQuery({
+    queryKey: queryKeys.tracks.aiMix,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tracks")
+        .select("id, title, artist, audio_url, album_art_url, duration, genre")
+        .eq("is_ai_generated", true)
+        .not("audio_url", "is", null)
+        .limit(50);
+
+      if (error) throw error;
+
+      return data;
+    },
+  });
+}
+
+export function useFocusTracks() {
+  return useQuery({
+    queryKey: queryKeys.tracks.focus,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tracks")
+        .select(
+          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, bpm",
+        )
+        .overlaps("mood_tags", FOCUS_MOODS)
+        .not("audio_url", "is", null)
+        .limit(50);
 
       if (error) throw error;
 
