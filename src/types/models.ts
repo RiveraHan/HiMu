@@ -41,8 +41,6 @@ export interface DJ {
 
 export interface DJConfig {
   djId: string;
-  provider: 'minimax' | 'elevenlabs';
-  model: string;
   basePrompt: string;
   defaultLyrics?: string;
   isInstrumental: boolean;

@@ -88,8 +88,6 @@ async function main() {
     const { error: cfgErr } = await admin.from("dj_generation_configs").upsert(
       {
         dj_id: saved.id,
-        provider: "minimax", // CHECK allows 'minimax' | 'elevenlabs'
-        model: "minimax/music-2.6", // real Cloudflare model id
         base_prompt: config.base_prompt,
         is_instrumental: config.is_instrumental,
         temperature: config.temperature,
