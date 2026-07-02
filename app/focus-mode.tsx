@@ -3,12 +3,13 @@ import { Text } from "@/src/components";
 import { FocusAtmosphere } from "@/src/components/focus/FocusAtmosphere";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useFocusTimer } from "@/src/hooks/use-focus-timer";
-import { useRecommendedTracks } from "@/src/hooks/use-home";
+import { useFocusTracks } from "@/src/hooks/use-home";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
 import { Pause, Play, SkipBack, SkipForward, X } from "lucide-react-native";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,23 +28,53 @@ export default function FocusModeScreen() {
   const track = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const { toggle: toggleAudio, next, prev, load } = usePlayer();
-  const { data: recommended } = useRecommendedTracks();
+  const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
+  const { data: focusData } = useFocusTracks();
 
-  const focusQueue: PlayerTrack[] = (recommended ?? [])
-    .filter((t): t is typeof t & { audio_url: string } => t.audio_url != null)
-    .map((t) => ({
-      id: t.id,
-      title: t.title,
-      artist: t.artist,
-      audio_url: t.audio_url,
-      album_art_url: t.album_art_url,
-      duration: t.duration,
-      genre: t.genre,
-    }));
+  // Focus queue: calmest first (energy asc, then bpm asc; nulls = neutral mid),
+  // with a random tiebreak for session-to-session variety.
+  const focusQueue: PlayerTrack[] = useMemo(() => {
+    const rows = (focusData ?? []).filter(
+      (t): t is typeof t & { audio_url: string } => t.audio_url != null,
+    );
+    return rows
+      .map((t) => ({ t, r: Math.random() }))
+      .sort((a, b) => {
+        const e = (a.t.energy_level ?? 5) - (b.t.energy_level ?? 5);
+        if (e !== 0) return e;
+        const bpm = (a.t.bpm ?? 90) - (b.t.bpm ?? 90);
+        if (bpm !== 0) return bpm;
+        return a.r - b.r;
+      })
+      .map(({ t }) => ({
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        audio_url: t.audio_url,
+        album_art_url: t.album_art_url,
+        duration: t.duration,
+        genre: t.genre,
+      }));
+  }, [focusData]);
 
-  const canPlay = !!track || focusQueue.length > 0;
+  // Undo the session loop when leaving focus mode (only if we started it).
+  const startedLoop = useRef(false);
+  useEffect(
+    () => () => {
+      if (startedLoop.current) setRepeatMode("off");
+    },
+    [setRepeatMode],
+  );
+
+  // Session ended → stop the looping music too.
+  useEffect(() => {
+    if (timer.status === "completed" && usePlayerStore.getState().isPlaying) {
+      toggleAudio();
+    }
+  }, [timer.status, toggleAudio]);
 
   const running = timer.status === "running";
+  const canToggle = timer.status !== "idle" || focusQueue.length > 0;
   const label =
     timer.status === "running"
       ? "DEEP FOCUS"
@@ -53,22 +84,27 @@ export default function FocusModeScreen() {
           ? "COMPLETE"
           : "READY";
 
-  // Start the focus queue if nothing is loaded; otherwise toggle play/pause.
-  const onPlayPress = () => {
-    if (!track) {
-      if (focusQueue.length) load(focusQueue[0], focusQueue, 0);
-    } else {
-      toggleAudio();
-    }
-  };
-
-  const onTimerPress = () => {
+  // One control for the whole session: timer + music start/pause together.
+  const onSessionToggle = () => {
     if (process.env.EXPO_OS === "ios") Haptics.selectionAsync();
-    const starting = timer.status === "idle"; // beginning a fresh session
-    timer.toggle();
-    // Beginning a session with nothing playing also kicks off the focus queue.
-    if (starting && !track && focusQueue.length) {
-      load(focusQueue[0], focusQueue, 0);
+    switch (timer.status) {
+      case "running":
+        timer.pause();
+        if (isPlaying) toggleAudio();
+        break;
+      case "paused":
+        timer.start(); // resume timer
+        if (track && !isPlaying) toggleAudio(); // resume music
+        break;
+      case "completed":
+        timer.reset();
+        break;
+      default: // idle → fresh session
+        if (!focusQueue.length) break;
+        timer.start();
+        setRepeatMode("all");
+        startedLoop.current = true;
+        load(focusQueue[0], focusQueue, 0);
     }
   };
 
@@ -84,7 +120,7 @@ export default function FocusModeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={onTimerPress} style={styles.timerBlock}>
+          <View style={styles.timerBlock}>
             <View style={styles.labelRow}>
               <View style={styles.labelDot} />
               <Text variant="labelCaps" color="primary" style={styles.label}>
@@ -94,7 +130,7 @@ export default function FocusModeScreen() {
             <Text variant="display" color="onSurface" style={styles.timer}>
               {timer.formatted}
             </Text>
-          </Pressable>
+          </View>
 
           <Pressable
             onPress={() => router.canGoBack() && router.back()}
@@ -165,12 +201,14 @@ export default function FocusModeScreen() {
             </Pressable>
 
             <Pressable
-              onPress={onPlayPress}
-              disabled={!canPlay}
-              accessibilityLabel={isPlaying ? "Pause" : "Play"}
-              style={[styles.playBtn, !canPlay && styles.playDisabled]}
+              onPress={onSessionToggle}
+              disabled={!canToggle}
+              accessibilityLabel={
+                running ? "Pause focus session" : "Start focus session"
+              }
+              style={[styles.playBtn, !canToggle && styles.playDisabled]}
             >
-              {isPlaying ? (
+              {running ? (
                 <Pause
                   size={32}
                   color={theme.colors.onPrimaryContainer}
@@ -252,6 +290,7 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     justifyContent: "center",
     gap: theme.spacing.stackSm,
+    marginBottom: theme.spacing.stackLg,
   },
   chip: {
     paddingHorizontal: theme.spacing.stackMd,
