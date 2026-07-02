@@ -1,11 +1,14 @@
+import { queryKeys } from "@/src/api/queries";
 import { usePlayer } from "@/src/audio/use-player";
 import { DjHero, StatCard, Tag, Text, TrackCard } from "@/src/components";
 import { useDJ, useDJTracks } from "@/src/hooks/use-dj";
+import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useLiveDJIds } from "@/src/hooks/use-home";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { AudioLines, ChevronLeft, Music2 } from "lucide-react-native";
-import { useMemo } from "react";
+import { AudioLines, ChevronLeft, Music2, Sparkles } from "lucide-react-native";
+import { useEffect, useMemo } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -20,6 +23,39 @@ export default function DJProfileScreen() {
   const { data: liveIds } = useLiveDJIds();
   const { load } = usePlayer();
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
+  const queryClient = useQueryClient();
+
+  const {
+    generate,
+    isStarting,
+    status: genStatus,
+    track: generatedTrack,
+    reset: resetGen,
+  } = useGenerateMix();
+  const isGenerating =
+    isStarting || genStatus === "queued" || genStatus === "generating";
+  // Temporal: Kill switch for in-app generation; set to false to hide/disable the button.
+  const canGenerate: boolean = false;
+  const genFgToken = canGenerate ? "onPrimary" : "onSurfaceVariant";
+
+  // When a generated mix is ready, play it, refresh track lists, and clear the job.
+  useEffect(() => {
+    if (genStatus === "ready" && generatedTrack && generatedTrack.audio_url) {
+      load({
+        id: generatedTrack.id,
+        title: generatedTrack.title,
+        artist: generatedTrack.artist,
+        audio_url: generatedTrack.audio_url,
+        album_art_url: generatedTrack.album_art_url,
+        duration: generatedTrack.duration,
+        genre: generatedTrack.genre,
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tracks.all });
+      resetGen();
+    } else if (genStatus === "failed") {
+      resetGen();
+    }
+  }, [genStatus, generatedTrack, load, resetGen, queryClient]);
 
   const queue: PlayerTrack[] = useMemo(
     () =>
@@ -133,6 +169,36 @@ export default function DJProfileScreen() {
             />
           </View>
 
+          {/* Generate a new mix in this DJ's style (temporarily disabled) */}
+          <Pressable
+            onPress={() => canGenerate && !isGenerating && generate(id)}
+            disabled={!canGenerate || isGenerating}
+            accessibilityRole="button"
+            accessibilityLabel="Generate a new mix"
+            accessibilityState={{ disabled: !canGenerate || isGenerating }}
+            style={({ pressed }) => [
+              styles.generateBtn,
+              !canGenerate && styles.generateBtnDisabled,
+              canGenerate && pressed && styles.pressed,
+            ]}
+          >
+            {isGenerating ? (
+              <>
+                <ActivityIndicator color={theme.colors[genFgToken]} />
+                <Text variant="labelCaps" color={genFgToken}>
+                  GENERATING…
+                </Text>
+              </>
+            ) : (
+              <>
+                <Sparkles size={20} color={theme.colors[genFgToken]} />
+                <Text variant="labelCaps" color={genFgToken}>
+                  Generate new mix
+                </Text>
+              </>
+            )}
+          </Pressable>
+
           {/* Sonic Philosophy */}
 
           {!!dj.character && (
@@ -211,6 +277,22 @@ const styles = StyleSheet.create((theme) => ({
   },
   header: { flexDirection: "row" },
   statsRow: { flexDirection: "row", gap: theme.spacing.gutter },
+  generateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.stackSm,
+    paddingVertical: theme.spacing.stackMd,
+    borderRadius: theme.borderRadius.full,
+    borderCurve: "continuous",
+    backgroundColor: theme.colors.primary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "transparent",
+  },
+  generateBtnDisabled: {
+    backgroundColor: theme.colors.glassTint,
+    borderColor: theme.colors.glassBorder,
+  },
   section: { gap: theme.spacing.stackSm },
   sectionLabel: { letterSpacing: 2 },
   tagWrap: {
