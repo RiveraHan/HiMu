@@ -1,3 +1,4 @@
+import { supabase } from "@/src/api/supabase";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import {
@@ -13,8 +14,27 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { supabase } from "@/src/api/supabase";
 import { AppState } from "react-native";
+
+// Best-effort: record that the signed-in user has listened to this track's DJ.
+async function recordDjListen(trackId: string) {
+  try {
+    const uid = useAuthStore.getState().session?.user?.id;
+    if (!uid) return;
+    const { data } = await supabase
+      .from("tracks")
+      .select("dj_id")
+      .eq("id", trackId)
+      .maybeSingle();
+    if (!data?.dj_id) return;
+    await supabase
+      .from("dj_listens")
+      .upsert(
+        { user_id: uid, dj_id: data.dj_id },
+        { onConflict: "user_id,dj_id", ignoreDuplicates: true },
+      );
+  } catch {}
+}
 
 type PlayerControls = {
   load: (track: PlayerTrack, queue?: PlayerTrack[], index?: number) => void;
@@ -117,8 +137,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const countTrackIfPlayed = useCallback(() => {
     if (trackSecondsRef.current >= 30) {
       trackPlayedRef.current += 1;
-      lastGenreRef.current =
-        store.getState().currentTrack?.genre ?? lastGenreRef.current;
+      const played = store.getState().currentTrack;
+      lastGenreRef.current = played?.genre ?? lastGenreRef.current;
+      if (played) void recordDjListen(played.id);
     }
 
     trackSecondsRef.current = 0;
