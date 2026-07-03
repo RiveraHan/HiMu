@@ -7,34 +7,17 @@
  * (own vocal DJs only), and R2 cleanup when a generation fails mid-way.
  */
 
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { invalid, json } from "../_shared/http.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun } from "../_shared/replicate.ts";
+import { serveAuthed } from "../_shared/serve.ts";
+import { admin } from "../_shared/supabase.ts";
 import { sanitize } from "../_shared/text.ts";
 
 const DAILY_TRACKS = 10;
 
 const STABLE_AUDIO_VERSION =
   "a61ac8edbb27cd2eda1b2eff2bbc03dcff1131f5560836ff77a052df05b77491";
-
-const admin = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-);
-
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "Content-Type": "application/json" },
-  });
-}
 
 async function generateMusic(cfg: any, lyrics: string | null): Promise<string> {
   const prompt = String(cfg.base_prompt).slice(0, 2000);
@@ -150,111 +133,80 @@ async function generateCover(jobId: string, dj: any): Promise<string | null> {
   }
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+serveAuthed(async (req, user) => {
+  const { djId, lyrics: rawLyrics } = await req.json();
+  if (!djId) return invalid("djId required");
 
-  try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Unauthorized" }, 401);
+  // DJ config (+ owner for authorization)
+  const { data: cfg } = await admin
+    .from("dj_generation_configs")
+    .select(
+      "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, genre_specialties, mood_tags, avatar_url, owner_id)",
+    )
+    .eq("dj_id", djId)
+    .single();
 
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
+  if (!cfg) return json({ error: "DJ config not found" }, 404);
+
+  // Authorization: system DJs (no owner) or your own.
+  const owner: string | null = (cfg.djs as any)?.owner_id ?? null;
+  if (owner !== null && owner !== user.id) {
+    return json(
+      { error: "you can't generate with this DJ", code: "dj_not_allowed" },
+      403,
     );
-
-    const {
-      data: { user },
-    } = await userClient.auth.getUser();
-    if (!user) return json({ error: "Unauthorized" }, 401);
-
-    const { djId, lyrics: rawLyrics } = await req.json();
-    if (!djId) return json({ error: "djId required" }, 400);
-
-    // DJ config (+ owner for authorization)
-    const { data: cfg } = await admin
-      .from("dj_generation_configs")
-      .select(
-        "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, genre_specialties, mood_tags, avatar_url, owner_id)",
-      )
-      .eq("dj_id", djId)
-      .single();
-
-    if (!cfg) return json({ error: "DJ config not found" }, 404);
-
-    // Authorization: system DJs (no owner) or your own.
-    const owner: string | null = (cfg.djs as any)?.owner_id ?? null;
-    if (owner !== null && owner !== user.id) {
-      return json(
-        { error: "you can't generate with this DJ", code: "dj_not_allowed" },
-        403,
-      );
-    }
-
-    // Optional user lyrics: only on your OWN vocal DJ (private tracks).
-    let lyrics: string | null = null;
-
-    if (rawLyrics != null) {
-      if (typeof rawLyrics !== "string") {
-        return json(
-          { error: "lyrics must be text", code: "invalid_input" },
-          400,
-        );
-      }
-
-      if (cfg.is_instrumental !== false || owner !== user.id) {
-        return json(
-          {
-            error: "lyrics are only allowed on your own vocal DJs",
-            code: "invalid_input",
-          },
-          400,
-        );
-      }
-
-      lyrics = sanitize(rawLyrics, 1000) || null;
-    }
-
-    // Daily quota (failed jobs don't count).
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-    const { count } = await admin
-      .from("generation_jobs")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gt("created_at", dayAgo)
-      .neq("status", "failed");
-
-    if ((count ?? 0) >= DAILY_TRACKS) {
-      return json(
-        {
-          error: `daily limit of ${DAILY_TRACKS} mixes reached`,
-          code: "daily_quota_reached",
-        },
-        429,
-      );
-    }
-
-    // Create the job and respond right away
-    const { data: job, error: jobErr } = await admin
-      .from("generation_jobs")
-      .insert({
-        user_id: user.id,
-        dj_id: djId,
-        prompt: lyrics, // audit trail of what the user provided
-        status: "queued",
-      })
-      .select()
-      .single();
-
-    if (jobErr || !job) throw jobErr ?? new Error("could not create job");
-
-    EdgeRuntime.waitUntil(runGeneration(job.id, cfg, lyrics));
-
-    return json({ jobId: job.id });
-  } catch (e) {
-    return json({ error: String(e) }, 500);
   }
+
+  // Optional user lyrics: only on your OWN vocal DJ (private tracks).
+  let lyrics: string | null = null;
+
+  if (rawLyrics != null) {
+    if (typeof rawLyrics !== "string") return invalid("lyrics must be text");
+
+    if (cfg.is_instrumental !== false || owner !== user.id) {
+      return invalid("lyrics are only allowed on your own vocal DJs");
+    }
+
+    lyrics = sanitize(rawLyrics, 1000) || null;
+  }
+
+  // Daily quota (failed jobs don't count).
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { count } = await admin
+    .from("generation_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gt("created_at", dayAgo)
+    .neq("status", "failed");
+
+  if ((count ?? 0) >= DAILY_TRACKS) {
+    return json(
+      {
+        error: `daily limit of ${DAILY_TRACKS} mixes reached`,
+        code: "daily_quota_reached",
+      },
+      429,
+    );
+  }
+
+  // Create the job and respond right away
+  const { data: job, error: jobErr } = await admin
+    .from("generation_jobs")
+    .insert({
+      user_id: user.id,
+      dj_id: djId,
+      prompt: lyrics, // audit trail of what the user provided
+      status: "queued",
+    })
+    .select()
+    .single();
+
+  if (jobErr || !job) throw jobErr ?? new Error("could not create job");
+
+  EdgeRuntime.waitUntil(runGeneration(job.id, cfg, lyrics));
+
+  return json({ jobId: job.id });
 });
 
 async function runGeneration(
