@@ -10,6 +10,9 @@ type Props = {
   value: number;
   onCommit: (value: number) => void;
   disabled?: boolean;
+  minimumValue?: number;
+  maximumValue?: number;
+  step?: number;
 };
 
 export function VibeSlider({
@@ -18,6 +21,9 @@ export function VibeSlider({
   value,
   onCommit,
   disabled,
+  minimumValue = 0,
+  maximumValue = 1,
+  step,
 }: Props) {
   const { theme } = useUnistyles();
 
@@ -29,8 +35,9 @@ export function VibeSlider({
     <View style={styles.wrap}>
       <Slider
         style={styles.slider}
-        minimumValue={0}
-        maximumValue={1}
+        minimumValue={minimumValue}
+        maximumValue={maximumValue}
+        step={step}
         value={local}
         onValueChange={setLocal}
         onSlidingComplete={onCommit}

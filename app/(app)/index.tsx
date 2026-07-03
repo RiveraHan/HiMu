@@ -13,7 +13,7 @@ import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus, Settings } from "lucide-react-native";
-import { Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -26,6 +26,8 @@ export default function HomeScreen() {
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const paddingBottom = useTabBarPadding();
+
+  const ownCount = djs?.filter((d) => d.owner_id === user?.id).length ?? 0;
 
   function getGreeting(): string {
     const hour = new Date().getHours();
@@ -125,7 +127,16 @@ export default function HomeScreen() {
               ))}
               {/* New DJ slot */}
               <Pressable
-                onPress={() => {}}
+                onPress={() => {
+                  if (ownCount >= 2) {
+                    Alert.alert(
+                      "DJ limit reached",
+                      "You already have 2 DJs. Delete one to create another.",
+                    );
+                    return;
+                  }
+                  router.push("/create-dj");
+                }}
                 style={({ pressed }) => [
                   styles.newDJSlot,
                   pressed && styles.pressed,

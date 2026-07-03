@@ -3,6 +3,7 @@ export * from "./Avatar";
 export * from "./Button";
 export * from "./DJAvatar";
 export * from "./GlassCard";
+export * from "./GlassInput";
 export * from "./GlassView";
 export * from "./IconButton";
 export * from "./LibraryCard";
