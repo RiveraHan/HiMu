@@ -3,14 +3,17 @@
  * responds { jobId } immediately. Generation runs in the background with
  * EdgeRuntime.waitUntil (Replicate → R2 → insert track). The client polls the job.
  *
+ * v2: daily quota, DJ authorization (system or own), optional user lyrics
+ * (own vocal DJs only), and R2 cleanup when a generation fails mid-way.
  */
-import { createClient } from "jsr:@supabase/supabase-js@2";
-import { AwsClient } from "npm:aws4fetch";
 
-const ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!; // R2 endpoint host
-const R2_BUCKET = Deno.env.get("R2_BUCKET")!;
-const R2_PUBLIC_BASE = (Deno.env.get("R2_PUBLIC_BASE") ?? "").replace(/\/+$/, "");
-const REPLICATE_TOKEN = Deno.env.get("REPLICATE_API_TOKEN")!;
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { r2Delete, r2Put } from "../_shared/r2.ts";
+import { replicateRun } from "../_shared/replicate.ts";
+import { sanitize } from "../_shared/text.ts";
+
+const DAILY_TRACKS = 10;
+
 const STABLE_AUDIO_VERSION =
   "a61ac8edbb27cd2eda1b2eff2bbc03dcff1131f5560836ff77a052df05b77491";
 
@@ -18,13 +21,6 @@ const admin = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
-
-const r2 = new AwsClient({
-  accessKeyId: Deno.env.get("R2_ACCESS_KEY_ID")!,
-  secretAccessKey: Deno.env.get("R2_SECRET_ACCESS_KEY")!,
-  service: "s3",
-  region: "auto",
-});
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -40,58 +36,22 @@ function json(body: unknown, status = 200) {
   });
 }
 
-// Replicate (create prediction → wait/poll)
-async function replicateRun(endpoint: string, body: object): Promise<string> {
-  let pred: any;
-  for (let attempt = 0; ; attempt++) {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${REPLICATE_TOKEN}`,
-        "Content-Type": "application/json",
-        Prefer: "wait",
-      },
-      body: JSON.stringify(body),
-    });
-    pred = await res.json();
-    if (res.status === 429 && attempt < 10) {
-      await new Promise((r) => setTimeout(r, ((pred.retry_after ?? 3) + 1) * 1000));
-      continue;
-    }
-    if (!res.ok) {
-      throw new Error(`Replicate (${res.status}): ${JSON.stringify(pred).slice(0, 200)}`);
-    }
-    break;
-  }
-  let tries = 0;
-  while (!["succeeded", "failed", "canceled"].includes(pred.status) && tries < 80) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const r = await fetch(pred.urls.get, {
-      headers: { Authorization: `Bearer ${REPLICATE_TOKEN}` },
-    });
-    pred = await r.json();
-    tries++;
-  }
-  if (pred.status !== "succeeded") {
-    throw new Error(`Replicate ${pred.status}: ${pred.error ?? "no output"}`);
-  }
-  const out = pred.output;
-  const url = typeof out === "string" ? out : Array.isArray(out) ? out[0] : null;
-  if (!url) throw new Error("Replicate: no output url");
-  return url;
-}
-
-async function generateMusic(cfg: any, extraPrompt?: string): Promise<string> {
-  const prompt = (
-    extraPrompt ? `${cfg.base_prompt}, ${extraPrompt}` : cfg.base_prompt
-  ).slice(0, 2000);
+async function generateMusic(cfg: any, lyrics: string | null): Promise<string> {
+  const prompt = String(cfg.base_prompt).slice(0, 2000);
   const instrumental = cfg.is_instrumental ?? true;
   const dur = trackSeconds(cfg); // parametrizable via dj_generation_configs.max_duration
+
   if (!instrumental) {
-    // Vocal → elevenlabs/music (lyrics in the prompt, vocals on)
-    const desc = cfg.default_lyrics
-      ? `${prompt}. Sung lyrics:\n${String(cfg.default_lyrics).slice(0, 1500)}`
-      : prompt;
+    // Vocal → elevenlabs/music. User lyrics (own vocal DJs) or seeded
+    // default_lyrics win; otherwise the model must write ORIGINAL lyrics.
+    const provided = lyrics ?? cfg.default_lyrics ?? null;
+
+    const desc = provided
+      ? `${prompt}. Sing only the provided lyrics. Sung lyrics:\n${String(
+          provided,
+        ).slice(0, 1500)}`
+      : `${prompt}. Write original lyrics; do not reproduce existing copyrighted songs.`;
+
     return replicateRun(
       "https://api.replicate.com/v1/models/elevenlabs/music/predictions",
       {
@@ -103,20 +63,62 @@ async function generateMusic(cfg: any, extraPrompt?: string): Promise<string> {
       },
     );
   }
-  // Instrumental → stable-audio-2.5 (high quality)
+
   return replicateRun("https://api.replicate.com/v1/predictions", {
     version: STABLE_AUDIO_VERSION,
     input: { prompt, duration: dur },
   });
 }
 
-// Track length in seconds (Stable Audio caps at 190).
 function trackSeconds(cfg: any): number {
   return Math.min(Number(cfg.max_duration) || 150, 190);
 }
 
-const TITLE_ADJ = ["Neon", "Midnight", "Velvet", "Electric", "Crimson", "Silent", "Golden", "Hollow", "Lunar", "Ember", "Static", "Cosmic", "Faded", "Wild", "Distant", "Molten", "Frozen", "Endless", "Phantom", "Amber"];
-const TITLE_NOUN = ["Pulse", "Drift", "Haze", "Mirage", "Echo", "Bloom", "Tide", "Circuit", "Horizon", "Rush", "Signal", "Current", "Halo", "Ritual", "Voyage", "Fever", "Glow", "Reverie", "Cascade", "Nocturne"];
+const TITLE_ADJ = [
+  "Neon",
+  "Midnight",
+  "Velvet",
+  "Electric",
+  "Crimson",
+  "Silent",
+  "Golden",
+  "Hollow",
+  "Lunar",
+  "Ember",
+  "Static",
+  "Cosmic",
+  "Faded",
+  "Wild",
+  "Distant",
+  "Molten",
+  "Frozen",
+  "Endless",
+  "Phantom",
+  "Amber",
+];
+const TITLE_NOUN = [
+  "Pulse",
+  "Drift",
+  "Haze",
+  "Mirage",
+  "Echo",
+  "Bloom",
+  "Tide",
+  "Circuit",
+  "Horizon",
+  "Rush",
+  "Signal",
+  "Current",
+  "Halo",
+  "Ritual",
+  "Voyage",
+  "Fever",
+  "Glow",
+  "Reverie",
+  "Cascade",
+  "Nocturne",
+];
+
 function creativeTitle(): string {
   const pick = (a: string[]) => a[Math.floor(Math.random() * a.length)];
   return `${pick(TITLE_ADJ)} ${pick(TITLE_NOUN)}`;
@@ -127,6 +129,7 @@ async function generateCover(jobId: string, dj: any): Promise<string | null> {
   try {
     const genre = dj.genre_specialties?.[0] ?? "";
     const mood = dj.mood_tags?.[0] ?? "";
+
     const url = await replicateRun(
       "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
       {
@@ -138,31 +141,13 @@ async function generateCover(jobId: string, dj: any): Promise<string | null> {
         },
       },
     );
+
     const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+
     return await r2Put(`covers/generated/${jobId}.jpg`, bytes, "image/jpeg");
   } catch (_e) {
     return dj.avatar_url ?? null;
   }
-}
-
-async function r2Put(
-  key: string,
-  bytes: Uint8Array,
-  contentType: string,
-): Promise<string> {
-  const r = await r2.fetch(
-    `https://${ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/${key}`,
-    {
-      method: "PUT",
-      body: bytes,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=300",
-      },
-    },
-  );
-  if (!r.ok) throw new Error(`R2 PUT (${r.status})`);
-  return `${R2_PUBLIC_BASE}/${key}`;
 }
 
 Deno.serve(async (req) => {
@@ -177,23 +162,78 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } },
     );
+
     const {
       data: { user },
     } = await userClient.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401);
 
-    const { djId, prompt } = await req.json();
+    const { djId, lyrics: rawLyrics } = await req.json();
     if (!djId) return json({ error: "djId required" }, 400);
 
-    // DJ config
+    // DJ config (+ owner for authorization)
     const { data: cfg } = await admin
       .from("dj_generation_configs")
       .select(
-        "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, genre_specialties, mood_tags, avatar_url)",
+        "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, genre_specialties, mood_tags, avatar_url, owner_id)",
       )
       .eq("dj_id", djId)
       .single();
+
     if (!cfg) return json({ error: "DJ config not found" }, 404);
+
+    // Authorization: system DJs (no owner) or your own.
+    const owner: string | null = (cfg.djs as any)?.owner_id ?? null;
+    if (owner !== null && owner !== user.id) {
+      return json(
+        { error: "you can't generate with this DJ", code: "dj_not_allowed" },
+        403,
+      );
+    }
+
+    // Optional user lyrics: only on your OWN vocal DJ (private tracks).
+    let lyrics: string | null = null;
+
+    if (rawLyrics != null) {
+      if (typeof rawLyrics !== "string") {
+        return json(
+          { error: "lyrics must be text", code: "invalid_input" },
+          400,
+        );
+      }
+
+      if (cfg.is_instrumental !== false || owner !== user.id) {
+        return json(
+          {
+            error: "lyrics are only allowed on your own vocal DJs",
+            code: "invalid_input",
+          },
+          400,
+        );
+      }
+
+      lyrics = sanitize(rawLyrics, 1000) || null;
+    }
+
+    // Daily quota (failed jobs don't count).
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const { count } = await admin
+      .from("generation_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .gt("created_at", dayAgo)
+      .neq("status", "failed");
+
+    if ((count ?? 0) >= DAILY_TRACKS) {
+      return json(
+        {
+          error: `daily limit of ${DAILY_TRACKS} mixes reached`,
+          code: "daily_quota_reached",
+        },
+        429,
+      );
+    }
 
     // Create the job and respond right away
     const { data: job, error: jobErr } = await admin
@@ -201,14 +241,15 @@ Deno.serve(async (req) => {
       .insert({
         user_id: user.id,
         dj_id: djId,
-        prompt: prompt ?? null,
+        prompt: lyrics, // audit trail of what the user provided
         status: "queued",
       })
       .select()
       .single();
+
     if (jobErr || !job) throw jobErr ?? new Error("could not create job");
 
-    EdgeRuntime.waitUntil(runGeneration(job.id, cfg, prompt));
+    EdgeRuntime.waitUntil(runGeneration(job.id, cfg, lyrics));
 
     return json({ jobId: job.id });
   } catch (e) {
@@ -219,7 +260,7 @@ Deno.serve(async (req) => {
 async function runGeneration(
   jobId: string,
   cfg: any,
-  extraPrompt?: string,
+  lyrics: string | null,
 ): Promise<void> {
   const update = (patch: Record<string, unknown>) =>
     admin
@@ -230,9 +271,10 @@ async function runGeneration(
   try {
     await update({ status: "generating" });
 
-    const tempUrl = await generateMusic(cfg, extraPrompt);
+    const tempUrl = await generateMusic(cfg, lyrics);
 
     const bytes = new Uint8Array(await (await fetch(tempUrl)).arrayBuffer());
+
     const publicUrl = await r2Put(
       `tracks/generated/${jobId}.mp3`,
       bytes,
@@ -257,10 +299,16 @@ async function runGeneration(
       })
       .select()
       .single();
+
     if (insErr || !track) throw insErr ?? new Error("could not insert track");
 
     await update({ status: "ready", track_id: track.id });
   } catch (e) {
     await update({ status: "failed", error: String(e).slice(0, 500) });
+    // No orphans: remove whatever this job managed to upload.
+    await r2Delete([
+      `tracks/generated/${jobId}.mp3`,
+      `covers/generated/${jobId}.jpg`,
+    ]);
   }
 }
