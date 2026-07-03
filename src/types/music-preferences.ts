@@ -20,6 +20,21 @@ export const EXCLUDABLE_MOODS = [
   "Anxious",
 ] as const;
 
+export const DJ_MOODS = [
+  "Focus",
+  "Relax",
+  "Dreamy",
+  "Meditate",
+  "Nature",
+  "Sleep",
+  "Energetic",
+  "Uplifting",
+  "Dark",
+  "Melancholic",
+] as const;
+
+export type Mood = (typeof DJ_MOODS)[number];
+
 export const AI_FREQUENCIES = ["low", "optimal", "high"] as const;
 export type AiFrequency = (typeof AI_FREQUENCIES)[number];
 
