@@ -8,10 +8,12 @@ export function useGenerateMix() {
   const [jobId, setJobId] = useState<string | null>(null);
 
   const start = useMutation({
-    mutationFn: async (djId: string) => {
+    mutationFn: async ({ djId, lyrics }: { djId: string; lyrics?: string }) => {
       const { data, error } = await supabase.functions.invoke<{
         jobId: string;
-      }>("generate-mix", { body: { djId } });
+      }>("generate-mix", {
+        body: { djId, ...(lyrics ? { lyrics } : {}) },
+      });
       if (error) throw error;
       if (!data?.jobId) throw new Error("generate-mix did not return a jobId");
       return data.jobId;
@@ -33,7 +35,9 @@ export function useGenerateMix() {
         .select("status, error, track_id, tracks(*)")
         .eq("id", jobId!)
         .single();
+
       if (error) throw error;
+
       return data;
     },
   });

@@ -171,7 +171,7 @@ export default function DJProfileScreen() {
 
           {/* Generate a new mix in this DJ's style (temporarily disabled) */}
           <Pressable
-            onPress={() => canGenerate && !isGenerating && generate(id)}
+            onPress={() => canGenerate && !isGenerating && generate({ djId: id })}
             disabled={!canGenerate || isGenerating}
             accessibilityRole="button"
             accessibilityLabel="Generate a new mix"

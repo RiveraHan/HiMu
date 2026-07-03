@@ -33,7 +33,7 @@ export const DJ_MOODS = [
   "Melancholic",
 ] as const;
 
-export type Mood = (typeof DJ_MOODS)[number];
+export type DJMood = (typeof DJ_MOODS)[number];
 
 export const AI_FREQUENCIES = ["low", "optimal", "high"] as const;
 export type AiFrequency = (typeof AI_FREQUENCIES)[number];
