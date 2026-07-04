@@ -24,3 +24,18 @@ export function useTabBarPadding() {
 
   return base + miniPlayer + theme.spacing.stackLg;
 }
+
+/**
+ * paddingBottom for scrollable content in pushed screens (no tab bar), where
+ * the floating MiniPlayer sits just above the safe area. Reserves its height
+ * only while a track is active.
+ */
+export function useMiniPlayerPadding() {
+  const insets = useSafeAreaInsets();
+  const { theme } = useUnistyles();
+  const hasTrack = usePlayerStore((state) => state.currentTrack != null);
+
+  const miniPlayer = hasTrack ? theme.spacing.stackSm + MINI_PLAYER_HEIGHT : 0;
+
+  return insets.bottom + miniPlayer + theme.spacing.stackLg;
+}
