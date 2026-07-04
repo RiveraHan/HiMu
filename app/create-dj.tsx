@@ -2,6 +2,7 @@ import { getEdgeErrorCode } from "@/src/api/edge-errors";
 import {
   Button,
   Chip,
+  DjBirthOverlay,
   GlassInput,
   PrefSection,
   Segmented,
@@ -196,12 +197,9 @@ export default function CreateDJScreen() {
             )
           }
         />
-        {isPending && (
-          <Text variant="bodyMd" color="onSurfaceVariant" style={styles.wait}>
-            Composing its portrait… this takes a few seconds.
-          </Text>
-        )}
       </ScrollView>
+
+      {isPending && <DjBirthOverlay name={name.trim() || "your DJ"} />}
     </View>
   );
 }
@@ -233,9 +231,6 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: theme.spacing.stackSm,
-  },
-  wait: {
-    textAlign: "center",
   },
   pressed: {
     opacity: 0.6,

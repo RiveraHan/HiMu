@@ -1,15 +1,38 @@
+import { getEdgeErrorCode } from "@/src/api/edge-errors";
 import { queryKeys } from "@/src/api/queries";
 import { usePlayer } from "@/src/audio/use-player";
-import { DjHero, StatCard, Tag, Text, TrackCard } from "@/src/components";
+import {
+  DjHero,
+  GeneratingTrackCard,
+  GlassInput,
+  StatCard,
+  Tag,
+  Text,
+  TrackCard,
+} from "@/src/components";
+import { useCurrentUser } from "@/src/hooks/use-auth";
+import { useDeleteDJ } from "@/src/hooks/use-delete-dj";
 import { useDJ, useDJTracks } from "@/src/hooks/use-dj";
 import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useLiveDJIds } from "@/src/hooks/use-home";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { AudioLines, ChevronLeft, Music2, Sparkles } from "lucide-react-native";
-import { useEffect, useMemo } from "react";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import {
+  AudioLines,
+  ChevronLeft,
+  Music2,
+  Sparkles,
+  Trash2,
+} from "lucide-react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -34,9 +57,19 @@ export default function DJProfileScreen() {
   } = useGenerateMix();
   const isGenerating =
     isStarting || genStatus === "queued" || genStatus === "generating";
-  // Temporal: Kill switch for in-app generation; set to false to hide/disable the button.
-  const canGenerate: boolean = false;
-  const genFgToken = canGenerate ? "onPrimary" : "onSurfaceVariant";
+
+  const user = useCurrentUser();
+  const isOwner = !!dj?.owner_id && dj.owner_id === user?.id;
+
+  // is_instrumental lives in dj_generation_configs (closed to the client);
+  // the wizard mirrors it into personality_traits so the UI can read it.
+  const traits = (dj?.personality_traits ?? null) as {
+    isInstrumental?: boolean;
+  } | null;
+
+  const isVocal = traits?.isInstrumental === false;
+  const [lyricsText, setLyricsText] = useState("");
+  const { mutate: deleteDJ, isPending: isDeleting } = useDeleteDJ();
 
   // When a generated mix is ready, play it, refresh track lists, and clear the job.
   useEffect(() => {
@@ -53,6 +86,10 @@ export default function DJProfileScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tracks.all });
       resetGen();
     } else if (genStatus === "failed") {
+      Alert.alert(
+        "Generation failed",
+        "The mix couldn't be generated — your daily quota wasn't used. Try again.",
+      );
       resetGen();
     }
   }, [genStatus, generatedTrack, load, resetGen, queryClient]);
@@ -75,6 +112,57 @@ export default function DJProfileScreen() {
     [tracks],
   );
 
+  function onGeneratePress() {
+    if (isGenerating) return;
+    const lyrics = lyricsText.trim();
+    generate(
+      {
+        djId: id,
+        lyrics: isOwner && isVocal && lyrics ? lyrics : undefined,
+      },
+      {
+        onError: async (e) => {
+          const code = await getEdgeErrorCode(e);
+          Alert.alert(
+            "Couldn't start the mix",
+            code === "daily_quota_reached"
+              ? "Daily mix limit reached (10). Try again tomorrow."
+              : code === "dj_not_allowed"
+                ? "You can't generate with this DJ."
+                : "Something went wrong. Please try again.",
+          );
+        },
+      },
+    );
+  }
+
+  const onDeletePress = () => {
+    if (!dj) return;
+    Alert.alert(
+      "Delete DJ",
+      `This will delete ${dj.name} and its ${tracks?.length ?? 0} tracks.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () =>
+            deleteDJ(
+              { djId: id },
+              {
+                onSuccess: () => router.back(),
+                onError: () =>
+                  Alert.alert(
+                    "Delete failed",
+                    "Couldn't delete the DJ. Try again.",
+                  ),
+              },
+            ),
+        },
+      ],
+    );
+  };
+
   const header = (
     <View style={styles.header}>
       <Pressable
@@ -85,6 +173,17 @@ export default function DJProfileScreen() {
       >
         <ChevronLeft size={24} color={theme.colors.onSurface} />
       </Pressable>
+      {isOwner && (
+        <Pressable
+          onPress={onDeletePress}
+          disabled={isDeleting}
+          accessibilityRole="button"
+          accessibilityLabel="Delete DJ"
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+        >
+          <Trash2 size={20} color={theme.colors.error} />
+        </Pressable>
+      )}
     </View>
   );
 
@@ -150,7 +249,13 @@ export default function DJProfileScreen() {
             name={dj.name}
             avatarUrl={dj.avatar_url}
             isLive={!!liveIds?.has(id)}
-            tagline={dj.is_premium ? "Global Resident" : undefined}
+            tagline={
+              isOwner
+                ? "YOUR DJ"
+                : dj.is_premium
+                  ? "Global Resident"
+                  : undefined
+            }
           />
 
           {/* Stats remap */}
@@ -169,30 +274,43 @@ export default function DJProfileScreen() {
             />
           </View>
 
-          {/* Generate a new mix in this DJ's style (temporarily disabled) */}
+          {/* Own lyrics: only for your vocal DJs (server re-validates) */}
+          {isOwner && isVocal && (
+            <GlassInput
+              label="YOUR OWN LYRICS (OPTIONAL)"
+              hint="Original lyrics only — no copyrighted songs."
+              placeholder="Write the lyrics your DJ should sing…"
+              multiline
+              maxLength={1000}
+              value={lyricsText}
+              onChangeText={setLyricsText}
+              editable={!isGenerating}
+            />
+          )}
+
+          {/* Generate a new mix in this DJ's style */}
           <Pressable
-            onPress={() => canGenerate && !isGenerating && generate({ djId: id })}
-            disabled={!canGenerate || isGenerating}
+            onPress={onGeneratePress}
+            disabled={isGenerating}
             accessibilityRole="button"
             accessibilityLabel="Generate a new mix"
-            accessibilityState={{ disabled: !canGenerate || isGenerating }}
+            accessibilityState={{ disabled: isGenerating }}
             style={({ pressed }) => [
               styles.generateBtn,
-              !canGenerate && styles.generateBtnDisabled,
-              canGenerate && pressed && styles.pressed,
+              pressed && !isGenerating && styles.pressed,
             ]}
           >
             {isGenerating ? (
               <>
-                <ActivityIndicator color={theme.colors[genFgToken]} />
-                <Text variant="labelCaps" color={genFgToken}>
+                <ActivityIndicator color={theme.colors.onPrimary} />
+                <Text variant="labelCaps" color="onPrimary">
                   GENERATING…
                 </Text>
               </>
             ) : (
               <>
-                <Sparkles size={20} color={theme.colors[genFgToken]} />
-                <Text variant="labelCaps" color={genFgToken}>
+                <Sparkles size={20} color={theme.colors.onPrimary} />
+                <Text variant="labelCaps" color="onPrimary">
                   Generate new mix
                 </Text>
               </>
@@ -243,8 +361,10 @@ export default function DJProfileScreen() {
             >
               TRACKS
             </Text>
-            {queue.length > 0 ? (
+            {queue.length > 0 || isGenerating ? (
               <View style={styles.trackList}>
+                {/* The new mix lands right here when it's ready */}
+                {isGenerating && <GeneratingTrackCard vocal={isVocal} />}
                 {queue.map((t, i) => (
                   <TrackCard
                     key={t.id}
@@ -275,8 +395,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },
-  header: { flexDirection: "row" },
-  statsRow: { flexDirection: "row", gap: theme.spacing.gutter },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: theme.spacing.gutter,
+  },
   generateBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -288,10 +414,6 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.primary,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "transparent",
-  },
-  generateBtnDisabled: {
-    backgroundColor: theme.colors.glassTint,
-    borderColor: theme.colors.glassBorder,
   },
   section: { gap: theme.spacing.stackSm },
   sectionLabel: { letterSpacing: 2 },

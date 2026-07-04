@@ -2,6 +2,7 @@ export * from "./Atmosphere";
 export * from "./Avatar";
 export * from "./Button";
 export * from "./DJAvatar";
+export * from "./EqualizerBars";
 export * from "./GlassCard";
 export * from "./GlassInput";
 export * from "./GlassView";
@@ -38,4 +39,6 @@ export * from "./vibe/TopGenreCard";
 export * from "./vibe/VibeAreaChart";
 
 // DJ
+export * from "./dj/DjBirthOverlay";
 export * from "./dj/DjHero";
+export * from "./dj/GeneratingTrackCard";
