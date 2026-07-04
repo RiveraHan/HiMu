@@ -1,5 +1,5 @@
 import { usePlayer } from "@/src/audio/use-player";
-import { SeekBar, Text } from "@/src/components";
+import { IconButton, SeekBar, Text } from "@/src/components";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -8,7 +8,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import {
   ChevronDown,
-  MoreHorizontal,
   Pause,
   Play,
   Repeat,
@@ -89,16 +88,14 @@ export default function PlayerScreen() {
       >
         {/* Top Bar */}
         <View style={styles.topBar}>
-          <Pressable
+          <IconButton
+            variant="glassStrong"
+            icon={
+              <ChevronDown size={24} color={theme.colors.onSurfaceVariant} />
+            }
             onPress={close}
-            style={({ pressed }) => [
-              styles.glassBtn,
-              pressed && styles.pressed,
-            ]}
             accessibilityLabel="Close player"
-          >
-            <ChevronDown size={24} color={theme.colors.onSurfaceVariant} />
-          </Pressable>
+          />
 
           <View style={styles.topCenter}>
             <Text
@@ -112,17 +109,10 @@ export default function PlayerScreen() {
               HIGH-FIDELITY AUDIO
             </Text>
           </View>
-          <Pressable
-            onPress={() => {
-              // TODO: abrir menú de opciones (cola, compartir, ir al artista)
-            }}
-            style={({ pressed }) => [
-              styles.glassBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <MoreHorizontal size={24} color={theme.colors.onSurface} />
-          </Pressable>
+
+          {/* Balances the close button so the labels stay centered;
+              the options menu takes this slot when it exists. */}
+          <View style={styles.topSpacer} />
         </View>
 
         {/* Album art */}
@@ -288,15 +278,8 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  glassBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.colors.glassTintStrong,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
+  topSpacer: {
+    width: 44,
   },
   topCenter: {
     alignItems: "center",
@@ -398,7 +381,4 @@ const styles = StyleSheet.create((theme) => ({
       : { elevation: 12 }),
   },
   playPressed: { transform: [{ scale: 1.05 }] },
-  pressed: {
-    opacity: 0.6,
-  },
 }));
