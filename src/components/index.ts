@@ -9,6 +9,7 @@ export * from "./GlassView";
 export * from "./IconButton";
 export * from "./LibraryCard";
 export * from "./PlaylistCard";
+export * from "./ScreenHeader";
 export * from "./Tag";
 export * from "./Text";
 export * from "./TrackCard";
@@ -41,4 +42,5 @@ export * from "./vibe/VibeAreaChart";
 // DJ
 export * from "./dj/DjBirthOverlay";
 export * from "./dj/DjHero";
+export * from "./dj/DjTraitsForm";
 export * from "./dj/GeneratingTrackCard";
