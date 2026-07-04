@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CreateDJInput } from "./use-create-dj";
 
 export type UpdateDJInput = CreateDJInput & {
-  djId?: string;
+  djId: string;
   regenerateAvatar?: boolean;
 };
 
