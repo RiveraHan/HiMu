@@ -1,5 +1,6 @@
 import {
   GlassCard,
+  ScreenHeader,
   StatCard,
   TopDjRow,
   TopGenreCard,
@@ -7,23 +8,24 @@ import {
 } from "@/src/components";
 import { Text } from "@/src/components/Text";
 import { useDJs } from "@/src/hooks/use-home";
+import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { router } from "expo-router";
 import {
   AudioLines,
-  ChevronLeft,
   TrendingDown,
   TrendingUp,
   Waves,
 } from "lucide-react-native";
-import { Pressable, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function VibeCheckScreen() {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
   const { data: vibe } = useVibeCheck();
   const { data: djs } = useDJs();
 
@@ -32,33 +34,15 @@ export default function VibeCheckScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          {
-            paddingTop: insets.top + theme.spacing.stackMd,
-            paddingBottom: insets.bottom + theme.spacing.stackLg,
-          },
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.canGoBack() && router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          >
-            <ChevronLeft size={24} color={theme.colors.onSurface} />
-          </Pressable>
-          <View style={styles.headerText}>
-            <Text variant="labelCaps" color="outline">
-              THIS WEEK
-            </Text>
-            <Text variant="h1">Vibe Check</Text>
-            <Text variant="bodyMd" color="onSurfaceVariant">
-              Your sonic evolution this week.
-            </Text>
-          </View>
-        </View>
+        <ScreenHeader
+          kicker="THIS WEEK"
+          title="Vibe Check"
+          subtitle="Your sonic evolution this week."
+        />
 
         {/* Hero - Resonance Flow */}
         <GlassCard style={styles.hero}>
@@ -167,19 +151,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },
-  header: { gap: theme.spacing.stackMd },
-  headerText: { gap: theme.spacing.stackXs },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.glassTint,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
-  },
-  pressed: { opacity: 0.6 },
   hero: { gap: theme.spacing.stackMd },
   heroTop: {
     flexDirection: "row",

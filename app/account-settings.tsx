@@ -1,5 +1,6 @@
 import { usePlayer } from "@/src/audio/use-player";
 import {
+  ScreenHeader,
   SettingsInfoRow,
   SettingsSection,
   SettingsToggleRow,
@@ -8,12 +9,12 @@ import {
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useProfile } from "@/src/hooks/use-profile";
 import { useSettings, useUpdateSettings } from "@/src/hooks/use-settings";
+import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { DEFAULT_PREFERENCES, DownloadQuality } from "@/src/types/preferences";
 import { router } from "expo-router";
 import {
   AudioLines,
   ChevronDown,
-  ChevronLeft,
   Gem,
   LogOut,
   Mail,
@@ -34,6 +35,7 @@ const QUALITY_LABELS: Record<DownloadQuality, string> = {
 
 export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
   const user = useCurrentUser();
   const { data: profile } = useProfile();
@@ -101,30 +103,14 @@ export default function AccountSettingsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          {
-            paddingTop: insets.top + theme.spacing.stackMd,
-            paddingBottom: insets.bottom + theme.spacing.stackLg,
-          },
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/*Header*/}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.canGoBack() && router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          >
-            <ChevronLeft size={24} color={theme.colors.onSurface} />
-          </Pressable>
-          <View style={styles.headerText}>
-            <Text variant="h1">Settings</Text>
-            <Text variant="bodyMd" color="onSurfaceVariant">
-              Manage your HiMu experience
-            </Text>
-          </View>
-        </View>
+        <ScreenHeader
+          title="Settings"
+          subtitle="Manage your HiMu experience"
+        />
 
         {/*Account Information*/}
         <SettingsSection title="Account Information">
@@ -228,23 +214,6 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
-  },
-  header: {
-    gap: theme.spacing.stackMd,
-  },
-  headerText: { gap: theme.spacing.stackXs },
-  pressed: {
-    opacity: 0.6,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.glassTint,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
   },
   signOut: {
     flexDirection: "row",

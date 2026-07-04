@@ -1,6 +1,7 @@
 import {
   Chip,
   PrefSection,
+  ScreenHeader,
   Segmented,
   Text,
   Toggle,
@@ -10,21 +11,16 @@ import {
   useMusicPreferences,
   useUpdateMusicPreferences,
 } from "@/src/hooks/use-music-preferences";
+import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import {
   AiFrequency,
   DEFAULT_MUSIC_PREFERENCES,
   EXCLUDABLE_MOODS,
   GENRES,
 } from "@/src/types/music-preferences";
-import { router } from "expo-router";
-import {
-  AudioLines,
-  Ban,
-  ChevronLeft,
-  SlidersHorizontal,
-} from "lucide-react-native";
+import { AudioLines, Ban, SlidersHorizontal } from "lucide-react-native";
 import { useMemo } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -41,6 +37,7 @@ const AI_OPTIONS: { label: string; value: AiFrequency }[] = [
 
 export default function MusicPreferencesScreen() {
   const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
   const { data } = useMusicPreferences();
   const { mutate: update } = useUpdateMusicPreferences();
@@ -91,34 +88,15 @@ export default function MusicPreferencesScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          {
-            paddingTop: insets.top + theme.spacing.stackMd,
-            paddingBottom: insets.bottom + theme.spacing.stackLg,
-          },
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.canGoBack() && router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          >
-            <ChevronLeft size={24} color={theme.colors.onSurface} />
-          </Pressable>
-          <View style={styles.headerText}>
-            <Text variant="labelCaps" color="outline">
-              TASTE PROFILE
-            </Text>
-            <Text variant="h1">Music Preferences</Text>
-            <Text variant="bodyMd" color="onSurfaceVariant">
-              Refine your auditory landscape. Adjusting these parameters
-              directly influences your personalized HiMu streams.
-            </Text>
-          </View>
-        </View>
+        <ScreenHeader
+          kicker="TASTE PROFILE"
+          title="Music Preferences"
+          subtitle="Refine your auditory landscape. Adjusting these parameters directly influences your personalized HiMu streams."
+        />
 
         {/* Genre Affinity */}
         <PrefSection
@@ -239,22 +217,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },
-  header: {
-    gap: theme.spacing.stackMd,
-  },
-  headerText: {
-    gap: theme.spacing.stackXs,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.glassTint,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
-  },
   chipWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -265,8 +227,5 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "space-between",
     gap: theme.spacing.gutter,
-  },
-  pressed: {
-    opacity: 0.6,
   },
 }));

@@ -5,6 +5,8 @@ import {
   DjHero,
   GeneratingTrackCard,
   GlassInput,
+  IconButton,
+  ScreenHeader,
   StatCard,
   Tag,
   Text,
@@ -15,12 +17,12 @@ import { useDeleteDJ } from "@/src/hooks/use-delete-dj";
 import { useDJ, useDJTracks } from "@/src/hooks/use-dj";
 import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useLiveDJIds } from "@/src/hooks/use-home";
+import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   AudioLines,
-  ChevronLeft,
   Music2,
   SlidersHorizontal,
   Sparkles,
@@ -40,6 +42,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 export default function DJProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
 
   const { data: dj, isLoading } = useDJ(id);
@@ -165,37 +168,30 @@ export default function DJProfileScreen() {
   };
 
   const header = (
-    <View style={styles.header}>
-      <Pressable
-        onPress={() => router.canGoBack() && router.back()}
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-      >
-        <ChevronLeft size={24} color={theme.colors.onSurface} />
-      </Pressable>
-      {isOwner && (
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => router.push(`/train-dj/${id}`)}
-            accessibilityRole="button"
-            accessibilityLabel="Train your DJ"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          >
-            <SlidersHorizontal size={20} color={theme.colors.onSurface} />
-          </Pressable>
-          <Pressable
-            onPress={onDeletePress}
-            disabled={isDeleting}
-            accessibilityRole="button"
-            accessibilityLabel="Delete DJ"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          >
-            <Trash2 size={20} color={theme.colors.error} />
-          </Pressable>
-        </View>
-      )}
-    </View>
+    <ScreenHeader
+      actions={
+        isOwner ? (
+          <>
+            <IconButton
+              variant="glass"
+              icon={
+                <SlidersHorizontal size={20} color={theme.colors.onSurface} />
+              }
+              onPress={() => router.push(`/train-dj/${id}`)}
+              disabled={isDeleting}
+              accessibilityLabel="Train your DJ"
+            />
+            <IconButton
+              variant="glass"
+              icon={<Trash2 size={20} color={theme.colors.error} />}
+              onPress={onDeletePress}
+              disabled={isDeleting}
+              accessibilityLabel="Delete DJ"
+            />
+          </>
+        ) : undefined
+      }
+    />
   );
 
   if (isLoading) {
@@ -240,12 +236,7 @@ export default function DJProfileScreen() {
   return (
     <View style={styles.root}>
       <ScrollView
-        contentContainerStyle={{
-          paddingBottom:
-            insets.bottom +
-            theme.spacing.stackLg +
-            (currentId ? 64 + theme.spacing.stackSm : 0),
-        }}
+        contentContainerStyle={{ paddingBottom }}
         showsVerticalScrollIndicator={false}
       >
         <View
@@ -406,14 +397,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  headerActions: {
-    flexDirection: "row",
-    gap: theme.spacing.stackSm,
-  },
   statsRow: {
     flexDirection: "row",
     gap: theme.spacing.gutter,
@@ -438,16 +421,6 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackSm,
   },
   trackList: { gap: theme.spacing.stackMd },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.glassTint,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
-  },
   pressed: { opacity: 0.6 },
   center: {
     flex: 1,
