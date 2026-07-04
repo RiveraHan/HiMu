@@ -21,7 +21,6 @@ import { getListeningIdentity } from "@/src/utils/listening-identity";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useFocusEffect } from "expo-router";
 import {
-  Bell,
   ChevronRight,
   CircleStar,
   Clock,
@@ -34,9 +33,11 @@ import {
 } from "lucide-react-native";
 import { useCallback } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
   const { data: profile } = useProfile();
   const { data: stats } = useListeningTotals();
@@ -73,7 +74,10 @@ export default function ProfileScreen() {
   return (
     <View style={styles.root}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/*Perfil Header*/}
@@ -223,13 +227,6 @@ export default function ProfileScreen() {
               onPress={() => router.push("/preferences")}
             />
             <SettingRow
-              icon={<Bell size={20} color={theme.colors.onSurfaceVariant} />}
-              label="Notifications"
-              onPress={() => {
-                // TODO: Navigate to notifications
-              }}
-            />
-            <SettingRow
               icon={<Crown size={20} color={theme.colors.tertiary} />}
               label="Subscription"
               right={
@@ -261,7 +258,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
-    paddingTop: theme.spacing.stackLg * 2,
     gap: theme.spacing.stackLg,
   },
   header: {
