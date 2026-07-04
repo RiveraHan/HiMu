@@ -10,7 +10,9 @@ export function useDJs() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("djs")
-        .select("id, name, slug, avatar_url, genre_specialties, is_premium");
+        .select(
+          "id, name, slug, avatar_url, genre_specialties, is_premium, owner_id",
+        );
 
       if (error) throw error;
 
