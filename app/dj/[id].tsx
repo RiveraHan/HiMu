@@ -22,6 +22,7 @@ import {
   AudioLines,
   ChevronLeft,
   Music2,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
 } from "lucide-react-native";
@@ -174,15 +175,25 @@ export default function DJProfileScreen() {
         <ChevronLeft size={24} color={theme.colors.onSurface} />
       </Pressable>
       {isOwner && (
-        <Pressable
-          onPress={onDeletePress}
-          disabled={isDeleting}
-          accessibilityRole="button"
-          accessibilityLabel="Delete DJ"
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-        >
-          <Trash2 size={20} color={theme.colors.error} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push(`/train-dj/${id}`)}
+            accessibilityRole="button"
+            accessibilityLabel="Train your DJ"
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          >
+            <SlidersHorizontal size={20} color={theme.colors.onSurface} />
+          </Pressable>
+          <Pressable
+            onPress={onDeletePress}
+            disabled={isDeleting}
+            accessibilityRole="button"
+            accessibilityLabel="Delete DJ"
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          >
+            <Trash2 size={20} color={theme.colors.error} />
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -398,6 +409,10 @@ const styles = StyleSheet.create((theme) => ({
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: theme.spacing.stackSm,
   },
   statsRow: {
     flexDirection: "row",
