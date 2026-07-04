@@ -2,32 +2,24 @@ import { getEdgeErrorCode } from "@/src/api/edge-errors";
 import {
   Avatar,
   Button,
-  Chip,
+  canSubmitDjTraits,
+  DjTraitsForm,
   EqualizerBars,
-  GlassInput,
   PrefSection,
-  Segmented,
+  ScreenHeader,
   Text,
-  VibeSlider,
+  type DjTraits,
 } from "@/src/components";
 import { useDJ } from "@/src/hooks/use-dj";
 import { usePhaseRotation } from "@/src/hooks/use-phase-rotation";
+import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useUpdateDJ } from "@/src/hooks/use-update-dj";
-import { DJ_MOODS, GENRES } from "@/src/types/music-preferences";
 import { router, useLocalSearchParams } from "expo-router";
-import { ChevronLeft, RefreshCw } from "lucide-react-native";
+import { RefreshCw } from "lucide-react-native";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-
-const MAX_PICKS = 3;
 
 const REGEN_PHASES = [
   "Sketching a new look…",
@@ -76,50 +68,42 @@ export default function TrainDJScreen() {
 
 function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
   const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
 
-  const traits = (dj.personality_traits ?? {}) as {
+  const saved = (dj.personality_traits ?? {}) as {
     energy?: number;
     vibe?: string | null;
     isInstrumental?: boolean;
   };
 
-  const [name, setName] = useState(dj.name);
-  const [genres, setGenres] = useState<string[]>(dj.genre_specialties ?? []);
-  const [moods, setMoods] = useState<string[]>(dj.mood_tags ?? []);
-  const [energy, setEnergy] = useState(traits.energy ?? 5);
-  const [mode, setMode] = useState<"instrumental" | "vocal">(
-    traits.isInstrumental === false ? "vocal" : "instrumental",
-  );
-  const [vibe, setVibe] = useState(traits.vibe ?? "");
+  const [traits, setTraits] = useState<DjTraits>({
+    name: dj.name,
+    genres: dj.genre_specialties ?? [],
+    moods: dj.mood_tags ?? [],
+    energy: saved.energy ?? 5,
+    mode: saved.isInstrumental === false ? "vocal" : "instrumental",
+    vibe: saved.vibe ?? "",
+  });
   const [action, setAction] = useState<"save" | "regen" | null>(null);
 
   const { mutate: updateDJ, isPending } = useUpdateDJ();
   const regenerating = isPending && action === "regen";
 
-  const toggle = (list: string[], set: (v: string[]) => void, value: string) =>
-    set(
-      list.includes(value)
-        ? list.filter((v) => v !== value)
-        : list.length >= MAX_PICKS
-          ? list
-          : [...list, value],
-    );
-
-  const canSubmit =
-    name.trim().length >= 2 && genres.length > 0 && moods.length > 0;
+  const patch = (p: Partial<DjTraits>) => setTraits((t) => ({ ...t, ...p }));
+  const canSubmit = canSubmitDjTraits(traits);
 
   function submit(regenerateAvatar: boolean) {
     setAction(regenerateAvatar ? "regen" : "save");
     updateDJ(
       {
         djId,
-        name: name.trim(),
-        genres,
-        moods,
-        energy,
-        isInstrumental: mode === "instrumental",
-        vibe: vibe.trim() || undefined,
+        name: traits.name.trim(),
+        genres: traits.genres,
+        moods: traits.moods,
+        energy: traits.energy,
+        isInstrumental: traits.mode === "instrumental",
+        vibe: traits.vibe.trim() || undefined,
         regenerateAvatar,
       },
       {
@@ -161,30 +145,16 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          {
-            paddingTop: insets.top + theme.spacing.stackMd,
-            paddingBottom: insets.bottom + theme.spacing.stackLg,
-          },
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.canGoBack() && router.back()}
-            disabled={isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          >
-            <ChevronLeft size={24} color={theme.colors.onSurface} />
-          </Pressable>
-          <Text variant="h1">Train your DJ</Text>
-          <Text variant="bodyMd" color="onSurfaceVariant">
-            Refine how {dj.name} shapes its music.
-          </Text>
-        </View>
+        <ScreenHeader
+          title="Train your DJ"
+          subtitle={`Refine how ${dj.name} shapes its music.`}
+          disabled={isPending}
+        />
 
         {/* Portrait */}
         <PrefSection
@@ -212,88 +182,7 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
           </View>
         </PrefSection>
 
-        {/* Identity */}
-        <PrefSection title="Identity" subtitle="What should we call it?">
-          <GlassInput
-            placeholder="e.g. Lumen"
-            value={name}
-            onChangeText={setName}
-            maxLength={24}
-            autoCapitalize="words"
-            editable={!isPending}
-          />
-        </PrefSection>
-
-        {/* Genres */}
-        <PrefSection title="Genres" subtitle={`Pick 1-${MAX_PICKS}`}>
-          <View style={styles.chipWrap}>
-            {GENRES.map((g) => (
-              <Chip
-                key={g}
-                label={g}
-                selected={genres.includes(g)}
-                onPress={() => toggle(genres, setGenres, g)}
-                disabled={isPending}
-              />
-            ))}
-          </View>
-        </PrefSection>
-
-        {/* Moods */}
-        <PrefSection title="Moods" subtitle={`Pick 1-${MAX_PICKS}`}>
-          <View style={styles.chipWrap}>
-            {DJ_MOODS.map((m) => (
-              <Chip
-                key={m}
-                label={m}
-                selected={moods.includes(m)}
-                onPress={() => toggle(moods, setMoods, m)}
-                disabled={isPending}
-              />
-            ))}
-          </View>
-        </PrefSection>
-
-        {/* Energy */}
-        <PrefSection title="Energy" subtitle={`${energy}/10`}>
-          <VibeSlider
-            leftLabel="CALM"
-            rightLabel="INTENSE"
-            value={energy}
-            onCommit={setEnergy}
-            minimumValue={1}
-            maximumValue={10}
-            step={1}
-            disabled={isPending}
-          />
-        </PrefSection>
-
-        {/* Sound */}
-        <PrefSection
-          title="Sound"
-          subtitle="Vocal DJs can sing your own lyrics"
-        >
-          <Segmented<"instrumental" | "vocal">
-            options={[
-              { label: "INSTRUMENTAL", value: "instrumental" },
-              { label: "VOCAL", value: "vocal" },
-            ]}
-            value={mode}
-            onChange={setMode}
-            disabled={isPending}
-          />
-        </PrefSection>
-
-        {/* Vibe */}
-        <PrefSection title="Vibe" subtitle="Optional - a hint of personality">
-          <GlassInput
-            placeholder="e.g. late-night rooftop textures"
-            value={vibe}
-            onChangeText={setVibe}
-            maxLength={140}
-            editable={!isPending}
-          />
-        </PrefSection>
+        <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
 
         <Button
           label="Save changes"
@@ -320,25 +209,6 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },
-  header: {
-    gap: theme.spacing.stackSm,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.glassTint,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
-    marginBottom: theme.spacing.stackSm,
-  },
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.stackSm,
-  },
   portraitRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -354,8 +224,5 @@ const styles = StyleSheet.create((theme) => ({
   },
   regenBtn: {
     flex: 1,
-  },
-  pressed: {
-    opacity: 0.6,
   },
 }));

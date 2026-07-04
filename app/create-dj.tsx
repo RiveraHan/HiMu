@@ -1,59 +1,49 @@
 import { getEdgeErrorCode } from "@/src/api/edge-errors";
 import {
   Button,
-  Chip,
+  canSubmitDjTraits,
   DjBirthOverlay,
-  GlassInput,
-  PrefSection,
-  Segmented,
-  Text,
-  VibeSlider,
+  DjTraitsForm,
+  ScreenHeader,
+  type DjTraits,
 } from "@/src/components";
 import { useCreateDJ } from "@/src/hooks/use-create-dj";
-import { DJ_MOODS, GENRES } from "@/src/types/music-preferences";
+import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { router } from "expo-router";
-import { ChevronLeft, Sparkles } from "lucide-react-native";
+import { Sparkles } from "lucide-react-native";
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
-const MAX_PICKS = 3;
-
 export default function CreateDJScreen() {
   const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
 
-  const [name, setName] = useState("");
-  const [genres, setGenres] = useState<string[]>([]);
-  const [moods, setMoods] = useState<string[]>([]);
-  const [energy, setEnergy] = useState(5);
-  const [mode, setMode] = useState<"instrumental" | "vocal">("instrumental");
-  const [vibe, setVibe] = useState("");
+  const [traits, setTraits] = useState<DjTraits>({
+    name: "",
+    genres: [],
+    moods: [],
+    energy: 5,
+    mode: "instrumental",
+    vibe: "",
+  });
 
   const { mutate: createDJ, isPending } = useCreateDJ();
 
-  const toggle = (list: string[], set: (v: string[]) => void, value: string) =>
-    set(
-      list.includes(value)
-        ? list.filter((v) => v !== value)
-        : list.length >= MAX_PICKS
-          ? list
-          : [...list, value],
-    );
-
-  const canSubmit =
-    name.trim().length >= 2 && genres.length > 0 && moods.length > 0;
+  const patch = (p: Partial<DjTraits>) => setTraits((t) => ({ ...t, ...p }));
+  const displayName = traits.name.trim() || "your DJ";
 
   function onSubmit() {
     createDJ(
       {
-        name: name.trim(),
-        genres,
-        moods,
-        energy,
-        isInstrumental: mode === "instrumental",
-        vibe: vibe.trim() || undefined,
+        name: traits.name.trim(),
+        genres: traits.genres,
+        moods: traits.moods,
+        energy: traits.energy,
+        isInstrumental: traits.mode === "instrumental",
+        vibe: traits.vibe.trim() || undefined,
       },
       {
         onSuccess: ({ djId }) => router.replace(`/dj/${djId}`),
@@ -77,119 +67,24 @@ export default function CreateDJScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          {
-            paddingTop: insets.top + theme.spacing.stackMd,
-            paddingBottom: insets.bottom + theme.spacing.stackLg,
-          },
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable
-            onPress={() => router.canGoBack() && router.back()}
-            disabled={isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          >
-            <ChevronLeft size={24} color={theme.colors.onSurface} />
-          </Pressable>
-          <Text variant="h1">Create your DJ</Text>
-          <Text variant="bodyMd" color="onSurfaceVariant">
-            Shape a companion that generates music just for you.
-          </Text>
-        </View>
+        <ScreenHeader
+          title="Create your DJ"
+          subtitle="Shape a companion that generates music just for you."
+          disabled={isPending}
+        />
 
-        {/* Identity */}
-        <PrefSection title="Identity" subtitle="What should we call it?">
-          <GlassInput
-            placeholder="e.g. Lumen"
-            value={name}
-            onChangeText={setName}
-            maxLength={24}
-            autoCapitalize="words"
-            editable={!isPending}
-          />
-        </PrefSection>
-
-        {/* Genres */}
-        <PrefSection title="Genres" subtitle={`Pick 1-${MAX_PICKS}`}>
-          <View style={styles.chipWrap}>
-            {GENRES.map((g) => (
-              <Chip
-                key={g}
-                label={g}
-                selected={genres.includes(g)}
-                onPress={() => toggle(genres, setGenres, g)}
-                disabled={isPending}
-              />
-            ))}
-          </View>
-        </PrefSection>
-
-        {/* Moods */}
-        <PrefSection title="Moods" subtitle={`Pick 1-${MAX_PICKS}`}>
-          <View style={styles.chipWrap}>
-            {DJ_MOODS.map((m) => (
-              <Chip
-                key={m}
-                label={m}
-                selected={moods.includes(m)}
-                onPress={() => toggle(moods, setMoods, m)}
-                disabled={isPending}
-              />
-            ))}
-          </View>
-        </PrefSection>
-
-        {/* Energy */}
-        <PrefSection title="Energy" subtitle={`${energy}/10`}>
-          <VibeSlider
-            leftLabel="CALM"
-            rightLabel="INTENSE"
-            value={energy}
-            onCommit={setEnergy}
-            minimumValue={1}
-            maximumValue={10}
-            step={1}
-            disabled={isPending}
-          />
-        </PrefSection>
-
-        {/* Sound */}
-        <PrefSection
-          title="Sound"
-          subtitle="Vocal DJs can sing your own lyrics later"
-        >
-          <Segmented<"instrumental" | "vocal">
-            options={[
-              { label: "INSTRUMENTAL", value: "instrumental" },
-              { label: "VOCAL", value: "vocal" },
-            ]}
-            value={mode}
-            onChange={setMode}
-            disabled={isPending}
-          />
-        </PrefSection>
-
-        {/* Vibe */}
-        <PrefSection title="Vibe" subtitle="Optional - a hint of personality">
-          <GlassInput
-            placeholder="e.g late-night rooftop textures"
-            value={vibe}
-            onChangeText={setVibe}
-            maxLength={140}
-            editable={!isPending}
-          />
-        </PrefSection>
+        <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
 
         <Button
           label="Bring my DJ to life"
-          loadingLabel={`Giving life to ${name.trim() || "your DJ"}…`}
+          loadingLabel={`Giving life to ${displayName}…`}
           loading={isPending}
-          disabled={!canSubmit}
+          disabled={!canSubmitDjTraits(traits)}
           onPress={onSubmit}
           leftIcon={
             !isPending && (
@@ -199,7 +94,7 @@ export default function CreateDJScreen() {
         />
       </ScrollView>
 
-      {isPending && <DjBirthOverlay name={name.trim() || "your DJ"} />}
+      {isPending && <DjBirthOverlay name={displayName} />}
     </View>
   );
 }
@@ -212,27 +107,5 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
-  },
-  header: {
-    gap: theme.spacing.stackSm,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: theme.colors.glassTint,
-    borderRadius: theme.borderRadius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
-    marginBottom: theme.spacing.stackSm,
-  },
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.stackSm,
-  },
-  pressed: {
-    opacity: 0.6,
   },
 }));
