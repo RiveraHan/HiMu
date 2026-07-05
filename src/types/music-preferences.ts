@@ -1,39 +1,15 @@
-export const GENRES = [
-  "Ambient",
-  "Neo-Classical",
-  "IDM",
-  "Jazz",
-  "Post-Rock",
-  "Minimal Techno",
-  "Drone",
-] as const;
+// The catalog lives in _shared so the edge functions validate against the
+// exact same data; this module re-exports it as the app-facing facade.
 
-export type Genre = (typeof GENRES)[number];
-
-export const EXCLUDABLE_MOODS = [
-  "Aggressive",
-  "Frantic",
-  "Melancholic",
-  "Somber",
-  "Chaotic",
-  "Tense",
-  "Anxious",
-] as const;
-
-export const DJ_MOODS = [
-  "Focus",
-  "Relax",
-  "Dreamy",
-  "Meditate",
-  "Nature",
-  "Sleep",
-  "Energetic",
-  "Uplifting",
-  "Dark",
-  "Melancholic",
-] as const;
-
-export type DJMood = (typeof DJ_MOODS)[number];
+export {
+  DJ_MOODS,
+  EXCLUDABLE_MOODS,
+  FOCUS_MOODS,
+  GENRE_GROUPS,
+  GENRES,
+  MOOD_GROUPS
+} from "@/supabase/functions/_shared/music-catalog";
+export type { DJMood, Genre } from "@/supabase/functions/_shared/music-catalog";
 
 export const AI_FREQUENCIES = ["low", "optimal", "high"] as const;
 export type AiFrequency = (typeof AI_FREQUENCIES)[number];

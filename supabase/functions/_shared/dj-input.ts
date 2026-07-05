@@ -1,27 +1,5 @@
+import { DJ_MOODS, GENRES } from "./music-catalog.ts";
 import { sanitize } from "./text.ts";
-
-export const GENRES = [
-  "Ambient",
-  "Neo-Classical",
-  "IDM",
-  "Jazz",
-  "Post-Rock",
-  "Minimal Techno",
-  "Drone",
-];
-
-export const DJ_MOODS = [
-  "Focus",
-  "Relax",
-  "Dreamy",
-  "Meditate",
-  "Nature",
-  "Sleep",
-  "Energetic",
-  "Uplifting",
-  "Dark",
-  "Melancholic",
-];
 
 export type DjInput = {
   name: string;
@@ -32,7 +10,7 @@ export type DjInput = {
   vibe: string | null;
 };
 
-function pickList(value: unknown, allowed: string[]): string[] | null {
+function pickList(value: unknown, allowed: readonly string[]): string[] | null {
   if (!Array.isArray(value)) return null;
 
   const picks = [...new Set(value.filter((v) => typeof v === "string"))];
