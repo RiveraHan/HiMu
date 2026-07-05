@@ -1,11 +1,9 @@
 import { GlassInput } from "@/src/components/GlassInput";
-import { Chip } from "@/src/components/preferences/Chip";
+import { GroupedChipPicker } from "@/src/components/preferences/GroupedChipPicker";
 import { PrefSection } from "@/src/components/preferences/PrefSection";
 import { Segmented } from "@/src/components/preferences/Segmented";
 import { VibeSlider } from "@/src/components/preferences/VibeSlider";
-import { DJ_MOODS, GENRES } from "@/src/types/music-preferences";
-import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { GENRE_GROUPS, MOOD_GROUPS } from "@/src/types/music-preferences";
 
 const MAX_PICKS = 3;
 
@@ -58,32 +56,22 @@ export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
 
       {/* Genres */}
       <PrefSection title="Genres" subtitle={`Pick 1-${MAX_PICKS}`}>
-        <View style={styles.chipWrap}>
-          {GENRES.map((g) => (
-            <Chip
-              key={g}
-              label={g}
-              selected={values.genres.includes(g)}
-              onPress={() => toggleGenre(g)}
-              disabled={disabled}
-            />
-          ))}
-        </View>
+        <GroupedChipPicker
+          groups={GENRE_GROUPS}
+          selected={values.genres}
+          onToggle={toggleGenre}
+          disabled={disabled}
+        />
       </PrefSection>
 
       {/* Moods */}
       <PrefSection title="Moods" subtitle={`Pick 1-${MAX_PICKS}`}>
-        <View style={styles.chipWrap}>
-          {DJ_MOODS.map((m) => (
-            <Chip
-              key={m}
-              label={m}
-              selected={values.moods.includes(m)}
-              onPress={() => toggleMood(m)}
-              disabled={disabled}
-            />
-          ))}
-        </View>
+        <GroupedChipPicker
+          groups={MOOD_GROUPS}
+          selected={values.moods}
+          onToggle={toggleMood}
+          disabled={disabled}
+        />
       </PrefSection>
 
       {/* Energy */}
@@ -129,11 +117,3 @@ export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
     </>
   );
 }
-
-const styles = StyleSheet.create((theme) => ({
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.stackSm,
-  },
-}));

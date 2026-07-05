@@ -1,5 +1,6 @@
 import {
   Chip,
+  GroupedChipPicker,
   PrefSection,
   ScreenHeader,
   Segmented,
@@ -16,7 +17,7 @@ import {
   AiFrequency,
   DEFAULT_MUSIC_PREFERENCES,
   EXCLUDABLE_MOODS,
-  GENRES,
+  GENRE_GROUPS,
 } from "@/src/types/music-preferences";
 import { AudioLines, Ban, SlidersHorizontal } from "lucide-react-native";
 import { useMemo } from "react";
@@ -103,17 +104,12 @@ export default function MusicPreferencesScreen() {
           title="Genre Affinity"
           icon={<AudioLines size={20} color={theme.colors.primaryContainer} />}
         >
-          <View style={styles.chipWrap}>
-            {GENRES.map((g) => (
-              <Chip
-                key={g}
-                label={g}
-                selected={prefs.genres.includes(g)}
-                disabled={!ready}
-                onPress={() => toggleGenre(g)}
-              />
-            ))}
-          </View>
+          <GroupedChipPicker
+            groups={GENRE_GROUPS}
+            selected={prefs.genres}
+            onToggle={toggleGenre}
+            disabled={!ready}
+          />
         </PrefSection>
 
         {/* Vibe Mapping */}
