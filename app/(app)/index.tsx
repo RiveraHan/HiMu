@@ -1,24 +1,20 @@
 import { usePlayer } from "@/src/audio/use-player";
-import {
-  Avatar,
-  DJAvatar,
-  IconButton,
-  LibraryCard,
-  Text,
-} from "@/src/components";
+import { Avatar, DJAvatar, LibraryCard, Text } from "@/src/components";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useAIMixTracks, useDJs, useLiveDJIds } from "@/src/hooks/use-home";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { router } from "expo-router";
-import { ChevronRight, Play, Plus, Settings } from "lucide-react-native";
+import { ChevronRight, Play, Plus } from "lucide-react-native";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function HomeScreen() {
   const { theme } = useUnistyles();
+  const insets = useSafeAreaInsets();
   const user = useCurrentUser();
   const { data: djs } = useDJs();
   const { data: liveDJIds } = useLiveDJIds();
@@ -62,46 +58,32 @@ export default function HomeScreen() {
   return (
     <View style={styles.root}>
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom }]}
-        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* Header: greeting + profile shortcut */}
         <View style={styles.header}>
-          <View style={styles.headerSide} />
-
-          <Text variant="labelCaps" style={styles.headerTitle}>
-            HIMU
-          </Text>
-
-          <View style={[styles.headerSide, styles.headerRight]}>
-            <Pressable
-              onPress={() => {}}
-              accessibilityLabel="Profile"
-              style={({ pressed }) => pressed && styles.pressed}
-            >
-              <Avatar
-                src={user?.user_metadata?.avatar_url}
-                fallback={user?.email ?? "U"}
-                size="sm"
-              />
-            </Pressable>
-            <IconButton
-              icon={
-                <Settings size={22} color={theme.colors.onSurfaceVariant} />
-              }
-              onPress={() => {}}
-              accessibilityLabel="Settings"
-              size="sm"
-            />
+          <View style={styles.greeting}>
+            <Text variant="h1">{getGreeting()}</Text>
+            <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
+              Your sonic environment awaits.
+            </Text>
           </View>
-        </View>
-        {/* Greeting */}
-        <View style={styles.greeting}>
-          <Text variant="h1">{getGreeting()}</Text>
-          <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
-            Your sonic environment awaits.
-          </Text>
+          <Pressable
+            onPress={() => router.push("/profile")}
+            accessibilityRole="button"
+            accessibilityLabel="Open your profile"
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Avatar
+              src={user?.user_metadata?.avatar_url}
+              fallback={user?.email ?? "U"}
+              size="md"
+            />
+          </Pressable>
         </View>
 
         {/* Your DJs */}
@@ -234,26 +216,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
-    paddingTop: theme.spacing.stackLg * 2,
     gap: theme.spacing.stackLg,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  headerSide: {
-    flex: 1,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: theme.spacing.stackSm,
-  },
-  headerTitle: {
-    letterSpacing: 4,
+    justifyContent: "space-between",
+    gap: theme.spacing.gutter,
   },
   greeting: {
+    flex: 1,
     gap: theme.spacing.stackXs,
   },
   focusEntry: {

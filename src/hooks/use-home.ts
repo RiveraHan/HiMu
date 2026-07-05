@@ -1,8 +1,7 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { FOCUS_MOODS } from "@/src/types/music-preferences";
 import { useQuery } from "@tanstack/react-query";
-
-const FOCUS_MOODS = ["Focus", "Relax", "Dreamy", "Meditate", "Nature", "Sleep"];
 
 export function useDJs() {
   return useQuery({

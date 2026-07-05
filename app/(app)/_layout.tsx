@@ -1,13 +1,7 @@
 import { useAuthStore } from "@/src/stores/auth-store";
 import { BlurView } from "expo-blur";
 import { Redirect, Tabs } from "expo-router";
-import {
-  Compass,
-  Home,
-  type LucideIcon,
-  Sparkles,
-  User,
-} from "lucide-react-native";
+import { Home, type LucideIcon, User } from "lucide-react-native";
 import {
   ActivityIndicator,
   Platform,
@@ -91,22 +85,10 @@ export default function Applayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="discover"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon Icon={Compass} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="community"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon Icon={Sparkles} focused={focused} />
-          ),
-        }}
-      />
+      {/* Hidden until Discovery/Community actually ship (blocked on the
+          moderation/is_public prerequisites) — no dead tabs in the bar. */}
+      <Tabs.Screen name="discover" options={{ href: null }} />
+      <Tabs.Screen name="community" options={{ href: null }} />
       <Tabs.Screen
         name="profile"
         options={{

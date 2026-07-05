@@ -8,7 +8,8 @@ type Props = {
   icon: ReactNode;
   onPress?: () => void;
   disabled?: boolean;
-  size: keyof typeof SIZES;
+  size?: keyof typeof SIZES;
+  variant?: "plain" | "glass" | "glassStrong";
   accessibilityLabel?: string;
   testID?: string;
 };
@@ -18,6 +19,7 @@ export function IconButton({
   onPress,
   disabled = false,
   size = "md",
+  variant = "plain",
   accessibilityLabel,
   testID,
 }: Props) {
@@ -34,6 +36,8 @@ export function IconButton({
       testID={testID}
       style={({ pressed }) => [
         styles.base,
+        variant === "glass" && styles.glass,
+        variant === "glassStrong" && styles.glassStrong,
         { width: dimension, height: dimension },
         disabled && styles.disabled,
         pressed && styles.pressed,
@@ -50,6 +54,16 @@ const styles = StyleSheet.create((theme) => ({
     justifyContent: "center",
     borderRadius: theme.borderRadius.full,
     borderCurve: "continuous",
+  },
+  glass: {
+    backgroundColor: theme.colors.glassTint,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
+  },
+  glassStrong: {
+    backgroundColor: theme.colors.glassTintStrong,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
   },
   pressed: {
     transform: [{ scale: 0.95 }],

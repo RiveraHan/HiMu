@@ -1,5 +1,5 @@
 import { usePlayer } from "@/src/audio/use-player";
-import { Text } from "@/src/components";
+import { IconButton, Text } from "@/src/components";
 import { FocusAtmosphere } from "@/src/components/focus/FocusAtmosphere";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useFocusTimer } from "@/src/hooks/use-focus-timer";
@@ -132,18 +132,12 @@ export default function FocusModeScreen() {
             </Text>
           </View>
 
-          <Pressable
+          <IconButton
+            variant="glass"
+            icon={<X size={24} color={theme.colors.onSurfaceVariant} />}
             onPress={() => router.canGoBack() && router.back()}
-            accessibilityRole="button"
             accessibilityLabel="End focus session"
-            style={({ pressed }) => [
-              styles.closeBtn,
-              pressed && styles.pressed,
-            ]}
-          >
-            <X size={24} color={theme.colors.onSurfaceVariant} />
-          </Pressable>
-          
+          />
         </View>
 
         {/* Center */}
@@ -269,17 +263,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   label: { letterSpacing: 2 },
   timer: { fontVariant: ["tabular-nums"] },
-  closeBtn: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: "rgba(42,41,47,0.3)",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
-  },
-  pressed: { opacity: 0.6 },
   center: {
     flex: 1,
     alignItems: "center",

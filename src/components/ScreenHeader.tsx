@@ -1,0 +1,82 @@
+import { IconButton } from "@/src/components/IconButton";
+import { Text } from "@/src/components/Text";
+import { router } from "expo-router";
+import { ChevronLeft, X } from "lucide-react-native";
+import type { ReactNode } from "react";
+import { View } from "react-native";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+
+type Props = {
+  variant?: "back" | "close";
+  onLeftPress?: () => void;
+  kicker?: string;
+  title?: string;
+  subtitle?: string;
+  actions?: ReactNode;
+  disabled?: boolean;
+};
+
+const goBack = () => {
+  if (router.canGoBack()) router.back();
+};
+
+export function ScreenHeader({
+  variant = "back",
+  onLeftPress = goBack,
+  kicker,
+  title,
+  subtitle,
+  actions,
+  disabled = false,
+}: Props) {
+  const { theme } = useUnistyles();
+  const Icon = variant === "back" ? ChevronLeft : X;
+
+  return (
+    <View style={styles.root}>
+      <View style={styles.row}>
+        <IconButton
+          variant="glass"
+          icon={<Icon size={24} color={theme.colors.onSurface} />}
+          onPress={onLeftPress}
+          disabled={disabled}
+          accessibilityLabel={variant === "back" ? "Back" : "Close"}
+        />
+        {actions && <View style={styles.actions}>{actions}</View>}
+      </View>
+      {(kicker || title || subtitle) && (
+        <View style={styles.text}>
+          {!!kicker && (
+            <Text variant="labelCaps" color="outline">
+              {kicker}
+            </Text>
+          )}
+          {!!title && <Text variant="h1">{title}</Text>}
+          {!!subtitle && (
+            <Text variant="bodyMd" color="onSurfaceVariant">
+              {subtitle}
+            </Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  root: {
+    gap: theme.spacing.stackMd,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  actions: {
+    flexDirection: "row",
+    gap: theme.spacing.stackSm,
+  },
+  text: {
+    gap: theme.spacing.stackXs,
+  },
+}));
