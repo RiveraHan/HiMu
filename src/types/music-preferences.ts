@@ -3,7 +3,6 @@
 
 export {
   DJ_MOODS,
-  EXCLUDABLE_MOODS,
   FOCUS_MOODS,
   GENRE_GROUPS,
   GENRES,

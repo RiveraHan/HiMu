@@ -1,11 +1,7 @@
 import {
-  Chip,
   GroupedChipPicker,
   PrefSection,
   ScreenHeader,
-  Segmented,
-  Text,
-  Toggle,
   VibeSlider,
 } from "@/src/components";
 import {
@@ -14,27 +10,14 @@ import {
 } from "@/src/hooks/use-music-preferences";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import {
-  AiFrequency,
   DEFAULT_MUSIC_PREFERENCES,
-  EXCLUDABLE_MOODS,
   GENRE_GROUPS,
+  MOOD_GROUPS,
 } from "@/src/types/music-preferences";
 import { AudioLines, Ban, SlidersHorizontal } from "lucide-react-native";
-import { useMemo } from "react";
-import { Alert, ScrollView, View } from "react-native";
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-} from "react-native-reanimated";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-
-const AI_OPTIONS: { label: string; value: AiFrequency }[] = [
-  { label: "Low", value: "low" },
-  { label: "Optimal", value: "optimal" },
-  { label: "High", value: "high" },
-];
 
 export default function MusicPreferencesScreen() {
   const insets = useSafeAreaInsets();
@@ -46,14 +29,8 @@ export default function MusicPreferencesScreen() {
   const prefs = data ?? DEFAULT_MUSIC_PREFERENCES;
   const ready = !!data;
 
-  const availableMoods = useMemo(
-    () => EXCLUDABLE_MOODS.filter((m) => !prefs.excludedMoods.includes(m)),
-    [prefs.excludedMoods],
-  );
-
   const toggleGenre = (genre: string) => {
     const has = prefs.genres.includes(genre);
-
     update({
       ...prefs,
       genres: has
@@ -62,23 +39,15 @@ export default function MusicPreferencesScreen() {
     });
   };
 
-  const addMood = () => {
-    if (availableMoods.length === 0) return;
-    Alert.alert("Add Exclusion", undefined, [
-      ...availableMoods.map((m) => ({
-        text: m,
-        onPress: () =>
-          update({ ...prefs, excludedMoods: [...prefs.excludedMoods, m] }),
-      })),
-      { text: "Cancel", style: "cancel" as const },
-    ]);
-  };
-
-  const removeMood = (mood: string) =>
+  const toggleExcluded = (mood: string) => {
+    const has = prefs.excludedMoods.includes(mood);
     update({
       ...prefs,
-      excludedMoods: prefs.excludedMoods.filter((m) => m !== mood),
+      excludedMoods: has
+        ? prefs.excludedMoods.filter((m) => m !== mood)
+        : [...prefs.excludedMoods, mood],
     });
+  };
 
   const setVibe =
     (key: "organicElectronic" | "melancholicEuphoric") => (v: number) =>
@@ -96,7 +65,7 @@ export default function MusicPreferencesScreen() {
         <ScreenHeader
           kicker="TASTE PROFILE"
           title="Music Preferences"
-          subtitle="Refine your auditory landscape. Adjusting these parameters directly influences your personalized HiMu streams."
+          subtitle="Shapes your AI Mixes and Focus queue - and nudges what your DJs generate."
         />
 
         {/* Genre Affinity */}
@@ -138,66 +107,18 @@ export default function MusicPreferencesScreen() {
           />
         </PrefSection>
 
-        {/* AI Interaction Frequency */}
-        <PrefSection
-          title="AI Interaction Frequency"
-          subtitle="How often the AI curates mid-session transitions."
-        >
-          <Segmented
-            options={AI_OPTIONS}
-            value={prefs.aiFrequency}
-            disabled={!ready}
-            onChange={(v) => update({ ...prefs, aiFrequency: v })}
-          />
-        </PrefSection>
-
-        {/* Discovery Depth */}
-        <PrefSection
-          title="Discovery Depth"
-          subtitle="Prioritize unknown artists over familiar catalogs."
-        >
-          <View style={styles.row}>
-            <Text variant="bodyMd" color="onSurfaceVariant">
-              Surface new artists
-            </Text>
-            <Toggle
-              value={prefs.discoveryDepth}
-              disabled={!ready}
-              onValueChange={(v) => update({ ...prefs, discoveryDepth: v })}
-              accessibilityLabel="Discovery Depth"
-            />
-          </View>
-        </PrefSection>
-
         {/* Excluded Moods */}
         <PrefSection
           title="Excluded Moods"
+          subtitle="Never picked for your auto queues - you can still play or generate anything you ask for."
           icon={<Ban size={20} color={theme.colors.error} />}
         >
-          <View style={styles.chipWrap}>
-            {prefs.excludedMoods.map((m) => (
-              <Animated.View
-                key={m}
-                entering={FadeIn.duration(160)}
-                exiting={FadeOut.duration(120)}
-                layout={LinearTransition}
-              >
-                <Chip
-                  label={m}
-                  onRemove={() => removeMood(m)}
-                  disabled={!ready}
-                />
-              </Animated.View>
-            ))}
-            <Animated.View layout={LinearTransition}>
-              <Chip
-                label="Add Exclusion"
-                add
-                disabled={!ready || availableMoods.length === 0}
-                onPress={addMood}
-              />
-            </Animated.View>
-          </View>
+          <GroupedChipPicker
+            groups={MOOD_GROUPS}
+            selected={prefs.excludedMoods}
+            onToggle={toggleExcluded}
+            disabled={!ready}
+          />
         </PrefSection>
       </ScrollView>
     </View>
@@ -212,16 +133,5 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
-  },
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: theme.spacing.stackSm,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing.gutter,
   },
 }));

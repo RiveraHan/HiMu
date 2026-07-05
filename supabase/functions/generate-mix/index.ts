@@ -19,8 +19,14 @@ const DAILY_TRACKS = 10;
 const STABLE_AUDIO_VERSION =
   "a61ac8edbb27cd2eda1b2eff2bbc03dcff1131f5560836ff77a052df05b77491";
 
-async function generateMusic(cfg: any, lyrics: string | null): Promise<string> {
-  const prompt = String(cfg.base_prompt).slice(0, 2000);
+async function generateMusic(
+  cfg: any,
+  lyrics: string | null,
+  seasoning: string[],
+): Promise<string> {
+  const prompt = [String(cfg.base_prompt), ...seasoning]
+    .join(", ")
+    .slice(0, 2000);
   const instrumental = cfg.is_instrumental ?? true;
   const dur = trackSeconds(cfg); // parametrizable via dj_generation_configs.max_duration
 
@@ -133,8 +139,78 @@ async function generateCover(jobId: string, dj: any): Promise<string | null> {
   }
 }
 
+const TOP_GENRE_DAYS = 14;
+
+// Catalog-only clauses: the user's taste nudges the mix; the DJ's
+// base_prompt still leads. No free text enters the prompt here.
+async function buildSeasoning(
+  userId: string,
+  dj: any,
+  localHour: unknown,
+): Promise<string[]> {
+  const clauses: string[] = [];
+
+  try {
+    const since = new Date(Date.now() - TOP_GENRE_DAYS * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
+    const [{ data: prefs }, { data: stats }] = await Promise.all([
+      admin
+        .from("music_preferences")
+        .select("genres")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      admin
+        .from("listening_stats")
+        .select("top_genre")
+        .eq("user_id", userId)
+        .gte("date", since)
+        .not("top_genre", "is", null),
+    ]);
+
+    const counts = new Map<string, number>();
+    for (const row of stats ?? []) {
+      counts.set(row.top_genre, (counts.get(row.top_genre) ?? 0) + 1);
+    }
+    const topGenre =
+      [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    const djGenres: string[] = dj?.genre_specialties ?? [];
+    const candidates = [topGenre, ...(prefs?.genres ?? [])].filter(
+      (g): g is string => typeof g === "string",
+    );
+    const emphasis = candidates.find((g) => djGenres.includes(g));
+
+    if (emphasis) clauses.push(`emphasis on ${emphasis.toLowerCase()}`);
+  } catch (e) {
+    // Seasoning is optional: never block a generation over it.
+    console.error("[generate-mix] seasoning skipped:", e);
+  }
+
+  const hour =
+    typeof localHour === "number" &&
+    Number.isInteger(localHour) &&
+    localHour >= 0 &&
+    localHour <= 23
+      ? localHour
+      : new Date().getUTCHours();
+
+  clauses.push(
+    hour >= 5 && hour <= 11
+      ? "fresh morning feel"
+      : hour >= 12 && hour <= 17
+        ? "steady daytime flow"
+        : hour >= 18 && hour <= 22
+          ? "evening warmth"
+          : "late night atmosphere",
+  );
+
+  return clauses;
+}
+
 serveAuthed(async (req, user) => {
-  const { djId, lyrics: rawLyrics } = await req.json();
+  const { djId, lyrics: rawLyrics, localHour } = await req.json();
   if (!djId) return invalid("djId required");
 
   // DJ config (+ owner for authorization)
@@ -204,7 +280,10 @@ serveAuthed(async (req, user) => {
 
   if (jobErr || !job) throw jobErr ?? new Error("could not create job");
 
-  EdgeRuntime.waitUntil(runGeneration(job.id, cfg, lyrics));
+  const seasoning = await buildSeasoning(user.id, cfg.djs, localHour);
+  console.log("[generate-mix] seasoning:", seasoning.join(" | "));
+
+  EdgeRuntime.waitUntil(runGeneration(job.id, cfg, lyrics, seasoning));
 
   return json({ jobId: job.id });
 });
@@ -213,6 +292,7 @@ async function runGeneration(
   jobId: string,
   cfg: any,
   lyrics: string | null,
+  seasoning: string[],
 ): Promise<void> {
   const update = (patch: Record<string, unknown>) =>
     admin
@@ -223,7 +303,7 @@ async function runGeneration(
   try {
     await update({ status: "generating" });
 
-    const tempUrl = await generateMusic(cfg, lyrics);
+    const tempUrl = await generateMusic(cfg, lyrics, seasoning);
 
     const bytes = new Uint8Array(await (await fetch(tempUrl)).arrayBuffer());
 

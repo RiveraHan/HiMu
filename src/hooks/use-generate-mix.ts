@@ -12,7 +12,11 @@ export function useGenerateMix() {
       const { data, error } = await supabase.functions.invoke<{
         jobId: string;
       }>("generate-mix", {
-        body: { djId, ...(lyrics ? { lyrics } : {}) },
+        body: {
+          djId,
+          localHour: new Date().getHours(),
+          ...(lyrics ? { lyrics } : {}),
+        },
       });
       if (error) throw error;
       if (!data?.jobId) throw new Error("generate-mix did not return a jobId");

@@ -121,17 +121,3 @@ export const FOCUS_MOODS = [
   "Cozy",
   "Ethereal",
 ] as const satisfies readonly DJMood[];
-
-// Taste-profile exclusions (separate concept from DJ moods).
-export const EXCLUDABLE_MOODS = [
-  "Aggressive",
-  "Frantic",
-  "Melancholic",
-  "Somber",
-  "Chaotic",
-  "Tense",
-  "Anxious",
-  "Gloomy",
-  "Dissonant",
-  "Restless",
-] as const;
