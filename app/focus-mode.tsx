@@ -4,7 +4,9 @@ import { FocusAtmosphere } from "@/src/components/focus/FocusAtmosphere";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useFocusTimer } from "@/src/hooks/use-focus-timer";
 import { useFocusTracks } from "@/src/hooks/use-home";
+import { useTasteProfile } from "@/src/hooks/use-taste-profile";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
+import { filterExcluded } from "@/src/utils/weighted-shuffle";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
@@ -30,12 +32,16 @@ export default function FocusModeScreen() {
   const { toggle: toggleAudio, next, prev, load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const { data: focusData } = useFocusTracks();
+  const taste = useTasteProfile();
 
   // Focus queue: calmest first (energy asc, then bpm asc; nulls = neutral mid),
   // with a random tiebreak for session-to-session variety.
   const focusQueue: PlayerTrack[] = useMemo(() => {
-    const rows = (focusData ?? []).filter(
-      (t): t is typeof t & { audio_url: string } => t.audio_url != null,
+    const rows = filterExcluded(
+      (focusData ?? []).filter(
+        (t): t is typeof t & { audio_url: string } => t.audio_url != null,
+      ),
+      taste.excludedMoods,
     );
     return rows
       .map((t) => ({ t, r: Math.random() }))
@@ -55,7 +61,7 @@ export default function FocusModeScreen() {
         duration: t.duration,
         genre: t.genre,
       }));
-  }, [focusData]);
+  }, [focusData, taste]);
 
   // Undo the session loop when leaving focus mode (only if we started it).
   const startedLoop = useRef(false);
