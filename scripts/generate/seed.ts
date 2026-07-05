@@ -44,8 +44,8 @@ const DJS: DJSeed[] = [
     name: "Axon",
     character: "Energetic, analytical, always chasing the perfect drop",
     voice_style: "Deep masculine",
-    genre_specialties: ["Techno", "House", "Electro"],
-    mood_tags: ["Energize", "Workout", "Party"],
+    genre_specialties: ["Techno", "House", "Deep House"],
+    mood_tags: ["Energetic", "Workout", "Party"],
     is_premium: true,
     config: {
       base_prompt:
@@ -60,7 +60,7 @@ const DJS: DJSeed[] = [
     name: "Sage",
     character: "Wise, calm, connected to nature",
     voice_style: "Ethereal androgynous",
-    genre_specialties: ["Classical", "Nature Sounds", "Meditation"],
+    genre_specialties: ["Classical", "Ambient", "Piano"],
     mood_tags: ["Sleep", "Meditate", "Nature"],
     is_premium: true,
     config: {
