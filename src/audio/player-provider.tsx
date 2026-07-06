@@ -36,6 +36,23 @@ async function recordDjListen(trackId: string) {
   } catch {}
 }
 
+// Best-effort: log a per-track outcome for the taste engine (spec: taste-engine).
+async function recordListeningEvent(
+  trackId: string,
+  event: "completed" | "skipped",
+) {
+  try {
+    const uid = useAuthStore.getState().session?.user?.id;
+    if (!uid) return;
+    const { error } = await supabase
+      .from("listening_events")
+      .insert({ user_id: uid, track_id: trackId, event });
+    if (error) console.warn("[listening_events]", error.message);
+  } catch (e) {
+    console.warn("[listening_events]", e);
+  }
+}
+
 type PlayerControls = {
   load: (track: PlayerTrack, queue?: PlayerTrack[], index?: number) => void;
   toggle: () => void;
@@ -61,6 +78,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const lastGenreRef = useRef<string | null>(null);
   const prevTimeRef = useRef(0);
   const wasPlayingRef = useRef(false); // detect transitions play -> pause
+  const outgoingSettledRef = useRef(false); // one event max per loaded track
 
   useEffect(() => {
     setAudioModeAsync({
@@ -150,9 +168,39 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     await flush({ final: true });
   }, [countTrackIfPlayed, flush]);
 
+  // Evaluate the outgoing track exactly once per load. Must run BEFORE
+  // countTrackIfPlayed(), which resets trackSecondsRef.
+  const settleOutgoingTrack = useCallback(
+    (finished: boolean) => {
+      if (outgoingSettledRef.current) return;
+
+      const track = store.getState().currentTrack;
+      if (!track) return;
+
+      outgoingSettledRef.current = true;
+
+      if (finished) {
+        void recordListeningEvent(track.id, "completed");
+        return;
+      }
+
+      const duration = store.getState().durationSec;
+      const played = trackSecondsRef.current;
+      const ratio = duration > 0 ? played / duration : 0;
+
+      if (ratio >= 0.9) void recordListeningEvent(track.id, "completed");
+      else if (played > 3 && ratio < 0.3)
+        void recordListeningEvent(track.id, "skipped");
+      // 30–90%: ambiguous, no event.
+    },
+    [store],
+  );
+
   const load: PlayerControls["load"] = useCallback(
     (track, queue, index) => {
+      settleOutgoingTrack(false); // user-initiated unless didJustFinish settled it
       countTrackIfPlayed();
+      outgoingSettledRef.current = false; // the new track is now evaluable
 
       const q = queue ?? [track];
       const i = index ?? q.findIndex((t) => t.id === track.id);
@@ -161,7 +209,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       player.replace({ uri: track.audio_url });
       player.play();
     },
-    [player, store, countTrackIfPlayed],
+    [player, store, countTrackIfPlayed, settleOutgoingTrack],
   );
 
   const toggle = useCallback(() => {
@@ -231,10 +279,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     if (status.didJustFinish) {
       if (store.getState().repeatMode === "one") {
-        countTrackIfPlayed();
+        countTrackIfPlayed(); // loops don't emit events (spec §4)
         player.seekTo(0);
         player.play();
       } else {
+        settleOutgoingTrack(true); // natural end = completed, even at queue end
         next();
       }
     }
@@ -247,6 +296,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     store,
     player,
     countTrackIfPlayed,
+    settleOutgoingTrack,
   ]);
 
   const value = useMemo<PlayerControls>(
