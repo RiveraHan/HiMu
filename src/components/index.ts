@@ -15,6 +15,7 @@ export * from "./Text";
 export * from "./TrackCard";
 
 // Home
+export * from "./home/CaptionVoiceButton";
 export * from "./home/ContentShelf";
 export * from "./home/OnAirHero";
 export * from "./home/VibeSpotlightCard";

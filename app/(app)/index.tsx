@@ -1,6 +1,7 @@
 import { usePlayer } from "@/src/audio/use-player";
 import {
   Avatar,
+  CaptionVoiceButton,
   ContentShelf,
   DJAvatar,
   LibraryCard,
@@ -155,6 +156,11 @@ export default function HomeScreen() {
             trackTitle={drop.track.title}
             isLive={false}
             onPlay={playDrop}
+            voiceSlot={
+              drop.captionAudioUrl ? (
+                <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
+              ) : undefined
+            }
           />
         ) : drop.status === "pending" && drop.dj ? (
           <OnAirHero

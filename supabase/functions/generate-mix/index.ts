@@ -263,6 +263,62 @@ async function buildCaption(
   return line || null;
 }
 
+const KOKORO_VERSION =
+  "f559560eb822dc509045f3921a1921234918b91739db4bf3daab2169b71c7a13";
+
+// Map the DJ's voice_style to a kokoro voice id (enum-validated ids).
+function pickVoice(voiceStyle: unknown): string {
+  const v = String(voiceStyle ?? "").toLowerCase();
+  if (v.includes("androgyn") || v.includes("ethereal")) return "af_nicole";
+  if (v.includes("mascul")) return "am_michael";
+  if (v.includes("femin")) return "af_bella";
+  return "af_bella";
+}
+
+const HIGH_ENERGY = new Set([
+  "energetic", "uplifting", "euphoric", "happy", "playful",
+  "groovy", "party", "workout", "epic", "intense",
+]);
+const CALM_ENERGY = new Set([
+  "focus", "relax", "dreamy", "meditate", "nature", "sleep", "cozy",
+  "ethereal", "melancholic", "nostalgic", "late night", "rainy day",
+]);
+
+// Delivery pace from the DJ's mood energy (the generated track has no
+// energy_level). Contained range so it never sounds distorted.
+function pickSpeed(dj: any): number {
+  const moods: string[] = Array.isArray(dj?.mood_tags) ? dj.mood_tags : [];
+  let score = 0;
+  for (const m of moods) {
+    const k = String(m).toLowerCase();
+    if (HIGH_ENERGY.has(k)) score += 1;
+    else if (CALM_ENERGY.has(k)) score -= 1;
+  }
+  return score > 0 ? 1.12 : score < 0 ? 0.92 : 1.0;
+}
+
+// TTS the caption in the DJ's voice; upload to R2. Best-effort — returns null
+// on any failure (caller tolerates it).
+async function buildCaptionAudio(
+  jobId: string,
+  dj: any,
+  caption: string,
+): Promise<string | null> {
+  const tempUrl = await replicateRun(
+    "https://api.replicate.com/v1/predictions",
+    {
+      version: KOKORO_VERSION,
+      input: {
+        text: caption.slice(0, 300),
+        voice: pickVoice(dj?.voice_style),
+        speed: pickSpeed(dj),
+      },
+    },
+  );
+  const bytes = new Uint8Array(await (await fetch(tempUrl)).arrayBuffer());
+  return await r2Put(`captions/generated/${jobId}.wav`, bytes, "audio/wav");
+}
+
 serveAuthed(async (req, user) => {
   const { djId, lyrics: rawLyrics, localHour, dropDate } = await req.json();
   if (!djId) return invalid("djId required");
@@ -456,21 +512,35 @@ async function runGeneration(
     if (insErr || !track) throw insErr ?? new Error("could not insert track");
 
     let caption: string | null = null;
+    let captionAudioUrl: string | null = null;
     if (drop) {
       try {
         caption = await buildCaption(dj, drop.localHour, track.title);
+        if (caption) {
+          try {
+            captionAudioUrl = await buildCaptionAudio(jobId, dj, caption);
+          } catch (e) {
+            console.error("[generate-mix] caption audio skipped:", e);
+          }
+        }
       } catch (e) {
         console.error("[generate-mix] caption skipped:", e); // best-effort
       }
     }
 
-    await update({ status: "ready", track_id: track.id, caption });
+    await update({
+      status: "ready",
+      track_id: track.id,
+      caption,
+      caption_audio_url: captionAudioUrl,
+    });
   } catch (e) {
     await update({ status: "failed", error: String(e).slice(0, 500) });
     // No orphans: remove whatever this job managed to upload.
     await r2Delete([
       `tracks/generated/${jobId}.mp3`,
       `covers/generated/${jobId}.jpg`,
+      `captions/generated/${jobId}.wav`,
     ]);
   }
 }

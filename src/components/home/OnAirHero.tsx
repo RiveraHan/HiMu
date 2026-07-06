@@ -1,4 +1,5 @@
 import { Play } from "lucide-react-native";
+import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Avatar } from "../Avatar";
@@ -16,6 +17,7 @@ type Props = {
   onPlay: () => void;
   eyebrow?: string;
   pending?: boolean;
+  voiceSlot?: ReactNode;
 };
 
 export function OnAirHero({
@@ -28,6 +30,7 @@ export function OnAirHero({
   onPlay,
   eyebrow,
   pending = false,
+  voiceSlot,
 }: Props) {
   const { theme } = useUnistyles();
   const accent = isLive ? theme.colors.error : theme.colors.primary;
@@ -97,6 +100,7 @@ export function OnAirHero({
           >
             {trackTitle}
           </Text>
+          {voiceSlot}
         </View>
       )}
     </GlassCard>
