@@ -21,6 +21,7 @@ export type DailyDrop = {
     genre: string | null;
   } | null;
   track: PlayerTrack | null;
+  caption: string | null;
 };
 
 // Lazily ensures today's drop exists (idempotent server-side) and polls it.
@@ -85,7 +86,7 @@ export function useDailyDrop(): DailyDrop {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("generation_jobs")
-        .select("status, error, track_id, tracks(*)")
+        .select("status, error, track_id, caption, tracks(*)")
         .eq("id", jobId!)
         .single();
       if (error) throw error;
@@ -94,13 +95,15 @@ export function useDailyDrop(): DailyDrop {
   });
 
   return useMemo<DailyDrop>(() => {
-    if (!dj) return { status: "idle", dj: null, track: null };
+    if (!dj) return { status: "idle", dj: null, track: null, caption: null };
     const s = job.data?.status;
     const t = job.data?.tracks;
+    const caption = job.data?.caption ?? null;
     if (s === "ready" && t?.audio_url) {
-      return { status: "ready", dj, track: toPlayerTrack(t) };
+      return { status: "ready", dj, track: toPlayerTrack(t), caption };
     }
-    if (s === "failed") return { status: "failed", dj, track: null };
-    return { status: "pending", dj, track: null };
+    if (s === "failed")
+      return { status: "failed", dj, track: null, caption: null };
+    return { status: "pending", dj, track: null, caption: null };
   }, [dj, job.data]);
 }

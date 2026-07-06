@@ -9,7 +9,7 @@
 
 import { invalid, json } from "../_shared/http.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
-import { replicateRun } from "../_shared/replicate.ts";
+import { replicateRun, replicateText } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import { sanitize } from "../_shared/text.ts";
@@ -209,6 +209,60 @@ async function buildSeasoning(
   return clauses;
 }
 
+const LLAMA_ENDPOINT =
+  "https://api.replicate.com/v1/models/meta/meta-llama-3-8b-instruct/predictions";
+
+function captionTimePhrase(localHour: unknown): string {
+  const hour =
+    typeof localHour === "number" &&
+    Number.isInteger(localHour) &&
+    localHour >= 0 &&
+    localHour <= 23
+      ? localHour
+      : new Date().getUTCHours();
+  if (hour >= 5 && hour <= 11) return "this morning";
+  if (hour >= 12 && hour <= 17) return "this afternoon";
+  if (hour >= 18 && hour <= 22) return "tonight";
+  return "in the late hours";
+}
+
+// One in-character line introducing today's drop. Best-effort: callers must
+// tolerate null. Display-only + capped — treats persona fields as untrusted.
+async function buildCaption(
+  dj: any,
+  localHour: unknown,
+  trackTitle: string,
+): Promise<string | null> {
+  const name = String(dj?.name ?? "Your DJ");
+  const character = String(dj?.character ?? "").slice(0, 300);
+  const voice = String(dj?.voice_style ?? "").slice(0, 120);
+  const genre = String(dj?.genre_specialties?.[0] ?? "eclectic");
+
+  const system =
+    `You are ${name}, an AI radio DJ. Persona: ${character}. Voice: ${voice}. ` +
+    `Write ONE short first-person line (max 18 words) introducing today's fresh drop to your listener, in your own voice. ` +
+    `Plain text only: no quotation marks, no emojis, no hashtags, no preamble. English.`;
+  const prompt =
+    `Genre: ${genre}. Time of day: ${captionTimePhrase(localHour)}. ` +
+    `Track title: ${trackTitle}. Write the single line now.`;
+
+  const raw = await replicateText(LLAMA_ENDPOINT, {
+    input: {
+      system_prompt: system,
+      prompt,
+      max_tokens: 60,
+      temperature: 0.8,
+    },
+  });
+
+  const line = raw
+    .trim()
+    .replace(/^["'\s]+|["'\s]+$/g, "")
+    .slice(0, 140)
+    .trim();
+  return line || null;
+}
+
 serveAuthed(async (req, user) => {
   const { djId, lyrics: rawLyrics, localHour, dropDate } = await req.json();
   if (!djId) return invalid("djId required");
@@ -276,7 +330,9 @@ serveAuthed(async (req, user) => {
         })
         .eq("id", existing.id);
       console.log("[generate-mix] drop retry:", existing.id);
-      EdgeRuntime.waitUntil(runGeneration(existing.id, cfg, null, seasoning));
+      EdgeRuntime.waitUntil(
+        runGeneration(existing.id, cfg, null, seasoning, { localHour }),
+      );
       return json({ jobId: existing.id });
     }
 
@@ -304,7 +360,9 @@ serveAuthed(async (req, user) => {
     }
 
     console.log("[generate-mix] drop seasoning:", seasoning.join(" | "));
-    EdgeRuntime.waitUntil(runGeneration(job.id, cfg, null, seasoning));
+    EdgeRuntime.waitUntil(
+      runGeneration(job.id, cfg, null, seasoning, { localHour }),
+    );
     return json({ jobId: job.id });
   }
 
@@ -355,6 +413,7 @@ async function runGeneration(
   cfg: any,
   lyrics: string | null,
   seasoning: string[],
+  drop?: { localHour: unknown },
 ): Promise<void> {
   const update = (patch: Record<string, unknown>) =>
     admin
@@ -396,7 +455,16 @@ async function runGeneration(
 
     if (insErr || !track) throw insErr ?? new Error("could not insert track");
 
-    await update({ status: "ready", track_id: track.id });
+    let caption: string | null = null;
+    if (drop) {
+      try {
+        caption = await buildCaption(dj, drop.localHour, track.title);
+      } catch (e) {
+        console.error("[generate-mix] caption skipped:", e); // best-effort
+      }
+    }
+
+    await update({ status: "ready", track_id: track.id, caption });
   } catch (e) {
     await update({ status: "failed", error: String(e).slice(0, 500) });
     // No orphans: remove whatever this job managed to upload.

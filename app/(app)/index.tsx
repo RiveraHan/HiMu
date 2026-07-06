@@ -151,7 +151,7 @@ export default function HomeScreen() {
             djName={drop.dj.name}
             avatarUrl={drop.dj.avatar_url}
             genre={drop.dj.genre}
-            headline="Fresh, just for you"
+            headline={drop.caption ?? "Fresh, just for you"}
             trackTitle={drop.track.title}
             isLive={false}
             onPlay={playDrop}

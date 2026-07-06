@@ -68,3 +68,32 @@ export async function replicateRun(
   if (!url) throw new Error("Replicate: no output url");
   return url;
 }
+
+// Text models return an array of token strings (or a single string). Join it,
+// rather than taking output[0] like replicateRun (which expects a media URL).
+export async function replicateText(
+  endpoint: string,
+  body: object,
+): Promise<string> {
+  let pred = await createPrediction(endpoint, body);
+
+  let tries = 0;
+  while (
+    !["succeeded", "failed", "canceled"].includes(pred.status) &&
+    tries < 40
+  ) {
+    await sleep(1500);
+    const r = await fetch(pred.urls.get, {
+      headers: { Authorization: `Bearer ${REPLICATE_TOKEN}` },
+    });
+    pred = (await r.json()) as Prediction;
+    tries++;
+  }
+
+  if (pred.status !== "succeeded") {
+    throw new Error(`Replicate ${pred.status}: ${pred.error ?? "no output"}`);
+  }
+
+  const out = pred.output;
+  return Array.isArray(out) ? out.join("") : typeof out === "string" ? out : "";
+}
