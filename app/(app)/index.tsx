@@ -174,7 +174,7 @@ export default function HomeScreen() {
             isLive={false}
             onPlay={() => {}}
           />
-        ) : hero ? (
+        ) : drop.status === "failed" && hero ? (
           <OnAirHero
             djName={hero.dj.name}
             avatarUrl={hero.dj.avatar_url}
