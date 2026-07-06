@@ -138,11 +138,61 @@ export async function musicGen(
   return firstUrl(out);
 }
 
+// Context-aware, varied cover prompt (mirrors supabase/functions/_shared/cover.ts,
+// which can't be imported here — different runtime). Palettes lean *limited*.
+const COVER_STYLES = [
+  "minimalist", "surreal collage", "risograph print", "dreamy double exposure",
+  "geometric abstraction", "organic flowing forms", "brutalist graphic",
+  "grainy vintage film", "iridescent liquid metal", "hand-painted gouache",
+  "macro texture photography", "bauhaus poster", "cyanotype", "art deco",
+  "glitch art", "ink wash", "collaged paper cutouts", "long-exposure light trails",
+];
+const COVER_PALETTES = [
+  "a bold duotone palette", "monochrome with a single accent color",
+  "high-contrast black and white with one accent", "a muted pastel palette",
+  "warm analogous tones", "cool moody tones", "a single-color wash",
+  "earthy natural tones", "a restrained two-color palette",
+];
+const COVER_COMPOSITIONS = [
+  "a strong central focal point", "off-center with generous negative space",
+  "a dynamic diagonal composition", "layered depth", "flat graphic shapes",
+  "radial symmetry",
+];
+
+export function coverPrompt(
+  genre: string,
+  moods: string[],
+  instrumental: boolean,
+): string {
+  const r = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
+  const g = genre.trim().toLowerCase();
+  const m = moods.filter(Boolean).map((x) => x.toLowerCase());
+  const feel = instrumental
+    ? "atmospheric, textural, wordless and instrumental"
+    : "intimate and expressive, with a human vocal warmth";
+  return [
+    `${r(COVER_STYLES)} album cover art`,
+    g ? `for a ${g} track` : "for a music track",
+    m.length ? `evoking a ${m.join(", ")} mood` : "evoking an abstract mood",
+    feel,
+    r(COVER_PALETTES),
+    r(COVER_COMPOSITIONS),
+    "striking, original, rich detail",
+    "no text, no words, no letters, no faces, no watermark",
+  ].join(", ");
+}
+
 /** Distinct color/mood identity per DJ, so covers/avatars don't all look alike. */
 export const DJ_PALETTES: Record<string, string> = {
   nova: "soft muted palette of dusty teal, powder blue and pale lavender, hazy dreamy film grain, gentle diffused light",
   axon: "bold neon palette of electric cyan, hot magenta and deep crimson, high contrast, sharp energetic glow, dark club haze",
   sage: "organic palette of deep forest green, warm gold and amber earth tones, soft natural mist, serene",
+  solano: "warm sun-soaked palette of golden amber, coral and deep magenta, vibrant, glowing dusk",
+  marea: "romantic palette of deep wine red, warm amber and dusky rose, candlelit, soft shadows",
+  fuego: "vibrant tropical palette of hot orange, turquoise and sunshine yellow, festive carnival energy",
+  vega: "retro neon palette of electric purple, cyan and hot pink, 80s sunset glow, chrome reflections",
+  kismet: "cool nocturnal palette of midnight blue, teal and electric violet, glowing city lights",
+  ember: "warm soulful palette of golden honey, terracotta and deep amber, golden-hour glow",
 };
 
 // ── R2 (S3 API, signed with aws4fetch) ──────────────────────────────────────

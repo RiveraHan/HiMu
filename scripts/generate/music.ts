@@ -4,16 +4,7 @@
  *
  *   npm run gen:music
  */
-import {
-  admin,
-  DJ_PALETTES,
-  imageGen,
-  musicGen,
-  uploadFromUrl,
-} from "./lib";
-
-const COVER_BASE =
-  "abstract album cover art, cinematic, rich texture, depth, premium, no text, no faces, no watermark";
+import { admin, coverPrompt, imageGen, musicGen, uploadFromUrl } from "./lib";
 
 // Track lengths are per-track and parametrizable below (seconds). Kept varied
 // and never short (>= ~110s). Stable Audio caps at 190s.
@@ -25,6 +16,7 @@ type Variation = {
   bpm: number;
   energy: number;
   dur: number; // seconds (parametrizable, varied, >= ~110)
+  lyrics?: string; // per-track lyrics for vocal DJs (overrides default_lyrics)
 };
 
 const VARIATIONS: Record<string, Variation[]> = {
@@ -45,6 +37,126 @@ const VARIATIONS: Record<string, Variation[]> = {
     { extra: "deep sleep, sub-bass drone, slow breath", title: "Night Tide", mood: "Sleep", bpm: 50, energy: 1, dur: 190 },
     { extra: "tibetan bowls, still water", title: "Still Water", mood: "Meditate", bpm: 55, energy: 2, dur: 170 },
     { extra: "mountain air, ethereal choir", title: "High Meadow", mood: "Meditate", bpm: 58, energy: 2, dur: 160 },
+  ],
+  solano: [
+    {
+      extra: "moonlit rooftop party, glossy modern reggaeton production, punchy dembow",
+      title: "Bajo la Luna",
+      mood: "Party",
+      bpm: 96,
+      energy: 8,
+      dur: 150,
+      lyrics: `Baja la luz, sube el bajo, ya llegó la madrugada,
+tú en el centro de la pista, no me importa nada.
+Una seña con tus ojos y me tienes rendido,
+esta noche es nuestra, mami, ya lo he decidido.
+
+Bajo la luna, tú y yo, perdiendo el control,
+tu cintura es la marea, yo naufrago en tu calor.
+Bajo la luna, dale, que retumbe el tambor,
+que no salga nunca el sol, quédate en mi corazón.`,
+    },
+    {
+      extra: "slow-burn seductive latin pop, warm night groove",
+      title: "Fuego Lento",
+      mood: "Groovy",
+      bpm: 92,
+      energy: 6,
+      dur: 150,
+      lyrics: `No hay prisa, corazón, deja que la noche corra,
+un beso lento quema más que mil que se te ahorran.
+Apaga ese teléfono, que el mundo espere afuera,
+contigo cada instante se me vuelve primavera.
+
+Fuego lento, así te quiero,
+sin apuro, paso a paso, prendo el cielo entero.
+Fuego lento, mi amor,
+lo bonito no se corre, se disfruta sin reloj.`,
+    },
+  ],
+  marea: [
+    {
+      extra: "bachata guitar, requinto, seaside heartbreak, tender",
+      title: "Cicatriz de Sal",
+      mood: "Romantic",
+      bpm: 128,
+      energy: 4,
+      dur: 160,
+      lyrics: `Dejé tu nombre en la arena y el mar se lo llevó,
+cada ola me repite lo que un día se rompió.
+Pero aprendí a bailar con la herida, sin rencor,
+que hasta la cicatriz de sal, con el tiempo, da una flor.
+
+Y si un día tú regresas, no prometo, mi bien,
+pero este corazón terco aún te guarda un boleto también.
+Cicatriz de sal, amor,
+duele menos cuando canto y te devuelvo el dolor.`,
+    },
+    {
+      extra: "candlelit bossa bachata, intimate nylon guitar, late night",
+      title: "Dos Copas",
+      mood: "Late Night",
+      bpm: 118,
+      energy: 4,
+      dur: 160,
+      lyrics: `Dos copas, media luz, y tu risa de contrabando,
+la ciudad se quedó afuera, los dos aquí temblando.
+No me hables de por siempre, dame solo esta canción,
+que en tus ojos cabe el mundo y me sobra la razón.
+
+Dos copas y tu piel,
+la noche se hace corta cuando bailo con la miel.
+Dos copas, nada más,
+quédate un segundo eterno, no me digas que te vas.`,
+    },
+  ],
+  fuego: [
+    { extra: "blazing salsa brass section, montuno piano, congas and timbales, fiery", title: "Candela", mood: "Party", bpm: 96, energy: 9, dur: 150 },
+    { extra: "cumbia and merengue, festive carnival, accordion and güira, driving", title: "Carnaval", mood: "Happy", bpm: 100, energy: 9, dur: 150 },
+  ],
+  vega: [
+    { extra: "synthwave sunset drive, gated retro drums, chrome arpeggios, widescreen", title: "Neon Coast", mood: "Nostalgic", bpm: 100, energy: 6, dur: 180 },
+    { extra: "dream pop haze, shimmering reverbed guitars, wistful, cinematic", title: "Afterglow", mood: "Dreamy", bpm: 92, energy: 4, dur: 180 },
+  ],
+  kismet: [
+    { extra: "deep house rolling bassline, hypnotic groove, warm pads, late night", title: "Midnight Current", mood: "Groovy", bpm: 122, energy: 7, dur: 180 },
+    { extra: "afro house, organic percussion, euphoric build, sunrise energy", title: "Sunrise Ritual", mood: "Euphoric", bpm: 123, energy: 8, dur: 180 },
+  ],
+  ember: [
+    {
+      extra: "warm vintage soul, silky lead vocals, horns, golden hour",
+      title: "Golden Hour",
+      mood: "Romantic",
+      bpm: 92,
+      energy: 6,
+      dur: 160,
+      lyrics: `Sun going down, painting gold on your skin,
+every worry I carried just melting within.
+No clock on the wall, nowhere we gotta be,
+just your hand in mine and the whole sky for free.
+
+It's a golden hour, and you're all I need,
+sweet as honey light, girl, you're the air I breathe.
+Golden hour, let it stay,
+hold me slow while the rest of the world fades away.`,
+    },
+    {
+      extra: "funky R&B, wah guitar, fat bass, sultry mid-tempo groove",
+      title: "Honey Slow",
+      mood: "Groovy",
+      bpm: 96,
+      energy: 6,
+      dur: 160,
+      lyrics: `Turn the low lights blue, let the bassline ride,
+you move like a river I could sink inside.
+Ain't no rush tonight, got some time to burn,
+every touch a lesson and, oh, I'm here to learn.
+
+Take it honey slow, let the groove decide,
+two hearts on a wire, catching fire on the ride.
+Honey slow, come near,
+whisper it soft, baby — I'm right here.`,
+    },
   ],
 };
 
@@ -93,7 +205,7 @@ async function main() {
         let coverUrl: string | null = null;
         try {
           const coverTmp = await imageGen(
-            `abstract album cover inspired by "${v.extra}". ${COVER_BASE}. Color palette: ${DJ_PALETTES[dj.slug]}`,
+            coverPrompt(genre, [v.mood], cfg.is_instrumental ?? true),
           );
           coverUrl = await uploadFromUrl(
             `covers/tracks/${dj.slug}/${trackSlug}.jpg`,
@@ -109,7 +221,7 @@ async function main() {
         const musicPrompt = `${cfg.base_prompt}, ${v.extra}`;
         const tempUrl = await musicGen(musicPrompt, {
           instrumental: cfg.is_instrumental ?? true,
-          lyrics: cfg.default_lyrics ?? undefined,
+          lyrics: v.lyrics ?? cfg.default_lyrics ?? undefined,
           duration: v.dur,
         });
         const audioUrl = await uploadFromUrl(
