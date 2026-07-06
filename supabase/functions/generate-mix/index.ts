@@ -210,8 +210,13 @@ async function buildSeasoning(
 }
 
 serveAuthed(async (req, user) => {
-  const { djId, lyrics: rawLyrics, localHour } = await req.json();
+  const { djId, lyrics: rawLyrics, localHour, dropDate } = await req.json();
   if (!djId) return invalid("djId required");
+
+  const isDrop = dropDate != null;
+  if (isDrop && !/^\d{4}-\d{2}-\d{2}$/.test(String(dropDate))) {
+    return invalid("dropDate must be YYYY-MM-DD");
+  }
 
   // DJ config (+ owner for authorization)
   const { data: cfg } = await admin
@@ -233,10 +238,10 @@ serveAuthed(async (req, user) => {
     );
   }
 
-  // Optional user lyrics: only on your OWN vocal DJ (private tracks).
+  // Optional user lyrics: only on your OWN vocal DJ, and never for a drop.
   let lyrics: string | null = null;
 
-  if (rawLyrics != null) {
+  if (!isDrop && rawLyrics != null) {
     if (typeof rawLyrics !== "string") return invalid("lyrics must be text");
 
     if (cfg.is_instrumental !== false || owner !== user.id) {
@@ -246,13 +251,71 @@ serveAuthed(async (req, user) => {
     lyrics = sanitize(rawLyrics, 1000) || null;
   }
 
-  // Daily quota (failed jobs don't count).
+  const seasoning = await buildSeasoning(user.id, cfg.djs, localHour);
+
+  // Daily drop: idempotent per (user, local date), exempt from the manual quota.
+  if (isDrop) {
+    const { data: existing } = await admin
+      .from("generation_jobs")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .eq("drop_date", dropDate)
+      .maybeSingle();
+
+    if (existing && existing.status !== "failed") {
+      return json({ jobId: existing.id }); // generating or ready — don't regenerate
+    }
+
+    if (existing && existing.status === "failed") {
+      await admin
+        .from("generation_jobs")
+        .update({
+          status: "queued",
+          error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      console.log("[generate-mix] drop retry:", existing.id);
+      EdgeRuntime.waitUntil(runGeneration(existing.id, cfg, null, seasoning));
+      return json({ jobId: existing.id });
+    }
+
+    const { data: job, error: jobErr } = await admin
+      .from("generation_jobs")
+      .insert({
+        user_id: user.id,
+        dj_id: djId,
+        status: "queued",
+        drop_date: dropDate,
+      })
+      .select()
+      .single();
+
+    if (jobErr || !job) {
+      // Race: a concurrent open created today's drop first. Return it.
+      const { data: raced } = await admin
+        .from("generation_jobs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("drop_date", dropDate)
+        .maybeSingle();
+      if (raced) return json({ jobId: raced.id });
+      throw jobErr ?? new Error("could not create drop job");
+    }
+
+    console.log("[generate-mix] drop seasoning:", seasoning.join(" | "));
+    EdgeRuntime.waitUntil(runGeneration(job.id, cfg, null, seasoning));
+    return json({ jobId: job.id });
+  }
+
+  // Manual generation: daily quota (drops excluded; failed jobs don't count).
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { count } = await admin
     .from("generation_jobs")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
+    .is("drop_date", null)
     .gt("created_at", dayAgo)
     .neq("status", "failed");
 
@@ -280,7 +343,6 @@ serveAuthed(async (req, user) => {
 
   if (jobErr || !job) throw jobErr ?? new Error("could not create job");
 
-  const seasoning = await buildSeasoning(user.id, cfg.djs, localHour);
   console.log("[generate-mix] seasoning:", seasoning.join(" | "));
 
   EdgeRuntime.waitUntil(runGeneration(job.id, cfg, lyrics, seasoning));

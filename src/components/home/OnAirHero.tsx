@@ -14,6 +14,8 @@ type Props = {
   trackTitle: string;
   isLive: boolean;
   onPlay: () => void;
+  eyebrow?: string;
+  pending?: boolean;
 };
 
 export function OnAirHero({
@@ -24,6 +26,8 @@ export function OnAirHero({
   trackTitle,
   isLive,
   onPlay,
+  eyebrow,
+  pending = false,
 }: Props) {
   const { theme } = useUnistyles();
   const accent = isLive ? theme.colors.error : theme.colors.primary;
@@ -33,7 +37,7 @@ export function OnAirHero({
       <View style={styles.eyebrow}>
         <EqualizerBars bars={4} height={14} color={accent} />
         <Text variant="labelCaps" color={isLive ? "error" : "primary"}>
-          {isLive ? "LIVE" : "ON AIR"}
+          {eyebrow ?? (isLive ? "LIVE" : "ON AIR")}
         </Text>
         {genre && (
           <Text
@@ -62,32 +66,39 @@ export function OnAirHero({
             {headline}
           </Text>
         </View>
-        <Pressable
-          onPress={onPlay}
-          accessibilityRole="button"
-          accessibilityLabel={`Play ${trackTitle} from ${djName}`}
-          style={({ pressed }) => [styles.playButton, pressed && styles.pressed]}
-        >
-          <Play
-            size={22}
-            color={theme.colors.onSurface}
-            fill={theme.colors.onSurface}
-          />
-        </Pressable>
+        {!pending && (
+          <Pressable
+            onPress={onPlay}
+            accessibilityRole="button"
+            accessibilityLabel={`Play ${trackTitle} from ${djName}`}
+            style={({ pressed }) => [
+              styles.playButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Play
+              size={22}
+              color={theme.colors.onSurface}
+              fill={theme.colors.onSurface}
+            />
+          </Pressable>
+        )}
       </View>
 
-      <View style={styles.trackRow}>
-        <Play size={12} color={theme.colors.onSurfaceVariant} />
-        <Text
-          variant="bodyMd"
-          color="onSurfaceVariant"
-          opacity={0.7}
-          numberOfLines={1}
-          style={styles.trackTitle}
-        >
-          {trackTitle}
-        </Text>
-      </View>
+      {!pending && (
+        <View style={styles.trackRow}>
+          <Play size={12} color={theme.colors.onSurfaceVariant} />
+          <Text
+            variant="bodyMd"
+            color="onSurfaceVariant"
+            opacity={0.7}
+            numberOfLines={1}
+            style={styles.trackTitle}
+          >
+            {trackTitle}
+          </Text>
+        </View>
+      )}
     </GlassCard>
   );
 }

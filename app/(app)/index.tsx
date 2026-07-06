@@ -10,6 +10,7 @@ import {
 } from "@/src/components";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useCurrentUser } from "@/src/hooks/use-auth";
+import { useDailyDrop } from "@/src/hooks/use-daily-drop";
 import {
   toPlayerTrack,
   useAIMixTracks,
@@ -51,6 +52,7 @@ export default function HomeScreen() {
   const { data: contextual } = useTimeOfDayShelf();
   const { data: vibe } = useVibeCheck();
   const taste = useTasteProfile();
+  const drop = useDailyDrop();
 
   const heroTrackId = hero?.track.id ?? null;
 
@@ -97,6 +99,12 @@ export default function HomeScreen() {
     load(hero.track, hero.queue, i < 0 ? 0 : i);
   }
 
+  function playDrop() {
+    if (!drop.track) return;
+    setRepeatMode("off");
+    load(drop.track, [drop.track], 0);
+  }
+
   function playFromShelf(
     tracks: PlayerTrack[],
     track: PlayerTrack,
@@ -137,7 +145,30 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {hero && (
+        {drop.status === "ready" && drop.track && drop.dj ? (
+          <OnAirHero
+            eyebrow="TODAY'S DROP"
+            djName={drop.dj.name}
+            avatarUrl={drop.dj.avatar_url}
+            genre={drop.dj.genre}
+            headline="Fresh, just for you"
+            trackTitle={drop.track.title}
+            isLive={false}
+            onPlay={playDrop}
+          />
+        ) : drop.status === "pending" && drop.dj ? (
+          <OnAirHero
+            eyebrow="TODAY'S DROP"
+            pending
+            djName={drop.dj.name}
+            avatarUrl={drop.dj.avatar_url}
+            genre={drop.dj.genre}
+            headline="Making today's drop…"
+            trackTitle=""
+            isLive={false}
+            onPlay={() => {}}
+          />
+        ) : hero ? (
           <OnAirHero
             djName={hero.dj.name}
             avatarUrl={hero.dj.avatar_url}
@@ -147,7 +178,7 @@ export default function HomeScreen() {
             isLive={hero.isLive}
             onPlay={playHero}
           />
-        )}
+        ) : null}
 
         {/* Your DJs */}
         {djs && djs.length > 0 && (
