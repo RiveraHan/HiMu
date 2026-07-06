@@ -17,6 +17,7 @@ export const queryKeys = {
     details: (id: string) => ["tracks", id] as const,
     myMood: (mood: string) => ["tracks", "mood", mood] as const,
     byDj: (id: string) => ["tracks", "dj", id] as const,
+    ownership: (id: string) => ["tracks", "ownership", id] as const,
   },
   generationJobs: {
     detail: (jobId: string | null) => ["generation-job", jobId] as const,

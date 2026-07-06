@@ -7,14 +7,14 @@
  * (own vocal DJs only), and R2 cleanup when a generation fails mid-way.
  */
 
+import { generateCoverImage } from "../_shared/cover.ts";
 import { invalid, json } from "../_shared/http.ts";
+import { countDailyGenerations, DAILY_GENERATION_LIMIT } from "../_shared/quota.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun, replicateText } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import { sanitize } from "../_shared/text.ts";
-
-const DAILY_TRACKS = 10;
 
 const STABLE_AUDIO_VERSION =
   "a61ac8edbb27cd2eda1b2eff2bbc03dcff1131f5560836ff77a052df05b77491";
@@ -113,61 +113,16 @@ function creativeTitle(): string {
   return `${pick(TITLE_ADJ)} ${pick(TITLE_NOUN)}`;
 }
 
-// Varied aesthetics so covers don't all look alike. Palettes lean *limited*
-// (duotone/mono/single-accent) so a cover rarely uses the whole spectrum.
-const COVER_STYLES = [
-  "minimalist", "surreal collage", "risograph print", "dreamy double exposure",
-  "geometric abstraction", "organic flowing forms", "brutalist graphic",
-  "grainy vintage film", "iridescent liquid metal", "hand-painted gouache",
-  "macro texture photography", "bauhaus poster", "cyanotype", "art deco",
-  "glitch art", "ink wash", "collaged paper cutouts", "long-exposure light trails",
-];
-const COVER_PALETTES = [
-  "a bold duotone palette", "monochrome with a single accent color",
-  "high-contrast black and white with one accent", "a muted pastel palette",
-  "warm analogous tones", "cool moody tones", "a single-color wash",
-  "earthy natural tones", "a restrained two-color palette",
-];
-const COVER_COMPOSITIONS = [
-  "a strong central focal point", "off-center with generous negative space",
-  "a dynamic diagonal composition", "layered depth", "flat graphic shapes",
-  "radial symmetry",
-];
-
-function coverPrompt(genre: string, mood: string): string {
-  const r = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
-  const subject = [genre, mood].filter(Boolean).join(" ").trim();
-  return [
-    `${r(COVER_STYLES)} album cover art`,
-    subject ? `evoking ${subject}` : "abstract mood",
-    r(COVER_PALETTES),
-    r(COVER_COMPOSITIONS),
-    "striking, original, rich detail",
-    "no text, no faces, no watermark",
-  ].join(", ");
-}
-
 // Cover; falls back to the DJ avatar so it's never null.
 async function generateCover(jobId: string, dj: any): Promise<string | null> {
   try {
     const genre = dj.genre_specialties?.[0] ?? "";
     const mood = dj.mood_tags?.[0] ?? "";
-
-    const url = await replicateRun(
-      "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
-      {
-        input: {
-          prompt: coverPrompt(genre, mood),
-          aspect_ratio: "1:1",
-          output_format: "jpg",
-          safety_tolerance: 5,
-        },
-      },
+    return await generateCoverImage(
+      `covers/generated/${jobId}.jpg`,
+      genre,
+      mood,
     );
-
-    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-
-    return await r2Put(`covers/generated/${jobId}.jpg`, bytes, "image/jpeg");
   } catch (_e) {
     return dj.avatar_url ?? null;
   }
@@ -456,21 +411,11 @@ serveAuthed(async (req, user) => {
     return json({ jobId: job.id });
   }
 
-  // Manual generation: daily quota (drops excluded; failed jobs don't count).
-  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-  const { count } = await admin
-    .from("generation_jobs")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .is("drop_date", null)
-    .gt("created_at", dayAgo)
-    .neq("status", "failed");
-
-  if ((count ?? 0) >= DAILY_TRACKS) {
+  // Manual generation: shared daily quota (drops exempt; cover regens included).
+  if ((await countDailyGenerations(user.id)) >= DAILY_GENERATION_LIMIT) {
     return json(
       {
-        error: `daily limit of ${DAILY_TRACKS} mixes reached`,
+        error: `daily limit of ${DAILY_GENERATION_LIMIT} mixes reached`,
         code: "daily_quota_reached",
       },
       429,

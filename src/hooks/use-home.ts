@@ -1,7 +1,7 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useCurrentUser } from "@/src/hooks/use-auth";
-import type { PlayerTrack } from "@/src/stores/player-store";
+import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import { FOCUS_MOODS } from "@/src/types/music-preferences";
 import {
   OWN_DJ_HERO_WEIGHT,
@@ -14,7 +14,7 @@ import {
   weightedPick,
   type TimeOfDayBucket,
 } from "@/src/utils/home-curation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 export type PlayableTrack = {
@@ -253,4 +253,43 @@ export function useOnAirHero(): { data: OnAirHero | null; isLoading: boolean } {
   }, [recent, liveDJIds, user?.id]);
 
   return { data: hero, isLoading };
+}
+
+// True when the track belongs to one of the current user's own DJs.
+export function useTrackOwnership(trackId: string | undefined) {
+  const user = useCurrentUser();
+  return useQuery({
+    queryKey: queryKeys.tracks.ownership(trackId ?? ""),
+    enabled: !!trackId && !!user,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from("tracks")
+        .select("dj_id, djs(owner_id)")
+        .eq("id", trackId!)
+        .maybeSingle();
+      if (error) throw error;
+      const owner = (data?.djs as { owner_id: string | null } | null)?.owner_id;
+      return owner != null && owner === user!.id;
+    },
+  });
+}
+
+// Regenerate a track's cover, updating it in place on success.
+export function useRegenerateCover() {
+  const qc = useQueryClient();
+  const setCoverForTrack = usePlayerStore((s) => s.setCoverForTrack);
+  return useMutation({
+    mutationFn: async (trackId: string) => {
+      const { data, error } = await supabase.functions.invoke<{
+        album_art_url: string;
+      }>("regenerate-cover", { body: { trackId } });
+      if (error) throw error;
+      if (!data?.album_art_url) throw new Error("no cover returned");
+      return { trackId, albumArtUrl: data.album_art_url };
+    },
+    onSuccess: ({ trackId, albumArtUrl }) => {
+      setCoverForTrack(trackId, albumArtUrl);
+      qc.invalidateQueries({ queryKey: ["tracks"] }); // refresh shelves/DJ page covers
+    },
+  });
 }
