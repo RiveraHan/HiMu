@@ -114,15 +114,17 @@ function creativeTitle(): string {
 }
 
 // Cover; falls back to the DJ avatar so it's never null.
-async function generateCover(jobId: string, dj: any): Promise<string | null> {
+async function generateCover(
+  jobId: string,
+  dj: any,
+  instrumental: boolean,
+): Promise<string | null> {
   try {
-    const genre = dj.genre_specialties?.[0] ?? "";
-    const mood = dj.mood_tags?.[0] ?? "";
-    return await generateCoverImage(
-      `covers/generated/${jobId}.jpg`,
-      genre,
-      mood,
-    );
+    return await generateCoverImage(`covers/generated/${jobId}.jpg`, {
+      genre: dj.genre_specialties?.[0] ?? "",
+      moods: dj.mood_tags ?? [],
+      instrumental,
+    });
   } catch (_e) {
     return dj.avatar_url ?? null;
   }
@@ -470,7 +472,7 @@ async function runGeneration(
     );
 
     const dj = cfg.djs;
-    const cover = await generateCover(jobId, dj);
+    const cover = await generateCover(jobId, dj, cfg.is_instrumental ?? true);
 
     const { data: track, error: insErr } = await admin
       .from("tracks")

@@ -22,16 +22,32 @@ const COVER_COMPOSITIONS = [
   "radial symmetry",
 ];
 
-export function coverPrompt(genre: string, mood: string): string {
+export type CoverContext = {
+  genre: string;
+  moods: string[];
+  instrumental: boolean;
+};
+
+// A varied style/palette, tied to the track's actual context: its genre, all
+// its moods, and whether it's instrumental or vocal.
+export function coverPrompt(ctx: CoverContext): string {
   const r = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
-  const subject = [genre, mood].filter(Boolean).join(" ").trim();
+  const genre = ctx.genre.trim().toLowerCase();
+  const moods = ctx.moods
+    .filter(Boolean)
+    .map((m) => m.toLowerCase());
+  const feel = ctx.instrumental
+    ? "atmospheric, textural, wordless and instrumental"
+    : "intimate and expressive, with a human vocal warmth";
   return [
     `${r(COVER_STYLES)} album cover art`,
-    subject ? `evoking ${subject}` : "abstract mood",
+    genre ? `for a ${genre} track` : "for a music track",
+    moods.length ? `evoking a ${moods.join(", ")} mood` : "evoking an abstract mood",
+    feel,
     r(COVER_PALETTES),
     r(COVER_COMPOSITIONS),
     "striking, original, rich detail",
-    "no text, no faces, no watermark",
+    "no text, no words, no letters, no faces, no watermark",
   ].join(", ");
 }
 
@@ -39,14 +55,13 @@ export function coverPrompt(genre: string, mood: string): string {
 // public URL. Throws on failure (callers decide whether to swallow it).
 export async function generateCoverImage(
   key: string,
-  genre: string,
-  mood: string,
+  ctx: CoverContext,
 ): Promise<string> {
   const url = await replicateRun(
     "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
     {
       input: {
-        prompt: coverPrompt(genre, mood),
+        prompt: coverPrompt(ctx),
         aspect_ratio: "1:1",
         output_format: "jpg",
         safety_tolerance: 5,

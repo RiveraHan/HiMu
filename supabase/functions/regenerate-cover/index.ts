@@ -46,12 +46,19 @@ serveAuthed(async (req, user) => {
     );
   }
 
+  // Instrumental vs vocal comes from the track's DJ config (tracks have no flag).
+  const { data: cfg } = await admin
+    .from("dj_generation_configs")
+    .select("is_instrumental")
+    .eq("dj_id", (track as any).dj_id)
+    .maybeSingle();
+
   const key = `covers/generated/${trackId}-${Date.now()}.jpg`;
-  const url = await generateCoverImage(
-    key,
-    (track as any).genre ?? "",
-    (track as any).mood_tags?.[0] ?? "",
-  );
+  const url = await generateCoverImage(key, {
+    genre: (track as any).genre ?? "",
+    moods: (track as any).mood_tags ?? [],
+    instrumental: cfg?.is_instrumental ?? true,
+  });
 
   const { error: upErr } = await admin
     .from("tracks")
