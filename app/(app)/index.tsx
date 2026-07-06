@@ -1,12 +1,35 @@
 import { usePlayer } from "@/src/audio/use-player";
-import { Avatar, DJAvatar, LibraryCard, Text } from "@/src/components";
+import {
+  Avatar,
+  CaptionVoiceButton,
+  ContentShelf,
+  DJAvatar,
+  LibraryCard,
+  OnAirHero,
+  Text,
+  VibeSpotlightCard,
+} from "@/src/components";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useCurrentUser } from "@/src/hooks/use-auth";
-import { useAIMixTracks, useDJs, useLiveDJIds } from "@/src/hooks/use-home";
+import { useDailyDrop } from "@/src/hooks/use-daily-drop";
+import {
+  toPlayerTrack,
+  useAIMixTracks,
+  useDJs,
+  useLiveDJIds,
+  useOnAirHero,
+  useRecentTracks,
+  useTimeOfDayShelf,
+} from "@/src/hooks/use-home";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useTasteProfile } from "@/src/hooks/use-taste-profile";
+import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { formatHours } from "@/src/utils/format-stats";
+import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
+import { useMemo } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +48,30 @@ export default function HomeScreen() {
 
   const ownCount = djs?.filter((d) => d.owner_id === user?.id).length ?? 0;
 
+  const { data: hero } = useOnAirHero();
+  const { data: recent } = useRecentTracks();
+  const { data: contextual } = useTimeOfDayShelf();
+  const { data: vibe } = useVibeCheck();
+  const taste = useTasteProfile();
+  const drop = useDailyDrop();
+
+  const heroTrackId = hero?.track.id ?? null;
+
+  const freshTracks = useMemo<PlayerTrack[]>(() => {
+    if (!recent) return [];
+    return recent
+      .filter((t) => t.audio_url != null && t.id !== heroTrackId)
+      .slice(0, 12)
+      .map((t) => ({ ...toPlayerTrack(t), artist: t.dj?.name ?? t.artist }));
+  }, [recent, heroTrackId]);
+
+  const contextualTracks = useMemo<PlayerTrack[]>(() => {
+    const pool = (contextual?.tracks ?? []).filter(
+      (t) => t.audio_url != null && t.id !== heroTrackId,
+    );
+    return weightedShuffle(pool, taste).slice(0, 12).map(toPlayerTrack);
+  }, [contextual, heroTrackId, taste]);
+
   function getGreeting(): string {
     const hour = new Date().getHours();
 
@@ -34,25 +81,38 @@ export default function HomeScreen() {
   }
 
   function playAIMixes() {
-    const pool: PlayerTrack[] = (aiMix ?? [])
-      .filter((t): t is typeof t & { audio_url: string } => t.audio_url != null)
-      .map((t) => ({
-        id: t.id,
-        title: t.title,
-        artist: t.artist,
-        audio_url: t.audio_url,
-        album_art_url: t.album_art_url,
-        duration: t.duration,
-        genre: t.genre,
-      }));
+    // Taste-weighted order over the raw rows (they carry genre + mood_tags).
+    const pool = weightedShuffle(
+      (aiMix ?? []).filter(
+        (t): t is typeof t & { audio_url: string } => t.audio_url != null,
+      ),
+      taste,
+    ).map(toPlayerTrack);
     if (!pool.length) return;
-    // Fisher–Yates shuffle so each tap gives a different mix across all DJs.
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
     setRepeatMode("all"); // continuous, looping session
     load(pool[0], pool, 0);
+  }
+
+  function playHero() {
+    if (!hero) return;
+    const i = hero.queue.findIndex((t) => t.id === hero.track.id);
+    setRepeatMode("all");
+    load(hero.track, hero.queue, i < 0 ? 0 : i);
+  }
+
+  function playDrop() {
+    if (!drop.track) return;
+    setRepeatMode("off");
+    load(drop.track, [drop.track], 0);
+  }
+
+  function playFromShelf(
+    tracks: PlayerTrack[],
+    track: PlayerTrack,
+    index: number,
+  ) {
+    setRepeatMode("all");
+    load(track, tracks, index);
   }
 
   return (
@@ -85,6 +145,46 @@ export default function HomeScreen() {
             />
           </Pressable>
         </View>
+
+        {drop.status === "ready" && drop.track && drop.dj ? (
+          <OnAirHero
+            eyebrow="TODAY'S DROP"
+            djName={drop.dj.name}
+            avatarUrl={drop.dj.avatar_url}
+            genre={drop.dj.genre}
+            headline={drop.caption ?? "Fresh, just for you"}
+            trackTitle={drop.track.title}
+            isLive={false}
+            onPlay={playDrop}
+            voiceSlot={
+              drop.captionAudioUrl ? (
+                <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
+              ) : undefined
+            }
+          />
+        ) : drop.status === "pending" && drop.dj ? (
+          <OnAirHero
+            eyebrow="TODAY'S DROP"
+            pending
+            djName={drop.dj.name}
+            avatarUrl={drop.dj.avatar_url}
+            genre={drop.dj.genre}
+            headline="Making today's drop…"
+            trackTitle=""
+            isLive={false}
+            onPlay={() => {}}
+          />
+        ) : drop.status === "failed" && hero ? (
+          <OnAirHero
+            djName={hero.dj.name}
+            avatarUrl={hero.dj.avatar_url}
+            genre={hero.dj.genre}
+            headline={hero.headline}
+            trackTitle={hero.track.title}
+            isLive={hero.isLive}
+            onPlay={playHero}
+          />
+        ) : null}
 
         {/* Your DJs */}
         {djs && djs.length > 0 && (
@@ -162,6 +262,22 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {freshTracks.length >= 3 && (
+          <ContentShelf
+            title="Fresh from your DJs"
+            tracks={freshTracks}
+            onPressTrack={(t, i) => playFromShelf(freshTracks, t, i)}
+          />
+        )}
+
+        {contextualTracks.length >= 3 && (
+          <ContentShelf
+            title={contextual?.label ?? "For you"}
+            tracks={contextualTracks}
+            onPressTrack={(t, i) => playFromShelf(contextualTracks, t, i)}
+          />
+        )}
+
         {/* Personalized Library */}
         <View style={styles.section}>
           <Text variant="h2">Personalized Library</Text>
@@ -182,6 +298,15 @@ export default function HomeScreen() {
             }
           />
         </View>
+
+        {vibe && vibe.hoursThisWeek > 0 && (
+          <VibeSpotlightCard
+            hours={formatHours(vibe.hoursThisWeek)}
+            topGenre={vibe.topGenre}
+            streak={vibe.streak}
+            onPress={() => router.push("/vibe-check")}
+          />
+        )}
 
         {/* Focus Mode entry */}
         <Pressable

@@ -31,6 +31,7 @@ type State = {
   setProgress: (positionSec: number, durationSec: number) => void;
   setIndex: (index: number) => void;
   setRepeatMode: (mode: State["repeatMode"]) => void;
+  setCoverForTrack: (trackId: string, url: string) => void;
   reset: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
@@ -62,6 +63,16 @@ export const usePlayerStore = create<State>((set) => ({
     })),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
   setProgress: (positionSec, durationSec) => set({ positionSec, durationSec }),
+  setCoverForTrack: (trackId, url) =>
+    set((state) => ({
+      currentTrack:
+        state.currentTrack?.id === trackId
+          ? { ...state.currentTrack, album_art_url: url }
+          : state.currentTrack,
+      queue: state.queue.map((t) =>
+        t.id === trackId ? { ...t, album_art_url: url } : t,
+      ),
+    })),
   setIndex: (index) => set({ index }),
   setRepeatMode: (repeatMode) => set({ repeatMode }),
   reset: () =>

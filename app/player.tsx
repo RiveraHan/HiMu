@@ -1,5 +1,6 @@
 import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
+import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -8,17 +9,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import {
   ChevronDown,
+  Loader,
   Pause,
   Play,
   Repeat,
   Repeat1,
+  RefreshCw,
   Shuffle,
   SkipBack,
   SkipForward,
   Sparkle,
 } from "lucide-react-native";
 import { useEffect } from "react";
-import { Pressable, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -35,6 +38,8 @@ export default function PlayerScreen() {
   const cycleRepeat = usePlayerStore((state) => state.cycleRepeat);
 
   const { seek, prev, toggle, next } = usePlayer();
+  const ownership = useTrackOwnership(track?.id);
+  const regenerate = useRegenerateCover();
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -111,8 +116,32 @@ export default function PlayerScreen() {
           </View>
 
           {/* Balances the close button so the labels stay centered;
-              the options menu takes this slot when it exists. */}
-          <View style={styles.topSpacer} />
+              own-DJ tracks get a regenerate-cover action in this slot. */}
+          {ownership.data ? (
+            <IconButton
+              variant="glassStrong"
+              disabled={regenerate.isPending}
+              icon={
+                regenerate.isPending ? (
+                  <Loader size={22} color={theme.colors.onSurfaceVariant} />
+                ) : (
+                  <RefreshCw size={22} color={theme.colors.onSurfaceVariant} />
+                )
+              }
+              onPress={() =>
+                regenerate.mutate(track.id, {
+                  onError: () =>
+                    Alert.alert(
+                      "Cover",
+                      "Couldn't regenerate the cover — you may have reached today's limit.",
+                    ),
+                })
+              }
+              accessibilityLabel="Regenerate cover"
+            />
+          ) : (
+            <View style={styles.topSpacer} />
+          )}
         </View>
 
         {/* Album art */}

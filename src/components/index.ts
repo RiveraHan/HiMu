@@ -14,6 +14,12 @@ export * from "./Tag";
 export * from "./Text";
 export * from "./TrackCard";
 
+// Home
+export * from "./home/CaptionVoiceButton";
+export * from "./home/ContentShelf";
+export * from "./home/OnAirHero";
+export * from "./home/VibeSpotlightCard";
+
 // Player
 export * from "./player/SeekBar";
 
