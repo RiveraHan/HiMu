@@ -1,35 +1,154 @@
-import { Stack } from "expo-router";
-import { ScrollView, Text } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { GlassInput, Text, TrackCard } from "@/src/components";
+import { AudiusShelf } from "@/src/components/discover/AudiusShelf";
+import { usePlayer } from "@/src/audio/use-player";
+import { useAudiusSearch, useAudiusTrending } from "@/src/hooks/use-audius";
+import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+
+// Curated Audius genres (exact API strings), chosen for overlap with HiMu's DJs.
+const GENRES: { title: string; genre?: string }[] = [
+  { title: "Trending on Audius" },
+  { title: "Electronic", genre: "Electronic" },
+  { title: "House", genre: "House" },
+  { title: "Techno", genre: "Techno" },
+  { title: "Lo-Fi", genre: "Lo-Fi" },
+  { title: "Hip-Hop", genre: "Hip-Hop/Rap" },
+  { title: "Ambient", genre: "Ambient" },
+  { title: "R&B / Soul", genre: "R&B/Soul" },
+  { title: "Latin", genre: "Latin" },
+];
 
 export default function DiscoverScreen() {
+  const { theme } = useUnistyles();
+  const insets = useSafeAreaInsets();
+  const paddingBottom = useTabBarPadding();
+  const qc = useQueryClient();
+  const { load } = usePlayer();
+  const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
+  const currentId = usePlayerStore((s) => s.currentTrack?.id);
+
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+  
+  const searching = debounced.trim().length >= 2;
+  const { data: results, isLoading: searchLoading } = useAudiusSearch(debounced);
+
+  // Shares its cache with the first shelf (same query key) — drives the error
+  // banner without a second network request.
+  const trending = useAudiusTrending();
+
+  function playFrom(tracks: PlayerTrack[], track: PlayerTrack, index: number) {
+    setRepeatMode("all");
+    load(track, tracks, index);
+  }
+
   return (
-    <>
-      <Stack.Screen options={{ title: "Discover" }} />
+    <View style={styles.root}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.text}>Discover (coming soon)</Text>
+        <View style={styles.header}>
+          <Text variant="h1">Discover</Text>
+          <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
+            Real music from independent artists
+          </Text>
+        </View>
+
+        <GlassInput
+          placeholder="Search Audius…"
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+
+        {searching ? (
+          <View style={styles.results}>
+            {searchLoading ? (
+              <ActivityIndicator color={theme.colors.primary} />
+            ) : results && results.length > 0 ? (
+              results.map((track, index) => (
+                <TrackCard
+                  key={track.id}
+                  variant="row"
+                  title={track.title}
+                  artist={track.artist}
+                  cover={track.album_art_url}
+                  isPlaying={currentId === track.id}
+                  onPress={() => playFrom(results, track, index)}
+                />
+              ))
+            ) : (
+              <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
+                No results on Audius for “{debounced.trim()}”.
+              </Text>
+            )}
+          </View>
+        ) : trending.isError ? (
+          <View style={styles.results}>
+            <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
+              Couldn’t reach Audius right now.
+            </Text>
+            <Pressable
+              onPress={() => qc.invalidateQueries({ queryKey: ["audius"] })}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
+            >
+              <Text variant="bodyMd" color="primary">
+                Retry
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {GENRES.map((g) => (
+              <AudiusShelf
+                key={g.title}
+                title={g.title}
+                genre={g.genre}
+                onPlay={playFrom}
+              />
+            ))}
+            <Text
+              variant="labelCaps"
+              color="onSurfaceVariant"
+              opacity={0.5}
+              style={styles.attribution}
+            >
+              Powered by Audius
+            </Text>
+          </>
+        )}
       </ScrollView>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  scrollView: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
+  root: { flex: 1, backgroundColor: theme.colors.background },
   content: {
-    flexGrow: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: theme.spacing.pageMargin,
+    paddingHorizontal: theme.spacing.pageMargin,
+    gap: theme.spacing.stackLg,
   },
-  text: {
-    ...theme.typography.bodyLg,
-    color: theme.colors.onSurfaceVariant,
-  },
+  header: { gap: theme.spacing.stackXs },
+  results: { gap: theme.spacing.stackMd },
+  retry: { alignSelf: "flex-start" },
+  attribution: { textAlign: "center", marginTop: theme.spacing.stackMd },
+  pressed: { transform: [{ scale: 0.97 }] },
 }));

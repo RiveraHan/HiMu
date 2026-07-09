@@ -16,9 +16,18 @@ import {
 } from "react";
 import { AppState } from "react-native";
 
+// Audius (and any future external-catalog) track ids are namespaced
+// "audius:<id>" and never correspond to a row in `tracks` — skip DB-backed
+// stats for them rather than let every insert/lookup fail against the
+// uuid-typed `tracks.id` / `listening_events.track_id` columns.
+function isExternalTrack(trackId: string): boolean {
+  return trackId.startsWith("audius:");
+}
+
 // Best-effort: record that the signed-in user has listened to this track's DJ.
 async function recordDjListen(trackId: string) {
   try {
+    if (isExternalTrack(trackId)) return;
     const uid = useAuthStore.getState().session?.user?.id;
     if (!uid) return;
     const { data } = await supabase
@@ -42,6 +51,7 @@ async function recordListeningEvent(
   event: "completed" | "skipped",
 ) {
   try {
+    if (isExternalTrack(trackId)) return;
     const uid = useAuthStore.getState().session?.user?.id;
     if (!uid) return;
     const { error } = await supabase

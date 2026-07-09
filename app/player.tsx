@@ -47,6 +47,11 @@ export default function PlayerScreen() {
 
   if (!track) return null;
 
+  // Audius (external) tracks are namespaced "audius:<id>" — HiMu neither
+  // generated nor curated them, so the badge must say so instead of
+  // claiming AI curation.
+  const isExternal = track.id.startsWith("audius:");
+
   const close = () =>
     router.canDismiss() ? router.dismiss() : router.replace("/");
 
@@ -160,7 +165,7 @@ export default function PlayerScreen() {
             <View style={styles.badge}>
               <Sparkle size={14} color={theme.colors.primary} />
               <Text variant="labelCaps" color="primary">
-                CURATED BY HIMU AI
+                {isExternal ? "VIA AUDIUS" : "CURATED BY HIMU AI"}
               </Text>
             </View>
             <Text variant="h1" numberOfLines={1} style={styles.title}>
