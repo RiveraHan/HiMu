@@ -14,6 +14,8 @@ import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun, replicateText } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
+import { streamUrl } from "../_shared/audius.ts";
+import { pickAudiusDrop } from "./audius-drop.ts";
 import { sanitize } from "../_shared/text.ts";
 
 const STABLE_AUDIO_VERSION =
@@ -323,7 +325,7 @@ serveAuthed(async (req, user) => {
   const { data: cfg } = await admin
     .from("dj_generation_configs")
     .select(
-      "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, genre_specialties, mood_tags, avatar_url, owner_id)",
+      "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, character, voice_style, genre_specialties, mood_tags, avatar_url, owner_id)",
     )
     .eq("dj_id", djId)
     .single();
@@ -445,6 +447,85 @@ serveAuthed(async (req, user) => {
   return json({ jobId: job.id });
 });
 
+// Phase B: the drop leads with a real Audius pick the DJ curates. Materializes
+// the pick into `tracks` (real uuid, source='audius'), reuses the DJ voice, and
+// marks the job ready. Returns false on any failure so the drop falls back to
+// generation — the drop is never empty.
+async function tryAudiusDrop(
+  jobId: string,
+  cfg: any,
+  localHour: unknown,
+): Promise<boolean> {
+  const dj = cfg.djs;
+  let picked: { pick: any; caption: string } | null = null;
+  try {
+    picked = await pickAudiusDrop(dj, localHour);
+  } catch (e) {
+    console.error("[generate-mix] audius pick failed:", e);
+    return false;
+  }
+  if (!picked) return false;
+
+  try {
+    const { pick, caption } = picked;
+
+    // Dedup by (source, external_id): reuse an already-materialized row.
+    const { data: existing } = await admin
+      .from("tracks")
+      .select("id")
+      .eq("source", "audius")
+      .eq("external_id", pick.id)
+      .maybeSingle();
+
+    let trackId: string | undefined = existing?.id;
+    if (!trackId) {
+      const { data: track, error: insErr } = await admin
+        .from("tracks")
+        .insert({
+          title: pick.title,
+          artist: pick.user?.name ?? "Unknown artist",
+          audio_url: streamUrl(pick.id),
+          album_art_url:
+            pick.artwork?.["480x480"] ?? pick.artwork?.["1000x1000"] ?? null,
+          genre: pick.genre ?? dj.genre_specialties?.[0] ?? null,
+          mood_tags: dj.mood_tags,
+          duration: pick.duration ?? null,
+          is_ai_generated: false,
+          source: "audius",
+          external_id: pick.id,
+          dj_id: cfg.dj_id,
+        })
+        .select("id")
+        .single();
+      if (insErr || !track) throw insErr ?? new Error("materialize failed");
+      trackId = track.id;
+    }
+
+    let captionAudioUrl: string | null = null;
+    try {
+      captionAudioUrl = await buildCaptionAudio(jobId, dj, caption);
+    } catch (e) {
+      console.error("[generate-mix] caption audio skipped:", e);
+    }
+
+    await admin
+      .from("generation_jobs")
+      .update({
+        status: "ready",
+        track_id: trackId,
+        caption,
+        caption_audio_url: captionAudioUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", jobId);
+
+    return true;
+  } catch (e) {
+    console.error("[generate-mix] audius materialize failed:", e);
+    return false; // fall back to generation
+  }
+}
+
 async function runGeneration(
   jobId: string,
   cfg: any,
@@ -460,6 +541,12 @@ async function runGeneration(
 
   try {
     await update({ status: "generating" });
+
+    // Phase B: drops lead with a real Audius pick; generation is the fallback.
+    if (drop) {
+      const done = await tryAudiusDrop(jobId, cfg, drop.localHour);
+      if (done) return;
+    }
 
     const tempUrl = await generateMusic(cfg, lyrics, seasoning);
 

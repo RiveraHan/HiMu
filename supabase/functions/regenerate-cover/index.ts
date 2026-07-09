@@ -20,11 +20,21 @@ serveAuthed(async (req, user) => {
 
   const { data: track } = await admin
     .from("tracks")
-    .select("id, genre, mood_tags, album_art_url, dj_id, djs(owner_id)")
+    .select("id, genre, mood_tags, album_art_url, dj_id, source, djs(owner_id)")
     .eq("id", trackId)
     .single();
 
   if (!track) return json({ error: "track not found" }, 404);
+
+  // External tracks (e.g. Audius picks materialized into a daily drop) keep
+  // their real artist's artwork — never overwritten with AI art, regardless
+  // of DJ ownership.
+  if ((track as any).source) {
+    return json(
+      { error: "this track's cover can't be regenerated", code: "external_track" },
+      403,
+    );
+  }
 
   // Authorization: only tracks from your own DJs.
   const owner: string | null = (track.djs as any)?.owner_id ?? null;

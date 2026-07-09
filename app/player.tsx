@@ -47,10 +47,13 @@ export default function PlayerScreen() {
 
   if (!track) return null;
 
-  // Audius (external) tracks are namespaced "audius:<id>" — HiMu neither
-  // generated nor curated them, so the badge must say so instead of
-  // claiming AI curation.
-  const isExternal = track.id.startsWith("audius:");
+  // External tracks: Phase A's ephemeral Discover uses the "audius:<id>"
+  // client prefix; Phase B's DJ-curated drop materializes a real uuid row
+  // instead, so it's detected by its audio_url host. Either way, HiMu neither
+  // generated nor curated them, so the badge must say so instead of claiming
+  // AI curation.
+  const isExternal =
+    track.id.startsWith("audius:") || track.audio_url.includes("api.audius.co");
 
   const close = () =>
     router.canDismiss() ? router.dismiss() : router.replace("/");
