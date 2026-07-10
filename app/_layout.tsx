@@ -30,6 +30,7 @@ export default function RootLayout() {
               />
               <Stack.Screen name="account-settings" />
               <Stack.Screen name="preferences" />
+              <Stack.Screen name="favorites" />
               <Stack.Screen name="vibe-check" />
               <Stack.Screen name="dj/[id]" />
               <Stack.Screen name="focus-mode" options={{ animation: "fade" }} />
