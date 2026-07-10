@@ -59,6 +59,12 @@ export const darkTheme = {
     errorContainer: "#93000a",
     onErrorContainer: "#ffdad6",
 
+    // Warning
+    warning: "#ffd7a8",
+    onWarning: "#4a2800",
+    warningContainer: "#6e3d00",
+    onWarningContainer: "#ffddb3",
+
     // Glass tokens — design-system.json §elevation
     // Tier 1 (Cards): backdrop-blur 30px, fill 3% white, border 5% white
     glassBorder: "rgba(255,255,255,0.05)",
