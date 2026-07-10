@@ -258,16 +258,21 @@ export function useOnAirHero(): { data: OnAirHero | null; isLoading: boolean } {
 // True when the track belongs to one of the current user's own DJs.
 export function useTrackOwnership(trackId: string | undefined) {
   const user = useCurrentUser();
+  const isExternal = trackId?.startsWith("audius:") ?? false;
   return useQuery({
     queryKey: queryKeys.tracks.ownership(trackId ?? ""),
-    enabled: !!trackId && !!user,
+    enabled: !!trackId && !!user && !isExternal,
     queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
         .from("tracks")
-        .select("dj_id, djs(owner_id)")
+        .select("dj_id, source, djs(owner_id)")
         .eq("id", trackId!)
         .maybeSingle();
       if (error) throw error;
+      // External tracks (e.g. a materialized Audius drop pick) are never
+      // "owned", regardless of which DJ curated them — their real artist's
+      // artwork/attribution must never be treated as regenerable.
+      if (data?.source) return false;
       const owner = (data?.djs as { owner_id: string | null } | null)?.owner_id;
       return owner != null && owner === user!.id;
     },

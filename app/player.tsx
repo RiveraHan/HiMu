@@ -1,6 +1,8 @@
 import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
+import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
+import { useToast } from "@/src/hooks/use-toast";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -9,6 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import {
   ChevronDown,
+  Heart,
   Loader,
   Pause,
   Play,
@@ -21,7 +24,7 @@ import {
   Sparkle,
 } from "lucide-react-native";
 import { useEffect } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -40,12 +43,23 @@ export default function PlayerScreen() {
   const { seek, prev, toggle, next } = usePlayer();
   const ownership = useTrackOwnership(track?.id);
   const regenerate = useRegenerateCover();
+  const isFavorited = useIsFavorited(track?.id);
+  const toggleFavorite = useToggleFavorite();
+  const toast = useToast();
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
   }, [track]);
 
   if (!track) return null;
+
+  // External tracks: Phase A's ephemeral Discover uses the "audius:<id>"
+  // client prefix; Phase B's DJ-curated drop materializes a real uuid row
+  // instead, so it's detected by its audio_url host. Either way, HiMu neither
+  // generated nor curated them, so the badge must say so instead of claiming
+  // AI curation.
+  const isExternal =
+    track.id.startsWith("audius:") || track.audio_url.includes("api.audius.co");
 
   const close = () =>
     router.canDismiss() ? router.dismiss() : router.replace("/");
@@ -131,7 +145,7 @@ export default function PlayerScreen() {
               onPress={() =>
                 regenerate.mutate(track.id, {
                   onError: () =>
-                    Alert.alert(
+                    toast.error(
                       "Cover",
                       "Couldn't regenerate the cover — you may have reached today's limit.",
                     ),
@@ -146,12 +160,46 @@ export default function PlayerScreen() {
 
         {/* Album art */}
         <View style={styles.artWrap}>
-          <Image
-            source={track.album_art_url}
-            style={styles.art}
-            contentFit="cover"
-            transition={200}
-          />
+          <View style={styles.artFrame}>
+            <Image
+              source={track.album_art_url}
+              style={styles.art}
+              contentFit="cover"
+              transition={200}
+            />
+            {/* Floating save action, anchored to the artwork itself rather
+                than the top bar — reads as "favorite this song", not just
+                another toolbar icon. */}
+            <View style={styles.favoriteOverlay}>
+              <IconButton
+                variant="glassStrong"
+                icon={
+                  <Heart
+                    size={22}
+                    color={
+                      isFavorited.data
+                        ? theme.colors.primary
+                        : theme.colors.onSurfaceVariant
+                    }
+                    fill={
+                      isFavorited.data ? theme.colors.primary : "transparent"
+                    }
+                  />
+                }
+                onPress={() =>
+                  toggleFavorite.mutate({
+                    track,
+                    isFavorited: !!isFavorited.data,
+                  })
+                }
+                accessibilityLabel={
+                  isFavorited.data
+                    ? "Remove from favorites"
+                    : "Save to favorites"
+                }
+              />
+            </View>
+          </View>
         </View>
 
         {/* Meta and Controls */}
@@ -160,7 +208,7 @@ export default function PlayerScreen() {
             <View style={styles.badge}>
               <Sparkle size={14} color={theme.colors.primary} />
               <Text variant="labelCaps" color="primary">
-                CURATED BY HIMU AI
+                {isExternal ? "VIA AUDIUS" : "CURATED BY HIMU AI"}
               </Text>
             </View>
             <Text variant="h1" numberOfLines={1} style={styles.title}>
@@ -330,10 +378,15 @@ const styles = StyleSheet.create((theme) => ({
     paddingVertical: theme.spacing.stackLg,
   },
 
-  art: {
+  artFrame: {
     width: "100%",
     maxWidth: 340,
     aspectRatio: 1,
+  },
+
+  art: {
+    width: "100%",
+    height: "100%",
     borderRadius: theme.borderRadius.xl,
     borderCurve: "continuous",
     borderWidth: StyleSheet.hairlineWidth,
@@ -342,6 +395,12 @@ const styles = StyleSheet.create((theme) => ({
     ...(process.env.EXPO_OS === "ios"
       ? { boxShadow: "0 30px 60px rgba(0,0,0,0.6)" }
       : { elevation: 16 }),
+  },
+
+  favoriteOverlay: {
+    position: "absolute",
+    bottom: theme.spacing.stackMd,
+    right: theme.spacing.stackMd,
   },
 
   bottom: {

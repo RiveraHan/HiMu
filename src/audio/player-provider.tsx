@@ -16,9 +16,18 @@ import {
 } from "react";
 import { AppState } from "react-native";
 
+// Audius (and any future external-catalog) track ids are namespaced
+// "audius:<id>" and never correspond to a row in `tracks` — skip DB-backed
+// stats for them rather than let every insert/lookup fail against the
+// uuid-typed `tracks.id` / `listening_events.track_id` columns.
+function isExternalTrack(trackId: string): boolean {
+  return trackId.startsWith("audius:");
+}
+
 // Best-effort: record that the signed-in user has listened to this track's DJ.
 async function recordDjListen(trackId: string) {
   try {
+    if (isExternalTrack(trackId)) return;
     const uid = useAuthStore.getState().session?.user?.id;
     if (!uid) return;
     const { data } = await supabase
@@ -42,6 +51,7 @@ async function recordListeningEvent(
   event: "completed" | "skipped",
 ) {
   try {
+    if (isExternalTrack(trackId)) return;
     const uid = useAuthStore.getState().session?.user?.id;
     if (!uid) return;
     const { error } = await supabase
@@ -51,6 +61,18 @@ async function recordListeningEvent(
   } catch (e) {
     console.warn("[listening_events]", e);
   }
+}
+
+// Lock-screen / media-notification metadata for the current track. Activating
+// the lock screen (setActiveForLockScreen) is also what starts expo-audio's
+// Android mediaPlayback foreground service — which is what keeps the JS runtime
+// alive in the background so the queue can auto-advance between tracks.
+function lockScreenMetadata(track: PlayerTrack) {
+  return {
+    title: track.title,
+    artist: track.artist,
+    artworkUrl: track.album_art_url ?? undefined,
+  };
 }
 
 type PlayerControls = {
@@ -65,7 +87,13 @@ type PlayerControls = {
 export const PlayerContext = createContext<PlayerControls | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
-  const player = useAudioPlayer(undefined);
+  // keepAudioSessionActive keeps the iOS audio session active across the
+  // silent gap between tracks. Without it, expo-audio deactivates the session
+  // the instant a track ends (AudioModule.swift onPlaybackComplete), which
+  // relinquishes the background-audio grant and lets iOS suspend the JS
+  // runtime before our didJustFinish -> next() advance can run — so playback
+  // stops instead of auto-advancing while backgrounded or the screen is locked.
+  const player = useAudioPlayer(undefined, { keepAudioSessionActive: true });
 
   const status = useAudioPlayerStatus(player);
 
@@ -79,6 +107,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const prevTimeRef = useRef(0);
   const wasPlayingRef = useRef(false); // detect transitions play -> pause
   const outgoingSettledRef = useRef(false); // one event max per loaded track
+  const lockScreenActiveRef = useRef(false); // media session started once
 
   useEffect(() => {
     setAudioModeAsync({
@@ -103,6 +132,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       player.pause();
       store.getState().reset();
     }
+
+    // Tear down the media session/foreground service so a logged-out app
+    // isn't left holding a lock-screen notification.
+    player.clearLockScreenControls();
+    lockScreenActiveRef.current = false;
   }, [session, player, store]);
 
   const flush = useCallback(async (opts?: { final: boolean }) => {
@@ -208,6 +242,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       store.getState().setNowPlaying(track, q, Math.max(i, 0));
       player.replace({ uri: track.audio_url });
       player.play();
+
+      // Activate the lock-screen / media notification. The first activation
+      // also boots the Android foreground service that keeps this JS runtime
+      // alive in the background, so the queue keeps auto-advancing while
+      // backgrounded or screen-locked; later loads just refresh the metadata.
+      const metadata = lockScreenMetadata(track);
+      if (!lockScreenActiveRef.current) {
+        player.setActiveForLockScreen(true, metadata);
+        lockScreenActiveRef.current = true;
+      } else {
+        player.updateLockScreenMetadata(metadata);
+      }
     },
     [player, store, countTrackIfPlayed, settleOutgoingTrack],
   );

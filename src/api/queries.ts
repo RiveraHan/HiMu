@@ -48,4 +48,13 @@ export const queryKeys = {
   musicPreferences: {
     me: ["music-preferences", "me"] as const,
   },
+  audius: {
+    trending: (genre: string) => ["audius", "trending", genre] as const,
+    search: (q: string) => ["audius", "search", q] as const,
+  },
+  favorites: {
+    all: ["favorites"] as const,
+    isFavorited: (trackId: string) =>
+      ["favorites", "is-favorited", trackId] as const,
+  },
 };

@@ -5,6 +5,7 @@ import {
   Avatar,
   GlassCard,
   IdentityCard,
+  ScreenScrollView,
   SettingRow,
   StatCard,
   Text,
@@ -31,8 +32,9 @@ import {
   SlidersHorizontal,
   User,
 } from "lucide-react-native";
+import { useConfirm } from "@/src/hooks/use-confirm";
 import { useCallback } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -46,6 +48,7 @@ export default function ProfileScreen() {
   const { theme } = useUnistyles();
   const { flushListeningStats } = usePlayer();
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   useFocusEffect(
     useCallback(() => {
@@ -57,29 +60,26 @@ export default function ProfileScreen() {
   const isPro = profile?.subscriptionTier === "premium";
   const identity = getListeningIdentity(stats?.topGenre ?? null);
 
-  const onLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          await flushListeningStats(); // save the session's progress
-          await authApi.signOut(); // PlayerProvider pauses and resets when the session ends
-        },
-      },
-    ]);
+  const onLogout = async () => {
+    const ok = await confirm({
+      title: "Logout",
+      message: "Are you sure you want to logout?",
+      confirmLabel: "Logout",
+      destructive: true,
+    });
+    if (!ok) return;
+    await flushListeningStats(); // save the session's progress
+    await authApi.signOut(); // PlayerProvider pauses and resets when the session ends
   };
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
         {/*Perfil Header*/}
         <View style={styles.header}>
           <View style={styles.avatarWrap}>
@@ -246,8 +246,7 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
-      </ScrollView>
-    </View>
+    </ScreenScrollView>
   );
 }
 

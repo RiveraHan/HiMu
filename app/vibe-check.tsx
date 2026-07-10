@@ -1,6 +1,7 @@
 import {
   GlassCard,
   ScreenHeader,
+  ScreenScrollView,
   StatCard,
   TopDjRow,
   TopGenreCard,
@@ -18,7 +19,7 @@ import {
   TrendingUp,
   Waves,
 } from "lucide-react-native";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -30,115 +31,113 @@ export default function VibeCheckScreen() {
   const { data: djs } = useDJs();
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <ScreenHeader
-          kicker="THIS WEEK"
-          title="Vibe Check"
-          subtitle="Your sonic evolution this week."
-        />
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+      <ScreenHeader
+        kicker="THIS WEEK"
+        title="Vibe Check"
+        subtitle="Your sonic evolution this week."
+      />
 
-        {/* Hero - Resonance Flow */}
-        <GlassCard style={styles.hero}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroTitle}>
-              <Text variant="bodyLg">Resonance Flow</Text>
-              <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.7}>
-                {vibe?.topGenre ? `Mostly ${vibe.topGenre}` : "This week"}
-              </Text>
-            </View>
-            <View style={styles.heroNumber}>
-              <Text variant="display">
-                {formatHours(vibe?.hoursThisWeek ?? 0)}
-              </Text>
-              <Text variant="labelCaps" color="onSurfaceVariant">
-                HOURS
-              </Text>
-            </View>
-          </View>
-
-          {vibe && <VibeAreaChart data={vibe.week} />}
-
-          <View style={styles.heroFooter}>
-            {vibe?.weekOverWeekPct != null && (
-              <View style={styles.delta}>
-                {vibe.weekOverWeekPct >= 0 ? (
-                  <TrendingUp size={14} color={theme.colors.primary} />
-                ) : (
-                  <TrendingDown size={14} color={theme.colors.error} />
-                )}
-                <Text
-                  variant="labelCaps"
-                  color={vibe.weekOverWeekPct >= 0 ? "primary" : "error"}
-                >
-                  {Math.abs(Math.round(vibe.weekOverWeekPct * 100))}% vs last
-                  week
-                </Text>
-              </View>
-            )}
-            <Text variant="labelCaps" color="onSurfaceVariant" opacity={0.7}>
-              {formatCount(vibe?.tracksThisWeek ?? 0)} tracks ·{" "}
-              {vibe?.streak ?? 0}-day streak
+      {/* Hero - Resonance Flow */}
+      <GlassCard style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View style={styles.heroTitle}>
+            <Text variant="bodyLg">Resonance Flow</Text>
+            <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.7}>
+              {vibe?.topGenre ? `Mostly ${vibe.topGenre}` : "This week"}
             </Text>
           </View>
-        </GlassCard>
-
-        {/* Mix genres */}
-
-        {!!vibe && vibe.genreMix.length > 1 && (
-          <View style={styles.genreRow}>
-            {vibe.genreMix.slice(0, 2).map((slice) => (
-              <StatCard
-                key={slice.genre}
-                icon={
-                  <AudioLines size={20} color={theme.colors.primaryContainer} />
-                }
-                value={`${Math.round(slice.percentage * 100)}%`}
-                label={slice.genre}
-              />
-            ))}
-          </View>
-        )}
-
-        <TopGenreCard
-          icon={<Waves size={20} color={theme.colors.tertiary} />}
-          genre={vibe?.topGenre ?? null}
-          pct={vibe?.genreMix[0]?.percentage ?? 0}
-        />
-
-        {/* Top Djs Top Agents */}
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text
-              variant="labelCaps"
-              color="onSurfaceVariant"
-              style={styles.sectionLabel}
-            >
-              TOP DJS
+          <View style={styles.heroNumber}>
+            <Text variant="display">
+              {formatHours(vibe?.hoursThisWeek ?? 0)}
+            </Text>
+            <Text variant="labelCaps" color="onSurfaceVariant">
+              HOURS
             </Text>
           </View>
-          <GlassCard style={styles.djCard}>
-            {(djs ?? []).slice(0, 3).map((dj, i) => (
-              <TopDjRow
-                key={dj.id}
-                rank={i + 1}
-                name={dj.name}
-                specialty={dj.genre_specialties?.[0]}
-                avatarUrl={dj.avatar_url}
-                onPress={() => router.push(`/dj/${dj.id}`)}
-              />
-            ))}
-          </GlassCard>
         </View>
-      </ScrollView>
-    </View>
+
+        {vibe && <VibeAreaChart data={vibe.week} />}
+
+        <View style={styles.heroFooter}>
+          {vibe?.weekOverWeekPct != null && (
+            <View style={styles.delta}>
+              {vibe.weekOverWeekPct >= 0 ? (
+                <TrendingUp size={14} color={theme.colors.primary} />
+              ) : (
+                <TrendingDown size={14} color={theme.colors.error} />
+              )}
+              <Text
+                variant="labelCaps"
+                color={vibe.weekOverWeekPct >= 0 ? "primary" : "error"}
+              >
+                {Math.abs(Math.round(vibe.weekOverWeekPct * 100))}% vs last week
+              </Text>
+            </View>
+          )}
+          <Text variant="labelCaps" color="onSurfaceVariant" opacity={0.7}>
+            {formatCount(vibe?.tracksThisWeek ?? 0)} tracks ·{" "}
+            {vibe?.streak ?? 0}-day streak
+          </Text>
+        </View>
+      </GlassCard>
+
+      {/* Mix genres */}
+
+      {!!vibe && vibe.genreMix.length > 1 && (
+        <View style={styles.genreRow}>
+          {vibe.genreMix.slice(0, 2).map((slice) => (
+            <StatCard
+              key={slice.genre}
+              icon={
+                <AudioLines size={20} color={theme.colors.primaryContainer} />
+              }
+              value={`${Math.round(slice.percentage * 100)}%`}
+              label={slice.genre}
+            />
+          ))}
+        </View>
+      )}
+
+      <TopGenreCard
+        icon={<Waves size={20} color={theme.colors.tertiary} />}
+        genre={vibe?.topGenre ?? null}
+        pct={vibe?.genreMix[0]?.percentage ?? 0}
+      />
+
+      {/* Top Djs Top Agents */}
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text
+            variant="labelCaps"
+            color="onSurfaceVariant"
+            style={styles.sectionLabel}
+          >
+            TOP DJS
+          </Text>
+        </View>
+        <GlassCard style={styles.djCard}>
+          {(djs ?? []).slice(0, 3).map((dj, i) => (
+            <TopDjRow
+              key={dj.id}
+              rank={i + 1}
+              name={dj.name}
+              specialty={dj.genre_specialties?.[0]}
+              avatarUrl={dj.avatar_url}
+              onPress={() => router.push(`/dj/${dj.id}`)}
+            />
+          ))}
+        </GlassCard>
+      </View>
+    </ScreenScrollView>
   );
 }
 

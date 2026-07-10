@@ -6,12 +6,14 @@ import {
   DJAvatar,
   LibraryCard,
   OnAirHero,
+  ScreenScrollView,
   Text,
   VibeSpotlightCard,
 } from "@/src/components";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useDailyDrop } from "@/src/hooks/use-daily-drop";
+import { useFavorites } from "@/src/hooks/use-favorites";
 import {
   toPlayerTrack,
   useAIMixTracks,
@@ -23,6 +25,7 @@ import {
 } from "@/src/hooks/use-home";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
+import { useToast } from "@/src/hooks/use-toast";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { formatHours } from "@/src/utils/format-stats";
@@ -30,18 +33,20 @@ import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
 import { useMemo } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
-import Svg, { Circle } from "react-native-svg";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function HomeScreen() {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
+  const toast = useToast();
   const { data: djs } = useDJs();
   const { data: liveDJIds } = useLiveDJIds();
   const { data: aiMix } = useAIMixTracks();
+  const { data: favorites } = useFavorites();
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const paddingBottom = useTabBarPadding();
@@ -116,14 +121,13 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
         {/* Header: greeting + profile shortcut */}
         <View style={styles.header}>
           <View style={styles.greeting}>
@@ -211,7 +215,7 @@ export default function HomeScreen() {
               <Pressable
                 onPress={() => {
                   if (ownCount >= 2) {
-                    Alert.alert(
+                    toast.warning(
                       "DJ limit reached",
                       "You already have 2 DJs. Delete one to create another.",
                     );
@@ -297,6 +301,28 @@ export default function HomeScreen() {
               </View>
             }
           />
+
+          {favorites && (
+            <LibraryCard
+              cover={favorites?.[0]?.album_art_url ?? null}
+              label="SAVED"
+              title={
+                favorites && favorites.length > 0
+                  ? "Favorites"
+                  : "No favorites yet"
+              }
+              onPress={() => router.push("/favorites")}
+              right={
+                <View style={styles.playButton}>
+                  <Play
+                    size={22}
+                    color={theme.colors.onSurface}
+                    fill={theme.colors.onSurface}
+                  />
+                </View>
+              }
+            />
+          )}
         </View>
 
         {vibe && vibe.hoursThisWeek > 0 && (
@@ -329,8 +355,7 @@ export default function HomeScreen() {
           </View>
           <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />
         </Pressable>
-      </ScrollView>
-    </View>
+    </ScreenScrollView>
   );
 }
 

@@ -1,6 +1,7 @@
 import { usePlayer } from "@/src/audio/use-player";
 import {
   ScreenHeader,
+  ScreenScrollView,
   SettingsInfoRow,
   SettingsSection,
   SettingsToggleRow,
@@ -9,6 +10,7 @@ import {
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useProfile } from "@/src/hooks/use-profile";
 import { useSettings, useUpdateSettings } from "@/src/hooks/use-settings";
+import { useConfirm } from "@/src/hooks/use-confirm";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { DEFAULT_PREFERENCES, DownloadQuality } from "@/src/types/preferences";
 import { router } from "expo-router";
@@ -21,7 +23,7 @@ import {
   Smartphone,
   Wifi,
 } from "lucide-react-native";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Device from "expo-device";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -42,6 +44,7 @@ export default function AccountSettingsScreen() {
   const { data: settings } = useSettings();
   const { mutate: updateSettings } = useUpdateSettings();
   const { flushListeningStats } = usePlayer();
+  const confirm = useConfirm();
 
   const isPro = profile?.subscriptionTier === "premium";
   const prefs = settings ?? DEFAULT_PREFERENCES;
@@ -84,29 +87,27 @@ export default function AccountSettingsScreen() {
     ]);
   };
 
-  const onSignOut = () =>
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await flushListeningStats(); // guarda lo acumulado con la sesión viva
-          await authApi.signOut();
-          router.replace("/");
-        },
-      },
-    ]);
+  const onSignOut = async () => {
+    const ok = await confirm({
+      title: "Sign Out",
+      message: "Are you sure you want to sign out?",
+      confirmLabel: "Sign Out",
+      destructive: true,
+    });
+    if (!ok) return;
+    await flushListeningStats(); // guarda lo acumulado con la sesión viva
+    await authApi.signOut();
+    router.replace("/");
+  };
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
         <ScreenHeader
           title="Settings"
           subtitle="Manage your HiMu experience"
@@ -201,8 +202,7 @@ export default function AccountSettingsScreen() {
             SIGN OUT
           </Text>
         </Pressable>
-      </ScrollView>
-    </View>
+    </ScreenScrollView>
   );
 }
 
