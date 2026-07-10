@@ -10,6 +10,7 @@ import {
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useProfile } from "@/src/hooks/use-profile";
 import { useSettings, useUpdateSettings } from "@/src/hooks/use-settings";
+import { useConfirm } from "@/src/hooks/use-confirm";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { DEFAULT_PREFERENCES, DownloadQuality } from "@/src/types/preferences";
 import { router } from "expo-router";
@@ -43,6 +44,7 @@ export default function AccountSettingsScreen() {
   const { data: settings } = useSettings();
   const { mutate: updateSettings } = useUpdateSettings();
   const { flushListeningStats } = usePlayer();
+  const confirm = useConfirm();
 
   const isPro = profile?.subscriptionTier === "premium";
   const prefs = settings ?? DEFAULT_PREFERENCES;
@@ -85,19 +87,18 @@ export default function AccountSettingsScreen() {
     ]);
   };
 
-  const onSignOut = () =>
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await flushListeningStats(); // guarda lo acumulado con la sesión viva
-          await authApi.signOut();
-          router.replace("/");
-        },
-      },
-    ]);
+  const onSignOut = async () => {
+    const ok = await confirm({
+      title: "Sign Out",
+      message: "Are you sure you want to sign out?",
+      confirmLabel: "Sign Out",
+      destructive: true,
+    });
+    if (!ok) return;
+    await flushListeningStats(); // guarda lo acumulado con la sesión viva
+    await authApi.signOut();
+    router.replace("/");
+  };
 
   return (
     <ScreenScrollView

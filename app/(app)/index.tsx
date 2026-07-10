@@ -25,6 +25,7 @@ import {
 } from "@/src/hooks/use-home";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
+import { useToast } from "@/src/hooks/use-toast";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { formatHours } from "@/src/utils/format-stats";
@@ -32,7 +33,7 @@ import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
 import { useMemo } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -41,6 +42,7 @@ export default function HomeScreen() {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
+  const toast = useToast();
   const { data: djs } = useDJs();
   const { data: liveDJIds } = useLiveDJIds();
   const { data: aiMix } = useAIMixTracks();
@@ -213,7 +215,7 @@ export default function HomeScreen() {
               <Pressable
                 onPress={() => {
                   if (ownCount >= 2) {
-                    Alert.alert(
+                    toast.warning(
                       "DJ limit reached",
                       "You already have 2 DJs. Delete one to create another.",
                     );

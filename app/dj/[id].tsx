@@ -13,11 +13,13 @@ import {
   TrackCard,
 } from "@/src/components";
 import { useCurrentUser } from "@/src/hooks/use-auth";
+import { useConfirm } from "@/src/hooks/use-confirm";
 import { useDeleteDJ } from "@/src/hooks/use-delete-dj";
 import { useDJ, useDJTracks } from "@/src/hooks/use-dj";
 import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useLiveDJIds } from "@/src/hooks/use-home";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useToast } from "@/src/hooks/use-toast";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
@@ -29,13 +31,7 @@ import {
   Trash2,
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -51,6 +47,8 @@ export default function DJProfileScreen() {
   const { load } = usePlayer();
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const {
     generate,
@@ -90,13 +88,13 @@ export default function DJProfileScreen() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tracks.all });
       resetGen();
     } else if (genStatus === "failed") {
-      Alert.alert(
+      toast.error(
         "Generation failed",
         "The mix couldn't be generated — your daily quota wasn't used. Try again.",
       );
       resetGen();
     }
-  }, [genStatus, generatedTrack, load, resetGen, queryClient]);
+  }, [genStatus, generatedTrack, load, resetGen, queryClient, toast]);
 
   const queue: PlayerTrack[] = useMemo(
     () =>
@@ -127,7 +125,7 @@ export default function DJProfileScreen() {
       {
         onError: async (e) => {
           const code = await getEdgeErrorCode(e);
-          Alert.alert(
+          toast.error(
             "Couldn't start the mix",
             code === "daily_quota_reached"
               ? "Daily mix limit reached (10). Try again tomorrow."
@@ -140,30 +138,22 @@ export default function DJProfileScreen() {
     );
   }
 
-  const onDeletePress = () => {
+  const onDeletePress = async () => {
     if (!dj) return;
-    Alert.alert(
-      "Delete DJ",
-      `This will delete ${dj.name} and its ${tracks?.length ?? 0} tracks.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () =>
-            deleteDJ(
-              { djId: id },
-              {
-                onSuccess: () => router.back(),
-                onError: () =>
-                  Alert.alert(
-                    "Delete failed",
-                    "Couldn't delete the DJ. Try again.",
-                  ),
-              },
-            ),
-        },
-      ],
+    const ok = await confirm({
+      title: "Delete DJ",
+      message: `This will delete ${dj.name} and its ${tracks?.length ?? 0} tracks.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteDJ(
+      { djId: id },
+      {
+        onSuccess: () => router.back(),
+        onError: () =>
+          toast.error("Delete failed", "Couldn't delete the DJ. Try again."),
+      },
     );
   };
 

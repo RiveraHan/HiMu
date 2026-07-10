@@ -1,6 +1,8 @@
 import { QueryProvider } from "@/src/api/query-provider";
 import { PlayerProvider } from "@/src/audio/player-provider";
+import { ConfirmDialogHost } from "@/src/components/ConfirmDialog";
 import { MiniPlayer } from "@/src/components/MiniPlayer";
+import { ToastHost } from "@/src/components/Toast";
 import { useAuthInit } from "@/src/hooks/use-auth";
 import "@/src/theme";
 import { Stack } from "expo-router";
@@ -38,6 +40,8 @@ export default function RootLayout() {
               <Stack.Screen name="train-dj/[id]" />
             </Stack>
             <MiniPlayer />
+            <ToastHost />
+            <ConfirmDialogHost />
           </PlayerProvider>
         </AuthInitializer>
         <StatusBar style="light" />

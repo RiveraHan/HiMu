@@ -9,10 +9,11 @@ import {
 } from "@/src/components";
 import { useCreateDJ } from "@/src/hooks/use-create-dj";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useToast } from "@/src/hooks/use-toast";
 import { router } from "expo-router";
 import { Sparkles } from "lucide-react-native";
 import { useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -20,6 +21,7 @@ export default function CreateDJScreen() {
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
+  const toast = useToast();
 
   const [traits, setTraits] = useState<DjTraits>({
     name: "",
@@ -49,7 +51,7 @@ export default function CreateDJScreen() {
         onSuccess: ({ djId }) => router.replace(`/dj/${djId}`),
         onError: async (e) => {
           const code = await getEdgeErrorCode(e);
-          Alert.alert(
+          toast.error(
             "Couldn't create your DJ",
             code === "dj_quota_reached"
               ? "You already have 2 DJs. Delete one to create another."

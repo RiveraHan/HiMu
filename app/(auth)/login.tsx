@@ -1,12 +1,14 @@
 import { authApi } from "@/src/api/auth";
 import { Atmosphere, Button, Text } from "@/src/components";
 import { GoogleIcon, Logo, SpotifyIcon } from "@/src/components/icons";
+import { useToast } from "@/src/hooks/use-toast";
 import { useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
 
 export default function LoginScreen() {
   const [loading, setLoading] = useState<boolean>(false);
+  const toast = useToast();
 
   const handleGoogleSignIn = async () => {
     if (loading) return;
@@ -16,17 +18,14 @@ export default function LoginScreen() {
       await authApi.signInWithGoogle();
     } catch (error) {
       console.error("[LoginScreen] Google sign-in error:", error);
-      Alert.alert(
-        "Sign-in failed",
-        "We couldn't sign you in. Please try again.",
-      );
+      toast.error("Sign-in failed", "We couldn't sign you in. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const showComingSoon = () =>
-    Alert.alert("Coming soon", "This sign-in method is not available yet.");
+    toast.info("Coming soon", "This sign-in method is not available yet.");
 
   return (
     <View style={styles.root}>

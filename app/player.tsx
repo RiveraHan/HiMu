@@ -2,6 +2,7 @@ import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
 import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
+import { useToast } from "@/src/hooks/use-toast";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -23,7 +24,7 @@ import {
   Sparkle,
 } from "lucide-react-native";
 import { useEffect } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -44,6 +45,7 @@ export default function PlayerScreen() {
   const regenerate = useRegenerateCover();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
+  const toast = useToast();
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -143,7 +145,7 @@ export default function PlayerScreen() {
               onPress={() =>
                 regenerate.mutate(track.id, {
                   onError: () =>
-                    Alert.alert(
+                    toast.error(
                       "Cover",
                       "Couldn't regenerate the cover — you may have reached today's limit.",
                     ),

@@ -13,11 +13,12 @@ import {
 import { useDJ } from "@/src/hooks/use-dj";
 import { usePhaseRotation } from "@/src/hooks/use-phase-rotation";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useToast } from "@/src/hooks/use-toast";
 import { useUpdateDJ } from "@/src/hooks/use-update-dj";
 import { router, useLocalSearchParams } from "expo-router";
 import { RefreshCw } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, View } from "react-native";
+import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -70,6 +71,7 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
+  const toast = useToast();
 
   const saved = (dj.personality_traits ?? {}) as {
     energy?: number;
@@ -113,7 +115,7 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
             return;
           }
           if (data.avatarUrl === null) {
-            Alert.alert(
+            toast.warning(
               "Portrait",
               "Portrait couldn't be regenerated — your changes were saved.",
             );
@@ -123,11 +125,11 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
         onError: async (e) => {
           const code = await getEdgeErrorCode(e);
           if (code === "not_owner" || code === "not_found") {
-            Alert.alert("Not available", "This DJ can't be edited.");
+            toast.warning("Not available", "This DJ can't be edited.");
             router.back();
             return;
           }
-          Alert.alert(
+          toast.error(
             "Couldn't save",
             code === "avatar_quota_reached"
               ? "Daily portrait limit reached (3). Try again tomorrow."
