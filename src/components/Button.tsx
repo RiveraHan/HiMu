@@ -12,6 +12,7 @@ interface Props {
   label: string;
   loading?: boolean;
   disabled?: boolean;
+  destructive?: boolean;
   leftIcon?: ReactNode;
   rightIcon?: ReactNode;
   loadingLabel?: string;
@@ -25,6 +26,7 @@ export function Button({
   label,
   loading = false,
   disabled = false,
+  destructive = false,
   leftIcon,
   rightIcon,
   loadingLabel = "Loading...",
@@ -39,7 +41,13 @@ export function Button({
       {leftIcon}
       <Text
         variant="labelCaps"
-        color={variant === "primary" ? "onPrimaryContainer" : "onSurface"}
+        color={
+          variant === "primary"
+            ? destructive
+              ? "onErrorContainer"
+              : "onPrimaryContainer"
+            : "onSurface"
+        }
         numberOfLines={1}
         style={styles.label}
       >
@@ -92,6 +100,7 @@ export function Button({
       testID={testID}
       style={({ pressed }) => [
         styles.primary,
+        destructive && styles.destructive,
         isDisabled && styles.disabled,
         pressed && styles.pressed,
         style,
@@ -117,6 +126,10 @@ const styles = StyleSheet.create((theme) => ({
       android: { elevation: 6 },
       default: { boxShadow: theme.shadows.primaryButton },
     }),
+  },
+  destructive: {
+    backgroundColor: theme.colors.errorContainer,
+    boxShadow: "none",
   },
   glassCard: {
     height: 64,
