@@ -1,0 +1,67 @@
+import { usePlayer } from "@/src/audio/use-player";
+import { ScreenHeader, Text, TrackCard } from "@/src/components";
+import { useFavorites } from "@/src/hooks/use-favorites";
+import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
+
+export default function FavoritesScreen() {
+  const { theme } = useUnistyles();
+  const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
+  const { data: favorites, isLoading } = useFavorites();
+  const { load } = usePlayer();
+  const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
+  const currentId = usePlayerStore((s) => s.currentTrack?.id);
+
+  function play(track: PlayerTrack, index: number) {
+    if (!favorites) return;
+    setRepeatMode("all");
+    load(track, favorites, index);
+  }
+
+  return (
+    <View style={styles.root}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <ScreenHeader kicker="PERSONALIZED LIBRARY" title="Favorites" />
+
+        {isLoading ? null : favorites && favorites.length > 0 ? (
+          <View style={styles.list}>
+            {favorites.map((track, index) => (
+              <TrackCard
+                key={track.id}
+                variant="row"
+                title={track.title}
+                artist={track.artist}
+                cover={track.album_art_url}
+                isPlaying={currentId === track.id}
+                onPress={() => play(track, index)}
+              />
+            ))}
+          </View>
+        ) : (
+          <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
+            No favorites yet — tap the heart on Now Playing to save a track.
+          </Text>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  root: { flex: 1, backgroundColor: theme.colors.background },
+  content: {
+    paddingHorizontal: theme.spacing.pageMargin,
+    gap: theme.spacing.stackLg,
+  },
+  list: { gap: theme.spacing.stackMd },
+}));

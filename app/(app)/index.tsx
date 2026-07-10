@@ -12,6 +12,7 @@ import {
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useDailyDrop } from "@/src/hooks/use-daily-drop";
+import { useFavorites } from "@/src/hooks/use-favorites";
 import {
   toPlayerTrack,
   useAIMixTracks,
@@ -31,8 +32,8 @@ import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
 import { useMemo } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
-import Svg, { Circle } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 export default function HomeScreen() {
@@ -42,6 +43,7 @@ export default function HomeScreen() {
   const { data: djs } = useDJs();
   const { data: liveDJIds } = useLiveDJIds();
   const { data: aiMix } = useAIMixTracks();
+  const { data: favorites } = useFavorites();
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const paddingBottom = useTabBarPadding();
@@ -297,6 +299,28 @@ export default function HomeScreen() {
               </View>
             }
           />
+
+          {favorites && (
+            <LibraryCard
+              cover={favorites?.[0]?.album_art_url ?? null}
+              label="SAVED"
+              title={
+                favorites && favorites.length > 0
+                  ? "Favorites"
+                  : "No favorites yet"
+              }
+              onPress={() => router.push("/favorites")}
+              right={
+                <View style={styles.playButton}>
+                  <Play
+                    size={22}
+                    color={theme.colors.onSurface}
+                    fill={theme.colors.onSurface}
+                  />
+                </View>
+              }
+            />
+          )}
         </View>
 
         {vibe && vibe.hoursThisWeek > 0 && (
