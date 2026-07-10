@@ -23,11 +23,28 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
   const [width, setWidth] = useState(0);
   const scrubbing = useSharedValue(false);
   const scrubPosition = useSharedValue(0);
+  // After the finger lifts, hold the knob at the released spot until the
+  // reported position catches up to it — see the derived value below.
+  const settling = useSharedValue(false);
+  const settleTarget = useSharedValue(0);
 
   const pct = useDerivedValue(() => {
     if (scrubbing.value) return scrubPosition.value;
 
     const p = durationSec > 0 ? positionSec / durationSec : 0;
+
+    // The seek is async: after release, positionSec keeps reporting the
+    // pre-seek spot for up to one status tick (~500ms). Without this hold the
+    // knob would animate back to the old spot and then jump forward once the
+    // update lands. Keep it pinned at the released target until the reported
+    // position reaches it, then resume normal tracking.
+    if (settling.value) {
+      if (Math.abs(p - settleTarget.value) < 0.02) {
+        settling.value = false;
+      } else {
+        return settleTarget.value;
+      }
+    }
 
     return withTiming(p, {
       duration: 200,
@@ -52,6 +69,8 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
         width > 0 ? Math.min(Math.max(e.x / width, 0), 1) : 0;
     })
     .onEnd(() => {
+      settleTarget.value = scrubPosition.value;
+      settling.value = true;
       scheduleOnRN(commitSeek, scrubPosition.value);
       scrubbing.value = false;
     });
