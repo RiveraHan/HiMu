@@ -2,6 +2,7 @@ import {
   GroupedChipPicker,
   PrefSection,
   ScreenHeader,
+  ScreenScrollView,
   VibeSlider,
 } from "@/src/components";
 import {
@@ -15,7 +16,6 @@ import {
   MOOD_GROUPS,
 } from "@/src/types/music-preferences";
 import { AudioLines, Ban, SlidersHorizontal } from "lucide-react-native";
-import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -54,74 +54,69 @@ export default function MusicPreferencesScreen() {
       update({ ...prefs, vibeMapping: { ...prefs.vibeMapping, [key]: v } });
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
+      <ScreenHeader
+        kicker="TASTE PROFILE"
+        title="Music Preferences"
+        subtitle="Shapes your AI Mixes and Focus queue - and nudges what your DJs generate."
+      />
+
+      {/* Genre Affinity */}
+      <PrefSection
+        title="Genre Affinity"
+        icon={<AudioLines size={20} color={theme.colors.primaryContainer} />}
       >
-        <ScreenHeader
-          kicker="TASTE PROFILE"
-          title="Music Preferences"
-          subtitle="Shapes your AI Mixes and Focus queue - and nudges what your DJs generate."
+        <GroupedChipPicker
+          groups={GENRE_GROUPS}
+          selected={prefs.genres}
+          onToggle={toggleGenre}
+          disabled={!ready}
         />
+      </PrefSection>
 
-        {/* Genre Affinity */}
-        <PrefSection
-          title="Genre Affinity"
-          icon={<AudioLines size={20} color={theme.colors.primaryContainer} />}
-        >
-          <GroupedChipPicker
-            groups={GENRE_GROUPS}
-            selected={prefs.genres}
-            onToggle={toggleGenre}
-            disabled={!ready}
-          />
-        </PrefSection>
+      {/* Vibe Mapping */}
+      <PrefSection
+        title="Vibe Mapping"
+        icon={
+          <SlidersHorizontal size={20} color={theme.colors.primaryContainer} />
+        }
+      >
+        <VibeSlider
+          leftLabel="Organic / Acoustic"
+          rightLabel="Synthetic / Electronic"
+          value={prefs.vibeMapping.organicElectronic}
+          disabled={!ready}
+          onCommit={setVibe("organicElectronic")}
+        />
+        <VibeSlider
+          leftLabel="Melancholic"
+          rightLabel="Euphoric"
+          value={prefs.vibeMapping.melancholicEuphoric}
+          disabled={!ready}
+          onCommit={setVibe("melancholicEuphoric")}
+        />
+      </PrefSection>
 
-        {/* Vibe Mapping */}
-        <PrefSection
-          title="Vibe Mapping"
-          icon={
-            <SlidersHorizontal
-              size={20}
-              color={theme.colors.primaryContainer}
-            />
-          }
-        >
-          <VibeSlider
-            leftLabel="Organic / Acoustic"
-            rightLabel="Synthetic / Electronic"
-            value={prefs.vibeMapping.organicElectronic}
-            disabled={!ready}
-            onCommit={setVibe("organicElectronic")}
-          />
-          <VibeSlider
-            leftLabel="Melancholic"
-            rightLabel="Euphoric"
-            value={prefs.vibeMapping.melancholicEuphoric}
-            disabled={!ready}
-            onCommit={setVibe("melancholicEuphoric")}
-          />
-        </PrefSection>
-
-        {/* Excluded Moods */}
-        <PrefSection
-          title="Excluded Moods"
-          subtitle="Never picked for your auto queues - you can still play or generate anything you ask for."
-          icon={<Ban size={20} color={theme.colors.error} />}
-        >
-          <GroupedChipPicker
-            groups={MOOD_GROUPS}
-            selected={prefs.excludedMoods}
-            onToggle={toggleExcluded}
-            disabled={!ready}
-          />
-        </PrefSection>
-      </ScrollView>
-    </View>
+      {/* Excluded Moods */}
+      <PrefSection
+        title="Excluded Moods"
+        subtitle="Never picked for your auto queues - you can still play or generate anything you ask for."
+        icon={<Ban size={20} color={theme.colors.error} />}
+      >
+        <GroupedChipPicker
+          groups={MOOD_GROUPS}
+          selected={prefs.excludedMoods}
+          onToggle={toggleExcluded}
+          disabled={!ready}
+        />
+      </PrefSection>
+    </ScreenScrollView>
   );
 }
 

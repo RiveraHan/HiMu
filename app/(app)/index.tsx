@@ -6,7 +6,7 @@ import {
   DJAvatar,
   LibraryCard,
   OnAirHero,
-  StatusBarScrim,
+  ScreenScrollView,
   Text,
   VibeSpotlightCard,
 } from "@/src/components";
@@ -33,10 +33,6 @@ import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
 import { useMemo } from "react";
 import { Alert, Pressable, ScrollView, View } from "react-native";
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -52,12 +48,6 @@ export default function HomeScreen() {
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const paddingBottom = useTabBarPadding();
-
-  // Drives the status-bar scrim's fade-in as the page scrolls.
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y;
-  });
 
   const ownCount = djs?.filter((d) => d.owner_id === user?.id).length ?? 0;
 
@@ -129,16 +119,13 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <Animated.ScrollView
-        onScroll={scrollHandler}
-        scrollEventThrottle={16}
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
         {/* Header: greeting + profile shortcut */}
         <View style={styles.header}>
           <View style={styles.greeting}>
@@ -366,10 +353,7 @@ export default function HomeScreen() {
           </View>
           <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />
         </Pressable>
-      </Animated.ScrollView>
-
-      <StatusBarScrim scrollY={scrollY} />
-    </View>
+    </ScreenScrollView>
   );
 }
 

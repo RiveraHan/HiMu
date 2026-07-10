@@ -5,6 +5,7 @@ import {
   Avatar,
   GlassCard,
   IdentityCard,
+  ScreenScrollView,
   SettingRow,
   StatCard,
   Text,
@@ -32,7 +33,7 @@ import {
   User,
 } from "lucide-react-native";
 import { useCallback } from "react";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -72,14 +73,13 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
         {/*Perfil Header*/}
         <View style={styles.header}>
           <View style={styles.avatarWrap}>
@@ -246,8 +246,7 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
-      </ScrollView>
-    </View>
+    </ScreenScrollView>
   );
 }
 

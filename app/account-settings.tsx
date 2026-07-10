@@ -1,6 +1,7 @@
 import { usePlayer } from "@/src/audio/use-player";
 import {
   ScreenHeader,
+  ScreenScrollView,
   SettingsInfoRow,
   SettingsSection,
   SettingsToggleRow,
@@ -21,7 +22,7 @@ import {
   Smartphone,
   Wifi,
 } from "lucide-react-native";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Device from "expo-device";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -99,14 +100,13 @@ export default function AccountSettingsScreen() {
     ]);
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
         <ScreenHeader
           title="Settings"
           subtitle="Manage your HiMu experience"
@@ -201,8 +201,7 @@ export default function AccountSettingsScreen() {
             SIGN OUT
           </Text>
         </Pressable>
-      </ScrollView>
-    </View>
+    </ScreenScrollView>
   );
 }
 

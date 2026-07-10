@@ -1,9 +1,14 @@
 import { usePlayer } from "@/src/audio/use-player";
-import { ScreenHeader, Text, TrackCard } from "@/src/components";
+import {
+  ScreenHeader,
+  ScreenScrollView,
+  Text,
+  TrackCard,
+} from "@/src/components";
 import { useFavorites } from "@/src/hooks/use-favorites";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -23,15 +28,14 @@ export default function FavoritesScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <ScreenHeader kicker="PERSONALIZED LIBRARY" title="Favorites" />
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+    >
+      <ScreenHeader kicker="PERSONALIZED LIBRARY" title="Favorites" />
 
         {isLoading ? null : favorites && favorites.length > 0 ? (
           <View style={styles.list}>
@@ -52,8 +56,7 @@ export default function FavoritesScreen() {
             No favorites yet — tap the heart on Now Playing to save a track.
           </Text>
         )}
-      </ScrollView>
-    </View>
+    </ScreenScrollView>
   );
 }
 

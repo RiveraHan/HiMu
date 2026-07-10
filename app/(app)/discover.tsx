@@ -1,4 +1,9 @@
-import { GlassInput, Text, TrackCard } from "@/src/components";
+import {
+  GlassInput,
+  ScreenScrollView,
+  Text,
+  TrackCard,
+} from "@/src/components";
 import { AudiusShelf } from "@/src/components/discover/AudiusShelf";
 import { usePlayer } from "@/src/audio/use-player";
 import { useAudiusSearch, useAudiusTrending } from "@/src/hooks/use-audius";
@@ -6,7 +11,7 @@ import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -53,15 +58,14 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+      keyboardShouldPersistTaps="handled"
+    >
         <View style={styles.header}>
           <Text variant="h1">Discover</Text>
           <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
@@ -135,8 +139,7 @@ export default function DiscoverScreen() {
             </Text>
           </>
         )}
-      </ScrollView>
-    </View>
+    </ScreenScrollView>
   );
 }
 
