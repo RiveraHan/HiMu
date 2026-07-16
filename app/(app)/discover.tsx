@@ -3,15 +3,17 @@ import {
   ScreenScrollView,
   Text,
   TrackCard,
+  TrackRowSkeleton,
 } from "@/src/components";
 import { AudiusShelf } from "@/src/components/discover/AudiusShelf";
 import { usePlayer } from "@/src/audio/use-player";
 import { useAudiusSearch, useAudiusTrending } from "@/src/hooks/use-audius";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -46,7 +48,9 @@ export default function DiscoverScreen() {
   }, [query]);
   
   const searching = debounced.trim().length >= 2;
-  const { data: results, isLoading: searchLoading } = useAudiusSearch(debounced);
+  const searchQuery = useAudiusSearch(debounced);
+  const results = searchQuery.data;
+  const searchLoading = isInitialQueryLoading(searchQuery);
 
   // Shares its cache with the first shelf (same query key) — drives the error
   // banner without a second network request.
@@ -85,7 +89,9 @@ export default function DiscoverScreen() {
         {searching ? (
           <View style={styles.results}>
             {searchLoading ? (
-              <ActivityIndicator color={theme.colors.primary} />
+              [0, 1, 2, 3].map((index) => (
+                <TrackRowSkeleton key={index} />
+              ))
             ) : results && results.length > 0 ? (
               results.map((track, index) => (
                 <TrackCard

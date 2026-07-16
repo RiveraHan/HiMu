@@ -3,6 +3,7 @@ import {
   Avatar,
   CaptionVoiceButton,
   ContentShelf,
+  ContentShelfSkeleton,
   DJAvatar,
   LibraryCard,
   OnAirHero,
@@ -11,6 +12,12 @@ import {
   VibeSpotlightCard,
 } from "@/src/components";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
+import {
+  HomeDjsSkeleton,
+  HomeHeroSkeleton,
+  HomeLibraryRowSkeleton,
+  HomeVibeSkeleton,
+} from "@/src/components/home/HomeSkeletons";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useDailyDrop } from "@/src/hooks/use-daily-drop";
 import { useFavorites } from "@/src/hooks/use-favorites";
@@ -29,6 +36,7 @@ import { useToast } from "@/src/hooks/use-toast";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { formatHours } from "@/src/utils/format-stats";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
@@ -43,22 +51,38 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
   const toast = useToast();
-  const { data: djs } = useDJs();
+  const djsQuery = useDJs();
   const { data: liveDJIds } = useLiveDJIds();
   const { data: aiMix } = useAIMixTracks();
-  const { data: favorites } = useFavorites();
+  const favoritesQuery = useFavorites();
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const paddingBottom = useTabBarPadding();
 
-  const ownCount = djs?.filter((d) => d.owner_id === user?.id).length ?? 0;
-
   const { data: hero } = useOnAirHero();
-  const { data: recent } = useRecentTracks();
-  const { data: contextual } = useTimeOfDayShelf();
-  const { data: vibe } = useVibeCheck();
+  const recentQuery = useRecentTracks();
+  const contextualQuery = useTimeOfDayShelf();
+  const vibeQuery = useVibeCheck();
   const taste = useTasteProfile();
   const drop = useDailyDrop();
+
+  const djs = djsQuery.data;
+  const recent = recentQuery.data;
+  const contextual = contextualQuery.data;
+  const favorites = favoritesQuery.data;
+  const vibe = vibeQuery.data;
+
+  const ownCount = djs?.filter((d) => d.owner_id === user?.id).length ?? 0;
+
+  const djsLoading = isInitialQueryLoading(djsQuery);
+  const recentLoading = isInitialQueryLoading(recentQuery);
+  const contextualLoading = isInitialQueryLoading(contextualQuery);
+  const favoritesLoading = isInitialQueryLoading(favoritesQuery);
+  const vibeLoading = isInitialQueryLoading(vibeQuery);
+
+  const showHeroSkeleton =
+    (drop.status === "idle" && (djsLoading || recentLoading)) ||
+    (drop.status === "failed" && recentLoading);
 
   const heroTrackId = hero?.track.id ?? null;
 
@@ -150,7 +174,9 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {drop.status === "ready" && drop.track && drop.dj ? (
+        {showHeroSkeleton ? (
+          <HomeHeroSkeleton />
+        ) : drop.status === "ready" && drop.track && drop.dj ? (
           <OnAirHero
             eyebrow="TODAY'S DROP"
             djName={drop.dj.name}
@@ -191,7 +217,9 @@ export default function HomeScreen() {
         ) : null}
 
         {/* Your DJs */}
-        {djs && djs.length > 0 && (
+        {djsLoading ? (
+          <HomeDjsSkeleton />
+        ) : djs && djs.length > 0 ? (
           <View style={styles.section}>
             <Text variant="h2">Your DJs</Text>
             <ScrollView
@@ -264,23 +292,27 @@ export default function HomeScreen() {
               </Pressable>
             </ScrollView>
           </View>
-        )}
+        ) : null}
 
-        {freshTracks.length >= 3 && (
+        {recentLoading ? (
+          <ContentShelfSkeleton />
+        ) : freshTracks.length >= 3 ? (
           <ContentShelf
             title="Fresh from your DJs"
             tracks={freshTracks}
             onPressTrack={(t, i) => playFromShelf(freshTracks, t, i)}
           />
-        )}
+        ) : null}
 
-        {contextualTracks.length >= 3 && (
+        {contextualLoading ? (
+          <ContentShelfSkeleton />
+        ) : contextualTracks.length >= 3 ? (
           <ContentShelf
             title={contextual?.label ?? "For you"}
             tracks={contextualTracks}
             onPressTrack={(t, i) => playFromShelf(contextualTracks, t, i)}
           />
-        )}
+        ) : null}
 
         {/* Personalized Library */}
         <View style={styles.section}>
@@ -302,7 +334,9 @@ export default function HomeScreen() {
             }
           />
 
-          {favorites && (
+          {favoritesLoading ? (
+            <HomeLibraryRowSkeleton />
+          ) : favorites ? (
             <LibraryCard
               cover={favorites?.[0]?.album_art_url ?? null}
               label="SAVED"
@@ -322,17 +356,19 @@ export default function HomeScreen() {
                 </View>
               }
             />
-          )}
+          ) : null}
         </View>
 
-        {vibe && vibe.hoursThisWeek > 0 && (
+        {vibeLoading ? (
+          <HomeVibeSkeleton />
+        ) : vibe && vibe.hoursThisWeek > 0 ? (
           <VibeSpotlightCard
             hours={formatHours(vibe.hoursThisWeek)}
             topGenre={vibe.topGenre}
             streak={vibe.streak}
             onPress={() => router.push("/vibe-check")}
           />
-        )}
+        ) : null}
 
         {/* Focus Mode entry */}
         <Pressable

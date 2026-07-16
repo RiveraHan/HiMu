@@ -11,13 +11,14 @@ type Props = {
   avatarUrl?: string | null;
   isLive?: boolean;
   tagline?: string;
+  testID?: string;
 };
 
-export function DjHero({ name, avatarUrl, isLive, tagline }: Props) {
+export function DjHero({ name, avatarUrl, isLive, tagline, testID }: Props) {
   const { theme } = useUnistyles();
 
   return (
-    <View style={styles.hero}>
+    <View testID={testID} style={styles.hero}>
       {avatarUrl ? (
         <Image
           source={avatarUrl}
@@ -58,6 +59,7 @@ export function DjHero({ name, avatarUrl, isLive, tagline }: Props) {
 
 const styles = StyleSheet.create((theme) => ({
   hero: {
+    alignSelf: "stretch",
     height: HERO_HEIGHT,
     justifyContent: "flex-end",
     borderRadius: theme.borderRadius.lg,

@@ -8,10 +8,15 @@ import {
   IconButton,
   ScreenHeader,
   StatCard,
+  StatCardSkeleton,
   Tag,
   Text,
   TrackCard,
 } from "@/src/components";
+import {
+  DjProfileSkeleton,
+  DjTracksSkeleton,
+} from "@/src/components/dj/DjProfileSkeleton";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useConfirm } from "@/src/hooks/use-confirm";
 import { useDeleteDJ } from "@/src/hooks/use-delete-dj";
@@ -21,6 +26,7 @@ import { useLiveDJIds } from "@/src/hooks/use-home";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useToast } from "@/src/hooks/use-toast";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import {
@@ -41,8 +47,12 @@ export default function DJProfileScreen() {
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
 
-  const { data: dj, isLoading } = useDJ(id);
-  const { data: tracks } = useDJTracks(id);
+  const djQuery = useDJ(id);
+  const tracksQuery = useDJTracks(id);
+  const dj = djQuery.data;
+  const tracks = tracksQuery.data;
+  const djLoading = isInitialQueryLoading(djQuery);
+  const tracksLoading = isInitialQueryLoading(tracksQuery);
   const { data: liveIds } = useLiveDJIds();
   const { load } = usePlayer();
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
@@ -142,7 +152,9 @@ export default function DJProfileScreen() {
     if (!dj) return;
     const ok = await confirm({
       title: "Delete DJ",
-      message: `This will delete ${dj.name} and its ${tracks?.length ?? 0} tracks.`,
+      message: tracksLoading
+        ? `This will delete ${dj.name}.`
+        : `This will delete ${dj.name} and its ${tracks?.length ?? 0} tracks.`,
       confirmLabel: "Delete",
       destructive: true,
     });
@@ -184,21 +196,13 @@ export default function DJProfileScreen() {
     />
   );
 
-  if (isLoading) {
+  if (djLoading) {
     return (
-      <View style={styles.root}>
-        <View
-          style={[
-            styles.body,
-            { paddingTop: insets.top + theme.spacing.stackMd },
-          ]}
-        >
-          {header}
-        </View>
-        <View style={styles.center}>
-          <ActivityIndicator color={theme.colors.primary} />
-        </View>
-      </View>
+      <DjProfileSkeleton
+        header={header}
+        paddingTop={insets.top + theme.spacing.stackMd}
+        paddingBottom={paddingBottom}
+      />
     );
   }
 
@@ -252,13 +256,20 @@ export default function DJProfileScreen() {
 
           {/* Stats remap */}
           <View style={styles.statsRow}>
-            <StatCard
-              icon={
-                <AudioLines size={20} color={theme.colors.primaryContainer} />
-              }
-              value={String(tracks?.length ?? 0)}
-              label="TRACKS"
-            />
+            {tracksLoading ? (
+              <StatCardSkeleton />
+            ) : (
+              <StatCard
+                icon={
+                  <AudioLines
+                    size={20}
+                    color={theme.colors.primaryContainer}
+                  />
+                }
+                value={String(tracks?.length ?? 0)}
+                label="TRACKS"
+              />
+            )}
             <StatCard
               icon={<Music2 size={20} color={theme.colors.tertiary} />}
               value={String(dj.genre_specialties?.length ?? 0)}
@@ -345,36 +356,44 @@ export default function DJProfileScreen() {
           )}
 
           {/* Tracks */}
-          <View style={styles.section}>
-            <Text
-              variant="labelCaps"
-              color="onSurfaceVariant"
-              style={styles.sectionLabel}
-            >
-              TRACKS
-            </Text>
-            {queue.length > 0 || isGenerating ? (
-              <View style={styles.trackList}>
-                {/* The new mix lands right here when it's ready */}
-                {isGenerating && <GeneratingTrackCard vocal={isVocal} />}
-                {queue.map((t, i) => (
-                  <TrackCard
-                    key={t.id}
-                    title={t.title}
-                    artist={t.artist}
-                    cover={t.album_art_url}
-                    variant="row"
-                    isPlaying={currentId === t.id}
-                    onPress={() => load(t, queue, i)}
-                  />
-                ))}
-              </View>
-            ) : (
-              <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.7}>
-                No tracks yet.
+          {tracksLoading ? (
+            <DjTracksSkeleton />
+          ) : (
+            <View style={styles.section}>
+              <Text
+                variant="labelCaps"
+                color="onSurfaceVariant"
+                style={styles.sectionLabel}
+              >
+                TRACKS
               </Text>
-            )}
-          </View>
+              {queue.length > 0 || isGenerating ? (
+                <View style={styles.trackList}>
+                  {/* The new mix lands right here when it's ready */}
+                  {isGenerating && <GeneratingTrackCard vocal={isVocal} />}
+                  {queue.map((t, i) => (
+                    <TrackCard
+                      key={t.id}
+                      title={t.title}
+                      artist={t.artist}
+                      cover={t.album_art_url}
+                      variant="row"
+                      isPlaying={currentId === t.id}
+                      onPress={() => load(t, queue, i)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text
+                  variant="bodyMd"
+                  color="onSurfaceVariant"
+                  opacity={0.7}
+                >
+                  No tracks yet.
+                </Text>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>

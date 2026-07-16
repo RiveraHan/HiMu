@@ -5,6 +5,9 @@ import {
   Avatar,
   GlassCard,
   IdentityCard,
+  ProfileDjsSkeleton,
+  ProfileIdentitySkeleton,
+  ProfileStatsSkeleton,
   ScreenScrollView,
   SettingRow,
   StatCard,
@@ -19,6 +22,7 @@ import {
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useFocusEffect } from "expo-router";
 import {
@@ -41,10 +45,19 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
-  const { data: profile } = useProfile();
-  const { data: stats } = useListeningTotals();
-  const { data: djsHeard } = useDjsHeard();
-  const { data: djs } = useDJs();
+  const profileQuery = useProfile();
+  const statsQuery = useListeningTotals();
+  const djsHeardQuery = useDjsHeard();
+  const djsQuery = useDJs();
+  const profile = profileQuery.data;
+  const stats = statsQuery.data;
+  const djsHeard = djsHeardQuery.data;
+  const djs = djsQuery.data;
+  const profileLoading = isInitialQueryLoading(profileQuery);
+  const statsLoading =
+    isInitialQueryLoading(statsQuery) ||
+    isInitialQueryLoading(djsHeardQuery);
+  const djsLoading = isInitialQueryLoading(djsQuery);
   const { theme } = useUnistyles();
   const { flushListeningStats } = usePlayer();
   const queryClient = useQueryClient();
@@ -80,7 +93,10 @@ export default function ProfileScreen() {
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
     >
-        {/*Perfil Header*/}
+      {/*Perfil Header*/}
+      {profileLoading ? (
+        <ProfileIdentitySkeleton />
+      ) : (
         <View style={styles.header}>
           <View style={styles.avatarWrap}>
             <Avatar
@@ -103,106 +119,115 @@ export default function ProfileScreen() {
             </Text>
             {!!profile?.username && (
               <Text variant="bodyMd" numberOfLines={1} color="onSurfaceVariant">
-                @{profile?.username}
+                @{profile.username}
               </Text>
             )}
           </View>
         </View>
+      )}
 
-        {/*Stats → Vibe Check*/}
-        <Pressable
-          onPress={() => router.push("/vibe-check")}
-          accessibilityRole="button"
-          accessibilityLabel="Open Vibe Check"
-          style={({ pressed }) => [styles.section, pressed && styles.pressed]}
-        >
-          <View style={styles.sectionHeader}>
-            <Text
-              variant="labelCaps"
-              color="onSurfaceVariant"
-              style={styles.sectionLabel}
-            >
-              VIBE CHECK
-            </Text>
-            <ChevronRight size={16} color={theme.colors.onSurfaceVariant} />
-          </View>
-          <View style={styles.statsRow}>
-            <StatCard
-              icon={<Clock size={20} color={theme.colors.tertiary} />}
-              value={formatHours(stats?.hours ?? 0)}
-              label="HOURS"
-            />
-            <StatCard
-              icon={<Disc3 size={20} color={theme.colors.primary} />}
-              value={formatCount(stats?.tracks ?? 0)}
-              label="TRACKS"
-            />
-            <StatCard
-              icon={<Headphones size={20} color={theme.colors.error} />}
-              value={formatCount(djsHeard ?? 0)}
-              label="DJS"
-            />
-          </View>
-        </Pressable>
-
-        {/*Listening Identity*/}
-        <View style={styles.section}>
-          <Text
-            variant="labelCaps"
-            color="onSurfaceVariant"
-            style={styles.sectionLabel}
+      {/*Stats → Vibe Check*/}
+      {statsLoading ? (
+        <ProfileStatsSkeleton />
+      ) : (
+        <>
+          <Pressable
+            onPress={() => router.push("/vibe-check")}
+            accessibilityRole="button"
+            accessibilityLabel="Open Vibe Check"
+            style={({ pressed }) => [styles.section, pressed && styles.pressed]}
           >
-            LISTENING IDENTITY
-          </Text>
-          <IdentityCard
-            title={identity.title}
-            description={identity.description}
-          />
-        </View>
-
-        {/*Top DJs*/}
-        {djs && djs.length > 0 && (
-          <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text
                 variant="labelCaps"
                 color="onSurfaceVariant"
                 style={styles.sectionLabel}
               >
-                YOUR DJS
+                VIBE CHECK
               </Text>
+              <ChevronRight size={16} color={theme.colors.onSurfaceVariant} />
             </View>
-            <View style={styles.djGrid}>
-              {djs.map((dj) => (
-                <Pressable
-                  key={dj.id}
-                  onPress={() => router.push(`/dj/${dj.id}`)}
-                  style={({ pressed }) => [
-                    styles.djCardWrap,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <GlassCard style={styles.djCard}>
-                    <Avatar src={dj.avatar_url} size="lg" fallback={dj.name} />
-                    <Text variant="bodyMd" numberOfLines={1}>
-                      {dj.name}
-                    </Text>
-                    <Text
-                      variant="labelCaps"
-                      color="onSurfaceVariant"
-                      opacity={0.6}
-                    >
-                      {dj.genre_specialties?.[0]?.toUpperCase()}
-                    </Text>
-                  </GlassCard>
-                </Pressable>
-              ))}
+            <View style={styles.statsRow}>
+              <StatCard
+                icon={<Clock size={20} color={theme.colors.tertiary} />}
+                value={formatHours(stats?.hours ?? 0)}
+                label="HOURS"
+              />
+              <StatCard
+                icon={<Disc3 size={20} color={theme.colors.primary} />}
+                value={formatCount(stats?.tracks ?? 0)}
+                label="TRACKS"
+              />
+              <StatCard
+                icon={<Headphones size={20} color={theme.colors.error} />}
+                value={formatCount(djsHeard ?? 0)}
+                label="DJS"
+              />
             </View>
-          </View>
-        )}
+          </Pressable>
 
-        {/*Prefenrences*/}
+          {/*Listening Identity*/}
+          <View style={styles.section}>
+            <Text
+              variant="labelCaps"
+              color="onSurfaceVariant"
+              style={styles.sectionLabel}
+            >
+              LISTENING IDENTITY
+            </Text>
+            <IdentityCard
+              title={identity.title}
+              description={identity.description}
+            />
+          </View>
+        </>
+      )}
+
+      {/*Top DJs*/}
+      {djsLoading ? (
+        <ProfileDjsSkeleton />
+      ) : djs && djs.length > 0 ? (
         <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text
+              variant="labelCaps"
+              color="onSurfaceVariant"
+              style={styles.sectionLabel}
+            >
+              YOUR DJS
+            </Text>
+          </View>
+          <View style={styles.djGrid}>
+            {djs.map((dj) => (
+              <Pressable
+                key={dj.id}
+                onPress={() => router.push(`/dj/${dj.id}`)}
+                style={({ pressed }) => [
+                  styles.djCardWrap,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <GlassCard style={styles.djCard}>
+                  <Avatar src={dj.avatar_url} size="lg" fallback={dj.name} />
+                  <Text variant="bodyMd" numberOfLines={1}>
+                    {dj.name}
+                  </Text>
+                  <Text
+                    variant="labelCaps"
+                    color="onSurfaceVariant"
+                    opacity={0.6}
+                  >
+                    {dj.genre_specialties?.[0]?.toUpperCase()}
+                  </Text>
+                </GlassCard>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {/*Prefenrences*/}
+      <View style={styles.section}>
           <Text
             variant="labelCaps"
             color="onSurfaceVariant"
@@ -245,7 +270,7 @@ export default function ProfileScreen() {
               onPress={onLogout}
             />
           </View>
-        </View>
+      </View>
     </ScreenScrollView>
   );
 }
