@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/src/stores/auth-store";
+import { TourTarget } from "@/src/onboarding";
 import { BlurView } from "expo-blur";
 import { Redirect, Tabs } from "expo-router";
 import { Compass, Home, type LucideIcon, User } from "lucide-react-native";
@@ -10,10 +11,23 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
-function TabIcon({ Icon, focused }: { Icon: LucideIcon; focused: boolean }) {
+function TabIcon({
+  Icon,
+  focused,
+  target,
+  testID,
+}: {
+  Icon: LucideIcon;
+  focused: boolean;
+  target?: "tabs.discover";
+  testID?: string;
+}) {
   const { theme } = useUnistyles();
-  return (
-    <View style={[styles.tabIcon, focused && styles.tabIconActive]}>
+  const icon = (
+    <View
+      style={[styles.tabIcon, focused && styles.tabIconActive]}
+      testID={testID}
+    >
       <Icon
         size={24}
         color={focused ? theme.colors.primary : theme.colors.onSurfaceVariant}
@@ -21,6 +35,11 @@ function TabIcon({ Icon, focused }: { Icon: LucideIcon; focused: boolean }) {
       />
     </View>
   );
+  return target ? (
+    <TourTarget id={target} borderRadius={theme.borderRadius.full}>
+      {icon}
+    </TourTarget>
+  ) : icon;
 }
 
 function TabBarBackground() {
@@ -88,8 +107,14 @@ export default function Applayout() {
       <Tabs.Screen
         name="discover"
         options={{
+          tabBarAccessibilityLabel: "Discover",
           tabBarIcon: ({ focused }) => (
-            <TabIcon Icon={Compass} focused={focused} />
+            <TabIcon
+              Icon={Compass}
+              focused={focused}
+              target="tabs.discover"
+              testID="discover-tab-icon"
+            />
           ),
         }}
       />

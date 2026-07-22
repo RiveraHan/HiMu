@@ -38,6 +38,8 @@ const ownedDj = { ...dj, owner_id: "listener" };
 let mockDjQuery = initialQuery();
 let mockTracksQuery = initialQuery();
 const mockConfirm = jest.fn().mockResolvedValue(false);
+const mockRegisterContextTarget = jest.fn();
+let mockDjId = "dj-one";
 let mockGenerateMix = {
   generate: jest.fn(),
   isStarting: false,
@@ -100,6 +102,16 @@ jest.mock("@/src/components/dj/DjProfileSkeleton", () => {
       React.createElement(View, { testID: "dj-tracks-skeleton" }),
   };
 });
+jest.mock("@/src/onboarding", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  return {
+    TourTarget: ({ children, id }: { children: React.ReactNode; id: string }) =>
+      React.createElement(View, { testID: `tour-target-${id}` }, children),
+    useAppTour: () => ({ registerContextTarget: mockRegisterContextTarget }),
+  };
+});
 
 jest.mock("@/src/hooks/use-dj", () => ({
   useDJ: () => mockDjQuery,
@@ -138,7 +150,7 @@ jest.mock("@tanstack/react-query", () => ({
 }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
-  useLocalSearchParams: () => ({ id: "dj-one" }),
+  useLocalSearchParams: () => ({ id: mockDjId }),
 }));
 jest.mock("lucide-react-native", () => {
   const React = require("react");
@@ -160,6 +172,8 @@ describe("DJProfileScreen", () => {
   beforeEach(() => {
     mockDjQuery = initialQuery();
     mockTracksQuery = initialQuery();
+    mockDjId = "dj-one";
+    mockRegisterContextTarget.mockReset().mockReturnValue(jest.fn());
     mockConfirm.mockReset().mockResolvedValue(false);
     mockGenerateMix = {
       generate: jest.fn(),
@@ -175,6 +189,54 @@ describe("DJProfileScreen", () => {
 
     expect(screen.getByTestId("dj-profile-skeleton")).toBeTruthy();
     expect(screen.queryByTestId("dj-hero")).toBeNull();
+    expect(screen.queryByTestId("tour-target-dj.hero")).toBeNull();
+    expect(mockRegisterContextTarget).not.toHaveBeenCalled();
+  });
+
+  it("wraps and registers only a resolved DJ hero", async () => {
+    mockDjQuery = settledQuery(dj);
+
+    const screen = await render(<DJProfileScreen />);
+    const target = screen.getByTestId("tour-target-dj.hero");
+
+    expect(screen.getByTestId("dj-hero").parent).toBe(target);
+    await waitFor(() => expect(mockRegisterContextTarget).toHaveBeenCalledWith({
+      tipId: "dj.hero",
+      targetId: "dj.hero",
+      ready: true,
+    }));
+  });
+
+  it.each([
+    ["not found", settledQuery(null)],
+    ["error with cached content", { ...settledQuery(dj), isError: true }],
+  ])("does not register the DJ tip for a settled %s route", async (_label, query) => {
+    mockDjQuery = query;
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.queryByTestId("tour-target-dj.hero")).toBeNull();
+    expect(mockRegisterContextTarget).not.toHaveBeenCalled();
+  });
+
+  it("unregisters the previous DJ before registering a changed route id", async () => {
+    const firstCleanup = jest.fn();
+    mockRegisterContextTarget
+      .mockReturnValueOnce(firstCleanup)
+      .mockReturnValueOnce(jest.fn());
+    mockDjQuery = settledQuery(dj);
+    const screen = await render(<DJProfileScreen />);
+    await waitFor(() => expect(mockRegisterContextTarget).toHaveBeenCalledTimes(1));
+
+    mockDjId = "dj-two";
+    mockDjQuery = settledQuery({ ...dj, id: "dj-two", name: "DJ Two" });
+    await screen.rerender(<DJProfileScreen />);
+    await waitFor(() => expect(mockRegisterContextTarget).toHaveBeenCalledTimes(2));
+
+    expect(firstCleanup).toHaveBeenCalledTimes(1);
+    expect(firstCleanup.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRegisterContextTarget.mock.invocationCallOrder[1],
+    );
   });
 
   it("keeps the resolved DJ visible while tracks load independently", async () => {

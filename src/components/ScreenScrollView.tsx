@@ -16,6 +16,7 @@ type Props = ScrollViewProps & {
   children: ReactNode;
   /** Style for the outer container — the screen background lives here. */
   style?: StyleProp<ViewStyle>;
+  onScrollRef?: (node: { scrollTo(options: { y: number; animated: boolean }): void } | null) => void;
 };
 
 // A vertical ScrollView with the status-bar scrim baked in: content stays
@@ -27,6 +28,7 @@ export function ScreenScrollView({
   children,
   style,
   showsVerticalScrollIndicator = false,
+  onScrollRef,
   ...rest
 }: Props) {
   const scrollY = useSharedValue(0);
@@ -37,6 +39,7 @@ export function ScreenScrollView({
   return (
     <View style={[styles.root, style]}>
       <Animated.ScrollView
+        ref={onScrollRef}
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={showsVerticalScrollIndicator}

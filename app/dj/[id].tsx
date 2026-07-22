@@ -25,6 +25,7 @@ import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useLiveDJIds } from "@/src/hooks/use-home";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useToast } from "@/src/hooks/use-toast";
+import { TourTarget, useAppTour } from "@/src/onboarding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useQueryClient } from "@tanstack/react-query";
@@ -59,6 +60,18 @@ export default function DJProfileScreen() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
+  const { registerContextTarget } = useAppTour();
+  const djReady =
+    !djLoading && !djQuery.isError && dj !== undefined && dj !== null && dj.id === id;
+
+  useEffect(() => {
+    if (!djReady) return;
+    return registerContextTarget({
+      tipId: "dj.hero",
+      targetId: "dj.hero",
+      ready: true,
+    });
+  }, [djReady, id, registerContextTarget]);
 
   const {
     generate,
@@ -241,18 +254,35 @@ export default function DJProfileScreen() {
         >
           {header}
 
-          <DjHero
-            name={dj.name}
-            avatarUrl={dj.avatar_url}
-            isLive={!!liveIds?.has(id)}
-            tagline={
-              isOwner
-                ? "YOUR DJ"
-                : dj.is_premium
-                  ? "Global Resident"
-                  : undefined
-            }
-          />
+          {djReady ? (
+            <TourTarget id="dj.hero" borderRadius={theme.borderRadius["2xl"]}>
+              <DjHero
+                name={dj.name}
+                avatarUrl={dj.avatar_url}
+                isLive={!!liveIds?.has(id)}
+                tagline={
+                  isOwner
+                    ? "YOUR DJ"
+                    : dj.is_premium
+                      ? "Global Resident"
+                      : undefined
+                }
+              />
+            </TourTarget>
+          ) : (
+            <DjHero
+              name={dj.name}
+              avatarUrl={dj.avatar_url}
+              isLive={!!liveIds?.has(id)}
+              tagline={
+                isOwner
+                  ? "YOUR DJ"
+                  : dj.is_premium
+                    ? "Global Resident"
+                    : undefined
+              }
+            />
+          )}
 
           {/* Stats remap */}
           <View style={styles.statsRow}>

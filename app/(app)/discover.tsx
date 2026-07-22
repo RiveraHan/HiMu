@@ -9,6 +9,7 @@ import { AudiusShelf } from "@/src/components/discover/AudiusShelf";
 import { usePlayer } from "@/src/audio/use-player";
 import { useAudiusSearch, useAudiusTrending } from "@/src/hooks/use-audius";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { TourTarget, useAppTour } from "@/src/onboarding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,6 +39,7 @@ export default function DiscoverScreen() {
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
+  const { registerContextTarget } = useAppTour();
 
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -55,6 +57,19 @@ export default function DiscoverScreen() {
   // Shares its cache with the first shelf (same query key) — drives the error
   // banner without a second network request.
   const trending = useAudiusTrending();
+  const contentLoading = searching
+    ? searchLoading
+    : isInitialQueryLoading(trending);
+
+  useEffect(
+    () =>
+      registerContextTarget({
+        tipId: "discover.search",
+        targetId: "discover.search",
+        ready: !contentLoading,
+      }),
+    [contentLoading, registerContextTarget],
+  );
 
   function playFrom(tracks: PlayerTrack[], track: PlayerTrack, index: number) {
     setRepeatMode("all");
@@ -77,14 +92,19 @@ export default function DiscoverScreen() {
           </Text>
         </View>
 
-        <GlassInput
-          placeholder="Search Audius…"
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-        />
+        <TourTarget
+          id="discover.search"
+          borderRadius={theme.borderRadius.md}
+        >
+          <GlassInput
+            placeholder="Search Audius…"
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+        </TourTarget>
 
         {searching ? (
           <View style={styles.results}>

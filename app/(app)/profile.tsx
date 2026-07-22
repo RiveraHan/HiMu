@@ -20,6 +20,7 @@ import {
   useProfile,
 } from "@/src/hooks/use-profile";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useAppTour } from "@/src/onboarding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
@@ -29,6 +30,7 @@ import {
   ChevronRight,
   CircleStar,
   Clock,
+  Compass,
   Crown,
   Disc3,
   Headphones,
@@ -62,6 +64,12 @@ export default function ProfileScreen() {
   const { flushListeningStats } = usePlayer();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const { replayTour } = useAppTour();
+
+  const onReplayTour = () => {
+    replayTour();
+    router.replace("/");
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -262,6 +270,11 @@ export default function ProfileScreen() {
                   {isPro ? "Pro" : "Free"}
                 </Text>
               }
+            />
+            <SettingRow
+              icon={<Compass size={20} color={theme.colors.onSurfaceVariant} />}
+              label="Replay product tour"
+              onPress={onReplayTour}
             />
             <SettingRow
               icon={<LogOut size={20} color={theme.colors.error} />}

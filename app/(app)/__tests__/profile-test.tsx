@@ -50,6 +50,8 @@ const mockUseDjsHeard = jest.fn(() => mockDjsHeardQuery);
 const mockUseDJs = jest.fn(() => mockDjsQuery);
 const mockInvalidateQueries = jest.fn();
 const mockRouterPush = jest.fn();
+const mockRouterReplace = jest.fn();
+const mockReplayTour = jest.fn();
 const mockConfirm = jest.fn();
 const mockFlushListeningStats = jest.fn();
 const mockSignOut = jest.fn();
@@ -111,6 +113,9 @@ jest.mock("@/src/api/auth", () => ({
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ flushListeningStats: mockFlushListeningStats }),
 }));
+jest.mock("@/src/onboarding", () => ({
+  useAppTour: () => ({ replayTour: mockReplayTour }),
+}));
 jest.mock("@/src/hooks/use-confirm", () => ({
   useConfirm: () => mockConfirm,
 }));
@@ -129,7 +134,10 @@ jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 jest.mock("expo-router", () => ({
-  router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+  router: {
+    push: (...args: unknown[]) => mockRouterPush(...args),
+    replace: (...args: unknown[]) => mockRouterReplace(...args),
+  },
   useFocusEffect: (effect: () => void) => effect(),
 }));
 jest.mock("react-native-safe-area-context", () => ({
@@ -148,6 +156,8 @@ describe("ProfileScreen", () => {
     mockUseDJs.mockClear();
     mockInvalidateQueries.mockClear();
     mockRouterPush.mockClear();
+    mockRouterReplace.mockClear();
+    mockReplayTour.mockClear();
     mockConfirm.mockReset();
     mockConfirm.mockResolvedValue(false);
     mockFlushListeningStats.mockReset();
@@ -166,11 +176,24 @@ describe("ProfileScreen", () => {
     expect(screen.getByLabelText("Account Details")).toBeTruthy();
     expect(screen.getByLabelText("Music Preferences")).toBeTruthy();
     expect(screen.getByLabelText("Subscription")).toBeTruthy();
+    expect(screen.getByLabelText("Replay product tour")).toBeTruthy();
     expect(screen.getByLabelText("Logout")).toBeTruthy();
     expect(mockUseProfile).toHaveBeenCalledTimes(1);
     expect(mockUseListeningTotals).toHaveBeenCalledTimes(1);
     expect(mockUseDjsHeard).toHaveBeenCalledTimes(1);
     expect(mockUseDJs).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests replay before replacing Profile with Home", async () => {
+    const screen = await render(<ProfileScreen />);
+
+    await fireEvent.press(screen.getByLabelText("Replay product tour"));
+
+    expect(mockReplayTour).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).toHaveBeenCalledWith("/");
+    expect(mockReplayTour.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRouterReplace.mock.invocationCallOrder[0],
+    );
   });
 
   it("shows resolved identity while stats and DJs remain unresolved", async () => {

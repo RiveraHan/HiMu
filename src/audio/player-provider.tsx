@@ -15,6 +15,7 @@ import {
   useRef,
 } from "react";
 import { AppState } from "react-native";
+import { PlaybackConfirmation } from "./playback-confirmation";
 
 // Audius (and any future external-catalog) track ids are namespaced
 // "audius:<id>" and never correspond to a row in `tracks` — skip DB-backed
@@ -76,7 +77,7 @@ function lockScreenMetadata(track: PlayerTrack) {
 }
 
 type PlayerControls = {
-  load: (track: PlayerTrack, queue?: PlayerTrack[], index?: number) => void;
+  load: (track: PlayerTrack, queue?: PlayerTrack[], index?: number) => Promise<boolean>;
   toggle: () => void;
   next: () => void;
   prev: () => void;
@@ -108,6 +109,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const wasPlayingRef = useRef(false); // detect transitions play -> pause
   const outgoingSettledRef = useRef(false); // one event max per loaded track
   const lockScreenActiveRef = useRef(false); // media session started once
+  const statusSequenceRef = useRef(0);
+  const playbackConfirmationRef = useRef(new PlaybackConfirmation(8_000));
+
+  useEffect(() => () => playbackConfirmationRef.current.dispose(), []);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -240,6 +245,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const i = index ?? q.findIndex((t) => t.id === track.id);
 
       store.getState().setNowPlaying(track, q, Math.max(i, 0));
+      const confirmation = playbackConfirmationRef.current.begin(
+        track.id,
+        statusSequenceRef.current,
+      );
       player.replace({ uri: track.audio_url });
       player.play();
 
@@ -254,6 +263,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       } else {
         player.updateLockScreenMetadata(metadata);
       }
+      return confirmation;
     },
     [player, store, countTrackIfPlayed, settleOutgoingTrack],
   );
@@ -307,6 +317,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Sync status -> store
   useEffect(() => {
+    statusSequenceRef.current += 1;
     // Accumulate playback time based on position changes.
     // Skips and track changes cause jumps (negative or > 2 s) that are ignored:
     // only the natural progression of playback (ticks of ~0.5 s) is counted.
@@ -322,6 +333,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
     store.getState().setIsPlaying(status.playing);
     store.getState().setProgress(status.currentTime, status.duration);
+    playbackConfirmationRef.current.observe({
+      statusSequence: statusSequenceRef.current,
+      currentTrackId: store.getState().currentTrack?.id ?? null,
+      isLoaded: status.isLoaded,
+      playing: status.playing,
+    });
 
     if (status.didJustFinish) {
       if (store.getState().repeatMode === "one") {
@@ -335,6 +352,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [
     status.playing,
+    status.isLoaded,
     status.currentTime,
     status.duration,
     status.didJustFinish,
