@@ -165,7 +165,6 @@ test("changes i18next before awaiting persistence", async () => {
   const localWrite = deferred<void>();
   mockUser = { id: "user-1" };
   mockSettings = preferences("en");
-  jest.mocked(writeLanguageState).mockReturnValue(localWrite.promise);
 
   await renderProvider();
   await waitFor(() => expect(currentLocale).not.toBeNull());
@@ -294,5 +293,98 @@ test("a user change cannot let an older retry replace the new user's pending pre
   await waitFor(() => {
     expect(mockMutateAsync).toHaveBeenCalledWith(preferences("en"));
   });
+  expect(currentLocale?.preference).toBe("en");
+});
+
+test("an older deferred clean write cannot replace a new user's completed retry", async () => {
+  const oldCleanWrite = deferred<void>();
+  mockUser = { id: "user-1" };
+  mockSettings = preferences("en");
+
+  const view = await renderProvider();
+  await waitFor(() => expect(currentLocale?.preference).toBe("en"));
+  jest.clearAllMocks();
+  jest.mocked(readLanguageState).mockResolvedValueOnce({
+    preference: "en",
+    pendingSync: true,
+  });
+  jest.mocked(writeLanguageState).mockImplementation(async (userId, state) => {
+    if (userId === "user-1" && !state.pendingSync) {
+      return oldCleanWrite.promise;
+    }
+  });
+
+  let oldSave!: Promise<void>;
+  await act(async () => {
+    oldSave = currentLocale!.setPreference("es");
+    await Promise.resolve();
+  });
+  await waitFor(() =>
+    expect(writeLanguageState).toHaveBeenCalledWith("user-1", {
+      preference: "es",
+      pendingSync: false,
+    }),
+  );
+
+  mockUser = { id: "user-2" };
+  mockSettings = preferences("es");
+  await view.rerender(
+    <LocaleProvider>
+      <Probe />
+    </LocaleProvider>,
+  );
+  expect(currentLocale?.preference).toBe("en");
+
+  await act(async () => {
+    oldCleanWrite.resolve();
+    await oldSave;
+  });
+
+  await waitFor(() => {
+    expect(writeLanguageState).toHaveBeenCalledWith("user-2", {
+      preference: "en",
+      pendingSync: false,
+    });
+  });
+  expect(currentLocale?.preference).toBe("en");
+});
+
+test("overlapping selections persist the newest preference last", async () => {
+  const firstPendingWrite = deferred<void>();
+  let stored: StoredLanguageState | null = null;
+  mockUser = { id: "user-1" };
+  mockSettings = preferences("en");
+
+  await renderProvider();
+  await waitFor(() => expect(currentLocale?.preference).toBe("en"));
+  jest.clearAllMocks();
+  jest.mocked(writeLanguageState).mockImplementation(async (_userId, state) => {
+    if (state.preference === "es" && state.pendingSync) {
+      await firstPendingWrite.promise;
+    }
+    stored = state;
+  });
+
+  let firstSave!: Promise<void>;
+  let secondSave!: Promise<void>;
+  await act(async () => {
+    firstSave = currentLocale!.setPreference("es");
+    await Promise.resolve();
+  });
+  await act(async () => {
+    secondSave = currentLocale!.setPreference("en");
+    await Promise.resolve();
+  });
+
+  expect(currentLocale?.preference).toBe("en");
+  expect(writeLanguageState).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    firstPendingWrite.resolve();
+    await Promise.all([firstSave, secondSave]);
+  });
+
+  expect(stored).toEqual({ preference: "en", pendingSync: false });
+  expect(mockMutateAsync).toHaveBeenLastCalledWith(preferences("en"));
   expect(currentLocale?.preference).toBe("en");
 });
