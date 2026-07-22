@@ -57,22 +57,16 @@ export default function AccountSettingsScreen() {
     t("settings.thisDevice");
 
   const setLossless = (lossless: boolean) =>
-    updateSettings({ ...prefs, audio: { ...prefs.audio, lossless } });
+    updateSettings({ audio: { lossless } });
 
   const setPush = (push: boolean) =>
-    updateSettings({
-      ...prefs,
-      notifications: { ...prefs.notifications, push },
-    });
+    updateSettings({ notifications: { push } });
 
   const setNewsletters = (emailNewsletters: boolean) =>
-    updateSettings({
-      ...prefs,
-      notifications: { ...prefs.notifications, emailNewsletters },
-    });
+    updateSettings({ notifications: { emailNewsletters } });
 
   const setDownloadQuality = (downloadQuality: DownloadQuality) =>
-    updateSettings({ ...prefs, audio: { ...prefs.audio, downloadQuality } });
+    updateSettings({ audio: { downloadQuality } });
 
   const pickDownloadQuality = () => {
     Alert.alert(t("settings.downloadQuality"), undefined, [

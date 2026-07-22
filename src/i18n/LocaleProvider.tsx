@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { getLocales } from "expo-localization";
+import { AppState, type AppStateStatus } from "react-native";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useSettings, useUpdateSettings } from "@/src/hooks/use-settings";
 import { useToastStore } from "@/src/stores/toast-store";
@@ -38,11 +39,13 @@ export function LocaleProvider({ children }: PropsWithChildren) {
   const [localState, setLocalState] = useState<StoredLanguageState | null>(null);
   const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [retryVersion, setRetryVersion] = useState(0);
   const syncInFlightRef = useRef(false);
   const syncGenerationRef = useRef(0);
   const pendingAttemptRef = useRef<string | null>(null);
   const appliedRemoteRef = useRef<string | null>(null);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const enqueuePersistence = useCallback(
     (operation: () => Promise<void>) => {
@@ -62,6 +65,22 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     },
     [deviceLanguageCode],
   );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+      if (
+        nextState === "active" &&
+        (previousState === "background" || previousState === "inactive")
+      ) {
+        pendingAttemptRef.current = null;
+        setRetryVersion((version) => version + 1);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,10 +137,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
 
         try {
           try {
-            await updateSettings({
-              ...settings,
-              language: localState.preference,
-            });
+            await updateSettings({ language: localState.preference });
           } catch {
             if (syncGenerationRef.current === syncGeneration) {
               showPersistenceError();
@@ -182,6 +198,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     enqueuePersistence,
     hydratedUserId,
     localState,
+    retryVersion,
     settings,
     updateSettings,
     userId,
@@ -224,7 +241,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
 
         try {
           try {
-            await updateSettings({ ...settings, language: next });
+            await updateSettings({ language: next });
           } catch {
             if (syncGenerationRef.current === syncGeneration) {
               showPersistenceError();

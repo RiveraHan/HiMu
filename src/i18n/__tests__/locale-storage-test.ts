@@ -18,7 +18,7 @@ describe("language preference storage", () => {
 
     await readLanguageState("user-42");
 
-    expect(secureStorage.getItem).toHaveBeenCalledWith("himu:language:user-42");
+    expect(secureStorage.getItem).toHaveBeenCalledWith("himu.language.user-42");
   });
 
   test.each([
@@ -45,7 +45,7 @@ describe("language preference storage", () => {
     });
 
     expect(secureStorage.setItem).toHaveBeenCalledWith(
-      "himu:language:user-1",
+      "himu.language.user-1",
       JSON.stringify({ preference: "es", pendingSync: true }),
     );
     await expect(readLanguageState("user-1")).resolves.toEqual({

@@ -1,7 +1,10 @@
 import { act, render, waitFor } from "@testing-library/react-native";
 import { getLocales } from "expo-localization";
-import { Text } from "react-native";
-import type { UserPreferences } from "@/src/types/preferences";
+import { AppState, Text, type AppStateStatus } from "react-native";
+import type {
+  UserPreferences,
+  UserPreferencesPatch,
+} from "@/src/types/preferences";
 import type { LanguagePreference } from "../types";
 import i18n from "../index";
 import {
@@ -15,7 +18,7 @@ import { useLocale } from "../use-locale";
 let mockUser: { id: string } | null = null;
 let mockSettings: UserPreferences | undefined;
 let mockDeviceLanguageCode = "en";
-const mockMutateAsync = jest.fn<Promise<void>, [UserPreferences]>();
+const mockMutateAsync = jest.fn<Promise<void>, [UserPreferencesPatch]>();
 const mockShowToast = jest.fn();
 
 jest.mock("@/src/hooks/use-auth", () => ({
@@ -82,6 +85,7 @@ async function renderProvider() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockMutateAsync.mockReset();
   mockUser = null;
   mockSettings = undefined;
   mockDeviceLanguageCode = "en";
@@ -97,6 +101,10 @@ beforeEach(() => {
   jest.mocked(readLanguageState).mockResolvedValue(null);
   jest.mocked(writeLanguageState).mockResolvedValue(undefined);
   mockMutateAsync.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 test("an unauthenticated user resolves system from the device", async () => {
@@ -158,7 +166,9 @@ test("retains and retries a cached pending preference", async () => {
 
   const view = await renderProvider();
 
-  await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledWith(preferences("es")));
+  await waitFor(() =>
+    expect(mockMutateAsync).toHaveBeenCalledWith({ language: "es" }),
+  );
   expect(view.getByTestId("locale").props.children).toBe("es:es:true");
 
   await act(async () => {
@@ -215,7 +225,7 @@ test("a local write failure keeps Spanish, continues remotely, and shows feedbac
   await act(async () => currentLocale!.setPreference("es"));
 
   expect(currentLocale?.resolvedLanguage).toBe("es");
-  expect(mockMutateAsync).toHaveBeenCalledWith(preferences("es"));
+  expect(mockMutateAsync).toHaveBeenCalledWith({ language: "es" });
   expect(mockShowToast).toHaveBeenCalledWith(
     "error",
     "common.errors.generic",
@@ -246,6 +256,68 @@ test("a remote failure keeps Spanish pending and shows feedback", async () => {
     "common.errors.generic",
     "common.errors.savePreference",
   );
+});
+
+test("retries a failed pending sync on foreground without concurrent duplicates", async () => {
+  const retry = deferred<void>();
+  let appStateListener: ((state: AppStateStatus) => void) | null = null;
+  const removeListener = jest.fn();
+  jest.spyOn(AppState, "addEventListener")
+    .mockImplementation((_type, listener) => {
+      appStateListener = listener;
+      return { remove: removeListener };
+    });
+  mockUser = { id: "user-1" };
+  mockSettings = preferences("en");
+  jest.mocked(readLanguageState).mockResolvedValue({
+    preference: "es",
+    pendingSync: true,
+  });
+  mockMutateAsync
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockReturnValueOnce(retry.promise);
+
+  const view = await renderProvider();
+
+  await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1));
+  await waitFor(() => {
+    expect(view.getByTestId("locale").props.children).toBe("es:es:false");
+  });
+  expect(appStateListener).not.toBeNull();
+  expect(writeLanguageState).not.toHaveBeenCalledWith("user-1", {
+    preference: "es",
+    pendingSync: false,
+  });
+
+  await act(async () => {
+    appStateListener!("background");
+    appStateListener!("active");
+  });
+  await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(2));
+  expect(view.getByTestId("locale").props.children).toBe("es:es:true");
+
+  await act(async () => {
+    appStateListener!("background");
+    appStateListener!("active");
+    await Promise.resolve();
+  });
+  expect(mockMutateAsync).toHaveBeenCalledTimes(2);
+
+  await act(async () => {
+    retry.resolve();
+    await retry.promise;
+  });
+  await waitFor(() => {
+    expect(writeLanguageState).toHaveBeenCalledWith("user-1", {
+      preference: "es",
+      pendingSync: false,
+    });
+    expect(view.getByTestId("locale").props.children).toBe("es:es:false");
+  });
+  expect(mockMutateAsync).toHaveBeenNthCalledWith(2, { language: "es" });
+
+  await view.unmount();
+  expect(removeListener).toHaveBeenCalledTimes(1);
 });
 
 test("a successful pending retry marks the cache clean", async () => {
@@ -297,7 +369,7 @@ test("a user change cannot let an older retry replace the new user's pending pre
   });
 
   await waitFor(() => {
-    expect(mockMutateAsync).toHaveBeenCalledWith(preferences("en"));
+    expect(mockMutateAsync).toHaveBeenCalledWith({ language: "en" });
   });
   expect(currentLocale?.preference).toBe("en");
 });
@@ -391,6 +463,6 @@ test("overlapping selections persist the newest preference last", async () => {
   });
 
   expect(stored).toEqual({ preference: "en", pendingSync: false });
-  expect(mockMutateAsync).toHaveBeenLastCalledWith(preferences("en"));
+  expect(mockMutateAsync).toHaveBeenLastCalledWith({ language: "en" });
   expect(currentLocale?.preference).toBe("en");
 });

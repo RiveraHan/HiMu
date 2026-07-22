@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { Avatar } from "../Avatar";
 import { EqualizerBars } from "../EqualizerBars";
 import { GlassCard } from "../GlassCard";
@@ -33,9 +34,11 @@ export function OnAirHero({
   pending = false,
   voiceSlot,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
   const accent = isLive ? theme.colors.error : theme.colors.primary;
+  const displayGenre = genre ? catalogLabel(genre, resolvedLanguage) : null;
 
   return (
     <GlassCard level={3} style={styles.card}>
@@ -44,14 +47,14 @@ export function OnAirHero({
         <Text variant="labelCaps" color={isLive ? "error" : "primary"}>
           {eyebrow ?? (isLive ? t("home.hero.live") : t("home.hero.onAir"))}
         </Text>
-        {genre && (
+        {displayGenre && (
           <Text
             variant="labelCaps"
             color="onSurfaceVariant"
             opacity={0.7}
             style={styles.genre}
           >
-            {genre}
+            {displayGenre}
           </Text>
         )}
       </View>

@@ -15,6 +15,12 @@ export type UserPreferences = {
   };
 };
 
+export type UserPreferencesPatch = {
+  language?: LanguagePreference;
+  audio?: Partial<UserPreferences["audio"]>;
+  notifications?: Partial<UserPreferences["notifications"]>;
+};
+
 export const DEFAULT_PREFERENCES: UserPreferences = {
   language: "system",
   audio: {
@@ -61,5 +67,16 @@ export function mergePreferences(stored: unknown): UserPreferences {
         preferences.notifications?.emailNewsletters ??
         DEFAULT_PREFERENCES.notifications.emailNewsletters,
     },
+  };
+}
+
+export function patchPreferences(
+  current: UserPreferences,
+  patch: UserPreferencesPatch,
+): UserPreferences {
+  return {
+    language: patch.language ?? current.language,
+    audio: { ...current.audio, ...patch.audio },
+    notifications: { ...current.notifications, ...patch.notifications },
   };
 }

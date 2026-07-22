@@ -24,6 +24,7 @@ import { useAppTour } from "@/src/onboarding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useFocusEffect } from "expo-router";
 import {
@@ -47,7 +48,7 @@ import { useTranslation } from "react-i18next";
 
 export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
-  const resolvedLanguage = i18n.resolvedLanguage ?? "en";
+  const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
   const profileQuery = useProfile();
@@ -230,7 +231,12 @@ export default function ProfileScreen() {
                     color="onSurfaceVariant"
                     opacity={0.6}
                   >
-                    {dj.genre_specialties?.[0]?.toUpperCase()}
+                    {dj.genre_specialties?.[0]
+                      ? catalogLabel(
+                          dj.genre_specialties[0],
+                          resolvedLanguage,
+                        ).toUpperCase()
+                      : null}
                   </Text>
                 </GlassCard>
               </Pressable>

@@ -35,7 +35,7 @@ const djs = [
     name: "DJ One",
     slug: "dj-one",
     avatar_url: null,
-    genre_specialties: ["House"],
+    genre_specialties: ["Ambient"],
     is_premium: false,
     owner_id: "listener-one",
   },
@@ -203,6 +203,16 @@ describe("ProfileScreen", () => {
         "Ambient profundo, texturas atmosféricas y paisajes sonoros expansivos.",
       ),
     ).toBeTruthy();
+  });
+
+  it("presents canonical DJ genres in Spanish without changing profile data", async () => {
+    await i18n.changeLanguage("es");
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("AMBIENTAL")).toBeTruthy();
+    expect(djs[0].genre_specialties).toEqual(["Ambient"]);
   });
 
   it("loads identity, stats, and DJs independently while Preferences remain", async () => {

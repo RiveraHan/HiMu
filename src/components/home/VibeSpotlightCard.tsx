@@ -2,6 +2,7 @@ import { ChevronRight, Waves } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { Text } from "../Text";
 
 type Props = {
@@ -17,11 +18,16 @@ export function VibeSpotlightCard({
   streak,
   onPress,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
 
   const subtitle = [
-    topGenre ? t("home.vibe.mostly", { genre: topGenre }) : null,
+    topGenre
+      ? t("home.vibe.mostly", {
+          genre: catalogLabel(topGenre, resolvedLanguage),
+        })
+      : null,
     t("home.vibe.streak", { count: streak }),
   ]
     .filter(Boolean)

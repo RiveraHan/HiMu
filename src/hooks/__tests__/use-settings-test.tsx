@@ -2,7 +2,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 import { supabase } from "@/src/api/supabase";
-import type { UserPreferences } from "@/src/types/preferences";
+import type {
+  UserPreferences,
+  UserPreferencesPatch,
+} from "@/src/types/preferences";
 import { useCurrentUser } from "../use-auth";
 import { useSettings, useUpdateSettings } from "../use-settings";
 
@@ -11,7 +14,7 @@ jest.mock("@/src/api/supabase", () => ({
   supabase: { from: jest.fn() },
 }));
 
-const profiles: Record<string, UserPreferences> = {
+const profileFixtures: Record<string, UserPreferences> = {
   "user-1": {
     language: "en",
     audio: { lossless: false, downloadQuality: "high" },
@@ -23,6 +26,14 @@ const profiles: Record<string, UserPreferences> = {
     notifications: { push: false, emailNewsletters: true },
   },
 };
+
+function clonePreferences(value: UserPreferences): UserPreferences {
+  return {
+    language: value.language,
+    audio: { ...value.audio },
+    notifications: { ...value.notifications },
+  };
+}
 
 function queryClient() {
   return new QueryClient({
@@ -53,13 +64,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(supabase.from).mockImplementation(() => {
     let selectedUserId = "";
-    const maybeSingle = jest.fn(async () => ({
-      data: { preferences: profiles[selectedUserId] },
-      error: null,
-    }));
     const selectBuilder = {
       eq: jest.fn(),
-      maybeSingle,
+      maybeSingle: jest.fn(async () => ({
+        data: { preferences: clonePreferences(profileFixtures[selectedUserId]) },
+        error: null,
+      })),
     };
     selectBuilder.eq.mockImplementation((_field: string, userId: string) => {
       selectedUserId = userId;
@@ -85,42 +95,175 @@ test("switching users reads from separate settings cache entries", async () => {
 
   await waitFor(() => expect(view.result.current.data?.language).toBe("es"));
   expect(client.getQueryData(["settings", "me", "user-1"])).toEqual(
-    profiles["user-1"],
+    profileFixtures["user-1"],
   );
   expect(client.getQueryData(["settings", "me", "user-2"])).toEqual(
-    profiles["user-2"],
+    profileFixtures["user-2"],
   );
+  await view.unmount();
 });
 
-test("an update targets and optimistically changes only the current user", async () => {
-  const updateGate = deferred<{ error: null }>();
-  const updateEq = jest.fn(() => updateGate.promise);
-  jest.mocked(supabase.from).mockReturnValue({
-    update: jest.fn(() => ({ eq: updateEq })),
-  } as never);
-  const client = queryClient();
-  client.setQueryData(["settings", "me", "user-1"], profiles["user-1"]);
-  client.setQueryData(["settings", "me", "user-2"], profiles["user-2"]);
-  jest.mocked(useCurrentUser).mockReturnValue({ id: "user-2" } as never);
-  const view = await renderHook(() => useUpdateSettings(), {
-    wrapper: wrapper(client),
-  });
-  const next = { ...profiles["user-2"], language: "system" as const };
+test("serializes field patches per user and merges each against latest remote settings", async () => {
+  const remoteProfiles: Record<string, UserPreferences> = {
+    "user-1": clonePreferences(profileFixtures["user-1"]),
+    "user-2": clonePreferences(profileFixtures["user-2"]),
+  };
+  const firstWriteGate = deferred<void>();
+  const blockedUsers = new Set<string>();
+  const selectOrder: string[] = [];
+  const updateOrder: { userId: string; preferences: UserPreferences }[] = [];
+  const activeByUser = new Map<string, number>();
+  const maxActiveByUser = new Map<string, number>();
 
-  let update!: Promise<void>;
+  jest.mocked(supabase.from).mockImplementation(() => ({
+    select: jest.fn(() => {
+      let userId = "";
+      const builder = {
+        eq: jest.fn(),
+        maybeSingle: jest.fn(async () => {
+          selectOrder.push(userId);
+          return {
+            data: { preferences: clonePreferences(remoteProfiles[userId]) },
+            error: null,
+          };
+        }),
+      };
+      builder.eq.mockImplementation((_field: string, nextUserId: string) => {
+        userId = nextUserId;
+        return builder;
+      });
+      return builder;
+    }),
+    update: jest.fn(
+      ({ preferences }: { preferences: UserPreferencesPatch | UserPreferences }) => ({
+        eq: jest.fn(async (_field: string, userId: string) => {
+          const snapshot = preferences as UserPreferences;
+          updateOrder.push({
+            userId,
+            preferences: snapshot,
+          });
+          const active = (activeByUser.get(userId) ?? 0) + 1;
+          activeByUser.set(userId, active);
+          maxActiveByUser.set(
+            userId,
+            Math.max(maxActiveByUser.get(userId) ?? 0, active),
+          );
+
+          if (userId === "user-1" && !blockedUsers.has(userId)) {
+            blockedUsers.add(userId);
+            await firstWriteGate.promise;
+          }
+
+          remoteProfiles[userId] = snapshot;
+          activeByUser.set(userId, active - 1);
+          return { error: null };
+        }),
+      }),
+    ),
+  })) as never;
+
+  const client = queryClient();
+  client.setQueryData(
+    ["settings", "me", "user-1"],
+    clonePreferences(profileFixtures["user-1"]),
+  );
+  client.setQueryData(
+    ["settings", "me", "user-2"],
+    clonePreferences(profileFixtures["user-2"]),
+  );
+
+  jest.mocked(useCurrentUser).mockReturnValue({ id: "user-1" } as never);
+  const userOne = await renderHook(
+    () => ({
+      locale: useUpdateSettings(),
+      account: useUpdateSettings(),
+    }),
+    { wrapper: wrapper(client) },
+  );
+  let operations!: Promise<void>[];
   await act(async () => {
-    update = view.result.current.mutateAsync(next);
+    operations = [
+      userOne.result.current.locale.mutateAsync({ language: "es" }),
+      userOne.result.current.account.mutateAsync({ audio: { lossless: true } }),
+      userOne.result.current.account.mutateAsync({
+        notifications: { push: false },
+      }),
+    ];
     await Promise.resolve();
   });
 
-  expect(client.getQueryData(["settings", "me", "user-1"])).toEqual(
-    profiles["user-1"],
-  );
-  expect(client.getQueryData(["settings", "me", "user-2"])).toEqual(next);
-  expect(updateEq).toHaveBeenCalledWith("id", "user-2");
+  await waitFor(() => {
+    expect(updateOrder.some(({ userId }) => userId === "user-1")).toBe(true);
+  });
+  const userOneStartsBeforeRelease = updateOrder.filter(
+    ({ userId }) => userId === "user-1",
+  ).length;
 
   await act(async () => {
-    updateGate.resolve({ error: null });
-    await update;
+    firstWriteGate.resolve();
+    await Promise.all(operations);
   });
+
+  await waitFor(() => {
+    expect(userOne.result.current.locale.isSuccess).toBe(true);
+    expect(userOne.result.current.account.isSuccess).toBe(true);
+  });
+
+  await userOne.unmount();
+  jest.mocked(useCurrentUser).mockReturnValue({ id: "user-2" } as never);
+  const userTwo = await renderHook(() => useUpdateSettings(), {
+    wrapper: wrapper(client),
+  });
+  await act(async () => {
+    await userTwo.result.current.mutateAsync({ language: "system" });
+  });
+  await waitFor(() => expect(userTwo.result.current.isSuccess).toBe(true));
+
+  const userOneSnapshots = updateOrder
+    .filter(({ userId }) => userId === "user-1")
+    .map(({ preferences }) => preferences);
+  expect(userOneStartsBeforeRelease).toBe(1);
+  expect(maxActiveByUser).toEqual(
+    new Map([
+      ["user-1", 1],
+      ["user-2", 1],
+    ]),
+  );
+  expect(selectOrder.filter((userId) => userId === "user-1")).toHaveLength(3);
+  expect(selectOrder.filter((userId) => userId === "user-2")).toHaveLength(1);
+  expect(userOneSnapshots).toEqual([
+    {
+      ...profileFixtures["user-1"],
+      language: "es",
+    },
+    {
+      ...profileFixtures["user-1"],
+      language: "es",
+      audio: { lossless: true, downloadQuality: "high" },
+    },
+    {
+      language: "es",
+      audio: { lossless: true, downloadQuality: "high" },
+      notifications: { push: false, emailNewsletters: false },
+    },
+  ]);
+  expect(remoteProfiles).toEqual({
+    "user-1": {
+      language: "es",
+      audio: { lossless: true, downloadQuality: "high" },
+      notifications: { push: false, emailNewsletters: false },
+    },
+    "user-2": {
+      language: "system",
+      audio: { lossless: true, downloadQuality: "lossless" },
+      notifications: { push: false, emailNewsletters: true },
+    },
+  });
+  expect(client.getQueryData(["settings", "me", "user-1"])).toEqual(
+    remoteProfiles["user-1"],
+  );
+  expect(client.getQueryData(["settings", "me", "user-2"])).toEqual(
+    remoteProfiles["user-2"],
+  );
+  await userTwo.unmount();
 });

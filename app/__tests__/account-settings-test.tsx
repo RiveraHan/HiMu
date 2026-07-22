@@ -2,9 +2,16 @@
 import { fireEvent, render } from "@testing-library/react-native";
 import { Alert } from "react-native";
 import AccountSettingsScreen from "@/app/account-settings";
+import type { UserPreferences } from "@/src/types/preferences";
 
 const mockSetPreference = jest.fn();
+const mockUpdateSettings = jest.fn();
 let mockIsSaving = false;
+const mockSettings: UserPreferences = {
+  language: "en",
+  audio: { lossless: false, downloadQuality: "high" },
+  notifications: { push: true, emailNewsletters: false },
+};
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -16,6 +23,11 @@ jest.mock("react-i18next", () => ({
         "settings.language.systemResolved": "Device language ({{language}})",
         "settings.language.en": "English",
         "settings.language.es": "Español",
+        "settings.lossless": "Lossless audio",
+        "settings.push": "Push notifications",
+        "settings.newsletters": "Newsletters",
+        "settings.downloadQuality": "Download quality",
+        "settings.quality.low": "Low",
         "common.actions.cancel": "Cancel",
       };
       const translation = translations[key] ?? key;
@@ -67,7 +79,24 @@ jest.mock("@/src/components", () => {
         React.createElement(NativeText, { key: "title" }, title),
         children,
       ]),
-    SettingsToggleRow: () => React.createElement(View),
+    SettingsToggleRow: ({
+      label,
+      onValueChange,
+      value,
+    }: {
+      label: string;
+      onValueChange: (value: boolean) => void;
+      value: boolean;
+    }) =>
+      React.createElement(
+        Pressable,
+        {
+          accessibilityLabel: label,
+          accessibilityRole: "switch",
+          onPress: () => onValueChange(!value),
+        },
+        React.createElement(NativeText, null, label),
+      ),
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
   };
@@ -84,8 +113,8 @@ jest.mock("@/src/i18n/use-locale", () => ({
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => null }));
 jest.mock("@/src/hooks/use-profile", () => ({ useProfile: () => ({ data: null }) }));
 jest.mock("@/src/hooks/use-settings", () => ({
-  useSettings: () => ({ data: undefined }),
-  useUpdateSettings: () => ({ mutate: jest.fn() }),
+  useSettings: () => ({ data: mockSettings }),
+  useUpdateSettings: () => ({ mutate: mockUpdateSettings }),
 }));
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ flushListeningStats: jest.fn() }),
@@ -117,6 +146,7 @@ jest.mock("react-native-unistyles", () => ({
 describe("AccountSettingsScreen", () => {
   beforeEach(() => {
     mockSetPreference.mockReset();
+    mockUpdateSettings.mockReset();
     mockIsSaving = false;
     jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
   });
@@ -157,5 +187,24 @@ describe("AccountSettingsScreen", () => {
     await fireEvent.press(screen.getByLabelText("Language"));
 
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it("writes only field-scoped audio and notification patches", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    await fireEvent.press(screen.getByLabelText("Lossless audio"));
+    await fireEvent.press(screen.getByLabelText("Push notifications"));
+    await fireEvent.press(screen.getByLabelText("Newsletters"));
+    await fireEvent.press(screen.getByLabelText("Download quality"));
+
+    const qualityActions = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2];
+    qualityActions?.[0].onPress?.();
+
+    expect(mockUpdateSettings.mock.calls).toEqual([
+      [{ audio: { lossless: true } }],
+      [{ notifications: { push: false } }],
+      [{ notifications: { emailNewsletters: true } }],
+      [{ audio: { downloadQuality: "low" } }],
+    ]);
   });
 });

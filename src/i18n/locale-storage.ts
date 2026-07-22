@@ -7,7 +7,7 @@ export type StoredLanguageState = {
   pendingSync: boolean;
 };
 
-const keyFor = (userId: string) => `himu:language:${userId}`;
+const keyFor = (userId: string) => `himu.language.${userId}`;
 
 export async function readLanguageState(
   userId: string,

@@ -36,6 +36,7 @@ import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
 import { useToast } from "@/src/hooks/use-toast";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
 import {
   ContinueTourCard,
   TourTarget,
@@ -58,7 +59,7 @@ import { useTranslation } from "react-i18next";
 
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
-  const resolvedLanguage = i18n.resolvedLanguage ?? "en";
+  const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
@@ -356,7 +357,14 @@ export default function HomeScreen() {
                     src={dj.avatar_url}
                     fallback={dj.name}
                     name={dj.name}
-                    subtitle={dj.genre_specialties?.[0]}
+                    subtitle={
+                      dj.genre_specialties?.[0]
+                        ? catalogLabel(
+                            dj.genre_specialties[0],
+                            resolvedLanguage,
+                          )
+                        : undefined
+                    }
                     isLive={liveDJIds?.has(dj.id) ?? false}
                     onPress={() => router.push(`/dj/${dj.id}`)}
                   />

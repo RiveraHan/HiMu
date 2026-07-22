@@ -55,7 +55,12 @@ jest.mock("@/src/components", () => {
     ContentShelf: ({ title }: { title: string }) =>
       React.createElement(View, { testID: `content-shelf-${title}` }),
     ContentShelfSkeleton: placeholder("content-shelf-skeleton"),
-    DJAvatar: placeholder("dj-avatar"),
+    DJAvatar: ({ subtitle }: { subtitle?: string }) =>
+      React.createElement(
+        View,
+        { testID: "dj-avatar" },
+        React.createElement(NativeText, null, subtitle),
+      ),
     HomeDjsSkeleton: placeholder("home-djs-skeleton"),
     HomeHeroSkeleton: placeholder("home-hero-skeleton"),
     HomeLibraryRowSkeleton: placeholder("home-library-row-skeleton"),
@@ -200,21 +205,24 @@ describe("HomeScreen", () => {
   it("renders the Home surface in Spanish", async () => {
     await i18n.changeLanguage("es");
     jest.spyOn(Date.prototype, "getHours").mockReturnValue(9);
-    mockDjsQuery = settledQuery([
+    const canonicalDjs = [
       {
         id: "dj-one",
         owner_id: "user",
         name: "DJ One",
         avatar_url: null,
-        genre_specialties: ["House"],
+        genre_specialties: ["Ambient"],
       },
-    ]);
+    ];
+    mockDjsQuery = settledQuery(canonicalDjs);
 
     const screen = await render(<HomeScreen />);
 
     expect(screen.getByText("Buenos días")).toBeTruthy();
     expect(screen.getByText("Tus DJs")).toBeTruthy();
+    expect(screen.getByText("Ambiental")).toBeTruthy();
     expect(screen.getByText("Tu entorno sonoro te espera.")).toBeTruthy();
+    expect(canonicalDjs[0].genre_specialties).toEqual(["Ambient"]);
   });
 
   it("resolves initial Home queries with independent progressive skeletons", async () => {
