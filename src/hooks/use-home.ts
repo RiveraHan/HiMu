@@ -5,8 +5,6 @@ import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import { FOCUS_MOODS } from "@/src/types/music-preferences";
 import {
   OWN_DJ_HERO_WEIGHT,
-  TIME_OF_DAY_HEADLINES,
-  TIME_OF_DAY_LABELS,
   TIME_OF_DAY_MOODS,
   daySeed,
   pickHeroTrack,
@@ -170,7 +168,7 @@ export function useTimeOfDayShelf() {
         .returns<ContextualTrack[]>();
 
       if (error) throw error;
-      return { bucket, label: TIME_OF_DAY_LABELS[bucket], tracks: data ?? [] };
+      return { bucket, tracks: data ?? [] };
     },
   });
 }
@@ -184,7 +182,7 @@ export type OnAirHero = {
   };
   track: PlayerTrack;
   queue: PlayerTrack[];
-  headline: string;
+  bucket: TimeOfDayBucket;
   isLive: boolean;
 };
 
@@ -247,7 +245,7 @@ export function useOnAirHero(): { data: OnAirHero | null; isLoading: boolean } {
       },
       track,
       queue,
-      headline: TIME_OF_DAY_HEADLINES[bucket],
+      bucket,
       isLive,
     };
   }, [recent, liveDJIds, user?.id]);

@@ -17,21 +17,23 @@ import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 // Curated Audius genres (exact API strings), chosen for overlap with HiMu's DJs.
-const GENRES: { title: string; genre?: string }[] = [
-  { title: "Trending on Audius" },
-  { title: "Electronic", genre: "Electronic" },
-  { title: "House", genre: "House" },
-  { title: "Techno", genre: "Techno" },
-  { title: "Lo-Fi", genre: "Lo-Fi" },
-  { title: "Hip-Hop", genre: "Hip-Hop/Rap" },
-  { title: "Ambient", genre: "Ambient" },
-  { title: "R&B / Soul", genre: "R&B/Soul" },
-  { title: "Latin", genre: "Latin" },
+const GENRES: { titleKey: string; genre?: string }[] = [
+  { titleKey: "trending" },
+  { titleKey: "electronic", genre: "Electronic" },
+  { titleKey: "house", genre: "House" },
+  { titleKey: "techno", genre: "Techno" },
+  { titleKey: "loFi", genre: "Lo-Fi" },
+  { titleKey: "hipHop", genre: "Hip-Hop/Rap" },
+  { titleKey: "ambient", genre: "Ambient" },
+  { titleKey: "rnbSoul", genre: "R&B/Soul" },
+  { titleKey: "latin", genre: "Latin" },
 ];
 
 export default function DiscoverScreen() {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
@@ -86,9 +88,9 @@ export default function DiscoverScreen() {
       keyboardShouldPersistTaps="handled"
     >
         <View style={styles.header}>
-          <Text variant="h1">Discover</Text>
+          <Text variant="h1">{t("discover.title")}</Text>
           <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
-            Real music from independent artists
+            {t("discover.subtitle")}
           </Text>
         </View>
 
@@ -97,7 +99,7 @@ export default function DiscoverScreen() {
           borderRadius={theme.borderRadius.md}
         >
           <GlassInput
-            placeholder="Search Audius…"
+            placeholder={t("discover.searchPlaceholder")}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
@@ -126,14 +128,14 @@ export default function DiscoverScreen() {
               ))
             ) : (
               <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-                No results on Audius for “{debounced.trim()}”.
+                {t("discover.noResults", { query: debounced.trim() })}
               </Text>
             )}
           </View>
         ) : trending.isError ? (
           <View style={styles.results}>
             <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-              Couldn’t reach Audius right now.
+              {t("discover.unavailable")}
             </Text>
             <Pressable
               onPress={() => qc.invalidateQueries({ queryKey: ["audius"] })}
@@ -141,7 +143,7 @@ export default function DiscoverScreen() {
               style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
             >
               <Text variant="bodyMd" color="primary">
-                Retry
+                {t("discover.retry")}
               </Text>
             </Pressable>
           </View>
@@ -149,8 +151,8 @@ export default function DiscoverScreen() {
           <>
             {GENRES.map((g) => (
               <AudiusShelf
-                key={g.title}
-                title={g.title}
+                key={g.titleKey}
+                title={t(`discover.shelves.${g.titleKey}`)}
                 genre={g.genre}
                 onPlay={playFrom}
               />
@@ -161,7 +163,7 @@ export default function DiscoverScreen() {
               opacity={0.5}
               style={styles.attribution}
             >
-              Powered by Audius
+              {t("discover.attribution")}
             </Text>
           </>
         )}

@@ -13,8 +13,10 @@ import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function FavoritesScreen() {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
@@ -39,7 +41,10 @@ export default function FavoritesScreen() {
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
     >
-      <ScreenHeader kicker="PERSONALIZED LIBRARY" title="Favorites" />
+      <ScreenHeader
+        kicker={t("profile.favorites.kicker")}
+        title={t("profile.favorites.title")}
+      />
 
       {favoritesLoading ? (
         <View style={styles.list}>
@@ -63,7 +68,7 @@ export default function FavoritesScreen() {
         </View>
       ) : (
         <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-          No favorites yet — tap the heart on Now Playing to save a track.
+          {t("profile.favorites.empty")}
         </Text>
       )}
     </ScreenScrollView>

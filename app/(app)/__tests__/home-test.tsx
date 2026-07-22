@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render } from "@testing-library/react-native";
 import HomeScreen from "@/app/(app)/index";
+import i18n from "@/src/i18n";
 import { HOME_TOUR_STEPS } from "@/src/onboarding/constants";
 import type { HomeTourRegistration } from "@/src/onboarding";
 
@@ -190,6 +191,30 @@ describe("HomeScreen", () => {
     mockScrollTo.mockReset();
     mockRegistrationCleanup = jest.fn();
     mockRegisterHome.mockReturnValue(mockRegistrationCleanup);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("renders the Home surface in Spanish", async () => {
+    await i18n.changeLanguage("es");
+    jest.spyOn(Date.prototype, "getHours").mockReturnValue(9);
+    mockDjsQuery = settledQuery([
+      {
+        id: "dj-one",
+        owner_id: "user",
+        name: "DJ One",
+        avatar_url: null,
+        genre_specialties: ["House"],
+      },
+    ]);
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByText("Buenos días")).toBeTruthy();
+    expect(screen.getByText("Tus DJs")).toBeTruthy();
+    expect(screen.getByText("Tu entorno sonoro te espera.")).toBeTruthy();
   });
 
   it("resolves initial Home queries with independent progressive skeletons", async () => {

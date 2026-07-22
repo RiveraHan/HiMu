@@ -1,17 +1,19 @@
 import { Stack } from "expo-router";
 import { ScrollView, Text } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function CommunityScreen() {
+  const { t } = useTranslation();
   return (
     <>
-      <Stack.Screen options={{ title: "Community" }} />
+      <Stack.Screen options={{ title: t("profile.community.title") }} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
       >
-        <Text style={styles.text}>Community (coming soon)</Text>
+        <Text style={styles.text}>{t("profile.community.comingSoon")}</Text>
       </ScrollView>
     </>
   );

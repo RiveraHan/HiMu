@@ -2,6 +2,7 @@ import { Play } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Avatar } from "../Avatar";
 import { EqualizerBars } from "../EqualizerBars";
 import { GlassCard } from "../GlassCard";
@@ -32,6 +33,7 @@ export function OnAirHero({
   pending = false,
   voiceSlot,
 }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const accent = isLive ? theme.colors.error : theme.colors.primary;
 
@@ -40,7 +42,7 @@ export function OnAirHero({
       <View style={styles.eyebrow}>
         <EqualizerBars bars={4} height={14} color={accent} />
         <Text variant="labelCaps" color={isLive ? "error" : "primary"}>
-          {eyebrow ?? (isLive ? "LIVE" : "ON AIR")}
+          {eyebrow ?? (isLive ? t("home.hero.live") : t("home.hero.onAir"))}
         </Text>
         {genre && (
           <Text
@@ -73,7 +75,10 @@ export function OnAirHero({
           <Pressable
             onPress={onPlay}
             accessibilityRole="button"
-            accessibilityLabel={`Play ${trackTitle} from ${djName}`}
+            accessibilityLabel={t("home.hero.playTrack", {
+              trackTitle,
+              djName,
+            })}
             style={({ pressed }) => [
               styles.playButton,
               pressed && styles.pressed,

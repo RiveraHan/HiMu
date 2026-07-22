@@ -126,7 +126,7 @@ describe("VibeCheckScreen", () => {
     const screen = await render(<VibeCheckScreen />);
 
     expect(screen.queryByTestId("vibe-insight-skeleton")).toBeNull();
-    expect(screen.getByText("0.0")).toBeTruthy();
+    expect(screen.getByText("0")).toBeTruthy();
     expect(screen.getByText("0 tracks · 0-day streak")).toBeTruthy();
     expect(screen.getByTestId("vibe-chart")).toBeTruthy();
     expect(screen.getByTestId("vibe-djs-skeleton")).toBeTruthy();
@@ -150,7 +150,7 @@ describe("VibeCheckScreen", () => {
 
     expect(screen.queryByTestId("vibe-insight-skeleton")).toBeNull();
     expect(screen.queryByTestId("vibe-djs-skeleton")).toBeNull();
-    expect(screen.getByText("0.0")).toBeTruthy();
+    expect(screen.getByText("0")).toBeTruthy();
     expect(screen.getByText("DJ One")).toBeTruthy();
   });
 

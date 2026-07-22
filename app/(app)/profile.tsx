@@ -43,8 +43,11 @@ import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function ProfileScreen() {
+  const { t, i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage ?? "en";
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
   const profileQuery = useProfile();
@@ -83,9 +86,9 @@ export default function ProfileScreen() {
 
   const onLogout = async () => {
     const ok = await confirm({
-      title: "Logout",
-      message: "Are you sure you want to logout?",
-      confirmLabel: "Logout",
+      title: t("profile.logout"),
+      message: t("profile.logoutQuestion"),
+      confirmLabel: t("profile.logout"),
       destructive: true,
     });
     if (!ok) return;
@@ -109,7 +112,7 @@ export default function ProfileScreen() {
           <View style={styles.avatarWrap}>
             <Avatar
               src={profile?.avatarUrl}
-              fallback={profile?.name ?? "U"}
+              fallback={profile?.name ?? t("profile.listener")}
               size="2xl"
             />
             <View style={styles.tierBadge}>
@@ -117,13 +120,15 @@ export default function ProfileScreen() {
                 <CircleStar size={14} color={theme.colors.onPrimaryContainer} />
               )}
               <Text variant="labelCaps" color="onPrimaryContainer">
-                {isPro ? "PRO" : "FREE"}
+                {isPro
+                  ? t("profile.tier.proCaps")
+                  : t("profile.tier.freeCaps")}
               </Text>
             </View>
           </View>
           <View style={styles.headerText}>
             <Text variant="h1" numberOfLines={1}>
-              {profile?.name ?? "Anonymous"}
+              {profile?.name ?? t("profile.listener")}
             </Text>
             {!!profile?.username && (
               <Text variant="bodyMd" numberOfLines={1} color="onSurfaceVariant">
@@ -142,7 +147,7 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => router.push("/vibe-check")}
             accessibilityRole="button"
-            accessibilityLabel="Open Vibe Check"
+            accessibilityLabel={t("profile.openVibeCheck")}
             style={({ pressed }) => [styles.section, pressed && styles.pressed]}
           >
             <View style={styles.sectionHeader}>
@@ -151,25 +156,25 @@ export default function ProfileScreen() {
                 color="onSurfaceVariant"
                 style={styles.sectionLabel}
               >
-                VIBE CHECK
+                {t("profile.vibeCheck")}
               </Text>
               <ChevronRight size={16} color={theme.colors.onSurfaceVariant} />
             </View>
             <View style={styles.statsRow}>
               <StatCard
                 icon={<Clock size={20} color={theme.colors.tertiary} />}
-                value={formatHours(stats?.hours ?? 0)}
-                label="HOURS"
+                value={formatHours(stats?.hours ?? 0, resolvedLanguage)}
+                label={t("profile.hours")}
               />
               <StatCard
                 icon={<Disc3 size={20} color={theme.colors.primary} />}
-                value={formatCount(stats?.tracks ?? 0)}
-                label="TRACKS"
+                value={formatCount(stats?.tracks ?? 0, resolvedLanguage)}
+                label={t("profile.tracks")}
               />
               <StatCard
                 icon={<Headphones size={20} color={theme.colors.error} />}
-                value={formatCount(djsHeard ?? 0)}
-                label="DJS"
+                value={formatCount(djsHeard ?? 0, resolvedLanguage)}
+                label={t("profile.djs")}
               />
             </View>
           </Pressable>
@@ -181,11 +186,11 @@ export default function ProfileScreen() {
               color="onSurfaceVariant"
               style={styles.sectionLabel}
             >
-              LISTENING IDENTITY
+              {t("profile.listeningIdentity")}
             </Text>
             <IdentityCard
-              title={identity.title}
-              description={identity.description}
+              title={t(`profile.identities.${identity.id}.title`)}
+              description={t(`profile.identities.${identity.id}.description`)}
             />
           </View>
         </>
@@ -202,7 +207,7 @@ export default function ProfileScreen() {
               color="onSurfaceVariant"
               style={styles.sectionLabel}
             >
-              YOUR DJS
+              {t("profile.yourDjs")}
             </Text>
           </View>
           <View style={styles.djGrid}>
@@ -241,12 +246,12 @@ export default function ProfileScreen() {
             color="onSurfaceVariant"
             style={styles.sectionLabel}
           >
-            PREFERENCES
+            {t("profile.preferences")}
           </Text>
           <View style={styles.prefList}>
             <SettingRow
               icon={<User size={20} color={theme.colors.onSurfaceVariant} />}
-              label="Account Details"
+              label={t("profile.accountDetails")}
               onPress={() => router.push("/account-settings")}
             />
             <SettingRow
@@ -256,29 +261,29 @@ export default function ProfileScreen() {
                   color={theme.colors.onSurfaceVariant}
                 />
               }
-              label="Music Preferences"
+              label={t("profile.musicPreferences")}
               onPress={() => router.push("/preferences")}
             />
             <SettingRow
               icon={<Crown size={20} color={theme.colors.tertiary} />}
-              label="Subscription"
+              label={t("profile.subscription")}
               right={
                 <Text
                   variant="bodyMd"
                   color={isPro ? "tertiary" : "onSurfaceVariant"}
                 >
-                  {isPro ? "Pro" : "Free"}
+                  {isPro ? t("profile.tier.pro") : t("profile.tier.free")}
                 </Text>
               }
             />
             <SettingRow
               icon={<Compass size={20} color={theme.colors.onSurfaceVariant} />}
-              label="Replay product tour"
+              label={t("profile.replayTour")}
               onPress={onReplayTour}
             />
             <SettingRow
               icon={<LogOut size={20} color={theme.colors.error} />}
-              label="Logout"
+              label={t("profile.logout")}
               destructive
               onPress={onLogout}
             />

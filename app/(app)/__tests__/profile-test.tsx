@@ -2,6 +2,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import ProfileScreen from "@/app/(app)/profile";
 import { queryKeys } from "@/src/api/queries";
+import i18n from "@/src/i18n";
 
 type MockQuery = {
   data: unknown;
@@ -166,6 +167,18 @@ describe("ProfileScreen", () => {
     mockSignOut.mockResolvedValue(undefined);
   });
 
+  it("renders the Profile surface in Spanish", async () => {
+    await i18n.changeLanguage("es");
+    mockProfileQuery = settledQuery({ ...profile, name: null });
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("PREFERENCIAS")).toBeTruthy();
+    expect(screen.getByLabelText("Detalles de la cuenta")).toBeTruthy();
+    expect(screen.getByText("Oyente")).toBeTruthy();
+    expect(screen.getByLabelText("Cerrar sesión")).toBeTruthy();
+  });
+
   it("loads identity, stats, and DJs independently while Preferences remain", async () => {
     const screen = await render(<ProfileScreen />);
 
@@ -233,7 +246,7 @@ describe("ProfileScreen", () => {
     const screen = await render(<ProfileScreen />);
 
     expect(screen.queryByTestId("profile-stats-skeleton")).toBeNull();
-    expect(screen.getByText("0.0 HOURS")).toBeTruthy();
+    expect(screen.getByText("0 HOURS")).toBeTruthy();
     expect(screen.getByText("0 TRACKS")).toBeTruthy();
     expect(screen.getByText("0 DJS")).toBeTruthy();
     expect(screen.getByTestId("identity-card")).toBeTruthy();
@@ -252,7 +265,7 @@ describe("ProfileScreen", () => {
     expect(screen.queryByTestId("profile-stats-skeleton")).toBeNull();
     expect(screen.queryByTestId("profile-djs-skeleton")).toBeNull();
     expect(screen.getByText("Listener One")).toBeTruthy();
-    expect(screen.getByText("0.0 HOURS")).toBeTruthy();
+    expect(screen.getByText("0 HOURS")).toBeTruthy();
     expect(screen.getByText("DJ One")).toBeTruthy();
   });
 

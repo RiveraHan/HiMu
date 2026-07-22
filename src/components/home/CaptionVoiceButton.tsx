@@ -4,10 +4,12 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Loader, Square, Volume2 } from "lucide-react-native";
 import { Pressable } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 // Plays the DJ's spoken caption in its own audio player, isolated from the
 // main player. Ducks the music (pauses it) while speaking.
 export function CaptionVoiceButton({ audioUrl }: { audioUrl: string }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const voice = useAudioPlayer({ uri: audioUrl });
   const status = useAudioPlayerStatus(voice);
@@ -42,7 +44,9 @@ export function CaptionVoiceButton({ audioUrl }: { audioUrl: string }) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={speaking ? "Stop the DJ" : "Hear the DJ"}
+      accessibilityLabel={
+        speaking ? t("home.captionVoice.stop") : t("home.captionVoice.hear")
+      }
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
     >
       {icon}

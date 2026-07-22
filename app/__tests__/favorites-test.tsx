@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { render } from "@testing-library/react-native";
 import FavoritesScreen from "@/app/favorites";
+import i18n from "@/src/i18n";
 
 type MockQuery = {
   data: unknown;
@@ -30,7 +31,12 @@ jest.mock("@/src/components", () => {
   const { Text: NativeText, View } = require("react-native");
 
   return {
-    ScreenHeader: () => React.createElement(View, { testID: "screen-header" }),
+    ScreenHeader: ({ title }: { title: string }) =>
+      React.createElement(
+        View,
+        { testID: "screen-header" },
+        React.createElement(NativeText, null, title),
+      ),
     ScreenScrollView: ({ children }: { children: React.ReactNode }) =>
       React.createElement(View, null, children),
     Text: ({ children }: { children: React.ReactNode }) =>
@@ -61,6 +67,14 @@ jest.mock("react-native-safe-area-context", () => ({
 describe("FavoritesScreen", () => {
   beforeEach(() => {
     mockFavoritesQuery = initialQuery();
+  });
+
+  it("renders the Favorites title in Spanish", async () => {
+    await i18n.changeLanguage("es");
+
+    const screen = await render(<FavoritesScreen />);
+
+    expect(screen.getByText("Favoritos")).toBeTruthy();
   });
 
   it("renders five track rows during the initial Favorites query", async () => {

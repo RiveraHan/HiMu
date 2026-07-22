@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import DiscoverScreen from "@/app/(app)/discover";
+import i18n from "@/src/i18n";
 
 const mockUseAudiusSearch = jest.fn();
 const mockUseAudiusTrending = jest.fn();
@@ -73,6 +74,18 @@ describe("DiscoverScreen", () => {
       isError: false,
     });
     mockRegisterContextTarget.mockReset().mockReturnValue(jest.fn());
+  });
+
+  it("renders the Discover surface in Spanish", async () => {
+    await i18n.changeLanguage("es");
+
+    const screen = await render(<DiscoverScreen />);
+
+    expect(screen.getByText("Descubrir")).toBeTruthy();
+    expect(
+      screen.getByText("Música real de artistas independientes"),
+    ).toBeTruthy();
+    expect(screen.getByPlaceholderText("Buscar en Audius…")).toBeTruthy();
   });
 
   afterEach(() => {

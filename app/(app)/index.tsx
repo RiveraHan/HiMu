@@ -29,6 +29,8 @@ import {
   useOnAirHero,
   useRecentTracks,
   useTimeOfDayShelf,
+  type ContextualTrack,
+  type RecentTrack,
 } from "@/src/hooks/use-home";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
@@ -52,8 +54,11 @@ import { Pressable, ScrollView, View, type LayoutChangeEvent } from "react-nativ
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function HomeScreen() {
+  const { t, i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage ?? "en";
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
@@ -108,24 +113,29 @@ export default function HomeScreen() {
   const freshTracks = useMemo<PlayerTrack[]>(() => {
     if (!recent) return [];
     return recent
-      .filter((t) => t.audio_url != null && t.id !== heroTrackId)
+      .filter((t: RecentTrack) => t.audio_url != null && t.id !== heroTrackId)
       .slice(0, 12)
-      .map((t) => ({ ...toPlayerTrack(t), artist: t.dj?.name ?? t.artist }));
+      .map((t: RecentTrack) => ({
+        ...toPlayerTrack(t),
+        artist: t.dj?.name ?? t.artist,
+      }));
   }, [recent, heroTrackId]);
 
   const contextualTracks = useMemo<PlayerTrack[]>(() => {
-    const pool = (contextual?.tracks ?? []).filter(
-      (t) => t.audio_url != null && t.id !== heroTrackId,
+    const pool = ((contextual?.tracks ?? []) as ContextualTrack[]).filter(
+      (t: ContextualTrack) => t.audio_url != null && t.id !== heroTrackId,
     );
-    return weightedShuffle(pool, taste).slice(0, 12).map(toPlayerTrack);
+    return weightedShuffle<ContextualTrack>(pool, taste)
+      .slice(0, 12)
+      .map(toPlayerTrack);
   }, [contextual, heroTrackId, taste]);
 
   function getGreeting(): string {
     const hour = new Date().getHours();
 
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return t("home.greeting.morning");
+    if (hour < 18) return t("home.greeting.afternoon");
+    return t("home.greeting.evening");
   }
 
   function playAIMixes() {
@@ -257,13 +267,13 @@ export default function HomeScreen() {
           <View style={styles.greeting}>
             <Text variant="h1">{getGreeting()}</Text>
             <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
-              Your sonic environment awaits.
+              {t("home.subtitle")}
             </Text>
           </View>
           <Pressable
             onPress={() => router.push("/profile")}
             accessibilityRole="button"
-            accessibilityLabel="Open your profile"
+            accessibilityLabel={t("home.openProfile")}
             style={({ pressed }) => pressed && styles.pressed}
           >
             <Avatar
@@ -286,11 +296,11 @@ export default function HomeScreen() {
         ) : drop.status === "ready" && drop.track && drop.dj ? (
           <TourTarget id="home.hero" borderRadius={theme.borderRadius["2xl"]} onLayout={captureTargetOffset("home.daily-drop")}>
             <OnAirHero
-              eyebrow="TODAY'S DROP"
+              eyebrow={t("home.dailyDrop.eyebrow")}
               djName={drop.dj.name}
               avatarUrl={drop.dj.avatar_url}
               genre={drop.dj.genre}
-              headline={drop.caption ?? "Fresh, just for you"}
+              headline={drop.caption ?? t("home.dailyDrop.fresh")}
               trackTitle={drop.track.title}
               isLive={false}
               onPlay={playDrop}
@@ -303,12 +313,12 @@ export default function HomeScreen() {
           </TourTarget>
         ) : drop.status === "pending" && drop.dj ? (
           <OnAirHero
-            eyebrow="TODAY'S DROP"
+            eyebrow={t("home.dailyDrop.eyebrow")}
             pending
             djName={drop.dj.name}
             avatarUrl={drop.dj.avatar_url}
             genre={drop.dj.genre}
-            headline="Making today's drop…"
+            headline={t("home.dailyDrop.making")}
             trackTitle=""
             isLive={false}
             onPlay={() => {}}
@@ -319,7 +329,7 @@ export default function HomeScreen() {
               djName={hero.dj.name}
               avatarUrl={hero.dj.avatar_url}
               genre={hero.dj.genre}
-              headline={hero.headline}
+              headline={t(`home.timeOfDay.${hero.bucket}.headline`)}
               trackTitle={hero.track.title}
               isLive={hero.isLive}
               onPlay={playHero}
@@ -333,7 +343,7 @@ export default function HomeScreen() {
         ) : djs && djs.length > 0 ? (
           <TourTarget id="home.djs" onLayout={captureTargetOffset("home.djs")}>
             <View style={styles.section}>
-              <Text variant="h2">Your DJs</Text>
+              <Text variant="h2">{t("home.yourDjs")}</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -356,8 +366,8 @@ export default function HomeScreen() {
                   onPress={() => {
                     if (ownCount >= 2) {
                       toast.warning(
-                        "DJ limit reached",
-                        "You already have 2 DJs. Delete one to create another.",
+                        t("home.djLimit.title"),
+                        t("home.djLimit.message"),
                       );
                       return;
                     }
@@ -391,7 +401,7 @@ export default function HomeScreen() {
                     numberOfLines={1}
                     style={styles.newDJLabel}
                   >
-                    New DJ
+                    {t("home.newDj")}
                   </Text>
                   <Text
                     variant="bodyMd"
@@ -399,7 +409,7 @@ export default function HomeScreen() {
                     opacity={0.6}
                     style={styles.newDJLabel}
                   >
-                    Create
+                    {t("home.create")}
                   </Text>
                 </Pressable>
               </ScrollView>
@@ -411,7 +421,7 @@ export default function HomeScreen() {
           <ContentShelfSkeleton />
         ) : freshTracks.length >= 3 ? (
           <ContentShelf
-            title="Fresh from your DJs"
+            title={t("home.freshFrequencies")}
             tracks={freshTracks}
             onPressTrack={(t, i) => playFromShelf(freshTracks, t, i)}
           />
@@ -421,7 +431,9 @@ export default function HomeScreen() {
           <ContentShelfSkeleton />
         ) : contextualTracks.length >= 3 ? (
           <ContentShelf
-            title={contextual?.label ?? "For you"}
+            title={contextual?.bucket
+              ? t(`home.timeOfDay.${contextual.bucket}.label`)
+              : t("home.forYou")}
             tracks={contextualTracks}
             onPressTrack={(t, i) => playFromShelf(contextualTracks, t, i)}
           />
@@ -429,12 +441,12 @@ export default function HomeScreen() {
 
         {/* Personalized Library */}
         <View style={styles.section}>
-          <Text variant="h2">Personalized Library</Text>
+          <Text variant="h2">{t("home.library.title")}</Text>
 
           <LibraryCard
             cover={`${process.env.EXPO_PUBLIC_MEDIA_BASE}/covers/hero/ai-mixes.jpg?v=1`}
-            label="GENERATED"
-            title="AI Mixes"
+            label={t("home.library.generated")}
+            title={t("home.library.aiMixes")}
             onPress={playAIMixes}
             right={
               <View style={styles.playButton}>
@@ -452,11 +464,11 @@ export default function HomeScreen() {
           ) : favorites ? (
             <LibraryCard
               cover={favorites?.[0]?.album_art_url ?? null}
-              label="SAVED"
+              label={t("home.library.saved")}
               title={
                 favorites && favorites.length > 0
-                  ? "Favorites"
-                  : "No favorites yet"
+                  ? t("home.library.favorites")
+                  : t("home.library.noFavorites")
               }
               onPress={() => router.push("/favorites")}
               right={
@@ -476,7 +488,7 @@ export default function HomeScreen() {
           <HomeVibeSkeleton />
         ) : vibe && vibe.hoursThisWeek > 0 ? (
           <VibeSpotlightCard
-            hours={formatHours(vibe.hoursThisWeek)}
+            hours={formatHours(vibe.hoursThisWeek, resolvedLanguage)}
             topGenre={vibe.topGenre}
             streak={vibe.streak}
             onPress={() => router.push("/vibe-check")}
@@ -487,7 +499,7 @@ export default function HomeScreen() {
         <Pressable
           onPress={() => router.push("/focus-mode")}
           accessibilityRole="button"
-          accessibilityLabel="Start a focus session"
+          accessibilityLabel={t("home.focus.start")}
           style={({ pressed }) => [
             styles.focusEntry,
             pressed && styles.pressed,
@@ -497,9 +509,9 @@ export default function HomeScreen() {
             <FocusOrb active size={56} />
           </View>
           <View style={styles.focusText}>
-            <Text variant="bodyLg">Focus Mode</Text>
+            <Text variant="bodyLg">{t("home.focus.title")}</Text>
             <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-              Music + a timer to lock in
+              {t("home.focus.subtitle")}
             </Text>
           </View>
           <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />

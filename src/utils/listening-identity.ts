@@ -1,38 +1,22 @@
-type Identity = { title: string; description: string };
+export type ListeningIdentityId =
+  | "etherealArchitect"
+  | "pulseDriver"
+  | "modernRomantic"
+  | "stillMind"
+  | "soundExplorer";
 
-const IDENTITIES: Record<string, Identity> = {
-  ambient: {
-    title: "Ethereal Architect",
-    description:
-      "Deep ambient, atmospheric textures, and expansive soundscapes.",
-  },
-  electronica: {
-    title: "Pulse Driver",
-    description: "Synthetic rhythms, neon nights, and kinetic energy.",
-  },
-  "neo-classical": {
-    title: "Modern Romantic",
-    description: "Piano, strings, and cinematic stillness.",
-  },
-  "lo-fi": {
-    title: "Ethereal Architect",
-    description:
-      "Deep ambient, atmospheric textures, and expansive soundscapes.",
-  },
-  techno: {
-    title: "Pulse Driver",
-    description: "Relentless rhythms, dark warehouses, and kinetic energy.",
-  },
-  meditation: {
-    title: "Still Mind",
-    description: "Slow breath, deep frequencies, and inner silence.",
-  },
+type ListeningIdentity = { id: ListeningIdentityId };
+
+const IDENTITIES: Record<string, ListeningIdentity> = {
+  ambient: { id: "etherealArchitect" },
+  electronica: { id: "pulseDriver" },
+  "neo-classical": { id: "modernRomantic" },
+  "lo-fi": { id: "etherealArchitect" },
+  techno: { id: "pulseDriver" },
+  meditation: { id: "stillMind" },
 };
 
-const DEFAULT_IDENTITY: Identity = {
-  title: "Sound Explorer",
-  description: "Your listening identity takes shape as you play more music.",
-};
+const DEFAULT_IDENTITY: ListeningIdentity = { id: "soundExplorer" };
 
-export const getListeningIdentity = (genre: string | null): Identity =>
+export const getListeningIdentity = (genre: string | null): ListeningIdentity =>
   (genre && IDENTITIES[genre.toLowerCase()]) || DEFAULT_IDENTITY;

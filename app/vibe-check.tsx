@@ -25,8 +25,11 @@ import {
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function VibeCheckScreen() {
+  const { i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage ?? "en";
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
@@ -67,7 +70,7 @@ export default function VibeCheckScreen() {
               </View>
               <View style={styles.heroNumber}>
                 <Text variant="display">
-                  {formatHours(vibe?.hoursThisWeek ?? 0)}
+                  {formatHours(vibe?.hoursThisWeek ?? 0, resolvedLanguage)}
                 </Text>
                 <Text variant="labelCaps" color="onSurfaceVariant">
                   HOURS
@@ -98,7 +101,8 @@ export default function VibeCheckScreen() {
                 color="onSurfaceVariant"
                 opacity={0.7}
               >
-                {formatCount(vibe?.tracksThisWeek ?? 0)} tracks ·{" "}
+                {formatCount(vibe?.tracksThisWeek ?? 0, resolvedLanguage)} tracks
+                {" · "}
                 {vibe?.streak ?? 0}-day streak
               </Text>
             </View>

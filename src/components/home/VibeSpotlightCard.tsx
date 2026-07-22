@@ -1,6 +1,7 @@
 import { ChevronRight, Waves } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Text } from "../Text";
 
 type Props = {
@@ -16,11 +17,12 @@ export function VibeSpotlightCard({
   streak,
   onPress,
 }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
 
   const subtitle = [
-    topGenre ? `Mostly ${topGenre}` : null,
-    `${streak}-day streak`,
+    topGenre ? t("home.vibe.mostly", { genre: topGenre }) : null,
+    t("home.vibe.streak", { count: streak }),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -29,7 +31,7 @@ export function VibeSpotlightCard({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="Open your Vibe Check"
+      accessibilityLabel={t("home.vibe.open")}
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
       <View style={styles.iconSlot}>
@@ -37,12 +39,12 @@ export function VibeSpotlightCard({
       </View>
       <View style={styles.body}>
         <Text variant="labelCaps" color="onSurfaceVariant" opacity={0.7}>
-          THIS WEEK
+          {t("home.vibe.thisWeek")}
         </Text>
         <View style={styles.numberRow}>
           <Text variant="h2">{hours}</Text>
           <Text variant="labelCaps" color="onSurfaceVariant">
-            HOURS
+            {t("home.vibe.hours")}
           </Text>
         </View>
         <Text
