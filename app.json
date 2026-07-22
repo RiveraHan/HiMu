@@ -80,7 +80,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.TU_IOS_CLIENT_ID_REVERSED"
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
