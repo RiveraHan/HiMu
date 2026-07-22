@@ -1,6 +1,10 @@
+import { isLanguagePreference } from "@/src/i18n/locale";
+import type { LanguagePreference } from "@/src/i18n/types";
+
 export type DownloadQuality = "low" | "high" | "lossless";
 
 export type UserPreferences = {
+  language: LanguagePreference;
   audio: {
     lossless: boolean;
     downloadQuality: DownloadQuality;
@@ -12,6 +16,7 @@ export type UserPreferences = {
 };
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
+  language: "system",
   audio: {
     lossless: false,
     downloadQuality: "high",
@@ -38,6 +43,9 @@ export function mergePreferences(stored: unknown): UserPreferences {
   const preferences = (stored ?? {}) as DeepPartial<UserPreferences>;
 
   return {
+    language: isLanguagePreference(preferences.language)
+      ? preferences.language
+      : "system",
     audio: {
       lossless:
         preferences.audio?.lossless ?? DEFAULT_PREFERENCES.audio.lossless,

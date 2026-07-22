@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
 import { queryKeys } from "@/src/api/queries";
-import { mergePreferences, UserPreferences } from "@/src/types/preferences";
+import {
+  mergePreferences,
+  type UserPreferences,
+} from "@/src/types/preferences";
 import { supabase } from "@/src/api/supabase";
 
 export function useSettings() {
