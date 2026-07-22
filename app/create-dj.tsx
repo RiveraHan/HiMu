@@ -16,8 +16,10 @@ import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function CreateDJScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
@@ -35,7 +37,7 @@ export default function CreateDJScreen() {
   const { mutate: createDJ, isPending } = useCreateDJ();
 
   const patch = (p: Partial<DjTraits>) => setTraits((t) => ({ ...t, ...p }));
-  const displayName = traits.name.trim() || "your DJ";
+  const displayName = traits.name.trim() || t("dj.create.defaultName");
 
   function onSubmit() {
     createDJ(
@@ -52,12 +54,12 @@ export default function CreateDJScreen() {
         onError: async (e) => {
           const code = await getEdgeErrorCode(e);
           toast.error(
-            "Couldn't create your DJ",
+            t("dj.create.errorTitle"),
             code === "dj_quota_reached"
-              ? "You already have 2 DJs. Delete one to create another."
+              ? t("dj.create.quotaError")
               : code === "invalid_input"
-                ? "Please check the fields and try again."
-                : "Something went wrong. Please try again.",
+                ? t("dj.create.invalidError")
+                : t("dj.create.genericError"),
           );
         },
       },
@@ -75,16 +77,16 @@ export default function CreateDJScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenHeader
-          title="Create your DJ"
-          subtitle="Shape a companion that generates music just for you."
+          title={t("dj.create.title")}
+          subtitle={t("dj.create.subtitle")}
           disabled={isPending}
         />
 
         <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
 
         <Button
-          label="Bring my DJ to life"
-          loadingLabel={`Giving life to ${displayName}…`}
+          label={t("dj.create.submit")}
+          loadingLabel={t("dj.create.loading", { name: displayName })}
           loading={isPending}
           disabled={!canSubmitDjTraits(traits)}
           onPress={onSubmit}

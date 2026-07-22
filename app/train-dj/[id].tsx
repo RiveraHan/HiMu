@@ -17,21 +17,25 @@ import { useToast } from "@/src/hooks/use-toast";
 import { useUpdateDJ } from "@/src/hooks/use-update-dj";
 import { router, useLocalSearchParams } from "expo-router";
 import { RefreshCw } from "lucide-react-native";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
-
-const REGEN_PHASES = [
-  "Sketching a new look…",
-  "Composing the portrait…",
-  "Almost there…",
-] as const;
+import { useTranslation } from "react-i18next";
 
 type DJData = NonNullable<ReturnType<typeof useDJ>["data"]>;
 
 function RegenStatus() {
-  const phase = usePhaseRotation(REGEN_PHASES, 4000);
+  const { t } = useTranslation();
+  const phases = useMemo(
+    () => [
+      t("dj.train.phases.sketch"),
+      t("dj.train.phases.portrait"),
+      t("dj.train.phases.almost"),
+    ],
+    [t],
+  );
+  const phase = usePhaseRotation(phases, 4000);
 
   return (
     <View style={styles.regenStatus}>
@@ -44,6 +48,7 @@ function RegenStatus() {
 }
 
 export default function TrainDJScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: dj, isLoading } = useDJ(id);
   const { theme } = useUnistyles();
@@ -59,7 +64,7 @@ export default function TrainDJScreen() {
   if (!dj || !dj.owner_id) {
     return (
       <View style={[styles.root, styles.center]}>
-        <Text variant="h2">DJ not found</Text>
+        <Text variant="h2">{t("dj.train.notFound")}</Text>
       </View>
     );
   }
@@ -68,6 +73,7 @@ export default function TrainDJScreen() {
 }
 
 function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
@@ -116,8 +122,8 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
           }
           if (data.avatarUrl === null) {
             toast.warning(
-              "Portrait",
-              "Portrait couldn't be regenerated — your changes were saved.",
+              t("dj.train.portraitWarningTitle"),
+              t("dj.train.portraitWarning"),
             );
           }
           // New portrait arrives via the ["djs"] invalidation refetch.
@@ -125,17 +131,20 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
         onError: async (e) => {
           const code = await getEdgeErrorCode(e);
           if (code === "not_owner" || code === "not_found") {
-            toast.warning("Not available", "This DJ can't be edited.");
+            toast.warning(
+              t("dj.train.unavailableTitle"),
+              t("dj.train.unavailable"),
+            );
             router.back();
             return;
           }
           toast.error(
-            "Couldn't save",
+            t("dj.train.errorTitle"),
             code === "avatar_quota_reached"
-              ? "Daily portrait limit reached (3). Try again tomorrow."
+              ? t("dj.train.quotaError")
               : code === "invalid_input"
-                ? "Please check the fields and try again."
-                : "Something went wrong. Please try again.",
+                ? t("dj.train.invalidError")
+                : t("dj.train.genericError"),
           );
         },
       },
@@ -153,15 +162,15 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenHeader
-          title="Train your DJ"
-          subtitle={`Refine how ${dj.name} shapes its music.`}
+          title={t("dj.train.title")}
+          subtitle={t("dj.train.subtitle", { name: dj.name })}
           disabled={isPending}
         />
 
         {/* Portrait */}
         <PrefSection
-          title="Portrait"
-          subtitle="Regenerated from the traits below"
+          title={t("dj.train.portrait")}
+          subtitle={t("dj.train.portraitSubtitle")}
         >
           <View style={styles.portraitRow}>
             <View style={regenerating && styles.portraitDim}>
@@ -172,7 +181,7 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
             ) : (
               <Button
                 variant="glass"
-                label="Regenerate portrait"
+                label={t("dj.train.regenerate")}
                 leftIcon={
                   <RefreshCw size={16} color={theme.colors.onSurface} />
                 }
@@ -187,8 +196,8 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
         <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
 
         <Button
-          label="Save changes"
-          loadingLabel="Saving…"
+          label={t("dj.train.save")}
+          loadingLabel={t("dj.train.saving")}
           loading={isPending && action === "save"}
           disabled={!canSubmit || isPending}
           onPress={() => submit(false)}

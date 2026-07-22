@@ -15,13 +15,19 @@ type Props = {
   groups: readonly Group[];
   selected: string[];
   onToggle: (value: string) => void;
+  getGroupLabel?: (value: string) => string;
+  getItemLabel?: (value: string) => string;
   disabled?: boolean;
 };
+
+const identityLabel = (value: string) => value;
 
 export function GroupedChipPicker({
   groups,
   selected,
   onToggle,
+  getGroupLabel = identityLabel,
+  getItemLabel = identityLabel,
   disabled = false,
 }: Props) {
   return (
@@ -32,6 +38,8 @@ export function GroupedChipPicker({
           group={group}
           selected={selected}
           onToggle={onToggle}
+          getGroupLabel={getGroupLabel}
+          getItemLabel={getItemLabel}
           disabled={disabled}
         />
       ))}
@@ -43,23 +51,28 @@ function CollapsibleGroup({
   group,
   selected,
   onToggle,
+  getGroupLabel,
+  getItemLabel,
   disabled,
 }: {
   group: Group;
   selected: string[];
   onToggle: (value: string) => void;
+  getGroupLabel: (value: string) => string;
+  getItemLabel: (value: string) => string;
   disabled: boolean;
 }) {
   const { theme } = useUnistyles();
   const count = group.items.filter((i) => selected.includes(i)).length;
   const [open, setOpen] = useState(count > 0);
+  const groupLabel = getGroupLabel(group.label);
 
   return (
     <Animated.View layout={LinearTransition.duration(180)} style={styles.group}>
       <Pressable
         onPress={() => setOpen((o) => !o)}
         accessibilityRole="button"
-        accessibilityLabel={group.label}
+        accessibilityLabel={groupLabel}
         accessibilityState={{ expanded: open }}
         style={({ pressed }) => [styles.header, pressed && styles.pressed]}
       >
@@ -69,7 +82,7 @@ function CollapsibleGroup({
           opacity={open ? 0.9 : 0.6}
           style={styles.label}
         >
-          {group.label.toUpperCase()}
+          {groupLabel.toUpperCase()}
         </Text>
         <View style={styles.headerRight}>
           {count > 0 && (
@@ -90,7 +103,7 @@ function CollapsibleGroup({
           {group.items.map((item) => (
             <Chip
               key={item}
-              label={item}
+              label={getItemLabel(item)}
               selected={selected.includes(item)}
               onPress={() => onToggle(item)}
               disabled={disabled}

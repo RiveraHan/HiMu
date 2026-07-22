@@ -3,7 +3,10 @@ import { GroupedChipPicker } from "@/src/components/preferences/GroupedChipPicke
 import { PrefSection } from "@/src/components/preferences/PrefSection";
 import { Segmented } from "@/src/components/preferences/Segmented";
 import { VibeSlider } from "@/src/components/preferences/VibeSlider";
+import { catalogGroupLabel, catalogLabel } from "@/src/i18n/catalog-labels";
+import { useLocale } from "@/src/i18n/use-locale";
 import { GENRE_GROUPS, MOOD_GROUPS } from "@/src/types/music-preferences";
+import { useTranslation } from "react-i18next";
 
 const MAX_PICKS = 3;
 
@@ -27,6 +30,8 @@ type Props = {
 
 // The six wizard sections shared by Create DJ and Train your DJ.
 export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
+  const { t } = useTranslation();
+  const { resolvedLanguage } = useLocale();
   const togglePick = (key: "genres" | "moods") => (value: string) => {
     const list = values[key];
     const next = list.includes(value)
@@ -43,9 +48,12 @@ export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
   return (
     <>
       {/* Identity */}
-      <PrefSection title="Identity" subtitle="What should we call it?">
+      <PrefSection
+        title={t("dj.traits.identity")}
+        subtitle={t("dj.traits.identitySubtitle")}
+      >
         <GlassInput
-          placeholder="e.g. Lumen"
+          placeholder={t("dj.traits.namePlaceholder")}
           value={values.name}
           onChangeText={(name) => onChange({ name })}
           maxLength={24}
@@ -55,30 +63,43 @@ export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
       </PrefSection>
 
       {/* Genres */}
-      <PrefSection title="Genres" subtitle={`Pick 1-${MAX_PICKS}`}>
+      <PrefSection
+        title={t("dj.traits.genres")}
+        subtitle={t("dj.traits.pickRange", { max: MAX_PICKS })}
+      >
         <GroupedChipPicker
           groups={GENRE_GROUPS}
           selected={values.genres}
           onToggle={toggleGenre}
+          getGroupLabel={(value) => catalogGroupLabel(value, resolvedLanguage)}
+          getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
           disabled={disabled}
         />
       </PrefSection>
 
       {/* Moods */}
-      <PrefSection title="Moods" subtitle={`Pick 1-${MAX_PICKS}`}>
+      <PrefSection
+        title={t("dj.traits.moods")}
+        subtitle={t("dj.traits.pickRange", { max: MAX_PICKS })}
+      >
         <GroupedChipPicker
           groups={MOOD_GROUPS}
           selected={values.moods}
           onToggle={toggleMood}
+          getGroupLabel={(value) => catalogGroupLabel(value, resolvedLanguage)}
+          getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
           disabled={disabled}
         />
       </PrefSection>
 
       {/* Energy */}
-      <PrefSection title="Energy" subtitle={`${values.energy}/10`}>
+      <PrefSection
+        title={t("dj.traits.energy")}
+        subtitle={`${values.energy}/10`}
+      >
         <VibeSlider
-          leftLabel="CALM"
-          rightLabel="INTENSE"
+          leftLabel={t("dj.traits.calm")}
+          rightLabel={t("dj.traits.intense")}
           value={values.energy}
           onCommit={(energy) => onChange({ energy })}
           minimumValue={1}
@@ -90,13 +111,13 @@ export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
 
       {/* Sound */}
       <PrefSection
-        title="Sound"
-        subtitle="Vocal DJs can sing your own lyrics"
+        title={t("dj.traits.sound")}
+        subtitle={t("dj.traits.soundSubtitle")}
       >
         <Segmented<"instrumental" | "vocal">
           options={[
-            { label: "INSTRUMENTAL", value: "instrumental" },
-            { label: "VOCAL", value: "vocal" },
+            { label: t("dj.traits.instrumental"), value: "instrumental" },
+            { label: t("dj.traits.vocal"), value: "vocal" },
           ]}
           value={values.mode}
           onChange={(mode) => onChange({ mode })}
@@ -105,9 +126,12 @@ export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
       </PrefSection>
 
       {/* Vibe */}
-      <PrefSection title="Vibe" subtitle="Optional - a hint of personality">
+      <PrefSection
+        title={t("dj.traits.vibe")}
+        subtitle={t("dj.traits.vibeSubtitle")}
+      >
         <GlassInput
-          placeholder="e.g. late-night rooftop textures"
+          placeholder={t("dj.traits.vibePlaceholder")}
           value={values.vibe}
           onChangeText={(vibe) => onChange({ vibe })}
           maxLength={140}

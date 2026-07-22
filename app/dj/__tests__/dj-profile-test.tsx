@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import DJProfileScreen from "@/app/dj/[id]";
+import i18n from "@/src/i18n";
 
 type MockQuery = {
   data: unknown;
@@ -141,6 +142,11 @@ jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
 jest.mock("@/src/hooks/use-toast", () => ({
   useToast: () => ({ error: jest.fn() }),
 }));
+jest.mock("@/src/i18n/use-locale", () => ({
+  useLocale: () => ({
+    resolvedLanguage: require("@/src/i18n").default.resolvedLanguage,
+  }),
+}));
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) =>
     selector({ currentTrack: null }),
@@ -247,7 +253,7 @@ describe("DJProfileScreen", () => {
     expect(screen.getByTestId("dj-hero")).toBeTruthy();
     expect(screen.getByTestId("stat-card-skeleton")).toBeTruthy();
     expect(screen.queryByText("0 TRACKS")).toBeNull();
-    expect(screen.getByText("1 GENRES")).toBeTruthy();
+    expect(screen.getByText("1 GENRE")).toBeTruthy();
     expect(screen.getByTestId("dj-tracks-skeleton")).toBeTruthy();
     expect(screen.queryByText("No tracks yet.")).toBeNull();
   });
@@ -259,6 +265,15 @@ describe("DJProfileScreen", () => {
 
     expect(screen.getByText("DJ not found")).toBeTruthy();
     expect(screen.queryByTestId("dj-profile-skeleton")).toBeNull();
+  });
+
+  it("localizes the settled not-found state in Spanish", async () => {
+    await i18n.changeLanguage("es");
+    mockDjQuery = settledQuery(null);
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByText("DJ no encontrado")).toBeTruthy();
   });
 
   it("keeps cached DJ and track content visible during refetches", async () => {
@@ -330,6 +345,38 @@ describe("DJProfileScreen", () => {
     expect(mockConfirm.mock.calls[0][0].message).toBe(
       "This will delete DJ One and its 2 tracks.",
     );
+  });
+
+  it.each([
+    [1, "Esto eliminará a DJ One y su 1 canción."],
+    [2, "Esto eliminará a DJ One y sus 2 canciones."],
+  ])("localizes the delete confirmation for %i track(s)", async (count, message) => {
+    await i18n.changeLanguage("es");
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = settledQuery(
+      Array.from({ length: count }, (_, index) => ({ id: `track-${index}` })),
+    );
+
+    const screen = await render(<DJProfileScreen />);
+    fireEvent.press(screen.getByLabelText("Eliminar DJ"));
+
+    await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
+    expect(mockConfirm.mock.calls[0][0].message).toBe(message);
+  });
+
+  it("localizes profile stats and generation action in Spanish", async () => {
+    await i18n.changeLanguage("es");
+    mockDjQuery = settledQuery({
+      ...dj,
+      genre_specialties: ["House", "Ambient"],
+    });
+    mockTracksQuery = settledQuery([{ id: "one" }, { id: "two" }]);
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByText("2 CANCIONES")).toBeTruthy();
+    expect(screen.getByText("2 GÉNEROS")).toBeTruthy();
+    expect(screen.getByLabelText("Generar una mezcla nueva")).toBeTruthy();
   });
 
   it("preserves the generation ActivityIndicator feedback", async () => {
