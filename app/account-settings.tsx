@@ -43,7 +43,7 @@ export default function AccountSettingsScreen() {
   const { mutate: updateSettings } = useUpdateSettings();
   const { flushListeningStats } = usePlayer();
   const confirm = useConfirm();
-  const { preference, resolvedLanguage, setPreference } = useLocale();
+  const { preference, resolvedLanguage, setPreference, isSaving } = useLocale();
 
   const isPro = profile?.subscriptionTier === "premium";
   const prefs = settings ?? DEFAULT_PREFERENCES;
@@ -163,7 +163,7 @@ export default function AccountSettingsScreen() {
                   })
                 : t(`settings.language.${preference}`)
             }
-            onPress={pickLanguage}
+            onPress={isSaving ? undefined : pickLanguage}
             accessory={<ChevronDown size={20} color={theme.colors.outline} />}
           />
         </SettingsSection>

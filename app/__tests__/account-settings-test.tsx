@@ -4,6 +4,7 @@ import { Alert } from "react-native";
 import AccountSettingsScreen from "@/app/account-settings";
 
 const mockSetPreference = jest.fn();
+let mockIsSaving = false;
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -77,7 +78,7 @@ jest.mock("@/src/i18n/use-locale", () => ({
     preference: "system",
     resolvedLanguage: "en",
     setPreference: mockSetPreference,
-    isSaving: false,
+    isSaving: mockIsSaving,
   }),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => null }));
@@ -116,6 +117,7 @@ jest.mock("react-native-unistyles", () => ({
 describe("AccountSettingsScreen", () => {
   beforeEach(() => {
     mockSetPreference.mockReset();
+    mockIsSaving = false;
     jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
   });
 
@@ -123,7 +125,7 @@ describe("AccountSettingsScreen", () => {
     jest.restoreAllMocks();
   });
 
-  it("shows the resolved device language and saves the chosen language", async () => {
+  it("shows the resolved device language and maps every language option", async () => {
     const screen = await render(<AccountSettingsScreen />);
 
     expect(screen.getByLabelText("Language")).toBeTruthy();
@@ -139,8 +141,21 @@ describe("AccountSettingsScreen", () => {
     ]);
 
     const actions = jest.mocked(Alert.alert).mock.calls[0][2]!;
+    actions[0].onPress?.();
+    actions[1].onPress?.();
     actions[2].onPress?.();
 
-    expect(mockSetPreference).toHaveBeenCalledWith("es");
+    expect(mockSetPreference).toHaveBeenNthCalledWith(1, "system");
+    expect(mockSetPreference).toHaveBeenNthCalledWith(2, "en");
+    expect(mockSetPreference).toHaveBeenNthCalledWith(3, "es");
+  });
+
+  it("does not open the language picker while saving a preference", async () => {
+    mockIsSaving = true;
+    const screen = await render(<AccountSettingsScreen />);
+
+    await fireEvent.press(screen.getByLabelText("Language"));
+
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
