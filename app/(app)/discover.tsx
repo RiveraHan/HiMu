@@ -123,6 +123,10 @@ export default function DiscoverScreen() {
                   artist={track.artist}
                   cover={track.album_art_url}
                   isPlaying={currentId === track.id}
+                  accessibilityLabel={t("discover.playTrack", {
+                    title: track.title,
+                    artist: track.artist,
+                  })}
                   onPress={() => playFrom(results, track, index)}
                 />
               ))

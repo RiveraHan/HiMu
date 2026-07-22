@@ -2,6 +2,7 @@ import { ContentShelf, ContentShelfSkeleton } from "@/src/components";
 import { useAudiusTrending } from "@/src/hooks/use-audius";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   title: string;
@@ -12,6 +13,7 @@ type Props = {
 // One trending shelf. Hidden until it has at least 3 playable tracks, so an
 // empty or failed genre never shows a sad half-row.
 export function AudiusShelf({ title, genre, onPlay }: Props) {
+  const { t } = useTranslation();
   const query = useAudiusTrending(genre);
 
   if (isInitialQueryLoading(query)) {
@@ -24,6 +26,9 @@ export function AudiusShelf({ title, genre, onPlay }: Props) {
     <ContentShelf
       title={title}
       tracks={tracks}
+      getTrackAccessibilityLabel={(track) =>
+        t("discover.playTrack", { title: track.title, artist: track.artist })
+      }
       onPressTrack={(track, index) => onPlay(tracks, track, index)}
     />
   );

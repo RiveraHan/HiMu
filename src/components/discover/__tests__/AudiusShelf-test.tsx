@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import { AudiusShelf } from "@/src/components/discover/AudiusShelf";
+import i18n from "@/src/i18n";
 
 const mockUseAudiusTrending = jest.fn();
 
@@ -13,8 +14,8 @@ jest.mock("@/src/components", () => {
   const { View } = require("react-native");
 
   return {
-    ContentShelf: (props: object) =>
-      React.createElement(View, { ...props, testID: "content-shelf" }),
+    ContentShelf:
+      jest.requireActual("@/src/components/home/ContentShelf").ContentShelf,
     ContentShelfSkeleton: () =>
       React.createElement(View, { testID: "content-shelf-skeleton" }),
   };
@@ -36,7 +37,11 @@ describe("AudiusShelf", () => {
   });
 
   it("keeps cached shelf content visible during a refetch", async () => {
-    const tracks = [{ id: "one" }, { id: "two" }, { id: "three" }];
+    const tracks = [
+      { id: "one", title: "One", artist: "Artist One" },
+      { id: "two", title: "Two", artist: "Artist Two" },
+      { id: "three", title: "Three", artist: "Artist Three" },
+    ];
     const onPlay = jest.fn();
     mockUseAudiusTrending.mockReturnValue({
       data: tracks,
@@ -44,14 +49,12 @@ describe("AudiusShelf", () => {
       fetchStatus: "fetching",
     });
 
-    const { getByTestId, queryByTestId } = await render(
+    const { getByLabelText, getByText, queryByTestId } = await render(
       <AudiusShelf title="Trending" onPlay={onPlay} />,
     );
 
-    const shelf = getByTestId("content-shelf");
-    expect(shelf.props.title).toBe("Trending");
-    expect(shelf.props.tracks).toBe(tracks);
-    shelf.props.onPressTrack(tracks[1], 1);
+    expect(getByText("Trending")).toBeTruthy();
+    await fireEvent.press(getByLabelText("Play Two by Artist Two"));
     expect(onPlay).toHaveBeenCalledWith(tracks, tracks[1], 1);
     expect(queryByTestId("content-shelf-skeleton")).toBeNull();
   });
@@ -76,6 +79,32 @@ describe("AudiusShelf", () => {
     );
 
     expect(screen.getAllByTestId("content-shelf-skeleton")).toHaveLength(1);
-    expect(screen.getByTestId("content-shelf").props.title).toBe("House");
+    expect(screen.getByText("House")).toBeTruthy();
+  });
+
+  it("exposes Spanish play accessibility while preserving Audius content", async () => {
+    await i18n.changeLanguage("es");
+    const tracks = [
+      { id: "one", title: "Bruma", artist: "Nombre Real" },
+      { id: "two", title: "Dos", artist: "Artista Dos" },
+      { id: "three", title: "Tres", artist: "Artista Tres" },
+    ];
+    mockUseAudiusTrending.mockReturnValue({
+      data: tracks,
+      isPending: false,
+      fetchStatus: "idle",
+    });
+
+    const screen = await render(
+      <AudiusShelf title="Ambiental" genre="Ambient" onPlay={jest.fn()} />,
+    );
+
+    expect(mockUseAudiusTrending).toHaveBeenCalledWith("Ambient");
+    expect(screen.getByText("Ambiental")).toBeTruthy();
+    expect(screen.getByText("Bruma")).toBeTruthy();
+    expect(screen.getByText("Nombre Real")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Reproducir Bruma de Nombre Real"),
+    ).toBeTruthy();
   });
 });

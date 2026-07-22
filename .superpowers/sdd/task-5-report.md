@@ -65,3 +65,38 @@ npx tsc --noEmit
 ## Concerns
 
 Only the two unrelated TypeScript baseline diagnostics above remain.
+
+## Review fixes
+
+Addressed all Task 5 review findings:
+
+- Added an optional `TrackCard` accessibility label and threaded per-track label generation through `ContentShelf`.
+- Search results and real Audius shelf cards now expose localized `discover.playTrack` labels without altering track titles, artists, or press behavior.
+- Changed only the Spanish Ambient shelf display to `Ambiental`; the Audius hook still receives the exact `Ambient` API genre.
+- Expanded Discover coverage for Spanish shelf display/API separation, attribution, no-results interpolation, error/retry behavior, and search play accessibility.
+- Reworked the Audius shelf coverage to exercise the real `ContentShelf` and `TrackCard` path for English and Spanish play labels and playback callbacks.
+- Added exhaustive tests for all six genre-to-identity mappings, null/unknown fallbacks, case-insensitive matching, and a Spanish Profile identity title/description consumer.
+
+### Review-fix RED evidence
+
+Requested focused command before implementation:
+
+```bash
+npm test -- --runTestsByPath 'app/(app)/__tests__/discover-test.tsx' 'src/components/discover/__tests__/AudiusShelf-test.tsx' 'src/utils/__tests__/listening-identity-test.ts' 'app/(app)/__tests__/profile-test.tsx' 'src/i18n/__tests__/resources-test.ts' --runInBand
+```
+
+The screen suite failed on the intended `Ambiental` display assertion and missing Spanish search-card accessibility. After correcting a test-only barrel-import environment error, the isolated real shelf slice failed only on the missing English and Spanish play labels, while its loading and independent-query tests passed. The semantic identity, translated Profile consumer, and parity coverage already passed against Task 5's implementation.
+
+### Review-fix GREEN evidence
+
+The requested focused command passed: **5/5 suites, 35/35 tests**.
+
+Fresh full Jest run:
+
+```bash
+npm test -- --runInBand
+```
+
+Result: **38/38 suites, 308/308 tests passed**.
+
+`git diff --check` and scoped ESLint passed. `npx tsc --noEmit` remains limited to the same two unrelated baseline diagnostics documented above.

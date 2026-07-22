@@ -6,6 +6,7 @@ import i18n from "@/src/i18n";
 const mockUseAudiusSearch = jest.fn();
 const mockUseAudiusTrending = jest.fn();
 const mockRegisterContextTarget = jest.fn();
+const mockInvalidateQueries = jest.fn();
 
 jest.mock("@/src/hooks/use-audius", () => ({
   useAudiusSearch: (...args: unknown[]) => mockUseAudiusSearch(...args),
@@ -23,14 +24,22 @@ jest.mock("@/src/components", () => {
       React.createElement(View, null, children),
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
-    TrackCard: () => React.createElement(View, { testID: "track-card" }),
+    TrackCard: (props: object) =>
+      React.createElement(View, { ...props, testID: "track-card" }),
     TrackRowSkeleton: () =>
       React.createElement(View, { testID: "track-row-skeleton" }),
   };
 });
 
 jest.mock("@/src/components/discover/AudiusShelf", () => ({
-  AudiusShelf: () => null,
+  AudiusShelf: (props: { genre?: string }) => {
+    const React = require("react");
+    const { View } = require("react-native");
+    return React.createElement(View, {
+      ...props,
+      testID: `audius-shelf-${props.genre ?? "trending"}`,
+    });
+  },
 }));
 jest.mock("@/src/onboarding", () => {
   const React = require("react");
@@ -53,7 +62,7 @@ jest.mock("@/src/stores/player-store", () => ({
     selector({ currentTrack: null, setRepeatMode: jest.fn() }),
 }));
 jest.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -74,6 +83,7 @@ describe("DiscoverScreen", () => {
       isError: false,
     });
     mockRegisterContextTarget.mockReset().mockReturnValue(jest.fn());
+    mockInvalidateQueries.mockReset();
   });
 
   it("renders the Discover surface in Spanish", async () => {
@@ -86,6 +96,11 @@ describe("DiscoverScreen", () => {
       screen.getByText("Música real de artistas independientes"),
     ).toBeTruthy();
     expect(screen.getByPlaceholderText("Buscar en Audius…")).toBeTruthy();
+    expect(screen.getByText("Con tecnología de Audius")).toBeTruthy();
+
+    const ambientShelf = screen.getByTestId("audius-shelf-Ambient");
+    expect(ambientShelf.props.title).toBe("Ambiental");
+    expect(ambientShelf.props.genre).toBe("Ambient");
   });
 
   afterEach(() => {
@@ -194,5 +209,68 @@ describe("DiscoverScreen", () => {
       targetId: "discover.search",
       ready: true,
     });
+  });
+
+  it("interpolates the Spanish no-results query", async () => {
+    await i18n.changeLanguage("es");
+    mockUseAudiusSearch.mockImplementation((query: string) =>
+      query.trim().length >= 2
+        ? { data: [], isPending: false, fetchStatus: "idle" }
+        : { data: undefined, isPending: true, fetchStatus: "idle" },
+    );
+
+    const screen = await searchForAmbient();
+
+    expect(
+      screen.getByText("No hay resultados en Audius para «ambient»."),
+    ).toBeTruthy();
+  });
+
+  it("localizes Audius errors, retry, and the retry action", async () => {
+    await i18n.changeLanguage("es");
+    mockUseAudiusTrending.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      fetchStatus: "idle",
+      isError: true,
+    });
+
+    const screen = await render(<DiscoverScreen />);
+
+    expect(
+      screen.getByText("No se pudo conectar con Audius en este momento."),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText("Reintentar"));
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["audius"],
+    });
+  });
+
+  it("preserves search content while exposing Spanish play accessibility", async () => {
+    await i18n.changeLanguage("es");
+    mockUseAudiusSearch.mockImplementation((query: string) =>
+      query.trim().length >= 2
+        ? {
+            data: [
+              {
+                id: "search-result",
+                title: "Luz Original",
+                artist: "Artista Real",
+              },
+            ],
+            isPending: false,
+            fetchStatus: "idle",
+          }
+        : { data: undefined, isPending: true, fetchStatus: "idle" },
+    );
+
+    const screen = await searchForAmbient();
+    const card = screen.getByTestId("track-card");
+
+    expect(card.props.title).toBe("Luz Original");
+    expect(card.props.artist).toBe("Artista Real");
+    expect(card.props.accessibilityLabel).toBe(
+      "Reproducir Luz Original de Artista Real",
+    );
   });
 });

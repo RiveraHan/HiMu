@@ -14,6 +14,7 @@ type Props = {
   isPlaying?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
+  accessibilityLabel?: string;
   testID?: string;
 };
 export function TrackCard({
@@ -25,6 +26,7 @@ export function TrackCard({
   isPlaying = false,
   onPress,
   onLongPress,
+  accessibilityLabel,
   testID,
 }: Props) {
   const { t } = useTranslation();
@@ -50,6 +52,8 @@ export function TrackCard({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={onPress ? "button" : undefined}
       testID={testID}
       style={({ pressed }) => [
         isRow ? styles.rootRow : styles.rootTile,

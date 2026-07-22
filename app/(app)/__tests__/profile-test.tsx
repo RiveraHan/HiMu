@@ -68,8 +68,19 @@ jest.mock("@/src/components", () => {
     Avatar: () => React.createElement(View, { testID: "avatar" }),
     GlassCard: ({ children }: { children: React.ReactNode }) =>
       React.createElement(View, null, children),
-    IdentityCard: ({ title }: { title: string }) =>
-      React.createElement(NativeText, { testID: "identity-card" }, title),
+    IdentityCard: ({
+      title,
+      description,
+    }: {
+      title: string;
+      description: string;
+    }) =>
+      React.createElement(
+        View,
+        { testID: "identity-card" },
+        React.createElement(NativeText, null, title),
+        React.createElement(NativeText, null, description),
+      ),
     ScreenScrollView: ({
       children,
       ...props
@@ -177,6 +188,21 @@ describe("ProfileScreen", () => {
     expect(screen.getByLabelText("Detalles de la cuenta")).toBeTruthy();
     expect(screen.getByText("Oyente")).toBeTruthy();
     expect(screen.getByLabelText("Cerrar sesión")).toBeTruthy();
+  });
+
+  it("renders a translated Spanish listening identity", async () => {
+    await i18n.changeLanguage("es");
+    mockStatsQuery = settledQuery({ ...stats, topGenre: "Ambient" });
+    mockDjsHeardQuery = settledQuery(1);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("Arquitecto etéreo")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Ambient profundo, texturas atmosféricas y paisajes sonoros expansivos.",
+      ),
+    ).toBeTruthy();
   });
 
   it("loads identity, stats, and DJs independently while Preferences remain", async () => {

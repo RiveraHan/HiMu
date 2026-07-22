@@ -14,7 +14,7 @@ export const discover = {
     techno: "Techno",
     loFi: "Lo-Fi",
     hipHop: "Hip-Hop",
-    ambient: "Ambient",
+    ambient: "Ambiental",
     rnbSoul: "R&B / Soul",
     latin: "Latina",
   },
