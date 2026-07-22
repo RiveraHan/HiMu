@@ -32,6 +32,8 @@ export const playback = {
       label: "Playback position",
       hint: "Swipe to seek through the track",
       value: "{{position}} of {{duration}}",
+      increment: "Forward {{seconds}} seconds",
+      decrement: "Back {{seconds}} seconds",
     },
   },
   focus: {
@@ -82,10 +84,13 @@ export const playback = {
     },
     chart: {
       accessibilityLabel: "Weekly listening time chart",
+      accessibilitySummary: "{{title}}. {{points}}.",
+      dayMinutes_one: "{{weekday}}: {{count}} minute",
+      dayMinutes_other: "{{weekday}}: {{count}} minutes",
       high: "HIGH",
       mid: "MID",
       low: "LOW",
     },
-    playDj: "Play {{name}}",
+    openDjProfile: "Open {{name}} profile",
   },
 } as const;

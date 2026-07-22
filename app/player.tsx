@@ -255,6 +255,7 @@ export default function PlayerScreen() {
               style={styles.ctrlSm}
               accessibilityRole="button"
               accessibilityLabel={t("playback.player.actions.shuffle")}
+              accessibilityState={{ checked: shuffle }}
             >
               <Shuffle
                 size={24}
@@ -322,7 +323,9 @@ export default function PlayerScreen() {
               style={styles.ctrlSm}
               accessibilityRole="button"
               accessibilityLabel={t("playback.player.actions.repeat")}
-              accessibilityHint={t(`playback.player.repeatModes.${repeatMode}`)}
+              accessibilityValue={{
+                text: t(`playback.player.repeatModes.${repeatMode}`),
+              }}
             >
               {repeatMode === "one" ? (
                 <Repeat1 size={24} color={theme.colors.primary} />

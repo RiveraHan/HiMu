@@ -69,13 +69,26 @@ export function VibeAreaChart({ data }: Props) {
       : EMPTY;
 
   const todayIndex = data.findIndex((d) => d.isToday);
+  const chartTitle = t("playback.vibe.chart.accessibilityLabel");
+  const pointSummary = data
+    .map((point) =>
+      t("playback.vibe.chart.dayMinutes", {
+        count: point.minutes,
+        weekday: t(`playback.vibe.weekdays.${point.weekday}`),
+      }),
+    )
+    .join(". ");
+  const accessibilitySummary = t(
+    "playback.vibe.chart.accessibilitySummary",
+    { title: chartTitle, points: pointSummary },
+  );
 
   return (
     <View
       style={styles.wrap}
       accessible
       accessibilityRole="image"
-      accessibilityLabel={t("playback.vibe.chart.accessibilityLabel")}
+      accessibilityLabel={accessibilitySummary}
     >
       <View style={styles.chartRow}>
         {/* Y: High / Mid / Low */}

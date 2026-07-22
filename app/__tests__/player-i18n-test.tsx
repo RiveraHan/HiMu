@@ -12,6 +12,8 @@ const track = {
   duration: 180,
   genre: "House",
 };
+let mockShuffle = false;
+let mockRepeatMode: "off" | "all" | "one" = "off";
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -31,8 +33,8 @@ jest.mock("@/src/stores/player-store", () => ({
     positionSec: 30,
     durationSec: 180,
     isPlaying: true,
-    shuffle: false,
-    repeatMode: "off",
+    shuffle: mockShuffle,
+    repeatMode: mockRepeatMode,
     toggleShuffle: jest.fn(),
     cycleRepeat: jest.fn(),
   }),
@@ -58,23 +60,54 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
-test("renders Spanish player actions and transport controls", async () => {
-  await i18n.changeLanguage("es");
-  const screen = await render(<PlayerScreen />);
+describe("PlayerScreen localization", () => {
+  beforeEach(() => {
+    mockShuffle = false;
+    mockRepeatMode = "off";
+  });
 
-  for (const name of [
-    "Cerrar reproductor",
-    "Regenerar portada",
-    "Guardar en favoritos",
-    "Aleatorio",
-    "Pista anterior",
-    "Pausar",
-    "Siguiente",
-    "Repetir",
-  ]) {
-    expect(screen.getByRole("button", { name })).toBeTruthy();
-  }
+  test("renders Spanish player actions and transport controls", async () => {
+    await i18n.changeLanguage("es");
+    const screen = await render(<PlayerScreen />);
 
-  expect(screen.getByText("Signal Bloom")).toBeTruthy();
-  expect(screen.getByText("DJ One")).toBeTruthy();
+    for (const name of [
+      "Cerrar reproductor",
+      "Regenerar portada",
+      "Guardar en favoritos",
+      "Aleatorio",
+      "Pista anterior",
+      "Pausar",
+      "Siguiente",
+      "Repetir",
+    ]) {
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    }
+
+    expect(screen.getByText("Signal Bloom")).toBeTruthy();
+    expect(screen.getByText("DJ One")).toBeTruthy();
+  });
+
+  test.each([false, true])("exposes shuffle checked state %s", async (shuffle) => {
+    mockShuffle = shuffle;
+    await i18n.changeLanguage("es");
+
+    const screen = await render(<PlayerScreen />);
+
+    expect(screen.getByRole("button", { name: "Aleatorio" }).props.accessibilityState)
+      .toEqual(expect.objectContaining({ checked: shuffle }));
+  });
+
+  test.each([
+    ["off", "Repetición desactivada"],
+    ["all", "Repetir todo"],
+    ["one", "Repetir una pista"],
+  ] as const)("exposes localized repeat mode %s", async (mode, value) => {
+    mockRepeatMode = mode;
+    await i18n.changeLanguage("es");
+
+    const screen = await render(<PlayerScreen />);
+
+    expect(screen.getByRole("button", { name: "Repetir" }).props.accessibilityValue)
+      .toEqual({ text: value });
+  });
 });

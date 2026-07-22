@@ -15,6 +15,8 @@ import { formatTime } from "@/src/utils/format-time";
 import { useTranslation } from "react-i18next";
 
 const KNOB = 16;
+// Screen-reader adjustable actions seek in a predictable fixed interval.
+const ACCESSIBILITY_SEEK_STEP_SECONDS = 10;
 
 type Props = {
   positionSec: number;
@@ -61,6 +63,11 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
     onSeek(seconds);
   };
 
+  const seekByAccessibilityStep = (deltaSeconds: number) => {
+    const maxSeconds = Math.max(durationSec, 0);
+    onSeek(Math.min(Math.max(positionSec + deltaSeconds, 0), maxSeconds));
+  };
+
   const pan = Gesture.Pan()
     .onBegin((e) => {
       scrubbing.value = true;
@@ -95,6 +102,27 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
         accessibilityRole="adjustable"
         accessibilityLabel={t("playback.player.seek.label")}
         accessibilityHint={t("playback.player.seek.hint")}
+        accessibilityActions={[
+          {
+            name: "increment",
+            label: t("playback.player.seek.increment", {
+              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
+            }),
+          },
+          {
+            name: "decrement",
+            label: t("playback.player.seek.decrement", {
+              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
+            }),
+          },
+        ]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "increment") {
+            seekByAccessibilityStep(ACCESSIBILITY_SEEK_STEP_SECONDS);
+          } else if (event.nativeEvent.actionName === "decrement") {
+            seekByAccessibilityStep(-ACCESSIBILITY_SEEK_STEP_SECONDS);
+          }
+        }}
         accessibilityValue={{
           min: 0,
           max: Math.max(durationSec, 0),

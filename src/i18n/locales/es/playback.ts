@@ -32,6 +32,8 @@ export const playback = {
       label: "Posición de reproducción",
       hint: "Desliza para avanzar o retroceder en la pista",
       value: "{{position}} de {{duration}}",
+      increment: "Avanzar {{seconds}} segundos",
+      decrement: "Retroceder {{seconds}} segundos",
     },
   },
   focus: {
@@ -82,10 +84,13 @@ export const playback = {
     },
     chart: {
       accessibilityLabel: "Gráfico de tiempo de escucha semanal",
+      accessibilitySummary: "{{title}}. {{points}}.",
+      dayMinutes_one: "{{weekday}}: {{count}} minuto",
+      dayMinutes_other: "{{weekday}}: {{count}} minutos",
       high: "ALTO",
       mid: "MEDIO",
       low: "BAJO",
     },
-    playDj: "Reproducir a {{name}}",
+    openDjProfile: "Abrir el perfil de {{name}}",
   },
 } as const;
