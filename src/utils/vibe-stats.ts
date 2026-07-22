@@ -6,7 +6,7 @@ export type ListeningRow = {
 };
 
 export type DayPoint = {
-  label: string; // day of the week
+  weekday: Weekday;
   date: string; // YYYY-MM-DD
   minutes: number;
   isToday: boolean;
@@ -24,7 +24,17 @@ export type VibeCheck = {
   weekOverWeekPct: number | null; // delta vs last week
 };
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
+const WEEKDAYS: readonly Weekday[] = [
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+  "sat",
+  "sun",
+];
 
 export function toISODate(date: Date): string {
   const y = date.getFullYear();
@@ -65,7 +75,7 @@ export function buildVibeCheck(
     const iso = toISODate(addDays(weekStart, i));
 
     return {
-      label: DAY_LABELS[i],
+      weekday: WEEKDAYS[i],
       date: iso,
       minutes: byDate.get(iso)?.minutes_listened ?? 0,
       isToday: iso === todayISO,

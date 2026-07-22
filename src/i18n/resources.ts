@@ -3,12 +3,14 @@ import { dj as enDj } from "./locales/en/dj";
 import { discover as enDiscover } from "./locales/en/discover";
 import { home as enHome } from "./locales/en/home";
 import { profile as enProfile } from "./locales/en/profile";
+import { playback as enPlayback } from "./locales/en/playback";
 import { settings as enSettings } from "./locales/en/settings";
 import { common as esCommon } from "./locales/es/common";
 import { dj as esDj } from "./locales/es/dj";
 import { discover as esDiscover } from "./locales/es/discover";
 import { home as esHome } from "./locales/es/home";
 import { profile as esProfile } from "./locales/es/profile";
+import { playback as esPlayback } from "./locales/es/playback";
 import { settings as esSettings } from "./locales/es/settings";
 
 export const en = {
@@ -16,6 +18,7 @@ export const en = {
   dj: enDj,
   discover: enDiscover,
   home: enHome,
+  playback: enPlayback,
   profile: enProfile,
   settings: enSettings,
 } as const;
@@ -24,6 +27,7 @@ export const es = {
   dj: esDj,
   discover: esDiscover,
   home: esHome,
+  playback: esPlayback,
   profile: esProfile,
   settings: esSettings,
 } as const;

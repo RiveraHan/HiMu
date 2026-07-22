@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render } from "@testing-library/react-native";
 import VibeCheckScreen from "@/app/vibe-check";
+import i18n from "@/src/i18n";
 
 type MockQuery = {
   data: unknown;
@@ -57,7 +58,14 @@ jest.mock("@/src/components", () => {
   return {
     GlassCard: ({ children }: { children: React.ReactNode }) =>
       React.createElement(View, null, children),
-    ScreenHeader: () => React.createElement(View, { testID: "screen-header" }),
+    ScreenHeader: ({ kicker, title, subtitle }: { kicker: string; title: string; subtitle: string }) =>
+      React.createElement(
+        View,
+        { testID: "screen-header" },
+        React.createElement(NativeText, null, kicker),
+        React.createElement(NativeText, null, title),
+        React.createElement(NativeText, null, subtitle),
+      ),
     ScreenScrollView: ({
       children,
       ...props
@@ -130,6 +138,17 @@ describe("VibeCheckScreen", () => {
     expect(screen.getByText("0 tracks · 0-day streak")).toBeTruthy();
     expect(screen.getByTestId("vibe-chart")).toBeTruthy();
     expect(screen.getByTestId("vibe-djs-skeleton")).toBeTruthy();
+  });
+
+  it("renders Spanish insight copy and zero-count plurals", async () => {
+    mockVibeQuery = settledQuery(zeroVibe);
+    await i18n.changeLanguage("es");
+
+    const screen = await render(<VibeCheckScreen />);
+
+    expect(screen.getByText("Tu evolución sonora esta semana.")).toBeTruthy();
+    expect(screen.getByText("Esta semana")).toBeTruthy();
+    expect(screen.getByText("0 canciones · racha de 0 días")).toBeTruthy();
   });
 
   it("renders settled DJs while the independent insight query loads", async () => {

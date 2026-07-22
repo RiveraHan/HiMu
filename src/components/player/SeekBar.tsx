@@ -11,6 +11,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { StyleSheet } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
+import { formatTime } from "@/src/utils/format-time";
+import { useTranslation } from "react-i18next";
 
 const KNOB = 16;
 
@@ -20,6 +22,7 @@ type Props = {
   onSeek: (seconds: number) => void;
 };
 export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
+  const { t } = useTranslation();
   const [width, setWidth] = useState(0);
   const scrubbing = useSharedValue(false);
   const scrubPosition = useSharedValue(0);
@@ -88,6 +91,19 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
       <View
         style={styles.hitbox}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        accessible
+        accessibilityRole="adjustable"
+        accessibilityLabel={t("playback.player.seek.label")}
+        accessibilityHint={t("playback.player.seek.hint")}
+        accessibilityValue={{
+          min: 0,
+          max: Math.max(durationSec, 0),
+          now: Math.min(Math.max(positionSec, 0), Math.max(durationSec, 0)),
+          text: t("playback.player.seek.value", {
+            position: formatTime(positionSec),
+            duration: formatTime(durationSec),
+          }),
+        }}
       >
         <View style={styles.track}>
           <Animated.View style={[styles.fill, fillStyle]} />

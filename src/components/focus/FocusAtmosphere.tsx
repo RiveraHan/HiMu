@@ -8,7 +8,13 @@ export function FocusAtmosphere() {
   const { width, height } = useWindowDimensions();
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
       <LinearGradient
         colors={[
           theme.colors.surfaceContainerLowest,

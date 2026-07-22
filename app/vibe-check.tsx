@@ -14,6 +14,7 @@ import { useDJs } from "@/src/hooks/use-home";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { router } from "expo-router";
 import {
@@ -28,8 +29,8 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 export default function VibeCheckScreen() {
-  const { i18n } = useTranslation();
-  const resolvedLanguage = i18n.resolvedLanguage ?? "en";
+  const { t, i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
@@ -50,9 +51,9 @@ export default function VibeCheckScreen() {
       showsVerticalScrollIndicator={false}
     >
       <ScreenHeader
-        kicker="THIS WEEK"
-        title="Vibe Check"
-        subtitle="Your sonic evolution this week."
+        kicker={t("playback.vibe.kicker")}
+        title={t("playback.vibe.title")}
+        subtitle={t("playback.vibe.subtitle")}
       />
 
       {vibeLoading ? (
@@ -63,9 +64,13 @@ export default function VibeCheckScreen() {
           <GlassCard style={styles.hero}>
             <View style={styles.heroTop}>
               <View style={styles.heroTitle}>
-                <Text variant="bodyLg">Resonance Flow</Text>
+                <Text variant="bodyLg">{t("playback.vibe.resonanceFlow")}</Text>
                 <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.7}>
-                  {vibe?.topGenre ? `Mostly ${vibe.topGenre}` : "This week"}
+                  {vibe?.topGenre
+                    ? t("playback.vibe.mostlyGenre", {
+                        genre: catalogLabel(vibe.topGenre, resolvedLanguage),
+                      })
+                    : t("playback.vibe.thisWeek")}
                 </Text>
               </View>
               <View style={styles.heroNumber}>
@@ -73,7 +78,9 @@ export default function VibeCheckScreen() {
                   {formatHours(vibe?.hoursThisWeek ?? 0, resolvedLanguage)}
                 </Text>
                 <Text variant="labelCaps" color="onSurfaceVariant">
-                  HOURS
+                  {t("playback.vibe.hours", {
+                    count: vibe?.hoursThisWeek ?? 0,
+                  })}
                 </Text>
               </View>
             </View>
@@ -92,7 +99,9 @@ export default function VibeCheckScreen() {
                     variant="labelCaps"
                     color={vibe.weekOverWeekPct >= 0 ? "primary" : "error"}
                   >
-                    {Math.abs(Math.round(vibe.weekOverWeekPct * 100))}% vs last week
+                    {t("playback.vibe.weekOverWeek", {
+                      percent: Math.abs(Math.round(vibe.weekOverWeekPct * 100)),
+                    })}
                   </Text>
                 </View>
               )}
@@ -101,9 +110,18 @@ export default function VibeCheckScreen() {
                 color="onSurfaceVariant"
                 opacity={0.7}
               >
-                {formatCount(vibe?.tracksThisWeek ?? 0, resolvedLanguage)} tracks
+                {t("playback.vibe.songs", {
+                  count: vibe?.tracksThisWeek ?? 0,
+                  formattedCount: formatCount(
+                    vibe?.tracksThisWeek ?? 0,
+                    resolvedLanguage,
+                  ),
+                })}
                 {" · "}
-                {vibe?.streak ?? 0}-day streak
+                {t("playback.vibe.streak", {
+                  count: vibe?.streak ?? 0,
+                  days: t("playback.vibe.days", { count: vibe?.streak ?? 0 }),
+                })}
               </Text>
             </View>
           </GlassCard>
@@ -122,7 +140,7 @@ export default function VibeCheckScreen() {
                     />
                   }
                   value={`${Math.round(slice.percentage * 100)}%`}
-                  label={slice.genre}
+                  label={catalogLabel(slice.genre, resolvedLanguage)}
                 />
               ))}
             </View>
@@ -148,20 +166,26 @@ export default function VibeCheckScreen() {
               color="onSurfaceVariant"
               style={styles.sectionLabel}
             >
-              TOP DJS
+              {t("playback.vibe.topDjs")}
             </Text>
           </View>
           <GlassCard style={styles.djCard}>
-            {(djs ?? []).slice(0, 3).map((dj, i) => (
-              <TopDjRow
-                key={dj.id}
-                rank={i + 1}
-                name={dj.name}
-                specialty={dj.genre_specialties?.[0]}
-                avatarUrl={dj.avatar_url}
-                onPress={() => router.push(`/dj/${dj.id}`)}
-              />
-            ))}
+            {(djs ?? []).length === 0 ? (
+              <Text variant="bodyMd" color="onSurfaceVariant">
+                {t("playback.vibe.noTopDjs")}
+              </Text>
+            ) : (
+              (djs ?? []).slice(0, 3).map((dj, i) => (
+                <TopDjRow
+                  key={dj.id}
+                  rank={i + 1}
+                  name={dj.name}
+                  specialty={dj.genre_specialties?.[0]}
+                  avatarUrl={dj.avatar_url}
+                  onPress={() => router.push(`/dj/${dj.id}`)}
+                />
+              ))
+            )}
           </GlassCard>
         </View>
       )}

@@ -3,6 +3,8 @@ import { Text } from "@/src/components/Text";
 import { Play } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   rank: number;
@@ -21,6 +23,8 @@ export function TopDjRow({
   onPress,
   disabled,
 }: Props) {
+  const { t, i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
 
   return (
@@ -28,7 +32,7 @@ export function TopDjRow({
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={name}
+      accessibilityLabel={t("playback.vibe.playDj", { name })}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       <Text variant="labelCaps" color="onSurfaceVariant" style={styles.rank}>
@@ -41,7 +45,7 @@ export function TopDjRow({
         </Text>
         {!!specialty && (
           <Text variant="labelCaps" color="onSurfaceVariant" opacity={0.7}>
-            {specialty}
+            {catalogLabel(specialty, resolvedLanguage)}
           </Text>
         )}
       </View>
