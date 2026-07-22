@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Text } from "./Text";
 
@@ -21,8 +22,9 @@ export function PlaylistCard({
   onPress,
   testID,
 }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
-  const countLabel = trackCount === 1 ? "1 TRACK" : `${trackCount} TRACKS`;
+  const countLabel = t("common.counts.tracks", { count: trackCount });
 
   return (
     <Pressable

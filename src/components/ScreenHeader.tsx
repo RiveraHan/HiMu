@@ -5,6 +5,7 @@ import { ChevronLeft, X } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 type Props = {
   variant?: "back" | "close";
@@ -29,6 +30,7 @@ export function ScreenHeader({
   actions,
   disabled = false,
 }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const Icon = variant === "back" ? ChevronLeft : X;
 
@@ -40,7 +42,11 @@ export function ScreenHeader({
           icon={<Icon size={24} color={theme.colors.onSurface} />}
           onPress={onLeftPress}
           disabled={disabled}
-          accessibilityLabel={variant === "back" ? "Back" : "Close"}
+          accessibilityLabel={
+            variant === "back"
+              ? t("common.actions.back")
+              : t("common.actions.close")
+          }
         />
         {actions && <View style={styles.actions}>{actions}</View>}
       </View>

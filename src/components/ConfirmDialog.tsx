@@ -4,11 +4,13 @@ import { BackHandler, Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Button } from "./Button";
 import { GlassCard } from "./GlassCard";
 import { Text } from "./Text";
 
 export function ConfirmDialogHost() {
+  const { t } = useTranslation();
   const pending = useConfirmStore((s) => s.pending);
   const resolve = useConfirmStore((s) => s.resolve);
   const insets = useSafeAreaInsets();
@@ -41,7 +43,7 @@ export function ConfirmDialogHost() {
         style={StyleSheet.absoluteFill}
         onPress={() => resolve(false)}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss"
+        accessibilityLabel={t("common.actions.dismiss")}
       />
       <Animated.View
         entering={ZoomIn.duration(200)}
@@ -58,14 +60,14 @@ export function ConfirmDialogHost() {
           <View style={styles.actions}>
             <Button
               variant="glass"
-              label={pending.cancelLabel}
+              label={pending.cancelLabel ?? t("common.actions.cancel")}
               onPress={() => resolve(false)}
               style={styles.actionButton}
             />
             <Button
               variant="primary"
               destructive={pending.destructive}
-              label={pending.confirmLabel}
+              label={pending.confirmLabel ?? t("common.actions.confirm")}
               onPress={() => resolve(true)}
               style={styles.actionButton}
             />

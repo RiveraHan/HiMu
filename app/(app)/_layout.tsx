@@ -8,6 +8,7 @@ import {
   Platform,
   View
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
@@ -53,6 +54,7 @@ function TabBarBackground() {
 }
 
 export default function Applayout() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
   const session = useAuthStore((state) => state.session);
@@ -99,6 +101,7 @@ export default function Applayout() {
       <Tabs.Screen
         name="index"
         options={{
+          tabBarAccessibilityLabel: t("common.navigation.home"),
           tabBarIcon: ({ focused }) => (
             <TabIcon Icon={Home} focused={focused} />
           ),
@@ -107,7 +110,7 @@ export default function Applayout() {
       <Tabs.Screen
         name="discover"
         options={{
-          tabBarAccessibilityLabel: "Discover",
+          tabBarAccessibilityLabel: t("common.navigation.discover"),
           tabBarIcon: ({ focused }) => (
             <TabIcon
               Icon={Compass}
@@ -123,6 +126,7 @@ export default function Applayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          tabBarAccessibilityLabel: t("common.navigation.profile"),
           tabBarIcon: ({ focused }) => (
             <TabIcon Icon={User} focused={focused} />
           ),

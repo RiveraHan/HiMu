@@ -6,10 +6,12 @@ import { Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { IconButton } from "./IconButton";
 import { Text } from "./Text";
 
 export function MiniPlayer() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
   const router = useRouter();
@@ -42,6 +44,8 @@ export function MiniPlayer() {
   return (
     <Pressable
       onPress={() => router.push("/player")}
+      accessibilityRole="button"
+      accessibilityLabel={t("common.player.open")}
       style={({ pressed }) => [
         styles.root,
         { bottom },
@@ -76,7 +80,7 @@ export function MiniPlayer() {
       <IconButton
         icon={<SkipBack size={20} color={theme.colors.onSurfaceVariant} />}
         onPress={prev}
-        accessibilityLabel="Back"
+        accessibilityLabel={t("common.actions.previous")}
         size="md"
       />
 
@@ -97,13 +101,15 @@ export function MiniPlayer() {
           )
         }
         onPress={toggle}
-        accessibilityLabel={isPlaying ? "Pause" : "Play"}
+        accessibilityLabel={
+          isPlaying ? t("common.actions.pause") : t("common.actions.play")
+        }
         size="md"
       />
       <IconButton
         icon={<SkipForward size={20} color={theme.colors.onSurfaceVariant} />}
         onPress={next}
-        accessibilityLabel="Next"
+        accessibilityLabel={t("common.actions.next")}
         size="md"
       />
     </Pressable>

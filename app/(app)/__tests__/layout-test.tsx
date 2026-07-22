@@ -2,6 +2,7 @@
 import { render } from "@testing-library/react-native";
 
 import AppLayout from "@/app/(app)/_layout";
+import i18n from "@/src/i18n";
 
 let mockDiscoverFocused = false;
 
@@ -60,11 +61,17 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 describe("App tab layout", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("es");
+  });
+
   it("keeps the Discover tour target, label, and 44-point icon across focus changes", async () => {
     const screen = await render(<AppLayout />);
 
+    expect(screen.getByLabelText("Inicio")).toBeTruthy();
     expect(screen.getByTestId("tour-target-tabs.discover")).toBeTruthy();
-    expect(screen.getByLabelText("Discover")).toBeTruthy();
+    expect(screen.getByLabelText("Descubrir")).toBeTruthy();
+    expect(screen.getByLabelText("Perfil")).toBeTruthy();
     expect(screen.getByTestId("discover-tab-icon")).toHaveStyle({
       width: 44,
       height: 44,
@@ -77,7 +84,7 @@ describe("App tab layout", () => {
     await screen.rerender(<AppLayout />);
 
     expect(screen.getByTestId("tour-target-tabs.discover")).toBeTruthy();
-    expect(screen.getByLabelText("Discover")).toBeTruthy();
+    expect(screen.getByLabelText("Descubrir")).toBeTruthy();
     expect(screen.getByTestId("discover-tab-icon")).toHaveStyle({
       width: 44,
       height: 44,

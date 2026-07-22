@@ -4,9 +4,11 @@ import { GoogleIcon, Logo, SpotifyIcon } from "@/src/components/icons";
 import { useToast } from "@/src/hooks/use-toast";
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState<boolean>(false);
   const toast = useToast();
 
@@ -18,14 +20,20 @@ export default function LoginScreen() {
       await authApi.signInWithGoogle();
     } catch (error) {
       console.error("[LoginScreen] Google sign-in error:", error);
-      toast.error("Sign-in failed", "We couldn't sign you in. Please try again.");
+      toast.error(
+        t("common.auth.signInFailedTitle"),
+        t("common.auth.signInFailedMessage"),
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const showComingSoon = () =>
-    toast.info("Coming soon", "This sign-in method is not available yet.");
+    toast.info(
+      t("common.auth.comingSoonTitle"),
+      t("common.auth.comingSoonMessage"),
+    );
 
   return (
     <View style={styles.root}>
@@ -41,9 +49,9 @@ export default function LoginScreen() {
           <View style={styles.logoWrapper}>
             <Logo size={96} />
           </View>
-          <Text variant="h1">Welcome to HiMu</Text>
+          <Text variant="h1">{t("common.auth.welcome")}</Text>
           <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.7}>
-            Your sonic journey begins here.
+            {t("common.auth.subtitle")}
           </Text>
         </View>
 
@@ -51,8 +59,8 @@ export default function LoginScreen() {
         <View style={styles.methods}>
           <Button
             variant="glass"
-            label="Continue with Spotify"
-            loadingLabel="Signing in..."
+            label={t("common.auth.spotify")}
+            loadingLabel={t("common.auth.signingIn")}
             loading={loading}
             leftIcon={<SpotifyIcon size={24} />}
             onPress={showComingSoon}
@@ -62,39 +70,39 @@ export default function LoginScreen() {
             variant="glass"
             loading={loading}
             leftIcon={<GoogleIcon size={24} />}
-            label="Continue with Google"
-            loadingLabel="Signing in..."
+            label={t("common.auth.google")}
+            loadingLabel={t("common.auth.signingIn")}
             onPress={handleGoogleSignIn}
           />
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
+            <Text style={styles.dividerText}>{t("common.auth.or")}</Text>
             <View style={styles.dividerLine} />
           </View>
 
           <Button
             variant="primary"
             onPress={showComingSoon}
-            label="Sign in with Email"
+            label={t("common.auth.email")}
           />
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-            New to HiMu?{" "}
+            {t("common.auth.accountPrompt")} {" "}
             <Text onPress={showComingSoon} color="primary">
-              Create an account
+              {t("common.auth.signUp")}
             </Text>
           </Text>
           <View style={styles.legal}>
             <Text onPress={() => showComingSoon()} style={styles.legalLink}>
-              TERMS OF SERVICE
+              {t("common.auth.terms")}
             </Text>
             <View style={styles.legalDot} />
             <Text onPress={() => showComingSoon()} style={styles.legalLink}>
-              PRIVACY POLICY
+              {t("common.auth.privacy")}
             </Text>
           </View>
         </View>

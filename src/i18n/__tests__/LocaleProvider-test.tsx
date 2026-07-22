@@ -1,4 +1,5 @@
 import { act, render, waitFor } from "@testing-library/react-native";
+import { getLocales } from "expo-localization";
 import { Text } from "react-native";
 import type { UserPreferences } from "@/src/types/preferences";
 import type { LanguagePreference } from "../types";
@@ -17,9 +18,6 @@ let mockDeviceLanguageCode = "en";
 const mockMutateAsync = jest.fn<Promise<void>, [UserPreferences]>();
 const mockShowToast = jest.fn();
 
-jest.mock("expo-localization", () => ({
-  getLocales: () => [{ languageCode: mockDeviceLanguageCode }],
-}));
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => mockUser,
 }));
@@ -87,6 +85,14 @@ beforeEach(() => {
   mockUser = null;
   mockSettings = undefined;
   mockDeviceLanguageCode = "en";
+  jest
+    .mocked(getLocales)
+    .mockImplementation(
+      () =>
+        [{ languageCode: mockDeviceLanguageCode }] as ReturnType<
+          typeof getLocales
+        >,
+    );
   currentLocale = null;
   jest.mocked(readLanguageState).mockResolvedValue(null);
   jest.mocked(writeLanguageState).mockResolvedValue(undefined);
