@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { AppState, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 import { useOnboarding, useSaveOnboarding } from "@/src/hooks/use-onboarding";
 import { useAuthStore } from "@/src/stores/auth-store";
@@ -31,6 +32,7 @@ import type {
   ContextualTipId,
   OnboardingRecord,
   SpotlightStep,
+  SpotlightStepDefinition,
   TourTargetId,
 } from "./types";
 import {
@@ -87,6 +89,7 @@ export function AppTourProvider({ children }: { children: ReactNode }) {
 }
 
 function AuthenticatedAppTourProvider({ children, userId }: { children: ReactNode; userId: string }) {
+  const { t } = useTranslation();
   const segments = useSegments();
   const route = routeFromSegments(segments as readonly string[]);
   const onboarding = useOnboarding(ONBOARDING_VERSION);
@@ -453,13 +456,21 @@ function AuthenticatedAppTourProvider({ children, userId }: { children: ReactNod
   const contextualRegistration = state.activeTipId
     ? contextRefs.current.get(state.activeTipId)
     : undefined;
-  const engineSteps: readonly SpotlightStep[] = state.phase === "contextual_tip" && contextualRegistration
+  const engineDefinitions: readonly SpotlightStepDefinition[] =
+    state.phase === "contextual_tip" && contextualRegistration
     ? [{
         id: contextualRegistration.tipId,
         targetId: contextualRegistration.targetId,
         ...CONTEXTUAL_TIP_COPY[contextualRegistration.tipId],
       }]
     : homeRef.current?.steps ?? [];
+  const engineSteps: readonly SpotlightStep[] = engineDefinitions.map(
+    ({ titleKey, descriptionKey, ...step }) => ({
+      ...step,
+      title: t(titleKey),
+      description: t(descriptionKey),
+    }),
+  );
   const engineIndex = state.phase === "contextual_tip" ? 0 : state.activeStepIndex ?? 0;
   const engineReady = state.phase === "contextual_tip"
     ? contextualRegistration?.ready === true

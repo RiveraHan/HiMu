@@ -1,4 +1,4 @@
-import type { ContextualTipId, SpotlightStep } from "./types";
+import type { ContextualTipId, SpotlightStepDefinition } from "./types";
 
 export const ONBOARDING_VERSION = 1;
 export const ONBOARDING_STORAGE_PREFIX = "himu:onboarding";
@@ -7,39 +7,38 @@ export const HOME_TOUR_STEPS = [
   {
     id: "home.daily-drop",
     targetId: "home.hero",
-    title: "START HERE",
-    description: "Your Daily Drop is a fresh track selected for this moment.",
+    titleKey: "onboarding.home.dailyDrop.title",
+    descriptionKey: "onboarding.home.dailyDrop.description",
     placement: "bottom",
   },
   {
     id: "home.djs",
     targetId: "home.djs",
-    title: "DIFFERENT MINDS, DIFFERENT SOUNDS",
-    description: "Each AI DJ has a distinct sound and personality.",
+    titleKey: "onboarding.home.djs.title",
+    descriptionKey: "onboarding.home.djs.description",
     placement: "top",
   },
   {
     id: "home.discover",
     targetId: "tabs.discover",
-    title: "GO BEYOND YOUR FEED",
-    description: "Search and explore more music whenever you want.",
+    titleKey: "onboarding.home.discover.title",
+    descriptionKey: "onboarding.home.discover.description",
     placement: "top",
   },
-] as const satisfies readonly SpotlightStep[];
+] as const satisfies readonly SpotlightStepDefinition[];
 
 export const CONTEXTUAL_TIP_COPY: Record<
   ContextualTipId,
-  Pick<SpotlightStep, "title" | "description" | "placement">
+  Pick<SpotlightStepDefinition, "titleKey" | "descriptionKey" | "placement">
 > = {
   "discover.search": {
-    title: "SEARCH THE WHOLE SOUND",
-    description: "Find tracks, moods, and artists beyond your Home feed.",
+    titleKey: "onboarding.contextual.discoverSearch.title",
+    descriptionKey: "onboarding.contextual.discoverSearch.description",
     placement: "bottom",
   },
   "dj.hero": {
-    title: "GET TO KNOW YOUR DJ",
-    description:
-      "Each DJ has a personality, sound, and evolving relationship with your taste.",
+    titleKey: "onboarding.contextual.djHero.title",
+    descriptionKey: "onboarding.contextual.djHero.description",
     placement: "bottom",
   },
 };

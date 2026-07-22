@@ -16,18 +16,19 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 import { Text } from "@/src/components/Text";
 import { GlassCard } from "@/src/components/GlassCard";
 
 export const WELCOME_PAGES = [
   {
-    title: "YOUR MUSIC, IN THE RIGHT MOMENT",
-    body: "HiMu blends AI-created music, curated drops, and listening tools around your mood.",
+    titleKey: "onboarding.welcome.pages.intro.title",
+    bodyKey: "onboarding.welcome.pages.intro.body",
   },
   {
-    title: "MEET YOUR AI DJS",
-    body: "Each DJ has a distinct sound and personality. Listen, favorite tracks, and shape what comes next.",
+    titleKey: "onboarding.welcome.pages.djs.title",
+    bodyKey: "onboarding.welcome.pages.djs.body",
   },
 ] as const;
 
@@ -39,11 +40,24 @@ type Props = {
 };
 
 export function WelcomeTour({ page, onBack, onContinue, onSkip }: Props) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const opacity = useSharedValue(1);
   const contentRef = useRef<View>(null);
   const content = WELCOME_PAGES[page];
+  const title = t(content.titleKey);
+  const body = t(content.bodyKey);
+  const pageCount = t("onboarding.welcome.pageCount", {
+    page: page + 1,
+    count: WELCOME_PAGES.length,
+  });
+  const announcement = t("onboarding.welcome.accessibility.announcement", {
+    title,
+    body,
+    page: page + 1,
+    count: WELCOME_PAGES.length,
+  });
 
   useEffect(() => {
     if (reducedMotion) {
@@ -55,11 +69,10 @@ export function WelcomeTour({ page, onBack, onContinue, onSkip }: Props) {
         reduceMotion: ReduceMotion.System,
       });
     }
-    const label = `${content.title}. ${content.body}. Page ${page + 1} of 2`;
-    AccessibilityInfo.announceForAccessibility(label);
+    AccessibilityInfo.announceForAccessibility(announcement);
     const node = findNodeHandle(contentRef.current);
     if (node !== null) AccessibilityInfo.setAccessibilityFocus(node);
-  }, [content.body, content.title, opacity, page, reducedMotion]);
+  }, [announcement, opacity, reducedMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
@@ -95,45 +108,55 @@ export function WelcomeTour({ page, onBack, onContinue, onSkip }: Props) {
             >
               <View
                 accessible
-                accessibilityLabel={`${content.title}. ${content.body}. Page ${page + 1} of 2`}
+                accessibilityLabel={announcement}
                 focusable
                 ref={contentRef}
                 testID="welcome-content"
               />
-              <Text color="primary" variant="labelCaps">WELCOME TO HIMU</Text>
-              <Text selectable variant="h1">{content.title}</Text>
-              <Text selectable color="onSurfaceVariant" variant="bodyLg">{content.body}</Text>
+              <Text color="primary" variant="labelCaps">{t("onboarding.welcome.eyebrow")}</Text>
+              <Text selectable variant="h1">{title}</Text>
+              <Text selectable color="onSurfaceVariant" variant="bodyLg">{body}</Text>
               <Text accessibilityLiveRegion="polite" color="onSurfaceVariant" variant="labelCaps">
-                {`Page ${page + 1} of 2`}
+                {pageCount}
               </Text>
             </ScrollView>
             <View style={styles.actions}>
               <Pressable
-                accessibilityLabel={page === 0 ? "Skip introduction" : "Back to introduction page 1"}
+                accessibilityLabel={page === 0
+                  ? t("onboarding.welcome.accessibility.skip")
+                  : t("onboarding.welcome.accessibility.back", { page: 1 })}
                 accessibilityRole="button"
                 onPress={page === 0 ? onSkip : onBack}
                 style={styles.secondaryButton}
               >
-                <Text variant="labelCaps">{page === 0 ? "Skip" : "Back"}</Text>
+                <Text variant="labelCaps">
+                  {page === 0
+                    ? t("onboarding.welcome.actions.skip")
+                    : t("onboarding.welcome.actions.back")}
+                </Text>
               </Pressable>
               {page === 1 ? (
                 <Pressable
-                  accessibilityLabel="Skip introduction"
+                  accessibilityLabel={t("onboarding.welcome.accessibility.skip")}
                   accessibilityRole="button"
                   onPress={onSkip}
                   style={styles.secondaryButton}
                 >
-                  <Text variant="labelCaps">Skip</Text>
+                  <Text variant="labelCaps">{t("onboarding.welcome.actions.skip")}</Text>
                 </Pressable>
               ) : null}
               <Pressable
-                accessibilityLabel={page === 0 ? "Continue introduction" : "Show me around HiMu"}
+                accessibilityLabel={page === 0
+                  ? t("onboarding.welcome.accessibility.continue")
+                  : t("onboarding.welcome.accessibility.showAround")}
                 accessibilityRole="button"
                 onPress={onContinue}
                 style={styles.primaryButton}
               >
                 <Text color="onPrimaryContainer" variant="labelCaps">
-                  {page === 0 ? "Continue" : "Show me around"}
+                  {page === 0
+                    ? t("onboarding.welcome.actions.continue")
+                    : t("onboarding.welcome.actions.showAround")}
                 </Text>
               </Pressable>
             </View>

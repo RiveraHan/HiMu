@@ -95,17 +95,42 @@ function ContextRegistration({
 it("keeps the contextual tip copy at the approved route-neutral contract", () => {
   expect(CONTEXTUAL_TIP_COPY).toEqual({
     "discover.search": {
-      title: "SEARCH THE WHOLE SOUND",
-      description: "Find tracks, moods, and artists beyond your Home feed.",
+      titleKey: "onboarding.contextual.discoverSearch.title",
+      descriptionKey: "onboarding.contextual.discoverSearch.description",
       placement: "bottom",
     },
     "dj.hero": {
-      title: "GET TO KNOW YOUR DJ",
-      description:
-        "Each DJ has a personality, sound, and evolving relationship with your taste.",
+      titleKey: "onboarding.contextual.djHero.title",
+      descriptionKey: "onboarding.contextual.djHero.description",
       placement: "bottom",
     },
   });
+});
+
+it("keeps Home tour definitions semantic without changing stable identity fields", () => {
+  expect(HOME_TOUR_STEPS).toEqual([
+    {
+      id: "home.daily-drop",
+      targetId: "home.hero",
+      titleKey: "onboarding.home.dailyDrop.title",
+      descriptionKey: "onboarding.home.dailyDrop.description",
+      placement: "bottom",
+    },
+    {
+      id: "home.djs",
+      targetId: "home.djs",
+      titleKey: "onboarding.home.djs.title",
+      descriptionKey: "onboarding.home.djs.description",
+      placement: "top",
+    },
+    {
+      id: "home.discover",
+      targetId: "tabs.discover",
+      titleKey: "onboarding.home.discover.title",
+      descriptionKey: "onboarding.home.discover.description",
+      placement: "top",
+    },
+  ]);
 });
 
 function ReplayRegistration() {

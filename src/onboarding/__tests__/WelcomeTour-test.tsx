@@ -1,6 +1,7 @@
 import { fireEvent, render } from "@testing-library/react-native";
-import { StyleSheet as RNStyleSheet } from "react-native";
+import { AccessibilityInfo, StyleSheet as RNStyleSheet } from "react-native";
 
+import i18n from "@/src/i18n";
 import { WelcomeTour } from "../WelcomeTour";
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -23,7 +24,8 @@ jest.mock("react-native-reanimated", () => {
   });
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   jest.clearAllMocks();
   mockReducedMotion = false;
 });
@@ -70,4 +72,28 @@ it("does not schedule animated timing when reduced motion is enabled", async () 
     <WelcomeTour page={0} onBack={jest.fn()} onContinue={onContinue} onSkip={onSkip} />,
   );
   expect(mockWithTiming).not.toHaveBeenCalled();
+});
+
+it("renders and announces the Spanish welcome pages", async () => {
+  await i18n.changeLanguage("es");
+  const announce = jest.spyOn(AccessibilityInfo, "announceForAccessibility");
+  const view = await render(
+    <WelcomeTour page={0} onBack={jest.fn()} onContinue={onContinue} onSkip={onSkip} />,
+  );
+
+  expect(view.getByText("BIENVENIDO A HIMU")).toBeTruthy();
+  expect(view.getByText("TU MÚSICA, EN EL MOMENTO JUSTO")).toBeTruthy();
+  expect(view.getByText("Página 1 de 2")).toBeTruthy();
+  expect(view.getByText("Omitir")).toBeTruthy();
+  expect(view.getByText("Continuar")).toBeTruthy();
+  expect(announce).toHaveBeenCalledWith(
+    "TU MÚSICA, EN EL MOMENTO JUSTO. HiMu combina música creada con IA, selecciones curadas y herramientas de escucha según tu estado de ánimo. Página 1 de 2",
+  );
+
+  await view.rerender(
+    <WelcomeTour page={1} onBack={jest.fn()} onContinue={onContinue} onSkip={onSkip} />,
+  );
+  expect(view.getByText("CONOCE A TUS DJS CON IA")).toBeTruthy();
+  expect(view.getByText("Atrás")).toBeTruthy();
+  expect(view.getByText("Página 2 de 2")).toBeTruthy();
 });

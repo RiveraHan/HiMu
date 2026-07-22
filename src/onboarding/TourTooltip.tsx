@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 import { Text } from "@/src/components/Text";
 import type { TourTooltipRenderProps } from "./engine/SpotlightTourEngine";
@@ -12,17 +13,24 @@ export function TourTooltip({
   onPrevious,
   onSkip,
 }: TourTooltipRenderProps) {
+  const { t } = useTranslation();
   const displayIndex = currentIndex + 1;
   return (
     <View accessibilityViewIsModal style={styles.card} testID="tour-tooltip">
       <View style={styles.copy}>
-        <Text color="primary" variant="labelCaps">GUIDED TOUR</Text>
+        <Text color="primary" variant="labelCaps">{t("onboarding.tooltip.eyebrow")}</Text>
         <Text selectable variant="h2">{step.title.toUpperCase()}</Text>
         <Text selectable color="onSurfaceVariant" variant="bodyMd">{step.description}</Text>
         <Text accessibilityLiveRegion="polite" color="onSurfaceVariant" variant="labelCaps">
-          {`Step ${displayIndex} of ${total}`}
+          {t("onboarding.tooltip.stepCount", { step: displayIndex, count: total })}
         </Text>
-        <View accessibilityLabel={`Tour progress, step ${displayIndex} of ${total}`} style={styles.progress}>
+        <View
+          accessibilityLabel={t("onboarding.tooltip.progress", {
+            step: displayIndex,
+            count: total,
+          })}
+          style={styles.progress}
+        >
           {Array.from({ length: total }, (_, index) => (
             <View key={index} style={[styles.dot, index <= currentIndex && styles.dotActive]} />
           ))}
@@ -30,24 +38,35 @@ export function TourTooltip({
       </View>
       <View style={styles.actions}>
         <Pressable
-          accessibilityLabel={`Back to tour step ${Math.max(1, displayIndex - 1)}`}
+          accessibilityLabel={t("onboarding.tooltip.accessibility.back", {
+            step: Math.max(1, displayIndex - 1),
+          })}
           accessibilityRole="button"
           disabled={currentIndex === 0}
           onPress={onPrevious}
           style={[styles.action, currentIndex === 0 && styles.disabled]}
         >
-          <Text variant="labelCaps">Back</Text>
-        </Pressable>
-        <Pressable accessibilityLabel="Skip tour" accessibilityRole="button" onPress={onSkip} style={styles.action}>
-          <Text variant="labelCaps">Skip</Text>
+          <Text variant="labelCaps">{t("onboarding.tooltip.actions.back")}</Text>
         </Pressable>
         <Pressable
-          accessibilityLabel={currentIndex === total - 1 ? "Finish tour steps" : `Next to tour step ${displayIndex + 1}`}
+          accessibilityLabel={t("onboarding.tooltip.accessibility.skip")}
+          accessibilityRole="button"
+          onPress={onSkip}
+          style={styles.action}
+        >
+          <Text variant="labelCaps">{t("onboarding.tooltip.actions.skip")}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={currentIndex === total - 1
+            ? t("onboarding.tooltip.accessibility.finish")
+            : t("onboarding.tooltip.accessibility.next", { step: displayIndex + 1 })}
           accessibilityRole="button"
           onPress={onNext}
           style={[styles.action, styles.next]}
         >
-          <Text color="onPrimaryContainer" variant="labelCaps">Next</Text>
+          <Text color="onPrimaryContainer" variant="labelCaps">
+            {t("onboarding.tooltip.actions.next")}
+          </Text>
         </Pressable>
       </View>
     </View>

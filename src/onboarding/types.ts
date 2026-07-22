@@ -31,3 +31,11 @@ export type SpotlightStep = {
   description: string;
   placement: "top" | "bottom";
 };
+
+export type SpotlightStepDefinition = Omit<
+  SpotlightStep,
+  "title" | "description"
+> & {
+  titleKey: string;
+  descriptionKey: string;
+};

@@ -3,9 +3,10 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { useEffect } from "react";
 import { AppState, Text } from "react-native";
 
+import i18n from "@/src/i18n";
 import { AppTourProvider } from "../AppTourProvider";
 import { HOME_TOUR_STEPS } from "../constants";
-import type { SpotlightStep } from "../types";
+import type { SpotlightStep, SpotlightStepDefinition } from "../types";
 import { useAppTour } from "../use-app-tour";
 
 let mockOnboarding: { data: unknown; isPending: boolean; isError: boolean };
@@ -103,7 +104,7 @@ function HomeRegistration({
 }: {
   autoContinue?: boolean;
   ensureStepVisible: (stepId: string) => Promise<void>;
-  steps: readonly SpotlightStep[];
+  steps: readonly SpotlightStepDefinition[];
 }) {
   const tour = useAppTour();
   mockTourApi = tour;
@@ -125,7 +126,8 @@ function HomeRegistration({
   return <Text testID="phase">{tour.phase}</Text>;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   mockOnboarding = { data: null, isPending: false, isError: false };
   mockSegments = ["(app)"];
   mockToast = null;
@@ -134,6 +136,48 @@ beforeEach(() => {
   mockEngineProps = null;
   mockMutateAsync.mockClear();
   mockMutateAsync.mockResolvedValue(undefined);
+});
+
+it("rerenders an open spotlight in the new language without resetting progress", async () => {
+  mockOnboarding = { data: record(), isPending: false, isError: false };
+  const view = await render(
+    <AppTourProvider>
+      <HomeRegistration
+        ensureStepVisible={async () => undefined}
+        steps={HOME_TOUR_STEPS}
+      />
+    </AppTourProvider>,
+  );
+  await waitFor(() =>
+    expect(mockEngineProps).toMatchObject({
+      active: true,
+      currentIndex: 2,
+      ready: true,
+      steps: [
+        expect.objectContaining({ title: "START HERE" }),
+        expect.objectContaining({ title: "DIFFERENT MINDS, DIFFERENT SOUNDS" }),
+        expect.objectContaining({ title: "GO BEYOND YOUR FEED" }),
+      ],
+    }),
+  );
+  const writesBeforeLanguageChange = mockMutateAsync.mock.calls.length;
+
+  await act(() => i18n.changeLanguage("es"));
+
+  await waitFor(() =>
+    expect(mockEngineProps).toMatchObject({
+      active: true,
+      currentIndex: 2,
+      ready: true,
+      steps: [
+        expect.objectContaining({ title: "EMPIEZA AQUÍ" }),
+        expect.objectContaining({ title: "MENTES DISTINTAS, SONIDOS DISTINTOS" }),
+        expect.objectContaining({ title: "VE MÁS ALLÁ DE TU FEED" }),
+      ],
+    }),
+  );
+  expect(view.getByTestId("phase").props.children).toBe("home_spotlights");
+  expect(mockMutateAsync).toHaveBeenCalledTimes(writesBeforeLanguageChange);
 });
 
 it("retires first-run readiness until an offscreen previous fallback is visible", async () => {

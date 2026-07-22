@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, findNodeHandle, Modal, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 import { Text } from "@/src/components/Text";
 import { GlassCard } from "@/src/components/GlassCard";
@@ -19,6 +20,7 @@ export function TourCompletionSheet({
   onDismiss,
   running = false,
 }: Props) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [localRunning, setLocalRunning] = useState(false);
   const runningRef = useRef(false);
@@ -26,10 +28,10 @@ export function TourCompletionSheet({
   const contentRef = useRef<View>(null);
 
   useEffect(() => {
-    AccessibilityInfo.announceForAccessibility("You’re ready. Guided tour complete.");
+    AccessibilityInfo.announceForAccessibility(t("onboarding.completion.announcement"));
     const node = findNodeHandle(contentRef.current);
     if (node !== null) AccessibilityInfo.setAccessibilityFocus(node);
-  }, []);
+  }, [t]);
   useEffect(() => () => {
     mountedRef.current = false;
   }, []);
@@ -46,7 +48,9 @@ export function TourCompletionSheet({
     }
   };
 
-  const label = canPlay ? "Play today’s drop" : "Finish";
+  const label = canPlay
+    ? t("onboarding.completion.actions.playToday")
+    : t("onboarding.completion.actions.finish");
   const isRunning = running || localRunning;
   return (
     <Modal animationType="none" onRequestClose={onDismiss} statusBarTranslucent transparent visible>
@@ -74,15 +78,15 @@ export function TourCompletionSheet({
             >
               <View
                 accessible
-                accessibilityLabel="You’re ready. HiMu gets better as you listen. Start with today’s sound and make it yours."
+                accessibilityLabel={t("onboarding.completion.accessibility")}
                 focusable
                 ref={contentRef}
                 testID="completion-content"
               />
-              <Text color="primary" variant="labelCaps">TOUR COMPLETE</Text>
-              <Text selectable variant="h1">YOU’RE READY</Text>
+              <Text color="primary" variant="labelCaps">{t("onboarding.completion.eyebrow")}</Text>
+              <Text selectable variant="h1">{t("onboarding.completion.title")}</Text>
               <Text selectable color="onSurfaceVariant" variant="bodyLg">
-                HiMu gets better as you listen. Start with today’s sound and make it yours.
+                {t("onboarding.completion.body")}
               </Text>
             </ScrollView>
             <Pressable

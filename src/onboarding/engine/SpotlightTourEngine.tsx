@@ -17,6 +17,7 @@ import {
   type LayoutRectangle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import Animated, {
   ReduceMotion,
   useAnimatedStyle,
@@ -93,6 +94,7 @@ export function SpotlightTourEngine({
   renderTooltip,
   children,
 }: TourEngineProps): React.ReactElement {
+  const { t } = useTranslation();
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -401,7 +403,12 @@ export function SpotlightTourEngine({
   const description = step?.description.trim() ?? "";
   const descriptionSeparator = /[.!?]$/.test(description) ? "" : ".";
   const focusLabel = step
-    ? `${step.title}. ${description}${descriptionSeparator} Step ${currentIndex + 1} of ${steps.length}`
+    ? t("onboarding.tooltip.accessibility.announcement", {
+        title: step.title,
+        description: `${description}${descriptionSeparator}`,
+        step: currentIndex + 1,
+        count: steps.length,
+      })
     : "";
 
   const handleNext = useCallback(() => {

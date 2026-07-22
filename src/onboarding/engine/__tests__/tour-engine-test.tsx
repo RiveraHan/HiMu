@@ -3,7 +3,7 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 import { Pressable, Text, View } from "react-native";
 import type { TestInstance } from "test-renderer";
 
-import { HOME_TOUR_STEPS } from "../../constants";
+import i18n from "@/src/i18n";
 import type { SpotlightStep } from "../../types";
 import { SpotlightTourEngine } from "../SpotlightTourEngine";
 import { TourTarget } from "../TourTarget";
@@ -17,6 +17,30 @@ const mockFindNodeHandle = jest.fn((_component: unknown) => 42);
 let mockReducedMotion = false;
 const mockWindowDimensions = { width: 400, height: 800 };
 const mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+const HOME_TOUR_STEPS = [
+  {
+    id: "home.daily-drop",
+    targetId: "home.hero",
+    title: "START HERE",
+    description: "Your Daily Drop is a fresh track selected for this moment.",
+    placement: "bottom",
+  },
+  {
+    id: "home.djs",
+    targetId: "home.djs",
+    title: "DIFFERENT MINDS, DIFFERENT SOUNDS",
+    description: "Each AI DJ has a distinct sound and personality.",
+    placement: "top",
+  },
+  {
+    id: "home.discover",
+    targetId: "tabs.discover",
+    title: "GO BEYOND YOUR FEED",
+    description: "Search and explore more music whenever you want.",
+    placement: "top",
+  },
+] as const satisfies readonly SpotlightStep[];
 
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => mockSafeAreaInsets,
@@ -176,7 +200,8 @@ async function activateTour(
   await measureTooltip(getByTestId);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
   jest.clearAllMocks();
   mockMeasureCallbacks.clear();
   mockReducedMotion = false;
@@ -376,6 +401,17 @@ it("announces title, description, and progress in the initial focus label", asyn
 
   expect(getByLabelText(
     "START HERE. Your Daily Drop is a fresh track selected for this moment. Step 1 of 3",
+  )).toBeTruthy();
+});
+
+it("rerenders the focus announcement in Spanish", async () => {
+  const view = await render(<Harness />);
+  await activateTour(view.getByTestId);
+
+  await act(() => i18n.changeLanguage("es"));
+
+  expect(view.getByLabelText(
+    "START HERE. Your Daily Drop is a fresh track selected for this moment. Paso 1 de 3",
   )).toBeTruthy();
 });
 

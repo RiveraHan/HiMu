@@ -1,12 +1,12 @@
 import { createContext, use } from "react";
 
 import type { OnboardingPhase } from "./onboarding-machine";
-import type { ContextualTipId, SpotlightStep, TourTargetId } from "./types";
+import type { ContextualTipId, SpotlightStepDefinition, TourTargetId } from "./types";
 
 export type HomeTourRegistration = {
   ready: boolean;
   hasPlayableCandidate: boolean;
-  steps: readonly SpotlightStep[];
+  steps: readonly SpotlightStepDefinition[];
   ensureStepVisible: (stepId: string) => Promise<void>;
   playFirstAvailable: () => Promise<boolean>;
 };

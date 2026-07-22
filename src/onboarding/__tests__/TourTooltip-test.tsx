@@ -1,18 +1,32 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import { StyleSheet as RNStyleSheet } from "react-native";
+import { AccessibilityInfo, StyleSheet as RNStyleSheet } from "react-native";
 
-import { HOME_TOUR_STEPS } from "../constants";
+import i18n from "@/src/i18n";
 import { TourCompletionSheet } from "../TourCompletionSheet";
 import { TourTooltip } from "../TourTooltip";
+import type { SpotlightStep } from "../types";
 
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+const STEP: SpotlightStep = {
+  id: "home.djs",
+  targetId: "home.djs",
+  title: "DIFFERENT MINDS, DIFFERENT SOUNDS",
+  description: "Each AI DJ has a distinct sound and personality.",
+  placement: "top",
+};
+
+beforeEach(async () => {
+  await i18n.changeLanguage("en");
+  jest.clearAllMocks();
+});
+
 it("exposes tooltip progress and 44-point named controls", async () => {
   const view = await render(
     <TourTooltip
-      step={HOME_TOUR_STEPS[1]}
+      step={STEP}
       currentIndex={1}
       total={3}
       onNext={jest.fn()}
@@ -55,4 +69,32 @@ it("uses Finish when Home has no playable candidate", async () => {
   expect(RNStyleSheet.flatten(view.getByTestId("completion-panel").props.style)).toEqual(
     expect.objectContaining({ maxWidth: 340, maxHeight: "100%", borderRadius: 24, padding: 20 }),
   );
+});
+
+it("localizes tooltip controls, completion copy, and announcements in Spanish", async () => {
+  await i18n.changeLanguage("es");
+  const announce = jest.spyOn(AccessibilityInfo, "announceForAccessibility");
+  const tooltip = await render(
+    <TourTooltip
+      step={STEP}
+      currentIndex={1}
+      total={3}
+      onNext={jest.fn()}
+      onPrevious={jest.fn()}
+      onSkip={jest.fn()}
+    />,
+  );
+
+  expect(tooltip.getByText("Paso 2 de 3")).toBeTruthy();
+  expect(tooltip.getByText("Atrás")).toBeTruthy();
+  expect(tooltip.getByText("Omitir")).toBeTruthy();
+  expect(tooltip.getByText("Siguiente")).toBeTruthy();
+  expect(tooltip.getByLabelText("Progreso del tour, paso 2 de 3")).toBeTruthy();
+
+  const completion = await render(
+    <TourCompletionSheet canPlay={false} onComplete={jest.fn(async () => undefined)} />,
+  );
+  expect(completion.getByText("TOUR COMPLETADO")).toBeTruthy();
+  expect(completion.getByText("YA ESTÁS LISTO")).toBeTruthy();
+  expect(announce).toHaveBeenCalledWith("Ya estás listo. Tour guiado completado.");
 });

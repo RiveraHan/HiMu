@@ -1,34 +1,40 @@
 import { Pressable, View } from "react-native";
 import { StyleSheet } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 import { Text } from "@/src/components/Text";
 
 type Props = { onContinue: () => void; onDismiss: () => void };
 
 export function ContinueTourCard({ onContinue, onDismiss }: Props) {
+  const { t } = useTranslation();
   return (
     <View style={styles.card}>
       <View style={styles.copy}>
-        <Text variant="labelCaps" color="primary">GUIDED TOUR</Text>
-        <Text selectable variant="h2">KEEP EXPLORING HIMU</Text>
-        <Text selectable color="onSurfaceVariant">Pick up where you left off.</Text>
+        <Text variant="labelCaps" color="primary">{t("onboarding.continueTour.eyebrow")}</Text>
+        <Text selectable variant="h2">{t("onboarding.continueTour.title")}</Text>
+        <Text selectable color="onSurfaceVariant">{t("onboarding.continueTour.body")}</Text>
       </View>
       <View style={styles.actions}>
         <Pressable
-          accessibilityLabel="Continue guided tour"
+          accessibilityLabel={t("onboarding.continueTour.accessibility.continue")}
           accessibilityRole="button"
           onPress={onContinue}
           style={styles.button}
         >
-          <Text color="onPrimaryContainer" variant="labelCaps">Continue tour</Text>
+          <Text color="onPrimaryContainer" variant="labelCaps">
+            {t("onboarding.continueTour.actions.continue")}
+          </Text>
         </Pressable>
         <Pressable
-          accessibilityLabel="Dismiss guided tour"
+          accessibilityLabel={t("onboarding.continueTour.accessibility.dismiss")}
           accessibilityRole="button"
           onPress={onDismiss}
           style={styles.dismissButton}
         >
-          <Text color="onSurfaceVariant" variant="labelCaps">End tour</Text>
+          <Text color="onSurfaceVariant" variant="labelCaps">
+            {t("onboarding.continueTour.actions.end")}
+          </Text>
         </Pressable>
       </View>
     </View>
