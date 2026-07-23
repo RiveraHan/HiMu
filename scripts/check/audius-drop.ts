@@ -13,7 +13,10 @@ import {
   fallbackAudiusCaption,
   LLAMA_ENDPOINT,
 } from "../../supabase/functions/generate-mix/generation-models";
-import { buildAudiusPickInput } from "../../supabase/functions/generate-mix/audius-drop";
+import {
+  buildAudiusPickInput,
+  fallbackAudiusPickCaption,
+} from "../../supabase/functions/generate-mix/audius-drop";
 
 function check(cond: boolean, msg: string) {
   if (!cond) {
@@ -41,6 +44,11 @@ assert.match(spanish.body.input.prompt, /esta noche/i);
 assert.equal(
   fallbackAudiusCaption("es", "Luz Azul", "Mara"),
   "Un hallazgo nuevo — Luz Azul de Mara.",
+);
+assert.equal(
+  fallbackAudiusPickCaption(undefined, "Luz Azul", "Mara"),
+  "Fresh find — Luz Azul by Mara.",
+  "legacy two-argument pick defaults its fallback caption to English",
 );
 
 // mapDjGenre: walks specialties, maps the first known, else null.

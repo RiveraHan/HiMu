@@ -15,6 +15,14 @@ const CANDIDATE_LIMIT = 12;
 
 export type AudiusPick = { pick: AudiusTrack; caption: string };
 
+export function fallbackAudiusPickCaption(
+  language: GenerationLanguage = "en",
+  trackTitle: string,
+  artistName?: string | null,
+): string {
+  return fallbackAudiusCaption(language, trackTitle, artistName);
+}
+
 export function buildAudiusPickInput(
   dj: any,
   localHour: unknown,
@@ -73,7 +81,7 @@ export function buildAudiusPickInput(
 export async function pickAudiusDrop(
   dj: any,
   localHour: unknown,
-  language: GenerationLanguage,
+  language: GenerationLanguage = "en",
 ): Promise<AudiusPick | null> {
   const genre = mapDjGenre(dj?.genre_specialties);
   const candidates = await fetchTrending(genre, CANDIDATE_LIMIT);
@@ -92,7 +100,7 @@ export async function pickAudiusDrop(
   const pick = candidates[index] ?? candidates[0];
   const finalCaption =
     caption ??
-    fallbackAudiusCaption(language, pick.title, pick.user?.name);
+    fallbackAudiusPickCaption(language, pick.title, pick.user?.name);
 
   return { pick, caption: finalCaption };
 }
