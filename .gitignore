@@ -49,6 +49,8 @@ supabase/.branches/
 supabase/functions/**/node_modules/
 src/types/database.ts
 
-docs/
+docs/*
+!docs/research/
+!docs/research/*.md
 
 reference/
