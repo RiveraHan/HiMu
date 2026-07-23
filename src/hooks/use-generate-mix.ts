@@ -1,11 +1,13 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { useLocale } from "@/src/i18n/use-locale";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 // Requests a new mix from a DJ and polls the job until it's ready.
 export function useGenerateMix() {
   const [jobId, setJobId] = useState<string | null>(null);
+  const { resolvedLanguage } = useLocale();
 
   const start = useMutation({
     mutationFn: async ({ djId, lyrics }: { djId: string; lyrics?: string }) => {
@@ -14,6 +16,7 @@ export function useGenerateMix() {
       }>("generate-mix", {
         body: {
           djId,
+          language: resolvedLanguage,
           localHour: new Date().getHours(),
           ...(lyrics ? { lyrics } : {}),
         },
