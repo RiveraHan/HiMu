@@ -54,6 +54,7 @@ export const onboarding = {
     eyebrow: "GUIDED TOUR",
     stepCount: "Step {{step}} of {{count}}",
     progress: "Tour progress, step {{step}} of {{count}}",
+    interactionHint: "Tap the highlight or use Next",
     actions: {
       back: "Back",
       skip: "Skip",

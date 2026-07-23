@@ -8,8 +8,9 @@ import React, {
 } from "react";
 import {
   AccessibilityInfo,
+  BackHandler,
   findNodeHandle,
-  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -19,10 +20,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import Animated, {
+  cancelAnimation,
   ReduceMotion,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import Svg, { Defs, Mask, Rect } from "react-native-svg";
@@ -35,6 +38,7 @@ const SCREEN_MARGIN = 16;
 const TRANSITION_DURATION = 200;
 const HIDDEN_SCALE = 0.96;
 const MASK_ID = "himu-tour-spotlight-mask";
+const SPOTLIGHT_COLOR = "#bdc2ff";
 
 export type TourTooltipRenderProps = {
   step: SpotlightStep;
@@ -95,16 +99,18 @@ export function SpotlightTourEngine({
   children,
 }: TourEngineProps): React.ReactElement {
   const { t } = useTranslation();
-  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const opacity = useSharedValue(0);
   const scale = useSharedValue(HIDDEN_SCALE);
+  const haloOpacity = useSharedValue(1);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusAnchorRef = useRef<View>(null);
+  const hostRef = useRef<View>(null);
   const measurementsEnabled = active && ready;
   const stepEpochKey = `${currentIndex}:${steps[currentIndex]?.id ?? "none"}`;
-  const viewportKey = `${screenWidth}:${screenHeight}:${stepEpochKey}`;
+  const viewportKey = `${windowWidth}:${windowHeight}:${stepEpochKey}`;
   const previousMeasurementEpoch = useRef({
     enabled: measurementsEnabled,
     viewportKey,
@@ -142,6 +148,9 @@ export function SpotlightTourEngine({
     height: number;
     key: string;
   } | null>(null);
+  const [hostMeasurement, setHostMeasurement] = useState<TargetMeasurement | null>(
+    null,
+  );
 
   const setSurface = useCallback((mounted: boolean) => {
     surfaceMountedRef.current = mounted;
@@ -212,6 +221,34 @@ export function SpotlightTourEngine({
     [],
   );
 
+  const measureHost = useCallback(() => {
+    const generation = measurementStateRef.current.generation;
+    if (!measurementStateRef.current.enabled) return;
+    hostRef.current?.measureInWindow((x, y, width, height) => {
+      if (
+        !measurementStateRef.current.enabled ||
+        generation !== measurementStateRef.current.generation ||
+        width <= 0 ||
+        height <= 0
+      ) {
+        return;
+      }
+      setHostMeasurement((current) =>
+        current?.x === x &&
+        current.y === y &&
+        current.width === width &&
+        current.height === height &&
+        current.generation === generation
+          ? current
+          : { x, y, width, height, borderRadius: 0, generation },
+      );
+    });
+  }, []);
+
+  useEffect(() => {
+    if (measurementsEnabled) measureHost();
+  }, [measureHost, measurementGeneration, measurementsEnabled, viewportKey]);
+
   const requestedTargets = useMemo(
     () => new Set(steps.map((step) => step.targetId)),
     [steps],
@@ -222,6 +259,7 @@ export function SpotlightTourEngine({
   const everyTargetMeasured = [...requestedTargets].every((id) =>
     targetMeasurements.get(id)?.generation === measurementGeneration,
   );
+  const hostReady = hostMeasurement?.generation === measurementGeneration;
   const validIndex = currentIndex >= 0 && currentIndex < steps.length;
   const step = validIndex ? steps[currentIndex] : undefined;
   const tooltipKey = step
@@ -237,12 +275,30 @@ export function SpotlightTourEngine({
     : "inactive";
   const tooltipHeight =
     tooltipMeasurement?.key === tooltipKey ? tooltipMeasurement.height : 0;
-  const safeTop = insets.top + SCREEN_MARGIN;
-  const safeBottom = screenHeight - insets.bottom - SCREEN_MARGIN;
+  const screenWidth = hostReady ? hostMeasurement.width : windowWidth;
+  const screenHeight = hostReady ? hostMeasurement.height : windowHeight;
+  const hostX = hostReady ? hostMeasurement.x : 0;
+  const hostY = hostReady ? hostMeasurement.y : 0;
+  const safeInsetTop = Math.max(0, insets.top - hostY);
+  const safeInsetLeft = Math.max(0, insets.left - hostX);
+  const safeInsetRight = Math.max(
+    0,
+    insets.right - Math.max(0, windowWidth - hostX - screenWidth),
+  );
+  const safeInsetBottom = Math.max(
+    0,
+    insets.bottom - Math.max(0, windowHeight - hostY - screenHeight),
+  );
+  const safeTop = safeInsetTop + SCREEN_MARGIN;
+  const safeBottom = screenHeight - safeInsetBottom - SCREEN_MARGIN;
   const maximumTooltipHeight = Math.max(44, safeBottom - safeTop);
   const tooltipReady = tooltipHeight > 0;
   const targetsReady =
-    measurementsEnabled && validIndex && everyTargetRegistered && everyTargetMeasured;
+    measurementsEnabled &&
+    validIndex &&
+    hostReady &&
+    everyTargetRegistered &&
+    everyTargetMeasured;
   const shouldShow = targetsReady && tooltipReady;
   const isPremeasuring = measurementsEnabled && validIndex && !shouldShow;
   const hasRenderableStep = step !== undefined;
@@ -340,6 +396,10 @@ export function SpotlightTourEngine({
     () => ({ transform: [{ scale: scale.value }] }),
     [surfaceMounted],
   );
+  const haloAnimatedStyle = useAnimatedStyle(
+    () => ({ opacity: haloOpacity.value }),
+    [surfaceMounted],
+  );
   const registry = useMemo<TargetRegistry>(
     () => ({
       measurementGeneration,
@@ -358,15 +418,17 @@ export function SpotlightTourEngine({
   );
 
   const target = step ? targetMeasurements.get(step.targetId) : undefined;
-  const left = clamp((target?.x ?? 0) - SPOTLIGHT_PADDING, 0, screenWidth);
-  const top = clamp((target?.y ?? 0) - SPOTLIGHT_PADDING, 0, screenHeight);
+  const targetX = (target?.x ?? 0) - hostX;
+  const targetY = (target?.y ?? 0) - hostY;
+  const left = clamp(targetX - SPOTLIGHT_PADDING, 0, screenWidth);
+  const top = clamp(targetY - SPOTLIGHT_PADDING, 0, screenHeight);
   const right = clamp(
-    (target?.x ?? 0) + (target?.width ?? 0) + SPOTLIGHT_PADDING,
+    targetX + (target?.width ?? 0) + SPOTLIGHT_PADDING,
     0,
     screenWidth,
   );
   const bottom = clamp(
-    (target?.y ?? 0) + (target?.height ?? 0) + SPOTLIGHT_PADDING,
+    targetY + (target?.height ?? 0) + SPOTLIGHT_PADDING,
     0,
     screenHeight,
   );
@@ -410,6 +472,15 @@ export function SpotlightTourEngine({
         count: steps.length,
       })
     : "";
+  const spotlightActionLabel = step
+    ? `${step.title}. ${
+        currentIndex === steps.length - 1
+          ? t("onboarding.tooltip.accessibility.finish")
+          : t("onboarding.tooltip.accessibility.next", {
+              step: currentIndex + 2,
+            })
+      }`
+    : "";
 
   const handleNext = useCallback(() => {
     if (currentIndex === steps.length - 1) {
@@ -438,6 +509,30 @@ export function SpotlightTourEngine({
   const hostMounted =
     hasRenderableStep && !shouldRetireForReadiness && (targetsReady || surfaceMounted);
   useEffect(() => {
+    if (!activeSurface || reduceMotion) {
+      cancelAnimation(haloOpacity);
+      haloOpacity.value = 1;
+      return;
+    }
+    haloOpacity.value = withRepeat(
+      withTiming(0.45, {
+        duration: 900,
+        reduceMotion: ReduceMotion.System,
+      }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(haloOpacity);
+  }, [activeSurface, haloOpacity, reduceMotion]);
+  useEffect(() => {
+    if (!activeSurface) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleSkip();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [activeSurface, handleSkip]);
+  useEffect(() => {
     if (activeSurface && shouldShow) {
       const node = findNodeHandle(focusAnchorRef.current);
       if (node !== null) AccessibilityInfo.setAccessibilityFocus(node);
@@ -447,21 +542,21 @@ export function SpotlightTourEngine({
   return (
     <TourTargetRegistryContext.Provider value={registry}>
       <View
-        accessibilityElementsHidden={activeSurface}
-        importantForAccessibility={activeSurface ? "no-hide-descendants" : "auto"}
-        style={styles.background}
-        testID="tour-background"
+        collapsable={false}
+        onLayout={measureHost}
+        ref={hostRef}
+        style={styles.host}
+        testID="tour-host"
       >
-        {children}
-      </View>
-      {hostMounted && step ? (
-        <Modal
-          animationType="none"
-          onRequestClose={handleSkip}
-          statusBarTranslucent
-          transparent
-          visible
+        <View
+          accessibilityElementsHidden={activeSurface}
+          importantForAccessibility={activeSurface ? "no-hide-descendants" : "auto"}
+          style={styles.background}
+          testID="tour-background"
         >
+          {children}
+        </View>
+        {hostMounted && step ? (
           <Animated.View
             accessibilityElementsHidden={!activeSurface}
             accessibilityViewIsModal={activeSurface}
@@ -491,7 +586,7 @@ export function SpotlightTourEngine({
                 </Mask>
               </Defs>
               <Rect
-                fill="rgba(0, 0, 0, 0.60)"
+                fill="rgba(0, 0, 0, 0.72)"
                 height={screenHeight}
                 mask={`url(#${MASK_ID})`}
                 testID="tour-scrim"
@@ -500,13 +595,39 @@ export function SpotlightTourEngine({
                 y={0}
               />
             </Svg>
+            <Pressable
+              accessibilityLabel={spotlightActionLabel}
+              accessibilityRole="button"
+              onPress={handleNext}
+              style={[
+                styles.spotlightAction,
+                {
+                  borderRadius: spotlight.borderRadius,
+                  height: spotlight.height,
+                  left: spotlight.x,
+                  top: spotlight.y,
+                  width: spotlight.width,
+                },
+              ]}
+              testID="tour-spotlight-action"
+            >
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.spotlightHalo,
+                  { borderRadius: spotlight.borderRadius },
+                  haloAnimatedStyle,
+                ]}
+                testID="tour-spotlight-halo"
+              />
+            </Pressable>
             <View
               onLayout={(event) => handleTooltipLayout(event.nativeEvent.layout.height)}
               style={[
                 styles.tooltip,
                 {
-                  left: insets.left + SCREEN_MARGIN,
-                  right: insets.right + SCREEN_MARGIN,
+                  left: safeInsetLeft + SCREEN_MARGIN,
+                  right: safeInsetRight + SCREEN_MARGIN,
                   top: isPremeasuring ? safeTop : tooltipTop,
                   maxHeight: maximumTooltipHeight,
                 },
@@ -540,21 +661,37 @@ export function SpotlightTourEngine({
               </ScrollView>
             </View>
           </Animated.View>
-        </Modal>
-      ) : null}
+        ) : null}
+      </View>
     </TourTargetRegistryContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
+  host: {
+    flex: 1,
+  },
   background: {
     flex: 1,
   },
   modal: {
     ...StyleSheet.absoluteFillObject,
+    elevation: 1000,
+    zIndex: 1000,
   },
   tooltip: {
     position: "absolute",
+    zIndex: 2,
+  },
+  spotlightAction: {
+    position: "absolute",
+    zIndex: 1,
+  },
+  spotlightHalo: {
+    ...StyleSheet.absoluteFillObject,
+    borderColor: SPOTLIGHT_COLOR,
+    borderWidth: 2,
+    boxShadow: "0 0 18px rgba(189, 194, 255, 0.85)",
   },
   tooltipScrollContent: {
     flexGrow: 1,

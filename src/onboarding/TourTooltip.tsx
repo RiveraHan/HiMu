@@ -24,6 +24,7 @@ export function TourTooltip({
         <Text accessibilityLiveRegion="polite" color="onSurfaceVariant" variant="labelCaps">
           {t("onboarding.tooltip.stepCount", { step: displayIndex, count: total })}
         </Text>
+        <Text color="primary" variant="bodyMd">{t("onboarding.tooltip.interactionHint")}</Text>
         <View
           accessibilityLabel={t("onboarding.tooltip.progress", {
             step: displayIndex,

@@ -36,6 +36,7 @@ it("exposes tooltip progress and 44-point named controls", async () => {
   );
 
   expect(view.getByText("Step 2 of 3")).toBeTruthy();
+  expect(view.getByText("Tap the highlight or use Next")).toBeTruthy();
   expect(view.getByTestId("tour-tooltip").props.accessibilityViewIsModal).toBe(true);
   for (const label of ["Back to tour step 1", "Next to tour step 3", "Skip tour"]) {
     const control = view.getByLabelText(label);
@@ -89,6 +90,7 @@ it("localizes tooltip controls, completion copy, and announcements in Spanish", 
   expect(tooltip.getByText("Atrás")).toBeTruthy();
   expect(tooltip.getByText("Omitir")).toBeTruthy();
   expect(tooltip.getByText("Siguiente")).toBeTruthy();
+  expect(tooltip.getByText("Toca el área resaltada o usa Siguiente")).toBeTruthy();
   expect(tooltip.getByLabelText("Progreso del tour, paso 2 de 3")).toBeTruthy();
 
   const completion = await render(

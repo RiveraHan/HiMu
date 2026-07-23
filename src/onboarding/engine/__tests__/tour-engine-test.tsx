@@ -1,6 +1,6 @@
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
-import { Pressable, Text, View } from "react-native";
+import { BackHandler, Pressable, Text, View } from "react-native";
 import type { TestInstance } from "test-renderer";
 
 import i18n from "@/src/i18n";
@@ -12,9 +12,11 @@ type MeasureCallback = (x: number, y: number, width: number, height: number) => 
 
 const mockMeasureCallbacks = new Map<string, MeasureCallback[]>();
 const mockWithTiming = jest.fn((value: number, _config: unknown) => value);
+const mockWithRepeat = jest.fn((animation: number) => animation);
 const mockSetAccessibilityFocus = jest.fn((_node: number) => undefined);
 const mockFindNodeHandle = jest.fn((_component: unknown) => 42);
 let mockReducedMotion = false;
+let hostHasBeenMeasured = false;
 const mockWindowDimensions = { width: 400, height: 800 };
 const mockSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -84,6 +86,9 @@ jest.mock("react-native-reanimated", () => {
       if (property === "useReducedMotion") return () => mockReducedMotion;
       if (property === "withTiming") {
         return (value: number, config: unknown) => mockWithTiming(value, config);
+      }
+      if (property === "withRepeat") {
+        return (animation: number) => mockWithRepeat(animation);
       }
       return target[property];
     },
@@ -163,11 +168,30 @@ async function signalLayout(getByTestId: (id: string) => TestInstance, index: nu
   });
 }
 
+async function measureHost(
+  getByTestId: (id: string, options?: { includeHiddenElements?: boolean }) => TestInstance,
+  rect = {
+    x: 0,
+    y: 0,
+    width: mockWindowDimensions.width,
+    height: mockWindowDimensions.height,
+  },
+) {
+  await fireEvent(getByTestId("tour-host", { includeHiddenElements: true }), "layout", {
+    nativeEvent: { layout: { x: 0, y: 0, width: rect.width, height: rect.height } },
+  });
+  const callback = mockMeasureCallbacks.get("tour-host")?.at(-1);
+  if (!callback) throw new Error("Tour host did not request measureInWindow");
+  await act(() => callback(rect.x, rect.y, rect.width, rect.height));
+  hostHasBeenMeasured = true;
+}
+
 async function measureTarget(
   getByTestId: (id: string) => TestInstance,
   index: number,
   rect = { x: 24, y: 80 + index * 120, width: 240, height: 80 },
 ) {
+  if (!hostHasBeenMeasured) await measureHost(getByTestId);
   await signalLayout(getByTestId, index);
   const callbacks = mockMeasureCallbacks.get(`tour-target-${index}`);
   const callback = callbacks?.at(-1);
@@ -177,8 +201,9 @@ async function measureTarget(
 
 async function measureAllTargets(
   getByTestId: (id: string) => TestInstance,
-  steps = HOME_TOUR_STEPS,
+  steps: readonly SpotlightStep[] = HOME_TOUR_STEPS,
 ) {
+  await measureHost(getByTestId);
   for (let index = 0; index < steps.length; index += 1) {
     await measureTarget(getByTestId, index);
   }
@@ -205,6 +230,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   mockMeasureCallbacks.clear();
   mockReducedMotion = false;
+  hostHasBeenMeasured = false;
   mockWindowDimensions.width = 400;
   mockWindowDimensions.height = 800;
   mockSafeAreaInsets.top = 0;
@@ -248,6 +274,7 @@ it("requires fresh positive window measurements after ready becomes true", async
 
   await rerender(<Harness ready />);
   expect(queryByText(HOME_TOUR_STEPS[0].title)).toBeNull();
+  await measureHost(getByTestId);
   for (let index = 0; index < HOME_TOUR_STEPS.length; index += 1) {
     const callbacks = mockMeasureCallbacks.get(`tour-target-${index}`);
     expect(callbacks?.length ?? 0).toBeGreaterThan(countsWhileReady[index]);
@@ -319,6 +346,7 @@ it("starts a new measurement epoch when the viewport changes", async () => {
   }
 
   expect(queryByText(HOME_TOUR_STEPS[0].title)).toBeNull();
+  await measureHost(getByTestId);
   expect(getByTestId("tour-overlay", { includeHiddenElements: true })).toHaveProp(
     "accessibilityElementsHidden",
     true,
@@ -439,6 +467,22 @@ it("reports next, previous, skip, and finish without leaking host events", async
   expect(mockOnNext).toHaveBeenCalledTimes(1);
 });
 
+it("dismisses the non-modal overlay through the Android hardware back action", async () => {
+  const remove = jest.fn();
+  const addBackHandler = jest
+    .spyOn(BackHandler, "addEventListener")
+    .mockReturnValue({ remove });
+  const { getByTestId, unmount } = await render(<Harness />);
+  await activateTour(getByTestId);
+
+  const hardwareBack = addBackHandler.mock.calls.at(-1)?.[1];
+  expect(hardwareBack?.()).toBe(true);
+  expect(mockOnSkip).toHaveBeenCalledWith();
+
+  await act(() => unmount());
+  expect(remove).toHaveBeenCalledWith();
+});
+
 it("hides the background reversibly and moves initial focus inside the tooltip", async () => {
   const { getByTestId, rerender } = await render(<Harness />);
   await activateTour(getByTestId);
@@ -465,7 +509,7 @@ it("hides the background reversibly and moves initial focus inside the tooltip",
   );
 });
 
-it("uses a 60 percent scrim and a rounded cutout with edge-correct padding", async () => {
+it("uses a high-contrast scrim and a rounded cutout with edge-correct padding", async () => {
   const { getByTestId } = await render(
     <Harness steps={[HOME_TOUR_STEPS[0]]} borderRadius={24} />,
   );
@@ -473,7 +517,7 @@ it("uses a 60 percent scrim and a rounded cutout with edge-correct padding", asy
   await measureTooltip(getByTestId);
 
   expect(getByTestId("tour-scrim")).toHaveProp("fill", {
-    payload: 0x99000000,
+    payload: 0xb8000000,
     type: 0,
   });
   expect(getByTestId("tour-cutout")).toHaveProp("x", 0);
@@ -481,6 +525,49 @@ it("uses a 60 percent scrim and a rounded cutout with edge-correct padding", asy
   expect(getByTestId("tour-cutout")).toHaveProp("width", 62);
   expect(getByTestId("tour-cutout")).toHaveProp("height", 51);
   expect(getByTestId("tour-cutout")).toHaveProp("rx", 24);
+});
+
+it("draws a visible halo and advances when the highlighted element is pressed", async () => {
+  const steps = [HOME_TOUR_STEPS[0], HOME_TOUR_STEPS[1]] as const;
+  const { getByLabelText, getByTestId } = await render(
+    <Harness steps={steps} />,
+  );
+  await measureAllTargets(getByTestId, steps);
+  await measureTooltip(getByTestId);
+
+  expect(getByTestId("tour-spotlight-halo")).toHaveStyle({
+    borderWidth: 2,
+    borderColor: "#bdc2ff",
+  });
+  const action = getByLabelText("START HERE. Next to tour step 2");
+  expect(action).toHaveProp("accessibilityRole", "button");
+  await fireEvent.press(action);
+
+  expect(mockOnNext).toHaveBeenCalledWith();
+});
+
+it("pulses the spotlight halo while the tour surface is active", async () => {
+  const { getByTestId } = await render(<Harness />);
+  await activateTour(getByTestId);
+
+  expect(mockWithTiming).toHaveBeenCalledWith(
+    0.45,
+    expect.objectContaining({ duration: 900 }),
+  );
+  expect(mockWithRepeat).toHaveBeenCalledWith(0.45);
+});
+
+it("converts target window coordinates into the tour host coordinate space", async () => {
+  const { getByTestId } = await render(
+    <Harness steps={[HOME_TOUR_STEPS[0]]} borderRadius={24} />,
+  );
+
+  await measureHost(getByTestId, { x: 12, y: 24, width: 376, height: 752 });
+  await measureTarget(getByTestId, 0, { x: 36, y: 104, width: 240, height: 80 });
+  await measureTooltip(getByTestId);
+
+  expect(getByTestId("tour-cutout")).toHaveProp("x", 16);
+  expect(getByTestId("tour-cutout")).toHaveProp("y", 72);
 });
 
 it("keeps a large tooltip scrollable inside safe-area placement bounds", async () => {
@@ -513,7 +600,11 @@ it("animates fade and scale for 200ms on entry and exit", async () => {
   const { getByTestId, queryByTestId, rerender } = await render(<Harness />);
   await activateTour(getByTestId);
   expect(mockWithTiming).toHaveBeenCalledWith(1, expect.objectContaining({ duration: 200 }));
-  expect(mockWithTiming).toHaveBeenCalledTimes(2);
+  expect(
+    mockWithTiming.mock.calls.filter(([, config]) =>
+      (config as { duration?: number }).duration === 200
+    ),
+  ).toHaveLength(2);
   expect(getByTestId("tour-tooltip-animated")).not.toHaveStyle({ opacity: 1 });
 
   jest.useFakeTimers();
