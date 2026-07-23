@@ -80,6 +80,26 @@ assert.match(caption.body.input.system_prompt, /\[CAPTION_START\]/);
 assert.match(caption.body.input.system_prompt, /\[CAPTION_END\]/);
 assert.match(caption.body.input.prompt, /esta mañana/i);
 
+const spanishTitleRandomValues = [0, 0.17, 0.34, 0.51, 0.68, 0.85];
+const spanishTitles = spanishTitleRandomValues.map((value) =>
+  creativeTitle("es", () => value)
+);
+const reviewFailures: string[] = [];
+if (!/neutral Latin American Spanish/i.test(caption.body.input.system_prompt)) {
+  reviewFailures.push("Spanish captions must require neutral Latin American Spanish");
+}
+if (JSON.stringify(spanishTitles) !== JSON.stringify([
+  "Neón Pulsante",
+  "Medianoche Dorada",
+  "Bruma Eléctrica",
+  "Deriva Lunar",
+  "Eco de Terciopelo",
+  "Horizonte Luminoso",
+])) {
+  reviewFailures.push("Spanish titles must use fixed grammatically compatible pairs");
+}
+assert.deepEqual(reviewFailures, []);
+
 const tts = buildCaptionTtsInput("es", "feminine", ["energetic"], "Hoy subimos el ritmo");
 assert.equal(tts.endpoint, INWORLD_TTS_ENDPOINT);
 assert.equal(tts.body.input.language, "es");

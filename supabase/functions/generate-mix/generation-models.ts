@@ -12,6 +12,7 @@ type LocalizedCopy = {
   timePhrases: [string, string, string, string];
   titleAdjectives: string[];
   titleNouns: string[];
+  titlePairs?: string[];
   defaultDjName: string;
   defaultArtistName: string;
   vocalLanguage: string;
@@ -36,14 +37,22 @@ const COPY: Record<GenerationLanguage, LocalizedCopy> = {
   },
   es: {
     timePhrases: ["esta mañana", "esta tarde", "esta noche", "en la madrugada"],
-    titleAdjectives: ["Neón", "Medianoche", "Terciopelo", "Eléctrico", "Dorado", "Lunar"],
-    titleNouns: ["Pulso", "Deriva", "Bruma", "Eco", "Horizonte", "Brillo"],
+    titleAdjectives: [],
+    titleNouns: [],
+    titlePairs: [
+      "Neón Pulsante",
+      "Medianoche Dorada",
+      "Bruma Eléctrica",
+      "Deriva Lunar",
+      "Eco de Terciopelo",
+      "Horizonte Luminoso",
+    ],
     defaultDjName: "Tu DJ",
     defaultArtistName: "un artista que me encanta",
     vocalLanguage: "español latinoamericano neutro",
     automaticLyrics: "Write original lyrics in neutral Latin American Spanish.",
     captionInstruction:
-      "Escribe una sola línea breve en primera persona para presentar el estreno de hoy.",
+      "Write one short first-person line introducing today's fresh drop in neutral Latin American Spanish (español latinoamericano neutro).",
     fallbackCaption: (trackTitle, artistName) =>
       `Un hallazgo nuevo — ${trackTitle} de ${artistName}.`,
   },
@@ -141,6 +150,7 @@ export function creativeTitle(
   const copy = COPY[language];
   const pick = (words: string[]) =>
     words[Math.min(words.length - 1, Math.max(0, Math.floor(random() * words.length)))];
+  if (copy.titlePairs) return pick(copy.titlePairs);
   return `${pick(copy.titleAdjectives)} ${pick(copy.titleNouns)}`;
 }
 
