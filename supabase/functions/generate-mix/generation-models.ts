@@ -140,8 +140,18 @@ export function buildMusicInput(args: {
     : vocalInstruction;
   let lyricsBlock = "";
   if (acceptedLyrics != null) {
+    const untrustedFrameSources = [
+      acceptedLyrics,
+      args.basePrompt,
+      ...args.seasoning,
+      musicDirection,
+    ];
     let boundaryIndex = 0;
-    while (acceptedLyrics.includes(`HIMU_LYRICS_${boundaryIndex}`)) {
+    while (
+      untrustedFrameSources.some((source) =>
+        source.includes(`HIMU_LYRICS_${boundaryIndex}`)
+      )
+    ) {
       boundaryIndex += 1;
     }
     const boundary = `HIMU_LYRICS_${boundaryIndex}`;
