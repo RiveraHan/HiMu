@@ -16,103 +16,36 @@ import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import { streamUrl } from "../_shared/audius.ts";
 import { pickAudiusDrop } from "./audius-drop.ts";
-import { sanitize } from "../_shared/text.ts";
-
-const STABLE_AUDIO_VERSION =
-  "a61ac8edbb27cd2eda1b2eff2bbc03dcff1131f5560836ff77a052df05b77491";
+import {
+  boundedDefaultLyrics,
+  buildCaptionInput,
+  buildCaptionTtsInput,
+  buildMusicInput,
+  creativeTitle,
+  type GenerationLanguage,
+  parseGenerationLanguage,
+  validateLyrics,
+} from "./generation-models.ts";
 
 async function generateMusic(
   cfg: any,
   lyrics: string | null,
   seasoning: string[],
+  language: GenerationLanguage,
 ): Promise<string> {
-  const prompt = [String(cfg.base_prompt), ...seasoning]
-    .join(", ")
-    .slice(0, 2000);
-  const instrumental = cfg.is_instrumental ?? true;
-  const dur = trackSeconds(cfg); // parametrizable via dj_generation_configs.max_duration
-
-  if (!instrumental) {
-    // Vocal → elevenlabs/music. User lyrics (own vocal DJs) or seeded
-    // default_lyrics win; otherwise the model must write ORIGINAL lyrics.
-    const provided = lyrics ?? cfg.default_lyrics ?? null;
-
-    const desc = provided
-      ? `${prompt}. Sing only the provided lyrics. Sung lyrics:\n${String(
-          provided,
-        ).slice(0, 1500)}`
-      : `${prompt}. Write original lyrics; do not reproduce existing copyrighted songs.`;
-
-    return replicateRun(
-      "https://api.replicate.com/v1/models/elevenlabs/music/predictions",
-      {
-        input: {
-          prompt: desc.slice(0, 2000),
-          music_length_ms: dur * 1000,
-          force_instrumental: false,
-        },
-      },
-    );
-  }
-
-  return replicateRun("https://api.replicate.com/v1/predictions", {
-    version: STABLE_AUDIO_VERSION,
-    input: { prompt, duration: dur },
+  const request = buildMusicInput({
+    basePrompt: String(cfg.base_prompt),
+    seasoning,
+    instrumental: cfg.is_instrumental ?? true,
+    durationSeconds: trackSeconds(cfg),
+    language,
+    lyrics: lyrics ?? boundedDefaultLyrics(cfg.default_lyrics),
   });
+  return replicateRun(request.endpoint, request.body);
 }
 
 function trackSeconds(cfg: any): number {
   return Math.min(Number(cfg.max_duration) || 150, 190);
-}
-
-const TITLE_ADJ = [
-  "Neon",
-  "Midnight",
-  "Velvet",
-  "Electric",
-  "Crimson",
-  "Silent",
-  "Golden",
-  "Hollow",
-  "Lunar",
-  "Ember",
-  "Static",
-  "Cosmic",
-  "Faded",
-  "Wild",
-  "Distant",
-  "Molten",
-  "Frozen",
-  "Endless",
-  "Phantom",
-  "Amber",
-];
-const TITLE_NOUN = [
-  "Pulse",
-  "Drift",
-  "Haze",
-  "Mirage",
-  "Echo",
-  "Bloom",
-  "Tide",
-  "Circuit",
-  "Horizon",
-  "Rush",
-  "Signal",
-  "Current",
-  "Halo",
-  "Ritual",
-  "Voyage",
-  "Fever",
-  "Glow",
-  "Reverie",
-  "Cascade",
-  "Nocturne",
-];
-
-function creativeTitle(): string {
-  const pick = (a: string[]) => a[Math.floor(Math.random() * a.length)];
-  return `${pick(TITLE_ADJ)} ${pick(TITLE_NOUN)}`;
 }
 
 // Cover; falls back to the DJ avatar so it's never null.
@@ -202,92 +135,31 @@ async function buildSeasoning(
   return clauses;
 }
 
-const LLAMA_ENDPOINT =
-  "https://api.replicate.com/v1/models/meta/meta-llama-3-8b-instruct/predictions";
-
-function captionTimePhrase(localHour: unknown): string {
-  const hour =
-    typeof localHour === "number" &&
-    Number.isInteger(localHour) &&
-    localHour >= 0 &&
-    localHour <= 23
-      ? localHour
-      : new Date().getUTCHours();
-  if (hour >= 5 && hour <= 11) return "this morning";
-  if (hour >= 12 && hour <= 17) return "this afternoon";
-  if (hour >= 18 && hour <= 22) return "tonight";
-  return "in the late hours";
-}
-
 // One in-character line introducing today's drop. Best-effort: callers must
 // tolerate null. Display-only + capped — treats persona fields as untrusted.
 async function buildCaption(
   dj: any,
   localHour: unknown,
   trackTitle: string,
+  language: GenerationLanguage,
 ): Promise<string | null> {
-  const name = String(dj?.name ?? "Your DJ");
-  const character = String(dj?.character ?? "").slice(0, 300);
-  const voice = String(dj?.voice_style ?? "").slice(0, 120);
-  const genre = String(dj?.genre_specialties?.[0] ?? "eclectic");
-
-  const system =
-    `You are ${name}, an AI radio DJ. Persona: ${character}. Voice: ${voice}. ` +
-    `Write ONE short first-person line (max 18 words) introducing today's fresh drop to your listener, in your own voice. ` +
-    `Plain text only: no quotation marks, no emojis, no hashtags, no preamble. English.`;
-  const prompt =
-    `Genre: ${genre}. Time of day: ${captionTimePhrase(localHour)}. ` +
-    `Track title: ${trackTitle}. Write the single line now.`;
-
-  const raw = await replicateText(LLAMA_ENDPOINT, {
-    input: {
-      system_prompt: system,
-      prompt,
-      max_tokens: 60,
-      temperature: 0.8,
-    },
+  const request = buildCaptionInput({
+    dj,
+    localHour,
+    trackTitle,
+    language,
   });
+  const raw = await replicateText(request.endpoint, request.body);
+  const marked =
+    raw.match(/\[CAPTION_START\]\s*([\s\S]*?)\s*\[CAPTION_END\]/i)?.[1] ??
+      raw;
 
-  const line = raw
+  const line = marked
     .trim()
     .replace(/^["'\s]+|["'\s]+$/g, "")
     .slice(0, 140)
     .trim();
   return line || null;
-}
-
-const KOKORO_VERSION =
-  "f559560eb822dc509045f3921a1921234918b91739db4bf3daab2169b71c7a13";
-
-// Map the DJ's voice_style to a kokoro voice id (enum-validated ids).
-function pickVoice(voiceStyle: unknown): string {
-  const v = String(voiceStyle ?? "").toLowerCase();
-  if (v.includes("androgyn") || v.includes("ethereal")) return "af_nicole";
-  if (v.includes("mascul")) return "am_michael";
-  if (v.includes("femin")) return "af_bella";
-  return "af_bella";
-}
-
-const HIGH_ENERGY = new Set([
-  "energetic", "uplifting", "euphoric", "happy", "playful",
-  "groovy", "party", "workout", "epic", "intense",
-]);
-const CALM_ENERGY = new Set([
-  "focus", "relax", "dreamy", "meditate", "nature", "sleep", "cozy",
-  "ethereal", "melancholic", "nostalgic", "late night", "rainy day",
-]);
-
-// Delivery pace from the DJ's mood energy (the generated track has no
-// energy_level). Contained range so it never sounds distorted.
-function pickSpeed(dj: any): number {
-  const moods: string[] = Array.isArray(dj?.mood_tags) ? dj.mood_tags : [];
-  let score = 0;
-  for (const m of moods) {
-    const k = String(m).toLowerCase();
-    if (HIGH_ENERGY.has(k)) score += 1;
-    else if (CALM_ENERGY.has(k)) score -= 1;
-  }
-  return score > 0 ? 1.12 : score < 0 ? 0.92 : 1.0;
 }
 
 // TTS the caption in the DJ's voice; upload to R2. Best-effort — returns null
@@ -296,24 +168,43 @@ async function buildCaptionAudio(
   jobId: string,
   dj: any,
   caption: string,
+  language: GenerationLanguage,
 ): Promise<string | null> {
-  const tempUrl = await replicateRun(
-    "https://api.replicate.com/v1/predictions",
-    {
-      version: KOKORO_VERSION,
-      input: {
-        text: caption.slice(0, 300),
-        voice: pickVoice(dj?.voice_style),
-        speed: pickSpeed(dj),
-      },
-    },
+  const request = buildCaptionTtsInput(
+    language,
+    dj?.voice_style,
+    dj?.mood_tags,
+    caption.slice(0, 300),
   );
+  const tempUrl = await replicateRun(request.endpoint, request.body);
   const bytes = new Uint8Array(await (await fetch(tempUrl)).arrayBuffer());
-  return await r2Put(`captions/generated/${jobId}.wav`, bytes, "audio/wav");
+  return await r2Put(
+    `captions/generated/${jobId}.mp3`,
+    bytes,
+    "audio/mpeg",
+  );
 }
 
 serveAuthed(async (req, user) => {
-  const { djId, lyrics: rawLyrics, localHour, dropDate } = await req.json();
+  const {
+    djId,
+    lyrics: rawLyrics,
+    language: rawLanguage,
+    localHour,
+    dropDate,
+  } = await req.json();
+
+  let language: GenerationLanguage;
+  let requestedLyrics: string | null;
+  try {
+    language = parseGenerationLanguage(rawLanguage);
+    requestedLyrics = validateLyrics(rawLyrics);
+  } catch (error) {
+    return invalid(
+      error instanceof Error ? error.message : "invalid generation input",
+    );
+  }
+
   if (!djId) return invalid("djId required");
 
   const isDrop = dropDate != null;
@@ -344,14 +235,12 @@ serveAuthed(async (req, user) => {
   // Optional user lyrics: only on your OWN vocal DJ, and never for a drop.
   let lyrics: string | null = null;
 
-  if (!isDrop && rawLyrics != null) {
-    if (typeof rawLyrics !== "string") return invalid("lyrics must be text");
-
+  if (!isDrop && requestedLyrics != null) {
     if (cfg.is_instrumental !== false || owner !== user.id) {
       return invalid("lyrics are only allowed on your own vocal DJs");
     }
 
-    lyrics = sanitize(rawLyrics, 1000) || null;
+    lyrics = requestedLyrics;
   }
 
   const seasoning = await buildSeasoning(user.id, cfg.djs, localHour);
@@ -380,7 +269,14 @@ serveAuthed(async (req, user) => {
         .eq("id", existing.id);
       console.log("[generate-mix] drop retry:", existing.id);
       EdgeRuntime.waitUntil(
-        runGeneration(existing.id, cfg, null, seasoning, { localHour }),
+        runGeneration(
+          existing.id,
+          cfg,
+          null,
+          seasoning,
+          language,
+          { localHour },
+        ),
       );
       return json({ jobId: existing.id });
     }
@@ -410,7 +306,7 @@ serveAuthed(async (req, user) => {
 
     console.log("[generate-mix] drop seasoning:", seasoning.join(" | "));
     EdgeRuntime.waitUntil(
-      runGeneration(job.id, cfg, null, seasoning, { localHour }),
+      runGeneration(job.id, cfg, null, seasoning, language, { localHour }),
     );
     return json({ jobId: job.id });
   }
@@ -442,7 +338,9 @@ serveAuthed(async (req, user) => {
 
   console.log("[generate-mix] seasoning:", seasoning.join(" | "));
 
-  EdgeRuntime.waitUntil(runGeneration(job.id, cfg, lyrics, seasoning));
+  EdgeRuntime.waitUntil(
+    runGeneration(job.id, cfg, lyrics, seasoning, language),
+  );
 
   return json({ jobId: job.id });
 });
@@ -455,11 +353,12 @@ async function tryAudiusDrop(
   jobId: string,
   cfg: any,
   localHour: unknown,
+  language: GenerationLanguage,
 ): Promise<boolean> {
   const dj = cfg.djs;
   let picked: { pick: any; caption: string } | null = null;
   try {
-    picked = await pickAudiusDrop(dj, localHour);
+    picked = await pickAudiusDrop(dj, localHour, language);
   } catch (e) {
     console.error("[generate-mix] audius pick failed:", e);
     return false;
@@ -503,7 +402,7 @@ async function tryAudiusDrop(
 
     let captionAudioUrl: string | null = null;
     try {
-      captionAudioUrl = await buildCaptionAudio(jobId, dj, caption);
+      captionAudioUrl = await buildCaptionAudio(jobId, dj, caption, language);
     } catch (e) {
       console.error("[generate-mix] caption audio skipped:", e);
     }
@@ -531,6 +430,7 @@ async function runGeneration(
   cfg: any,
   lyrics: string | null,
   seasoning: string[],
+  language: GenerationLanguage,
   drop?: { localHour: unknown },
 ): Promise<void> {
   const update = (patch: Record<string, unknown>) =>
@@ -544,11 +444,16 @@ async function runGeneration(
 
     // Phase B: drops lead with a real Audius pick; generation is the fallback.
     if (drop) {
-      const done = await tryAudiusDrop(jobId, cfg, drop.localHour);
+      const done = await tryAudiusDrop(
+        jobId,
+        cfg,
+        drop.localHour,
+        language,
+      );
       if (done) return;
     }
 
-    const tempUrl = await generateMusic(cfg, lyrics, seasoning);
+    const tempUrl = await generateMusic(cfg, lyrics, seasoning, language);
 
     const bytes = new Uint8Array(await (await fetch(tempUrl)).arrayBuffer());
 
@@ -564,7 +469,7 @@ async function runGeneration(
     const { data: track, error: insErr } = await admin
       .from("tracks")
       .insert({
-        title: creativeTitle(),
+        title: creativeTitle(language),
         artist: dj.name,
         audio_url: publicUrl,
         album_art_url: cover,
@@ -583,10 +488,20 @@ async function runGeneration(
     let captionAudioUrl: string | null = null;
     if (drop) {
       try {
-        caption = await buildCaption(dj, drop.localHour, track.title);
+        caption = await buildCaption(
+          dj,
+          drop.localHour,
+          track.title,
+          language,
+        );
         if (caption) {
           try {
-            captionAudioUrl = await buildCaptionAudio(jobId, dj, caption);
+            captionAudioUrl = await buildCaptionAudio(
+              jobId,
+              dj,
+              caption,
+              language,
+            );
           } catch (e) {
             console.error("[generate-mix] caption audio skipped:", e);
           }
@@ -608,7 +523,7 @@ async function runGeneration(
     await r2Delete([
       `tracks/generated/${jobId}.mp3`,
       `covers/generated/${jobId}.jpg`,
-      `captions/generated/${jobId}.wav`,
+      `captions/generated/${jobId}.mp3`,
     ]);
   }
 }

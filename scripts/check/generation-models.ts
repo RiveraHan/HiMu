@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   buildCaptionInput,
   buildCaptionTtsInput,
@@ -107,5 +108,21 @@ assert.equal(tts.body.input.audio_format, "mp3");
 assert.equal(tts.body.input.sample_rate, 48000);
 assert.equal(tts.body.input.voice_id, "Ashley");
 assert.match(tts.body.input.text, /^\[say with upbeat radio energy\]/);
+
+const indexSource = readFileSync(
+  new URL("../../supabase/functions/generate-mix/index.ts", import.meta.url),
+  "utf8",
+);
+assert.doesNotMatch(
+  indexSource,
+  /elevenlabs\/music|STABLE_AUDIO_VERSION|KOKORO_VERSION/,
+);
+assert.match(indexSource, /parseGenerationLanguage/);
+assert.match(indexSource, /pickAudiusDrop\(dj, localHour, language\)/);
+assert.match(
+  indexSource,
+  /buildCaptionAudio\(jobId, dj, caption, language\)/,
+);
+assert.match(indexSource, /captions\/generated\/\$\{jobId\}\.mp3/);
 
 console.log("generation model checks passed");
