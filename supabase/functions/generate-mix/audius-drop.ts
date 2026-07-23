@@ -9,6 +9,7 @@ import {
   fallbackAudiusCaption,
   GenerationLanguage,
   LLAMA_ENDPOINT,
+  localizedArtistName,
 } from "./generation-models.ts";
 
 const CANDIDATE_LIMIT = 12;
@@ -44,7 +45,7 @@ export function buildAudiusPickInput(
   const shortlist = candidates
     .map(
       (c, i) =>
-        `${i + 1}. ${c.title} — ${c.user?.name ?? "Unknown"}` +
+        `${i + 1}. ${c.title} — ${localizedArtistName(language, c.user?.name)}` +
         (c.genre ? ` [${c.genre}${c.mood ? `, ${c.mood}` : ""}]` : ""),
     )
     .join("\n");

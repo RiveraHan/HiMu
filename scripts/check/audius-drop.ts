@@ -51,6 +51,31 @@ assert.equal(
   "legacy two-argument pick defaults its fallback caption to English",
 );
 
+const missingArtistCandidates = [{
+  id: "track-missing-artist",
+  title: "Luz [scream]",
+  user: undefined,
+}];
+const spanishMissingArtist = buildAudiusPickInput(
+  dj,
+  21,
+  missingArtistCandidates,
+  "es",
+);
+assert.doesNotMatch(spanishMissingArtist.body.input.prompt, /\bUnknown\b/);
+assert.match(spanishMissingArtist.body.input.prompt, /artista desconocido/i);
+assert.equal(
+  fallbackAudiusCaption("es", "Luz [scream]", null),
+  "Un hallazgo nuevo — Luz [scream] de artista desconocido.",
+);
+const englishMissingArtist = buildAudiusPickInput(
+  dj,
+  21,
+  missingArtistCandidates,
+  "en",
+);
+assert.match(englishMissingArtist.body.input.prompt, /unknown artist/i);
+
 // mapDjGenre: walks specialties, maps the first known, else null.
 check(mapDjGenre(["Ambient", "Lo-Fi"]) === "Ambient", "maps first known specialty");
 check(mapDjGenre(["Reggaeton", "Latin Pop"]) === "Latin", "reggaeton -> Latin");
