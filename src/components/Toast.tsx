@@ -13,6 +13,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
+import { useTranslation } from "react-i18next";
 import { GlassCard } from "./GlassCard";
 import { IconButton } from "./IconButton";
 import { Text } from "./Text";
@@ -54,6 +55,7 @@ function ToastCard({
   title: string;
   message?: string;
 }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
   const dismiss = useToastStore((s) => s.dismiss);
@@ -123,7 +125,7 @@ function ToastCard({
               onPress={dismiss}
               size="sm"
               variant="plain"
-              accessibilityLabel="Dismiss"
+              accessibilityLabel={t("common.actions.dismiss")}
             />
           </GlassCard>
         </Pressable>

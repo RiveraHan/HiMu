@@ -43,6 +43,9 @@ export function FocusOrb({
     <View
       style={[styles.wrap, { width: size, height: size }]}
       pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
     >
       <Animated.View
         style={[styles.ringOuter, { margin: size * 0.03 }, outerStyle]}

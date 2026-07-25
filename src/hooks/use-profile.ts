@@ -21,11 +21,12 @@ export function useProfile() {
 
       // Fallback to user metadata if profile data is not available
       return {
-        name:
+        name: (
           data?.display_name ??
           meta.full_name ??
           meta.name ??
-          ("Listener" as string),
+          null
+        ) as string | null,
         username: (data?.username ??
           user!.email?.split("@")[0] ??
           "") as string,

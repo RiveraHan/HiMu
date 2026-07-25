@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Text } from "./Text";
 
@@ -13,6 +14,7 @@ type Props = {
   isPlaying?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
+  accessibilityLabel?: string;
   testID?: string;
 };
 export function TrackCard({
@@ -24,8 +26,10 @@ export function TrackCard({
   isPlaying = false,
   onPress,
   onLongPress,
+  accessibilityLabel,
   testID,
 }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const isRow = variant === "row";
 
@@ -48,6 +52,8 @@ export function TrackCard({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={onPress ? "button" : undefined}
       testID={testID}
       style={({ pressed }) => [
         isRow ? styles.rootRow : styles.rootTile,
@@ -69,7 +75,7 @@ export function TrackCard({
         </Text>
         {isPlaying && (
           <Text variant="labelCaps" color="primary">
-            NOW PLAYING
+            {t("common.states.nowPlaying")}
           </Text>
         )}
       </View>

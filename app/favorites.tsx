@@ -4,19 +4,25 @@ import {
   ScreenScrollView,
   Text,
   TrackCard,
+  TrackRowSkeleton,
 } from "@/src/components";
 import { useFavorites } from "@/src/hooks/use-favorites";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function FavoritesScreen() {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
-  const { data: favorites, isLoading } = useFavorites();
+  const favoritesQuery = useFavorites();
+  const favorites = favoritesQuery.data;
+  const favoritesLoading = isInitialQueryLoading(favoritesQuery);
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
@@ -35,27 +41,36 @@ export default function FavoritesScreen() {
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
     >
-      <ScreenHeader kicker="PERSONALIZED LIBRARY" title="Favorites" />
+      <ScreenHeader
+        kicker={t("profile.favorites.kicker")}
+        title={t("profile.favorites.title")}
+      />
 
-        {isLoading ? null : favorites && favorites.length > 0 ? (
-          <View style={styles.list}>
-            {favorites.map((track, index) => (
-              <TrackCard
-                key={track.id}
-                variant="row"
-                title={track.title}
-                artist={track.artist}
-                cover={track.album_art_url}
-                isPlaying={currentId === track.id}
-                onPress={() => play(track, index)}
-              />
-            ))}
-          </View>
-        ) : (
-          <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-            No favorites yet — tap the heart on Now Playing to save a track.
-          </Text>
-        )}
+      {favoritesLoading ? (
+        <View style={styles.list}>
+          {[0, 1, 2, 3, 4].map((index) => (
+            <TrackRowSkeleton key={index} />
+          ))}
+        </View>
+      ) : favorites && favorites.length > 0 ? (
+        <View style={styles.list}>
+          {favorites.map((track, index) => (
+            <TrackCard
+              key={track.id}
+              variant="row"
+              title={track.title}
+              artist={track.artist}
+              cover={track.album_art_url}
+              isPlaying={currentId === track.id}
+              onPress={() => play(track, index)}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
+          {t("profile.favorites.empty")}
+        </Text>
+      )}
     </ScreenScrollView>
   );
 }

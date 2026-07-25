@@ -43,10 +43,14 @@ export const queryKeys = {
     me: ["profile", "me"] as const,
   },
   settings: {
-    me: ["settings", "me"] as const,
+    me: (userId: string | null) => ["settings", "me", userId] as const,
   },
   musicPreferences: {
     me: ["music-preferences", "me"] as const,
+  },
+  onboarding: {
+    current: (userId: string, version: number) =>
+      ["onboarding", userId, version] as const,
   },
   audius: {
     trending: (genre: string) => ["audius", "trending", genre] as const,

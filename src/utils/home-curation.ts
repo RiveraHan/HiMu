@@ -22,20 +22,6 @@ export const TIME_OF_DAY_MOODS: Record<TimeOfDayBucket, string[]> = {
   lateNight: ["Late Night", "Dreamy", "Ethereal", "Mysterious", "Sleep"],
 };
 
-export const TIME_OF_DAY_HEADLINES: Record<TimeOfDayBucket, string> = {
-  morning: "Easing you into the morning.",
-  afternoon: "Keeping your afternoon in flow.",
-  evening: "Something warm to wind down.",
-  lateNight: "Late-night frequencies, just for you.",
-};
-
-export const TIME_OF_DAY_LABELS: Record<TimeOfDayBucket, string> = {
-  morning: "For your morning",
-  afternoon: "For your afternoon",
-  evening: "For your evening",
-  lateNight: "Late night",
-};
-
 // Deterministic 32-bit FNV-1a hash of a string → unsigned int.
 export function hashString(input: string): number {
   let h = 0x811c9dc5;

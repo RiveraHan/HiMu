@@ -1,0 +1,21 @@
+export const discover = {
+  title: "Discover",
+  subtitle: "Real music from independent artists",
+  searchPlaceholder: "Search Audius…",
+  noResults: "No results on Audius for “{{query}}”.",
+  unavailable: "Couldn’t reach Audius right now.",
+  retry: "Retry",
+  attribution: "Powered by Audius",
+  playTrack: "Play {{title}} by {{artist}}",
+  shelves: {
+    trending: "Trending on Audius",
+    electronic: "Electronic",
+    house: "House",
+    techno: "Techno",
+    loFi: "Lo-Fi",
+    hipHop: "Hip-Hop",
+    ambient: "Ambient",
+    rnbSoul: "R&B / Soul",
+    latin: "Latin",
+  },
+} as const;

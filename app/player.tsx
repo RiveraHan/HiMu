@@ -27,8 +27,10 @@ import { useEffect } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function PlayerScreen() {
+  const { t } = useTranslation();
   const track = usePlayerStore((state) => state.currentTrack);
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
@@ -113,7 +115,7 @@ export default function PlayerScreen() {
               <ChevronDown size={24} color={theme.colors.onSurfaceVariant} />
             }
             onPress={close}
-            accessibilityLabel="Close player"
+            accessibilityLabel={t("playback.player.actions.close")}
           />
 
           <View style={styles.topCenter}>
@@ -122,10 +124,10 @@ export default function PlayerScreen() {
               color="onSurfaceVariant"
               style={styles.nowPlaying}
             >
-              NOW PLAYING
+              {t("playback.player.nowPlaying")}
             </Text>
             <Text variant="labelCaps" color="primary" style={styles.subLabel}>
-              HIGH-FIDELITY AUDIO
+              {t("playback.player.highFidelityAudio")}
             </Text>
           </View>
 
@@ -146,12 +148,12 @@ export default function PlayerScreen() {
                 regenerate.mutate(track.id, {
                   onError: () =>
                     toast.error(
-                      "Cover",
-                      "Couldn't regenerate the cover — you may have reached today's limit.",
+                      t("playback.player.cover.title"),
+                      t("playback.player.cover.error"),
                     ),
                 })
               }
-              accessibilityLabel="Regenerate cover"
+              accessibilityLabel={t("playback.player.actions.regenerateCover")}
             />
           ) : (
             <View style={styles.topSpacer} />
@@ -194,8 +196,8 @@ export default function PlayerScreen() {
                 }
                 accessibilityLabel={
                   isFavorited.data
-                    ? "Remove from favorites"
-                    : "Save to favorites"
+                    ? t("playback.player.actions.removeFavorite")
+                    : t("playback.player.actions.saveFavorite")
                 }
               />
             </View>
@@ -208,7 +210,9 @@ export default function PlayerScreen() {
             <View style={styles.badge}>
               <Sparkle size={14} color={theme.colors.primary} />
               <Text variant="labelCaps" color="primary">
-                {isExternal ? "VIA AUDIUS" : "CURATED BY HIMU AI"}
+                {isExternal
+                  ? t("playback.player.source.audius")
+                  : t("playback.player.source.himu")}
               </Text>
             </View>
             <Text variant="h1" numberOfLines={1} style={styles.title}>
@@ -249,7 +253,9 @@ export default function PlayerScreen() {
             <Pressable
               onPress={withHaptic(toggleShuffle)}
               style={styles.ctrlSm}
-              accessibilityLabel="Shuffle"
+              accessibilityRole="button"
+              accessibilityLabel={t("playback.player.actions.shuffle")}
+              accessibilityState={{ checked: shuffle }}
             >
               <Shuffle
                 size={24}
@@ -261,7 +267,8 @@ export default function PlayerScreen() {
             <Pressable
               onPress={withHaptic(prev)}
               style={styles.ctrlMd}
-              accessibilityLabel="Previous track"
+              accessibilityRole="button"
+              accessibilityLabel={t("playback.player.actions.previous")}
             >
               <SkipBack
                 size={36}
@@ -275,7 +282,12 @@ export default function PlayerScreen() {
                 styles.playBtn,
                 pressed && styles.playPressed,
               ]}
-              accessibilityLabel={isPlaying ? "Pause" : "Play"}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isPlaying
+                  ? t("playback.player.actions.pause")
+                  : t("playback.player.actions.play")
+              }
             >
               {isPlaying ? (
                 <Pause
@@ -295,7 +307,8 @@ export default function PlayerScreen() {
             <Pressable
               onPress={withHaptic(next)}
               style={styles.ctrlMd}
-              accessibilityLabel="Next"
+              accessibilityRole="button"
+              accessibilityLabel={t("playback.player.actions.next")}
             >
               <SkipForward
                 size={36}
@@ -308,7 +321,11 @@ export default function PlayerScreen() {
             <Pressable
               onPress={withHaptic(cycleRepeat)}
               style={styles.ctrlSm}
-              accessibilityLabel="Repeat"
+              accessibilityRole="button"
+              accessibilityLabel={t("playback.player.actions.repeat")}
+              accessibilityValue={{
+                text: t(`playback.player.repeatModes.${repeatMode}`),
+              }}
             >
               {repeatMode === "one" ? (
                 <Repeat1 size={24} color={theme.colors.primary} />

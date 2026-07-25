@@ -8,10 +8,15 @@ import {
   IconButton,
   ScreenHeader,
   StatCard,
+  StatCardSkeleton,
   Tag,
   Text,
   TrackCard,
 } from "@/src/components";
+import {
+  DjProfileSkeleton,
+  DjTracksSkeleton,
+} from "@/src/components/dj/DjProfileSkeleton";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useConfirm } from "@/src/hooks/use-confirm";
 import { useDeleteDJ } from "@/src/hooks/use-delete-dj";
@@ -20,7 +25,11 @@ import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useLiveDJIds } from "@/src/hooks/use-home";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useToast } from "@/src/hooks/use-toast";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
+import { useLocale } from "@/src/i18n/use-locale";
+import { TourTarget, useAppTour } from "@/src/onboarding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import {
@@ -34,21 +43,40 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function DJProfileScreen() {
+  const { t } = useTranslation();
+  const { resolvedLanguage } = useLocale();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
 
-  const { data: dj, isLoading } = useDJ(id);
-  const { data: tracks } = useDJTracks(id);
+  const djQuery = useDJ(id);
+  const tracksQuery = useDJTracks(id);
+  const dj = djQuery.data;
+  const tracks = tracksQuery.data;
+  const djLoading = isInitialQueryLoading(djQuery);
+  const tracksLoading = isInitialQueryLoading(tracksQuery);
   const { data: liveIds } = useLiveDJIds();
   const { load } = usePlayer();
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
   const queryClient = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
+  const { registerContextTarget } = useAppTour();
+  const djReady =
+    !djLoading && !djQuery.isError && dj !== undefined && dj !== null && dj.id === id;
+
+  useEffect(() => {
+    if (!djReady) return;
+    return registerContextTarget({
+      tipId: "dj.hero",
+      targetId: "dj.hero",
+      ready: true,
+    });
+  }, [djReady, id, registerContextTarget]);
 
   const {
     generate,
@@ -89,12 +117,12 @@ export default function DJProfileScreen() {
       resetGen();
     } else if (genStatus === "failed") {
       toast.error(
-        "Generation failed",
-        "The mix couldn't be generated — your daily quota wasn't used. Try again.",
+        t("dj.profile.generationFailedTitle"),
+        t("dj.profile.generationFailed"),
       );
       resetGen();
     }
-  }, [genStatus, generatedTrack, load, resetGen, queryClient, toast]);
+  }, [genStatus, generatedTrack, load, resetGen, queryClient, t, toast]);
 
   const queue: PlayerTrack[] = useMemo(
     () =>
@@ -126,12 +154,12 @@ export default function DJProfileScreen() {
         onError: async (e) => {
           const code = await getEdgeErrorCode(e);
           toast.error(
-            "Couldn't start the mix",
+            t("dj.profile.startErrorTitle"),
             code === "daily_quota_reached"
-              ? "Daily mix limit reached (10). Try again tomorrow."
+              ? t("dj.profile.quotaError")
               : code === "dj_not_allowed"
-                ? "You can't generate with this DJ."
-                : "Something went wrong. Please try again.",
+                ? t("dj.profile.notAllowedError")
+                : t("dj.profile.genericError"),
           );
         },
       },
@@ -141,9 +169,14 @@ export default function DJProfileScreen() {
   const onDeletePress = async () => {
     if (!dj) return;
     const ok = await confirm({
-      title: "Delete DJ",
-      message: `This will delete ${dj.name} and its ${tracks?.length ?? 0} tracks.`,
-      confirmLabel: "Delete",
+      title: t("dj.profile.delete.title"),
+      message: tracksLoading
+        ? t("dj.profile.delete.messageUnknown", { name: dj.name })
+        : t("dj.profile.delete.message", {
+            name: dj.name,
+            count: tracks?.length ?? 0,
+          }),
+      confirmLabel: t("dj.profile.delete.confirm"),
       destructive: true,
     });
     if (!ok) return;
@@ -152,7 +185,10 @@ export default function DJProfileScreen() {
       {
         onSuccess: () => router.back(),
         onError: () =>
-          toast.error("Delete failed", "Couldn't delete the DJ. Try again."),
+          toast.error(
+            t("dj.profile.delete.errorTitle"),
+            t("dj.profile.delete.error"),
+          ),
       },
     );
   };
@@ -169,14 +205,14 @@ export default function DJProfileScreen() {
               }
               onPress={() => router.push(`/train-dj/${id}`)}
               disabled={isDeleting}
-              accessibilityLabel="Train your DJ"
+              accessibilityLabel={t("dj.profile.trainAction")}
             />
             <IconButton
               variant="glass"
               icon={<Trash2 size={20} color={theme.colors.error} />}
               onPress={onDeletePress}
               disabled={isDeleting}
-              accessibilityLabel="Delete DJ"
+              accessibilityLabel={t("dj.profile.deleteAction")}
             />
           </>
         ) : undefined
@@ -184,21 +220,13 @@ export default function DJProfileScreen() {
     />
   );
 
-  if (isLoading) {
+  if (djLoading) {
     return (
-      <View style={styles.root}>
-        <View
-          style={[
-            styles.body,
-            { paddingTop: insets.top + theme.spacing.stackMd },
-          ]}
-        >
-          {header}
-        </View>
-        <View style={styles.center}>
-          <ActivityIndicator color={theme.colors.primary} />
-        </View>
-      </View>
+      <DjProfileSkeleton
+        header={header}
+        paddingTop={insets.top + theme.spacing.stackMd}
+        paddingBottom={paddingBottom}
+      />
     );
   }
 
@@ -214,9 +242,9 @@ export default function DJProfileScreen() {
           {header}
         </View>
         <View style={styles.center}>
-          <Text variant="h2">DJ not found</Text>
+          <Text variant="h2">{t("dj.profile.notFound")}</Text>
           <Text variant="bodyMd" color="onSurfaceVariant">
-            This DJ doesn’t exist or was removed.
+            {t("dj.profile.notFoundDescription")}
           </Text>
         </View>
       </View>
@@ -237,41 +265,69 @@ export default function DJProfileScreen() {
         >
           {header}
 
-          <DjHero
-            name={dj.name}
-            avatarUrl={dj.avatar_url}
-            isLive={!!liveIds?.has(id)}
-            tagline={
-              isOwner
-                ? "YOUR DJ"
-                : dj.is_premium
-                  ? "Global Resident"
-                  : undefined
-            }
-          />
+          {djReady ? (
+            <TourTarget id="dj.hero" borderRadius={theme.borderRadius["2xl"]}>
+              <DjHero
+                name={dj.name}
+                avatarUrl={dj.avatar_url}
+                isLive={!!liveIds?.has(id)}
+                tagline={
+                  isOwner
+                    ? t("dj.profile.ownedBadge")
+                    : dj.is_premium
+                      ? t("dj.profile.residentBadge")
+                      : undefined
+                }
+              />
+            </TourTarget>
+          ) : (
+            <DjHero
+              name={dj.name}
+              avatarUrl={dj.avatar_url}
+              isLive={!!liveIds?.has(id)}
+              tagline={
+                isOwner
+                  ? t("dj.profile.ownedBadge")
+                  : dj.is_premium
+                    ? t("dj.profile.residentBadge")
+                    : undefined
+              }
+            />
+          )}
 
           {/* Stats remap */}
           <View style={styles.statsRow}>
-            <StatCard
-              icon={
-                <AudioLines size={20} color={theme.colors.primaryContainer} />
-              }
-              value={String(tracks?.length ?? 0)}
-              label="TRACKS"
-            />
+            {tracksLoading ? (
+              <StatCardSkeleton />
+            ) : (
+              <StatCard
+                icon={
+                  <AudioLines
+                    size={20}
+                    color={theme.colors.primaryContainer}
+                  />
+                }
+                value={String(tracks?.length ?? 0)}
+                label={t("dj.profile.stats.tracks", {
+                  count: tracks?.length ?? 0,
+                })}
+              />
+            )}
             <StatCard
               icon={<Music2 size={20} color={theme.colors.tertiary} />}
               value={String(dj.genre_specialties?.length ?? 0)}
-              label="GENRES"
+              label={t("dj.profile.stats.genres", {
+                count: dj.genre_specialties?.length ?? 0,
+              })}
             />
           </View>
 
           {/* Own lyrics: only for your vocal DJs (server re-validates) */}
           {isOwner && isVocal && (
             <GlassInput
-              label="YOUR OWN LYRICS (OPTIONAL)"
-              hint="Original lyrics only — no copyrighted songs."
-              placeholder="Write the lyrics your DJ should sing…"
+              label={t("dj.profile.lyricsLabel")}
+              hint={t("dj.profile.lyricsHint")}
+              placeholder={t("dj.profile.lyricsPlaceholder")}
               multiline
               maxLength={1000}
               value={lyricsText}
@@ -285,7 +341,7 @@ export default function DJProfileScreen() {
             onPress={onGeneratePress}
             disabled={isGenerating}
             accessibilityRole="button"
-            accessibilityLabel="Generate a new mix"
+            accessibilityLabel={t("dj.profile.generateAction")}
             accessibilityState={{ disabled: isGenerating }}
             style={({ pressed }) => [
               styles.generateBtn,
@@ -296,14 +352,14 @@ export default function DJProfileScreen() {
               <>
                 <ActivityIndicator color={theme.colors.onPrimary} />
                 <Text variant="labelCaps" color="onPrimary">
-                  GENERATING…
+                  {t("dj.profile.generating")}
                 </Text>
               </>
             ) : (
               <>
                 <Sparkles size={20} color={theme.colors.onPrimary} />
                 <Text variant="labelCaps" color="onPrimary">
-                  Generate new mix
+                  {t("dj.profile.generateButton")}
                 </Text>
               </>
             )}
@@ -318,7 +374,7 @@ export default function DJProfileScreen() {
                 color="onSurfaceVariant"
                 style={styles.sectionLabel}
               >
-                SONIC PHILOSOPHY
+                {t("dj.profile.sonicPhilosophy")}
               </Text>
               <Text variant="bodyMd" color="onSurfaceVariant">
                 {dj.character}
@@ -334,47 +390,58 @@ export default function DJProfileScreen() {
                 color="onSurfaceVariant"
                 style={styles.sectionLabel}
               >
-                CURATED GENRES
+                {t("dj.profile.curatedGenres")}
               </Text>
               <View style={styles.tagWrap}>
-                {dj.genre_specialties.map((g) => (
-                  <Tag key={g} label={g} />
+                {dj.genre_specialties.map((g: string) => (
+                  <Tag
+                    key={g}
+                    label={catalogLabel(g, resolvedLanguage)}
+                  />
                 ))}
               </View>
             </View>
           )}
 
           {/* Tracks */}
-          <View style={styles.section}>
-            <Text
-              variant="labelCaps"
-              color="onSurfaceVariant"
-              style={styles.sectionLabel}
-            >
-              TRACKS
-            </Text>
-            {queue.length > 0 || isGenerating ? (
-              <View style={styles.trackList}>
-                {/* The new mix lands right here when it's ready */}
-                {isGenerating && <GeneratingTrackCard vocal={isVocal} />}
-                {queue.map((t, i) => (
-                  <TrackCard
-                    key={t.id}
-                    title={t.title}
-                    artist={t.artist}
-                    cover={t.album_art_url}
-                    variant="row"
-                    isPlaying={currentId === t.id}
-                    onPress={() => load(t, queue, i)}
-                  />
-                ))}
-              </View>
-            ) : (
-              <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.7}>
-                No tracks yet.
+          {tracksLoading ? (
+            <DjTracksSkeleton />
+          ) : (
+            <View style={styles.section}>
+              <Text
+                variant="labelCaps"
+                color="onSurfaceVariant"
+                style={styles.sectionLabel}
+              >
+                {t("dj.profile.tracks")}
               </Text>
-            )}
-          </View>
+              {queue.length > 0 || isGenerating ? (
+                <View style={styles.trackList}>
+                  {/* The new mix lands right here when it's ready */}
+                  {isGenerating && <GeneratingTrackCard vocal={isVocal} />}
+                  {queue.map((t, i) => (
+                    <TrackCard
+                      key={t.id}
+                      title={t.title}
+                      artist={t.artist}
+                      cover={t.album_art_url}
+                      variant="row"
+                      isPlaying={currentId === t.id}
+                      onPress={() => load(t, queue, i)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <Text
+                  variant="bodyMd"
+                  color="onSurfaceVariant"
+                  opacity={0.7}
+                >
+                  {t("dj.profile.noTracks")}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>

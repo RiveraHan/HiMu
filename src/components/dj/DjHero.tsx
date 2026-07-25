@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Text } from "../Text";
+import { useTranslation } from "react-i18next";
 
 const HERO_HEIGHT = 380;
 
@@ -11,13 +12,15 @@ type Props = {
   avatarUrl?: string | null;
   isLive?: boolean;
   tagline?: string;
+  testID?: string;
 };
 
-export function DjHero({ name, avatarUrl, isLive, tagline }: Props) {
+export function DjHero({ name, avatarUrl, isLive, tagline, testID }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
 
   return (
-    <View style={styles.hero}>
+    <View testID={testID} style={styles.hero}>
       {avatarUrl ? (
         <Image
           source={avatarUrl}
@@ -40,7 +43,7 @@ export function DjHero({ name, avatarUrl, isLive, tagline }: Props) {
             <View style={styles.liveBadge}>
               <View style={styles.liveDot} />
               <Text variant="labelCaps" color="onSurface">
-                LIVE
+                {t("dj.profile.live")}
               </Text>
             </View>
           )}
@@ -58,6 +61,7 @@ export function DjHero({ name, avatarUrl, isLive, tagline }: Props) {
 
 const styles = StyleSheet.create((theme) => ({
   hero: {
+    alignSelf: "stretch",
     height: HERO_HEIGHT,
     justifyContent: "flex-end",
     borderRadius: theme.borderRadius.lg,

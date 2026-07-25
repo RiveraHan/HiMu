@@ -12,30 +12,28 @@ import { useProfile } from "@/src/hooks/use-profile";
 import { useSettings, useUpdateSettings } from "@/src/hooks/use-settings";
 import { useConfirm } from "@/src/hooks/use-confirm";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useLocale } from "@/src/i18n/use-locale";
 import { DEFAULT_PREFERENCES, DownloadQuality } from "@/src/types/preferences";
 import { router } from "expo-router";
 import {
   AudioLines,
   ChevronDown,
   Gem,
+  Languages,
   LogOut,
   Mail,
   Smartphone,
   Wifi,
 } from "lucide-react-native";
 import { Alert, Pressable } from "react-native";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Device from "expo-device";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { authApi } from "@/src/api/auth";
 
-const QUALITY_LABELS: Record<DownloadQuality, string> = {
-  low: "Low (96 kbps)",
-  high: "High (256kbps)",
-  lossless: "Lossless",
-};
-
 export default function AccountSettingsScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
@@ -45,6 +43,7 @@ export default function AccountSettingsScreen() {
   const { mutate: updateSettings } = useUpdateSettings();
   const { flushListeningStats } = usePlayer();
   const confirm = useConfirm();
+  const { preference, resolvedLanguage, setPreference, isSaving } = useLocale();
 
   const isPro = profile?.subscriptionTier === "premium";
   const prefs = settings ?? DEFAULT_PREFERENCES;
@@ -55,43 +54,61 @@ export default function AccountSettingsScreen() {
     Device.deviceName ??
     Device.modelName ??
     Device.productName ??
-    "This Device";
+    t("settings.thisDevice");
 
   const setLossless = (lossless: boolean) =>
-    updateSettings({ ...prefs, audio: { ...prefs.audio, lossless } });
+    updateSettings({ audio: { lossless } });
 
   const setPush = (push: boolean) =>
-    updateSettings({
-      ...prefs,
-      notifications: { ...prefs.notifications, push },
-    });
+    updateSettings({ notifications: { push } });
 
   const setNewsletters = (emailNewsletters: boolean) =>
-    updateSettings({
-      ...prefs,
-      notifications: { ...prefs.notifications, emailNewsletters },
-    });
+    updateSettings({ notifications: { emailNewsletters } });
 
   const setDownloadQuality = (downloadQuality: DownloadQuality) =>
-    updateSettings({ ...prefs, audio: { ...prefs.audio, downloadQuality } });
+    updateSettings({ audio: { downloadQuality } });
 
   const pickDownloadQuality = () => {
-    Alert.alert("Download Quality", undefined, [
-      { text: QUALITY_LABELS.low, onPress: () => setDownloadQuality("low") },
-      { text: QUALITY_LABELS.high, onPress: () => setDownloadQuality("high") },
+    Alert.alert(t("settings.downloadQuality"), undefined, [
       {
-        text: QUALITY_LABELS.lossless,
+        text: t("settings.quality.low"),
+        onPress: () => setDownloadQuality("low"),
+      },
+      {
+        text: t("settings.quality.high"),
+        onPress: () => setDownloadQuality("high"),
+      },
+      {
+        text: t("settings.quality.lossless"),
         onPress: () => setDownloadQuality("lossless"),
       },
-      { text: "Cancel", style: "cancel" },
+      { text: t("common.actions.cancel"), style: "cancel" },
+    ]);
+  };
+
+  const pickLanguage = () => {
+    Alert.alert(t("settings.sections.language"), undefined, [
+      {
+        text: t("settings.language.system"),
+        onPress: () => void setPreference("system"),
+      },
+      {
+        text: t("settings.language.en"),
+        onPress: () => void setPreference("en"),
+      },
+      {
+        text: t("settings.language.es"),
+        onPress: () => void setPreference("es"),
+      },
+      { text: t("common.actions.cancel"), style: "cancel" },
     ]);
   };
 
   const onSignOut = async () => {
     const ok = await confirm({
-      title: "Sign Out",
-      message: "Are you sure you want to sign out?",
-      confirmLabel: "Sign Out",
+      title: t("settings.signOut"),
+      message: t("settings.signOutQuestion"),
+      confirmLabel: t("settings.signOut"),
       destructive: true,
     });
     if (!ok) return;
@@ -109,28 +126,44 @@ export default function AccountSettingsScreen() {
       ]}
     >
         <ScreenHeader
-          title="Settings"
-          subtitle="Manage your HiMu experience"
+          title={t("settings.header.title")}
+          subtitle={t("settings.header.subtitle")}
         />
 
         {/*Account Information*/}
-        <SettingsSection title="Account Information">
+        <SettingsSection title={t("settings.sections.account")}>
           <SettingsInfoRow
             icon={<Mail size={20} color={theme.colors.onSurfaceVariant} />}
-            label="Email Address"
+            label={t("settings.email")}
             opacity={0.6}
             value={user?.email ?? "-"}
           />
           <SettingsInfoRow
             icon={<Gem size={20} color={theme.colors.onSurfaceVariant} />}
-            label="Subscription"
-            value={isPro ? "HiMu Premium" : "Free"}
+            label={t("settings.subscription")}
+            value={isPro ? t("settings.premium") : t("settings.free")}
             valueColor={isPro ? "primaryContainer" : "onSurfaceVariant"}
           />
         </SettingsSection>
 
+        <SettingsSection title={t("settings.sections.language")}>
+          <SettingsInfoRow
+            icon={<Languages size={20} color={theme.colors.onSurfaceVariant} />}
+            label={t("settings.language.label")}
+            value={
+              preference === "system"
+                ? t("settings.language.systemResolved", {
+                    language: t(`settings.language.${resolvedLanguage}`),
+                  })
+                : t(`settings.language.${preference}`)
+            }
+            onPress={isSaving ? undefined : pickLanguage}
+            accessory={<ChevronDown size={20} color={theme.colors.outline} />}
+          />
+        </SettingsSection>
+
         {/*Audio Quality*/}
-        <SettingsSection title="Audio Quality">
+        <SettingsSection title={t("settings.sections.audio")}>
           <SettingsToggleRow
             icon={
               <AudioLines
@@ -142,8 +175,8 @@ export default function AccountSettingsScreen() {
                 }
               />
             }
-            label="Lossless High-Fidelity"
-            description="Stream at 24-bit/192kH"
+            label={t("settings.lossless")}
+            description={t("settings.losslessDescription")}
             value={prefs.audio.lossless}
             disabled={!ready}
             onValueChange={setLossless}
@@ -151,46 +184,46 @@ export default function AccountSettingsScreen() {
 
           <SettingsInfoRow
             icon={<Wifi size={20} color={theme.colors.onSurfaceVariant} />}
-            label="Download Quality"
-            value={QUALITY_LABELS[prefs.audio.downloadQuality]}
+            label={t("settings.downloadQuality")}
+            value={t(`settings.quality.${prefs.audio.downloadQuality}`)}
             onPress={ready ? pickDownloadQuality : undefined}
             accessory={<ChevronDown size={20} color={theme.colors.outline} />}
           />
         </SettingsSection>
 
-        {/*Noifications*/}
-        <SettingsSection title="Notifications">
+        {/*Notifications*/}
+        <SettingsSection title={t("settings.sections.notifications")}>
           <SettingsToggleRow
-            label="Push Notifications"
-            description="New releases and listening stats"
+            label={t("settings.push")}
+            description={t("settings.pushDescription")}
             value={prefs.notifications.push}
             disabled={!ready}
             onValueChange={setPush}
           />
           <SettingsToggleRow
-            label="Email Newsletters"
-            description="Curated weekly digests"
+            label={t("settings.newsletters")}
+            description={t("settings.newslettersDescription")}
             value={prefs.notifications.emailNewsletters}
             disabled={!ready}
             onValueChange={setNewsletters}
           />
         </SettingsSection>
 
-        {/*Connected Devives*/}
-        <SettingsSection title="Connected Devices">
+        {/*Connected Devices*/}
+        <SettingsSection title={t("settings.sections.devices")}>
           <SettingsInfoRow
             icon={
               <Smartphone size={20} color={theme.colors.primaryContainer} />
             }
             label={deviceName}
-            value={`Current Device${osLabel ? ` • ${osLabel}` : ""}`}
+            value={`${t("settings.currentDevice")}${osLabel ? ` • ${osLabel}` : ""}`}
           />
         </SettingsSection>
 
         {/*Sign Out*/}
         <Pressable
           onPress={onSignOut}
-          accessibilityLabel="Sign Out"
+          accessibilityLabel={t("settings.signOut")}
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.signOut,
@@ -199,7 +232,7 @@ export default function AccountSettingsScreen() {
         >
           <LogOut size={20} color={theme.colors.error} />
           <Text variant="labelCaps" color="error">
-            SIGN OUT
+            {t("settings.signOut")}
           </Text>
         </Pressable>
     </ScreenScrollView>

@@ -11,8 +11,8 @@ export type ConfirmOptions = {
 type PendingConfirm = {
   title: string;
   message: string;
-  confirmLabel: string;
-  cancelLabel: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
   destructive: boolean;
   resolve: (ok: boolean) => void;
 };
@@ -31,8 +31,8 @@ export const useConfirmStore = create<State>((set, get) => ({
         pending: {
           title: opts.title,
           message: opts.message ?? "",
-          confirmLabel: opts.confirmLabel ?? "Confirm",
-          cancelLabel: opts.cancelLabel ?? "Cancel",
+          confirmLabel: opts.confirmLabel,
+          cancelLabel: opts.cancelLabel,
           destructive: opts.destructive ?? false,
           resolve,
         },

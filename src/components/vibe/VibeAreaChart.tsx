@@ -11,6 +11,7 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 const HEIGHT = 160;
 const PAD_T = 14;
@@ -52,6 +53,7 @@ const EMPTY: { line: string; area: string; pts: Pt[] } = {
 };
 
 export function VibeAreaChart({ data }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
   const [width, setWidth] = useState(0);
 
@@ -67,20 +69,38 @@ export function VibeAreaChart({ data }: Props) {
       : EMPTY;
 
   const todayIndex = data.findIndex((d) => d.isToday);
+  const chartTitle = t("playback.vibe.chart.accessibilityLabel");
+  const pointSummary = data
+    .map((point) =>
+      t("playback.vibe.chart.dayMinutes", {
+        count: point.minutes,
+        weekday: t(`playback.vibe.weekdays.${point.weekday}`),
+      }),
+    )
+    .join(". ");
+  const accessibilitySummary = t(
+    "playback.vibe.chart.accessibilitySummary",
+    { title: chartTitle, points: pointSummary },
+  );
 
   return (
-    <View style={styles.wrap}>
+    <View
+      style={styles.wrap}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={accessibilitySummary}
+    >
       <View style={styles.chartRow}>
         {/* Y: High / Mid / Low */}
         <View style={styles.yAxis}>
-          {["High", "Mid", "Low"].map((t) => (
+          {["high", "mid", "low"].map((level) => (
             <Text
-              key={t}
+              key={level}
               variant="labelCaps"
               color="onSurfaceVariant"
               opacity={0.5}
             >
-              {t}
+              {t(`playback.vibe.chart.${level}`)}
             </Text>
           ))}
         </View>
@@ -150,7 +170,7 @@ export function VibeAreaChart({ data }: Props) {
                 numberOfLines={1}
                 style={styles.dayLabel}
               >
-                {d.label}
+                {t(`playback.vibe.weekdays.${d.weekday}`)}
               </Text>
             ))}
           </View>

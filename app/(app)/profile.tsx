@@ -5,6 +5,9 @@ import {
   Avatar,
   GlassCard,
   IdentityCard,
+  ProfileDjsSkeleton,
+  ProfileIdentitySkeleton,
+  ProfileStatsSkeleton,
   ScreenScrollView,
   SettingRow,
   StatCard,
@@ -17,14 +20,18 @@ import {
   useProfile,
 } from "@/src/hooks/use-profile";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useAppTour } from "@/src/onboarding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
+import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { useQueryClient } from "@tanstack/react-query";
 import { router, useFocusEffect } from "expo-router";
 import {
   ChevronRight,
   CircleStar,
   Clock,
+  Compass,
   Crown,
   Disc3,
   Headphones,
@@ -37,18 +44,36 @@ import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function ProfileScreen() {
+  const { t, i18n } = useTranslation();
+  const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
-  const { data: profile } = useProfile();
-  const { data: stats } = useListeningTotals();
-  const { data: djsHeard } = useDjsHeard();
-  const { data: djs } = useDJs();
+  const profileQuery = useProfile();
+  const statsQuery = useListeningTotals();
+  const djsHeardQuery = useDjsHeard();
+  const djsQuery = useDJs();
+  const profile = profileQuery.data;
+  const stats = statsQuery.data;
+  const djsHeard = djsHeardQuery.data;
+  const djs = djsQuery.data;
+  const profileLoading = isInitialQueryLoading(profileQuery);
+  const statsLoading =
+    isInitialQueryLoading(statsQuery) ||
+    isInitialQueryLoading(djsHeardQuery);
+  const djsLoading = isInitialQueryLoading(djsQuery);
   const { theme } = useUnistyles();
   const { flushListeningStats } = usePlayer();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const { replayTour } = useAppTour();
+
+  const onReplayTour = () => {
+    replayTour();
+    router.replace("/");
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -62,9 +87,9 @@ export default function ProfileScreen() {
 
   const onLogout = async () => {
     const ok = await confirm({
-      title: "Logout",
-      message: "Are you sure you want to logout?",
-      confirmLabel: "Logout",
+      title: t("profile.logout"),
+      message: t("profile.logoutQuestion"),
+      confirmLabel: t("profile.logout"),
       destructive: true,
     });
     if (!ok) return;
@@ -80,12 +105,15 @@ export default function ProfileScreen() {
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
     >
-        {/*Perfil Header*/}
+      {/*Perfil Header*/}
+      {profileLoading ? (
+        <ProfileIdentitySkeleton />
+      ) : (
         <View style={styles.header}>
           <View style={styles.avatarWrap}>
             <Avatar
               src={profile?.avatarUrl}
-              fallback={profile?.name ?? "U"}
+              fallback={profile?.name ?? t("profile.listener")}
               size="2xl"
             />
             <View style={styles.tierBadge}>
@@ -93,127 +121,143 @@ export default function ProfileScreen() {
                 <CircleStar size={14} color={theme.colors.onPrimaryContainer} />
               )}
               <Text variant="labelCaps" color="onPrimaryContainer">
-                {isPro ? "PRO" : "FREE"}
+                {isPro
+                  ? t("profile.tier.proCaps")
+                  : t("profile.tier.freeCaps")}
               </Text>
             </View>
           </View>
           <View style={styles.headerText}>
             <Text variant="h1" numberOfLines={1}>
-              {profile?.name ?? "Anonymous"}
+              {profile?.name ?? t("profile.listener")}
             </Text>
             {!!profile?.username && (
               <Text variant="bodyMd" numberOfLines={1} color="onSurfaceVariant">
-                @{profile?.username}
+                @{profile.username}
               </Text>
             )}
           </View>
         </View>
+      )}
 
-        {/*Stats → Vibe Check*/}
-        <Pressable
-          onPress={() => router.push("/vibe-check")}
-          accessibilityRole="button"
-          accessibilityLabel="Open Vibe Check"
-          style={({ pressed }) => [styles.section, pressed && styles.pressed]}
-        >
-          <View style={styles.sectionHeader}>
-            <Text
-              variant="labelCaps"
-              color="onSurfaceVariant"
-              style={styles.sectionLabel}
-            >
-              VIBE CHECK
-            </Text>
-            <ChevronRight size={16} color={theme.colors.onSurfaceVariant} />
-          </View>
-          <View style={styles.statsRow}>
-            <StatCard
-              icon={<Clock size={20} color={theme.colors.tertiary} />}
-              value={formatHours(stats?.hours ?? 0)}
-              label="HOURS"
-            />
-            <StatCard
-              icon={<Disc3 size={20} color={theme.colors.primary} />}
-              value={formatCount(stats?.tracks ?? 0)}
-              label="TRACKS"
-            />
-            <StatCard
-              icon={<Headphones size={20} color={theme.colors.error} />}
-              value={formatCount(djsHeard ?? 0)}
-              label="DJS"
-            />
-          </View>
-        </Pressable>
-
-        {/*Listening Identity*/}
-        <View style={styles.section}>
-          <Text
-            variant="labelCaps"
-            color="onSurfaceVariant"
-            style={styles.sectionLabel}
+      {/*Stats → Vibe Check*/}
+      {statsLoading ? (
+        <ProfileStatsSkeleton />
+      ) : (
+        <>
+          <Pressable
+            onPress={() => router.push("/vibe-check")}
+            accessibilityRole="button"
+            accessibilityLabel={t("profile.openVibeCheck")}
+            style={({ pressed }) => [styles.section, pressed && styles.pressed]}
           >
-            LISTENING IDENTITY
-          </Text>
-          <IdentityCard
-            title={identity.title}
-            description={identity.description}
-          />
-        </View>
-
-        {/*Top DJs*/}
-        {djs && djs.length > 0 && (
-          <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text
                 variant="labelCaps"
                 color="onSurfaceVariant"
                 style={styles.sectionLabel}
               >
-                YOUR DJS
+                {t("profile.vibeCheck")}
               </Text>
+              <ChevronRight size={16} color={theme.colors.onSurfaceVariant} />
             </View>
-            <View style={styles.djGrid}>
-              {djs.map((dj) => (
-                <Pressable
-                  key={dj.id}
-                  onPress={() => router.push(`/dj/${dj.id}`)}
-                  style={({ pressed }) => [
-                    styles.djCardWrap,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <GlassCard style={styles.djCard}>
-                    <Avatar src={dj.avatar_url} size="lg" fallback={dj.name} />
-                    <Text variant="bodyMd" numberOfLines={1}>
-                      {dj.name}
-                    </Text>
-                    <Text
-                      variant="labelCaps"
-                      color="onSurfaceVariant"
-                      opacity={0.6}
-                    >
-                      {dj.genre_specialties?.[0]?.toUpperCase()}
-                    </Text>
-                  </GlassCard>
-                </Pressable>
-              ))}
+            <View style={styles.statsRow}>
+              <StatCard
+                icon={<Clock size={20} color={theme.colors.tertiary} />}
+                value={formatHours(stats?.hours ?? 0, resolvedLanguage)}
+                label={t("profile.hours")}
+              />
+              <StatCard
+                icon={<Disc3 size={20} color={theme.colors.primary} />}
+                value={formatCount(stats?.tracks ?? 0, resolvedLanguage)}
+                label={t("profile.tracks")}
+              />
+              <StatCard
+                icon={<Headphones size={20} color={theme.colors.error} />}
+                value={formatCount(djsHeard ?? 0, resolvedLanguage)}
+                label={t("profile.djs")}
+              />
             </View>
-          </View>
-        )}
+          </Pressable>
 
-        {/*Prefenrences*/}
+          {/*Listening Identity*/}
+          <View style={styles.section}>
+            <Text
+              variant="labelCaps"
+              color="onSurfaceVariant"
+              style={styles.sectionLabel}
+            >
+              {t("profile.listeningIdentity")}
+            </Text>
+            <IdentityCard
+              title={t(`profile.identities.${identity.id}.title`)}
+              description={t(`profile.identities.${identity.id}.description`)}
+            />
+          </View>
+        </>
+      )}
+
+      {/*Top DJs*/}
+      {djsLoading ? (
+        <ProfileDjsSkeleton />
+      ) : djs && djs.length > 0 ? (
         <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text
+              variant="labelCaps"
+              color="onSurfaceVariant"
+              style={styles.sectionLabel}
+            >
+              {t("profile.yourDjs")}
+            </Text>
+          </View>
+          <View style={styles.djGrid}>
+            {djs.map((dj) => (
+              <Pressable
+                key={dj.id}
+                onPress={() => router.push(`/dj/${dj.id}`)}
+                style={({ pressed }) => [
+                  styles.djCardWrap,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <GlassCard style={styles.djCard}>
+                  <Avatar src={dj.avatar_url} size="lg" fallback={dj.name} />
+                  <Text variant="bodyMd" numberOfLines={1}>
+                    {dj.name}
+                  </Text>
+                  <Text
+                    variant="labelCaps"
+                    color="onSurfaceVariant"
+                    opacity={0.6}
+                  >
+                    {dj.genre_specialties?.[0]
+                      ? catalogLabel(
+                          dj.genre_specialties[0],
+                          resolvedLanguage,
+                        ).toUpperCase()
+                      : null}
+                  </Text>
+                </GlassCard>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {/*Prefenrences*/}
+      <View style={styles.section}>
           <Text
             variant="labelCaps"
             color="onSurfaceVariant"
             style={styles.sectionLabel}
           >
-            PREFERENCES
+            {t("profile.preferences")}
           </Text>
           <View style={styles.prefList}>
             <SettingRow
               icon={<User size={20} color={theme.colors.onSurfaceVariant} />}
-              label="Account Details"
+              label={t("profile.accountDetails")}
               onPress={() => router.push("/account-settings")}
             />
             <SettingRow
@@ -223,29 +267,34 @@ export default function ProfileScreen() {
                   color={theme.colors.onSurfaceVariant}
                 />
               }
-              label="Music Preferences"
+              label={t("profile.musicPreferences")}
               onPress={() => router.push("/preferences")}
             />
             <SettingRow
               icon={<Crown size={20} color={theme.colors.tertiary} />}
-              label="Subscription"
+              label={t("profile.subscription")}
               right={
                 <Text
                   variant="bodyMd"
                   color={isPro ? "tertiary" : "onSurfaceVariant"}
                 >
-                  {isPro ? "Pro" : "Free"}
+                  {isPro ? t("profile.tier.pro") : t("profile.tier.free")}
                 </Text>
               }
             />
             <SettingRow
+              icon={<Compass size={20} color={theme.colors.onSurfaceVariant} />}
+              label={t("profile.replayTour")}
+              onPress={onReplayTour}
+            />
+            <SettingRow
               icon={<LogOut size={20} color={theme.colors.error} />}
-              label="Logout"
+              label={t("profile.logout")}
               destructive
               onPress={onLogout}
             />
           </View>
-        </View>
+      </View>
     </ScreenScrollView>
   );
 }

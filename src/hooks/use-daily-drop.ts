@@ -2,6 +2,7 @@ import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { toPlayerTrack, useDJs } from "@/src/hooks/use-home";
+import { useLocale } from "@/src/i18n/use-locale";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import {
   OWN_DJ_HERO_WEIGHT,
@@ -29,6 +30,7 @@ export type DailyDrop = {
 export function useDailyDrop(): DailyDrop {
   const user = useCurrentUser();
   const { data: djs } = useDJs();
+  const { resolvedLanguage } = useLocale();
   const [jobId, setJobId] = useState<string | null>(null);
   const triggered = useRef(false);
 
@@ -58,6 +60,7 @@ export function useDailyDrop(): DailyDrop {
       }>("generate-mix", {
         body: {
           djId,
+          language: resolvedLanguage,
           dropDate: localDateStr(),
           localHour: new Date().getHours(),
         },

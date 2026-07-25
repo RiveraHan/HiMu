@@ -16,8 +16,10 @@ import { Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function FocusModeScreen() {
+  const { t } = useTranslation();
   useKeepAwake();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
@@ -81,14 +83,7 @@ export default function FocusModeScreen() {
 
   const running = timer.status === "running";
   const canToggle = timer.status !== "idle" || focusQueue.length > 0;
-  const label =
-    timer.status === "running"
-      ? "DEEP FOCUS"
-      : timer.status === "paused"
-        ? "PAUSED"
-        : timer.status === "completed"
-          ? "COMPLETE"
-          : "READY";
+  const label = t(`playback.focus.status.${timer.status}`);
 
   // One control for the whole session: timer + music start/pause together.
   const onSessionToggle = () => {
@@ -142,7 +137,7 @@ export default function FocusModeScreen() {
             variant="glass"
             icon={<X size={24} color={theme.colors.onSurfaceVariant} />}
             onPress={() => router.canGoBack() && router.back()}
-            accessibilityLabel="End focus session"
+            accessibilityLabel={t("playback.focus.actions.end")}
           />
         </View>
 
@@ -172,7 +167,7 @@ export default function FocusModeScreen() {
                       : "onSurfaceVariant"
                   }
                 >
-                  {m} MIN
+                  {t("playback.focus.presetMinutes", { minutes: m })}
                 </Text>
               </Pressable>
             ))}
@@ -191,7 +186,8 @@ export default function FocusModeScreen() {
               onPress={prev}
               disabled={!track}
               style={styles.sideBtn}
-              accessibilityLabel="Previous"
+              accessibilityRole="button"
+              accessibilityLabel={t("playback.focus.actions.previous")}
             >
               <SkipBack
                 size={28}
@@ -203,8 +199,13 @@ export default function FocusModeScreen() {
             <Pressable
               onPress={onSessionToggle}
               disabled={!canToggle}
+              accessibilityRole="button"
               accessibilityLabel={
-                running ? "Pause focus session" : "Start focus session"
+                running
+                  ? t("playback.focus.actions.pause")
+                  : timer.status === "completed"
+                    ? t("playback.focus.actions.reset")
+                    : t("playback.focus.actions.start")
               }
               style={[styles.playBtn, !canToggle && styles.playDisabled]}
             >
@@ -227,7 +228,8 @@ export default function FocusModeScreen() {
               onPress={next}
               disabled={!track}
               style={styles.sideBtn}
-              accessibilityLabel="Next"
+              accessibilityRole="button"
+              accessibilityLabel={t("playback.focus.actions.next")}
             >
               <SkipForward
                 size={28}

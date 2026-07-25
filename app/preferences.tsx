@@ -10,6 +10,8 @@ import {
   useUpdateMusicPreferences,
 } from "@/src/hooks/use-music-preferences";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { catalogGroupLabel, catalogLabel } from "@/src/i18n/catalog-labels";
+import { useLocale } from "@/src/i18n/use-locale";
 import {
   DEFAULT_MUSIC_PREFERENCES,
   GENRE_GROUPS,
@@ -18,8 +20,11 @@ import {
 import { AudioLines, Ban, SlidersHorizontal } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 
 export default function MusicPreferencesScreen() {
+  const { t } = useTranslation();
+  const { resolvedLanguage } = useLocale();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
@@ -62,41 +67,43 @@ export default function MusicPreferencesScreen() {
       ]}
     >
       <ScreenHeader
-        kicker="TASTE PROFILE"
-        title="Music Preferences"
-        subtitle="Shapes your AI Mixes and Focus queue - and nudges what your DJs generate."
+        kicker={t("dj.preferences.kicker")}
+        title={t("dj.preferences.title")}
+        subtitle={t("dj.preferences.subtitle")}
       />
 
       {/* Genre Affinity */}
       <PrefSection
-        title="Genre Affinity"
+        title={t("dj.preferences.genreAffinity")}
         icon={<AudioLines size={20} color={theme.colors.primaryContainer} />}
       >
         <GroupedChipPicker
           groups={GENRE_GROUPS}
           selected={prefs.genres}
           onToggle={toggleGenre}
+          getGroupLabel={(value) => catalogGroupLabel(value, resolvedLanguage)}
+          getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
           disabled={!ready}
         />
       </PrefSection>
 
       {/* Vibe Mapping */}
       <PrefSection
-        title="Vibe Mapping"
+        title={t("dj.preferences.vibeMapping")}
         icon={
           <SlidersHorizontal size={20} color={theme.colors.primaryContainer} />
         }
       >
         <VibeSlider
-          leftLabel="Organic / Acoustic"
-          rightLabel="Synthetic / Electronic"
+          leftLabel={t("dj.preferences.organicAcoustic")}
+          rightLabel={t("dj.preferences.syntheticElectronic")}
           value={prefs.vibeMapping.organicElectronic}
           disabled={!ready}
           onCommit={setVibe("organicElectronic")}
         />
         <VibeSlider
-          leftLabel="Melancholic"
-          rightLabel="Euphoric"
+          leftLabel={t("dj.preferences.melancholic")}
+          rightLabel={t("dj.preferences.euphoric")}
           value={prefs.vibeMapping.melancholicEuphoric}
           disabled={!ready}
           onCommit={setVibe("melancholicEuphoric")}
@@ -105,14 +112,16 @@ export default function MusicPreferencesScreen() {
 
       {/* Excluded Moods */}
       <PrefSection
-        title="Excluded Moods"
-        subtitle="Never picked for your auto queues - you can still play or generate anything you ask for."
+        title={t("dj.preferences.excludedMoods")}
+        subtitle={t("dj.preferences.excludedMoodsSubtitle")}
         icon={<Ban size={20} color={theme.colors.error} />}
       >
         <GroupedChipPicker
           groups={MOOD_GROUPS}
           selected={prefs.excludedMoods}
           onToggle={toggleExcluded}
+          getGroupLabel={(value) => catalogGroupLabel(value, resolvedLanguage)}
+          getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
           disabled={!ready}
         />
       </PrefSection>

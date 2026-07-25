@@ -1,6 +1,6 @@
 import { usePhaseRotation } from "@/src/hooks/use-phase-rotation";
 import { Sparkles } from "lucide-react-native";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -11,20 +11,24 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { useTranslation } from "react-i18next";
 import { Text } from "../Text";
-
-const PHASES = [
-  "Sketching the personality…",
-  "Tuning the sound…",
-  "Composing the portrait…",
-  "Almost there…",
-] as const;
 
 // Full-screen takeover for the ~10-15s DJ creation: pulsing halo where the
 // avatar is being born + rotating phase messages.
 export function DjBirthOverlay({ name }: { name: string }) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
-  const phase = usePhaseRotation(PHASES, 4000);
+  const phases = useMemo(
+    () => [
+      t("dj.birth.phases.personality"),
+      t("dj.birth.phases.sound"),
+      t("dj.birth.phases.portrait"),
+      t("dj.birth.phases.almost"),
+    ],
+    [t],
+  );
+  const phase = usePhaseRotation(phases, 4000);
 
   const pulse = useSharedValue(1);
 
@@ -49,7 +53,7 @@ export function DjBirthOverlay({ name }: { name: string }) {
         <Sparkles size={40} color={theme.colors.primary} />
       </Animated.View>
 
-      <Text variant="h2">Giving life to {name}…</Text>
+      <Text variant="h2">{t("dj.birth.loading", { name })}</Text>
 
       <Animated.View
         key={phase}
@@ -62,7 +66,7 @@ export function DjBirthOverlay({ name }: { name: string }) {
       </Animated.View>
 
       <Text variant="labelCaps" color="onSurfaceVariant" opacity={0.5}>
-        THIS TAKES ABOUT 15 SECONDS
+        {t("dj.birth.duration")}
       </Text>
     </Animated.View>
   );

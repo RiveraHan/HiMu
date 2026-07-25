@@ -12,9 +12,16 @@ type Props = {
   subtitle?: string;
   tracks: PlayerTrack[];
   onPressTrack: (track: PlayerTrack, index: number) => void;
+  getTrackAccessibilityLabel?: (track: PlayerTrack) => string;
 };
 
-export function ContentShelf({ title, subtitle, tracks, onPressTrack }: Props) {
+export function ContentShelf({
+  title,
+  subtitle,
+  tracks,
+  onPressTrack,
+  getTrackAccessibilityLabel,
+}: Props) {
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
 
   return (
@@ -42,6 +49,7 @@ export function ContentShelf({ title, subtitle, tracks, onPressTrack }: Props) {
               artist={track.artist}
               cover={track.album_art_url}
               isPlaying={currentId === track.id}
+              accessibilityLabel={getTrackAccessibilityLabel?.(track)}
               onPress={() => onPressTrack(track, index)}
             />
           </View>

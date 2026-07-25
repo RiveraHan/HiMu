@@ -1,6 +1,7 @@
 import { Text } from "@/src/components/Text";
 import { Check, Plus, X } from "lucide-react-native";
 import { Pressable, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 
 type Props = {
@@ -20,6 +21,7 @@ export function Chip({
   add,
   disabled,
 }: Props) {
+  const { t } = useTranslation();
   const { theme } = useUnistyles();
 
   if (onRemove) {
@@ -33,7 +35,7 @@ export function Chip({
           disabled={disabled}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={`Remove ${label}`}
+          accessibilityLabel={t("common.actions.removeLabel", { label })}
         >
           <X size={14} color={theme.colors.onSurfaceVariant} />
         </Pressable>
