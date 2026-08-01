@@ -10,6 +10,7 @@ import {
   ProfileStatsSkeleton,
   ScreenScrollView,
   SettingRow,
+  StateNotice,
   StatCard,
   Text,
 } from "@/src/components";
@@ -21,6 +22,7 @@ import {
   useProfile,
 } from "@/src/hooks/use-profile";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useAppTour } from "@/src/onboarding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
@@ -53,6 +55,7 @@ export default function ProfileScreen() {
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
+  const online = useOnlineStatus();
   const profileQuery = useProfile();
   const statsQuery = useListeningTotals();
   const djsHeardQuery = useDjsHeard();
@@ -66,6 +69,19 @@ export default function ProfileScreen() {
     isInitialQueryLoading(statsQuery) ||
     isInitialQueryLoading(djsHeardQuery);
   const djsLoading = isInitialQueryLoading(djsQuery);
+  const profileOfflineWithoutData = !online && profileQuery.fetchStatus === "paused" && profile === undefined;
+  const statsOfflineWithoutData = !online && (
+    (statsQuery.fetchStatus === "paused" && stats === undefined) ||
+    (djsHeardQuery.fetchStatus === "paused" && djsHeard === undefined)
+  );
+  const djsOfflineWithoutData = !online && djsQuery.fetchStatus === "paused" && djs === undefined;
+  const blockingProfileError = profileQuery.isError && profile === undefined;
+  const blockingStatsError =
+    (statsQuery.isError && stats === undefined) ||
+    (djsHeardQuery.isError && djsHeard === undefined);
+  const blockingDjsError = djsQuery.isError && djs === undefined;
+  const hasCachedProfileData = [profile, stats, djsHeard, djs]
+    .some((value) => value !== undefined);
   const { theme } = useUnistyles();
   const { flushListeningStats } = usePlayer();
   const queryClient = useQueryClient();
@@ -108,9 +124,33 @@ export default function ProfileScreen() {
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
     >
+      {!online && hasCachedProfileData ? (
+        <StateNotice
+          compact
+          kind="offline"
+          title={t("common.errors.offline")}
+          message={t("common.errors.reconnect")}
+        />
+      ) : null}
+
       {/*Perfil Header*/}
-      {profileLoading ? (
+      {profileOfflineWithoutData ? (
+        <StateNotice
+          kind="offline"
+          title={t("common.errors.offline")}
+          message={t("common.errors.reconnect")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void profileQuery.refetch()}
+        />
+      ) : profileLoading ? (
         <ProfileIdentitySkeleton />
+      ) : blockingProfileError ? (
+        <StateNotice
+          kind={online ? "error" : "offline"}
+          title={t("profile.profileUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void profileQuery.refetch()}
+        />
       ) : (
         <View style={styles.header}>
           <View style={styles.avatarWrap}>
@@ -144,8 +184,29 @@ export default function ProfileScreen() {
       )}
 
       {/*Stats → Vibe Check*/}
-      {statsLoading ? (
+      {statsOfflineWithoutData ? (
+        <StateNotice
+          kind="offline"
+          title={t("common.errors.offline")}
+          message={t("common.errors.reconnect")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => {
+            if (stats === undefined) void statsQuery.refetch();
+            if (djsHeard === undefined) void djsHeardQuery.refetch();
+          }}
+        />
+      ) : statsLoading ? (
         <ProfileStatsSkeleton />
+      ) : blockingStatsError ? (
+        <StateNotice
+          kind={online ? "error" : "offline"}
+          title={t("profile.statsUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => {
+            if (statsQuery.isError) void statsQuery.refetch();
+            if (djsHeardQuery.isError) void djsHeardQuery.refetch();
+          }}
+        />
       ) : (
         <>
           <Pressable
@@ -197,12 +258,39 @@ export default function ProfileScreen() {
               description={t(`profile.identities.${identity.id}.description`)}
             />
           </View>
+          {statsQuery.isError || djsHeardQuery.isError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("profile.statsUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => {
+                if (statsQuery.isError) void statsQuery.refetch();
+                if (djsHeardQuery.isError) void djsHeardQuery.refetch();
+              }}
+            />
+          ) : null}
         </>
       )}
 
       {/*Top DJs*/}
-      {djsLoading ? (
+      {djsOfflineWithoutData ? (
+        <StateNotice
+          kind="offline"
+          title={t("common.errors.offline")}
+          message={t("common.errors.reconnect")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djsQuery.refetch()}
+        />
+      ) : djsLoading ? (
         <ProfileDjsSkeleton />
+      ) : blockingDjsError ? (
+        <StateNotice
+          kind={online ? "error" : "offline"}
+          title={t("profile.djsUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djsQuery.refetch()}
+        />
       ) : djs && djs.length > 0 ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -245,6 +333,28 @@ export default function ProfileScreen() {
               </Pressable>
             ))}
           </View>
+          {djsQuery.isError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("profile.djsUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void djsQuery.refetch()}
+            />
+          ) : null}
+        </View>
+      ) : djs !== undefined ? (
+        <View style={styles.section}>
+          <Text variant="labelCaps" color="onSurfaceVariant" style={styles.sectionLabel}>
+            {t("profile.yourDjs")}
+          </Text>
+          <StateNotice
+            compact
+            kind="empty"
+            title={t("profile.yourDjs")}
+            actionLabel={t("profile.createDjAction")}
+            onAction={() => router.push("/create-dj")}
+          />
         </View>
       ) : null}
 
@@ -273,18 +383,20 @@ export default function ProfileScreen() {
               label={t("profile.musicPreferences")}
               onPress={() => router.push("/preferences")}
             />
-            <SettingRow
-              icon={<Crown size={20} color={theme.colors.tertiary} />}
-              label={t("profile.subscription")}
-              right={
-                <Text
-                  variant="bodyMd"
-                  color={isPro ? "tertiary" : "onSurfaceVariant"}
-                >
-                  {isPro ? t("profile.tier.pro") : t("profile.tier.free")}
-                </Text>
-              }
-            />
+            {profile !== undefined ? (
+              <SettingRow
+                icon={<Crown size={20} color={theme.colors.tertiary} />}
+                label={t("profile.subscription")}
+                right={
+                  <Text
+                    variant="bodyMd"
+                    color={isPro ? "tertiary" : "onSurfaceVariant"}
+                  >
+                    {isPro ? t("profile.tier.pro") : t("profile.tier.free")}
+                  </Text>
+                }
+              />
+            ) : null}
             <SettingRow
               icon={<Compass size={20} color={theme.colors.onSurfaceVariant} />}
               label={t("profile.replayTour")}

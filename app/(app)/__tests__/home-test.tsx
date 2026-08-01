@@ -8,13 +8,17 @@ import type { HomeTourRegistration } from "@/src/onboarding";
 type MockQuery = {
   data: unknown;
   isPending: boolean;
+  isError: boolean;
   fetchStatus: "fetching" | "paused" | "idle";
+  refetch: jest.Mock;
 };
 
 const initialQuery = (): MockQuery => ({
   data: undefined,
   isPending: true,
+  isError: false,
   fetchStatus: "fetching",
+  refetch: jest.fn(),
 });
 
 const settledQuery = <T,>(
@@ -23,7 +27,17 @@ const settledQuery = <T,>(
 ): MockQuery => ({
   data,
   isPending: false,
+  isError: false,
   fetchStatus,
+  refetch: jest.fn(),
+});
+
+const failedQuery = (data: unknown = undefined): MockQuery => ({
+  data,
+  isPending: false,
+  isError: true,
+  fetchStatus: "idle",
+  refetch: jest.fn(),
 });
 
 let mockDjsQuery = initialQuery();
@@ -31,6 +45,8 @@ let mockRecentQuery = initialQuery();
 let mockContextualQuery = initialQuery();
 let mockFavoritesQuery = initialQuery();
 let mockVibeQuery = initialQuery();
+let mockAiMixQuery = initialQuery();
+let mockLiveQuery = initialQuery();
 let mockDrop: Record<string, unknown> = { status: "idle" };
 let mockHero: Record<string, any> | undefined;
 const mockLoad = jest.fn();
@@ -41,10 +57,12 @@ const mockDismissActiveTour = jest.fn();
 const mockScrollTo = jest.fn();
 let mockCanContinue = false;
 let mockRegistrationCleanup = jest.fn();
+let mockOnline = true;
+const mockRouterPush = jest.fn();
 
 jest.mock("@/src/components", () => {
   const React = require("react");
-  const { Text: NativeText, View } = require("react-native");
+  const { Pressable, Text: NativeText, View } = require("react-native");
   const placeholder = (testID: string) => function Placeholder() {
     return React.createElement(View, { testID });
   };
@@ -83,6 +101,22 @@ jest.mock("@/src/components", () => {
     },
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
+    StateNotice: ({ title, actionLabel, onAction }: {
+      title: string;
+      actionLabel?: string;
+      onAction?: () => void;
+    }) => React.createElement(
+      View,
+      null,
+      React.createElement(NativeText, null, title),
+      actionLabel && onAction
+        ? React.createElement(Pressable, {
+            accessibilityRole: "button",
+            accessibilityLabel: actionLabel,
+            onPress: onAction,
+          }, React.createElement(NativeText, null, actionLabel))
+        : null,
+    ),
     VibeSpotlightCard: placeholder("vibe-spotlight"),
   };
 });
@@ -116,15 +150,18 @@ jest.mock("@/src/hooks/use-favorites", () => ({
 }));
 jest.mock("@/src/hooks/use-home", () => ({
   toPlayerTrack: (track: object) => track,
-  useAIMixTracks: () => ({ data: [] }),
+  useAIMixTracks: () => mockAiMixQuery,
   useDJs: () => mockDjsQuery,
-  useLiveDJIds: () => ({ data: new Set() }),
+  useLiveDJIds: () => mockLiveQuery,
   useOnAirHero: () => ({ data: mockHero }),
   useRecentTracks: () => mockRecentQuery,
   useTimeOfDayShelf: () => mockContextualQuery,
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useTabBarPadding: () => 0,
+}));
+jest.mock("@/src/hooks/use-online-status", () => ({
+  useOnlineStatus: () => mockOnline,
 }));
 jest.mock("@/src/hooks/use-taste-profile", () => ({
   useTasteProfile: () => ({
@@ -172,7 +209,9 @@ jest.mock("@/src/onboarding", () => {
     }),
   };
 });
-jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
@@ -184,9 +223,12 @@ describe("HomeScreen", () => {
     mockContextualQuery = initialQuery();
     mockFavoritesQuery = initialQuery();
     mockVibeQuery = initialQuery();
+    mockAiMixQuery = initialQuery();
+    mockLiveQuery = settledQuery(new Set());
     mockDrop = { status: "idle" };
     mockHero = undefined;
     mockCanContinue = false;
+    mockOnline = true;
     mockLoad.mockReset();
     mockLoad.mockResolvedValue(true);
     mockSetRepeatMode.mockReset();
@@ -194,6 +236,7 @@ describe("HomeScreen", () => {
     mockContinueTour.mockReset();
     mockDismissActiveTour.mockReset();
     mockScrollTo.mockReset();
+    mockRouterPush.mockReset();
     mockRegistrationCleanup = jest.fn();
     mockRegisterHome.mockReturnValue(mockRegistrationCleanup);
   });
@@ -231,9 +274,9 @@ describe("HomeScreen", () => {
     expect(screen.getByTestId("home-hero-skeleton")).toBeTruthy();
     expect(screen.getByTestId("home-djs-skeleton")).toBeTruthy();
     expect(screen.getAllByTestId("content-shelf-skeleton")).toHaveLength(2);
-    expect(screen.getByTestId("home-library-row-skeleton")).toBeTruthy();
+    expect(screen.getAllByTestId("home-library-row-skeleton")).toHaveLength(2);
     expect(screen.getByTestId("home-vibe-skeleton")).toBeTruthy();
-    expect(screen.getByTestId("library-AI Mixes")).toBeTruthy();
+    expect(screen.queryByTestId("library-AI Mixes")).toBeNull();
     expect(screen.getByText("Focus Mode")).toBeTruthy();
   });
 
@@ -254,7 +297,7 @@ describe("HomeScreen", () => {
     expect(screen.queryByTestId("home-djs-skeleton")).toBeNull();
     expect(screen.getByTestId("home-hero-skeleton")).toBeTruthy();
     expect(screen.getAllByTestId("content-shelf-skeleton")).toHaveLength(2);
-    expect(screen.getByTestId("home-library-row-skeleton")).toBeTruthy();
+    expect(screen.getAllByTestId("home-library-row-skeleton")).toHaveLength(2);
     expect(screen.getByTestId("home-vibe-skeleton")).toBeTruthy();
   });
 
@@ -277,6 +320,98 @@ describe("HomeScreen", () => {
 
     expect(screen.getByTestId("content-shelf-Fresh from your DJs")).toBeTruthy();
     expect(screen.getAllByTestId("content-shelf-skeleton")).toHaveLength(1);
+  });
+
+  it("keeps Home usable when the DJ section fails and retries only that section", async () => {
+    mockDjsQuery = failedQuery();
+    mockRecentQuery = settledQuery([]);
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByText("Your DJs are unavailable")).toBeTruthy();
+    expect(screen.getByText("Focus Mode")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockDjsQuery.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders empty DJs and music shelves as intentional Discover actions", async () => {
+    mockDjsQuery = settledQuery([]);
+    mockRecentQuery = settledQuery([]);
+    mockContextualQuery = settledQuery({ bucket: "morning", tracks: [] });
+    mockAiMixQuery = settledQuery([]);
+    mockFavoritesQuery = settledQuery([]);
+    mockVibeQuery = settledQuery({ hoursThisWeek: 0, topGenre: null, streak: 0 });
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByText("New DJ")).toBeTruthy();
+    expect(screen.getByText("No fresh frequencies yet")).toBeTruthy();
+    expect(screen.getByText("No recommendations yet")).toBeTruthy();
+    expect(screen.getByText("No AI mixes are ready yet")).toBeTruthy();
+    expect(screen.getByText("Start listening to build your Vibe Check")).toBeTruthy();
+    const discover = screen.getAllByRole("button", { name: "Discover music" });
+    await fireEvent.press(discover[0]);
+    expect(mockRouterPush).toHaveBeenCalledWith("/discover");
+    expect(screen.queryByTestId("library-AI Mixes")).toBeNull();
+  });
+
+  it("shows section-local failures and preserves cached rows", async () => {
+    mockDjsQuery = settledQuery([]);
+    mockRecentQuery = failedQuery([
+      { id: "one", title: "One", audio_url: "one.mp3", artist: "Artist" },
+      { id: "two", title: "Two", audio_url: "two.mp3", artist: "Artist" },
+      { id: "three", title: "Three", audio_url: "three.mp3", artist: "Artist" },
+    ]);
+    mockContextualQuery = failedQuery();
+    mockAiMixQuery = failedQuery();
+    mockFavoritesQuery = failedQuery();
+    mockVibeQuery = failedQuery();
+    mockLiveQuery = failedQuery();
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByTestId("content-shelf-Fresh from your DJs")).toBeTruthy();
+    expect(screen.getByText("Fresh frequencies are unavailable")).toBeTruthy();
+    expect(screen.getByText("Recommendations are unavailable")).toBeTruthy();
+    expect(screen.getByText("AI Mixes are unavailable")).toBeTruthy();
+    expect(screen.getByText("Favorites are unavailable")).toBeTruthy();
+    expect(screen.getByText("Listening insights are unavailable")).toBeTruthy();
+    expect(screen.getByText("Live status couldn't be updated")).toBeTruthy();
+  });
+
+  it("renders first-load and cached offline states without hiding cached Home content", async () => {
+    mockOnline = false;
+    mockDjsQuery = { ...initialQuery(), fetchStatus: "paused" };
+    const offline = await render(<HomeScreen />);
+    expect(offline.getAllByText("You're offline").length).toBeGreaterThan(0);
+    expect(offline.queryByTestId("home-djs-skeleton")).toBeNull();
+    await offline.unmount();
+
+    mockDjsQuery = settledQuery([{
+      id: "dj-one", owner_id: "user", name: "DJ One", avatar_url: null,
+      genre_specialties: ["House"],
+    }]);
+    const cached = await render(<HomeScreen />);
+    expect(cached.getAllByText("You're offline")).toHaveLength(1);
+    expect(cached.getByTestId("dj-avatar")).toBeTruthy();
+  });
+
+  it("shows a retryable Daily Drop failure without hiding the fallback hero", async () => {
+    const retry = jest.fn();
+    mockDrop = { status: "failed", stale: false, retry };
+    mockHero = {
+      track: { id: "hero", title: "Hero", audio_url: "hero.mp3" },
+      queue: [{ id: "hero", title: "Hero", audio_url: "hero.mp3" }],
+      dj: { name: "DJ Two", avatar_url: null, genre: "Ambient" },
+      bucket: "morning",
+      isLive: false,
+    };
+
+    const screen = await render(<HomeScreen />);
+    expect(screen.getByTestId("on-air-hero")).toBeTruthy();
+    expect(screen.getByText("Today's drop is unavailable")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the real Daily Drop hero during generation", async () => {
