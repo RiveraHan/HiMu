@@ -69,8 +69,17 @@ describe("shared component translations", () => {
     );
 
     expect(screen.getByLabelText("Atrás")).toBeTruthy();
-    expect(screen.getByLabelText("Abrir reproductor")).toBeTruthy();
-    expect(screen.getByLabelText("Pausar")).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Abrir reproductor: Canción dinámica de Artista dinámico",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Anterior" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Siguiente" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pausar" })).toHaveProp(
+      "accessibilityState",
+      { disabled: false, selected: true },
+    );
     expect(screen.getByLabelText("Descartar")).toBeTruthy();
     expect(screen.getByLabelText("Eliminar Ambient")).toBeTruthy();
     expect(screen.getByText("Encabezado dinámico")).toBeTruthy();

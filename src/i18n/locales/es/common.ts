@@ -33,6 +33,7 @@ export const common = {
   },
   player: {
     open: "Abrir reproductor",
+    openTrack: "Abrir reproductor: {{title}} de {{artist}}",
     close: "Cerrar reproductor",
     shuffle: "Aleatorio",
     repeat: "Repetir",

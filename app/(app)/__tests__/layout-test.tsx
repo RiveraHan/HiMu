@@ -10,8 +10,8 @@ jest.mock("expo-router", () => {
   const React = require("react");
   const { View } = require("react-native");
 
-  function Tabs({ children }: { children: React.ReactNode }) {
-    return React.createElement(View, { testID: "tabs" }, children);
+  function Tabs({ children, screenOptions }: { children: React.ReactNode; screenOptions: object }) {
+    return React.createElement(View, { testID: "tabs", screenOptions }, children);
   }
   function TabScreen({
     name,
@@ -90,5 +90,18 @@ describe("App tab layout", () => {
       height: 44,
       backgroundColor: "rgba(189,194,255,0.16)",
     });
+  });
+
+  it("preserves the floating tab bar geometry beneath global chrome", async () => {
+    const screen = await render(<AppLayout />);
+    const options = screen.getByTestId("tabs").props.screenOptions;
+
+    expect(options.tabBarStyle).toEqual(
+      expect.objectContaining({
+        bottom: 8,
+        height: 64,
+        marginHorizontal: "6%",
+      }),
+    );
   });
 });
