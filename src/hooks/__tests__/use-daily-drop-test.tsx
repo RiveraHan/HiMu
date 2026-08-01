@@ -188,8 +188,20 @@ describe("useDailyDrop", () => {
       });
     });
     await waitFor(() => expect(known.result.current.stale).toBe(true));
+    rowResponse = {
+      data: {
+        status: "ready",
+        dj_id: "dj-1",
+        djs: djOne,
+        tracks: { id: "track-requeued", title: "Requeued", audio_url: "ready.mp3" },
+      },
+      error: null,
+    };
+    const readsBeforeRequeue = readCalls.length;
     await act(async () => known.result.current.retry());
     await waitFor(() => expect(supabase.functions.invoke).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(readCalls.length).toBeGreaterThan(readsBeforeRequeue));
+    await waitFor(() => expect(known.result.current.status).toBe("ready"));
     await known.unmount();
 
     jest.clearAllMocks();

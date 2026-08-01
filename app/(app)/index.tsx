@@ -123,6 +123,10 @@ export default function HomeScreen() {
   const aiMixOfflineWithoutData = !online && aiMixQuery.fetchStatus === "paused" && aiMix === undefined;
   const favoritesOfflineWithoutData = !online && favoritesQuery.fetchStatus === "paused" && favorites === undefined;
   const vibeOfflineWithoutData = !online && vibeQuery.fetchStatus === "paused" && vibe === undefined;
+  const heroOfflineWithoutData =
+    drop.status === "idle" &&
+    !hero &&
+    (djsOfflineWithoutData || recentOfflineWithoutData);
   const hasCachedHomeData = [djs, liveDJIds, aiMix, recent, contextual, favorites, vibe]
     .some((value) => value !== undefined);
 
@@ -153,6 +157,14 @@ export default function HomeScreen() {
       .map(toPlayerTrack);
   }, [contextual, heroTrackId, taste]);
 
+  const playableAiMixes = useMemo<PlayerTrack[]>(() => weightedShuffle(
+    (aiMix ?? []).filter(
+      (track): track is typeof track & { audio_url: string } =>
+        track.audio_url != null,
+    ),
+    taste,
+  ).map(toPlayerTrack), [aiMix, taste]);
+
   function getGreeting(): string {
     const hour = new Date().getHours();
 
@@ -162,16 +174,9 @@ export default function HomeScreen() {
   }
 
   function playAIMixes() {
-    // Taste-weighted order over the raw rows (they carry genre + mood_tags).
-    const pool = weightedShuffle(
-      (aiMix ?? []).filter(
-        (t): t is typeof t & { audio_url: string } => t.audio_url != null,
-      ),
-      taste,
-    ).map(toPlayerTrack);
-    if (!pool.length) return;
+    if (!playableAiMixes.length) return;
     setRepeatMode("all"); // continuous, looping session
-    load(pool[0], pool, 0);
+    load(playableAiMixes[0], playableAiMixes, 0);
   }
 
   const playHero = useCallback(() => {
@@ -288,7 +293,7 @@ export default function HomeScreen() {
           onAction={() => void djsQuery.refetch()}
         />
       ) : null}
-      {djs !== undefined ? (
+      {djs !== undefined && !(djsQuery.isError && djs.length === 0) ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -410,7 +415,19 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        {showHeroSkeleton ? (
+        {heroOfflineWithoutData ? (
+          <StateNotice
+            compact
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => {
+              if (djs === undefined) void djsQuery.refetch();
+              if (recent === undefined) void recentQuery.refetch();
+            }}
+          />
+        ) : showHeroSkeleton ? (
           <HomeHeroSkeleton />
         ) : drop.status === "ready" && drop.track && drop.dj ? (
           <TourTarget id="home.hero" borderRadius={theme.borderRadius["2xl"]} onLayout={captureTargetOffset("home.daily-drop")}>
@@ -458,7 +475,7 @@ export default function HomeScreen() {
           </TourTarget>
         ) : null}
 
-        {drop.status === "failed" ? (
+        {drop.status === "failed" || drop.stale ? (
           <StateNotice
             compact
             kind={online ? "error" : "offline"}
@@ -522,6 +539,14 @@ export default function HomeScreen() {
               />
             ) : null}
           </>
+        ) : recentQuery.isError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.freshUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void recentQuery.refetch()}
+          />
         ) : recent !== undefined ? (
           <StateNotice
             compact
@@ -570,6 +595,14 @@ export default function HomeScreen() {
               />
             ) : null}
           </>
+        ) : contextualQuery.isError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.contextualUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void contextualQuery.refetch()}
+          />
         ) : contextual !== undefined ? (
           <StateNotice
             compact
@@ -603,7 +636,7 @@ export default function HomeScreen() {
               actionLabel={t("common.actions.retry")}
               onAction={() => void aiMixQuery.refetch()}
             />
-          ) : aiMix && aiMix.length > 0 ? (
+          ) : playableAiMixes.length > 0 ? (
             <>
               <LibraryCard
                 cover={`${process.env.EXPO_PUBLIC_MEDIA_BASE}/covers/hero/ai-mixes.jpg?v=1`}
@@ -626,6 +659,14 @@ export default function HomeScreen() {
                 />
               ) : null}
             </>
+          ) : aiMixQuery.isError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("home.aiMixesUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void aiMixQuery.refetch()}
+            />
           ) : aiMix !== undefined ? (
             <StateNotice
               compact
@@ -678,6 +719,14 @@ export default function HomeScreen() {
                 />
               ) : null}
             </>
+          ) : favoritesQuery.isError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("home.favoritesUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void favoritesQuery.refetch()}
+            />
           ) : favorites !== undefined ? (
             <StateNotice
               compact
@@ -726,6 +775,14 @@ export default function HomeScreen() {
               />
             ) : null}
           </>
+        ) : vibeQuery.isError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.vibeUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void vibeQuery.refetch()}
+          />
         ) : vibe !== undefined ? (
           <StateNotice
             compact

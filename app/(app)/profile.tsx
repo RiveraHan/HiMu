@@ -75,6 +75,7 @@ export default function ProfileScreen() {
     (djsHeardQuery.fetchStatus === "paused" && djsHeard === undefined)
   );
   const djsOfflineWithoutData = !online && djsQuery.fetchStatus === "paused" && djs === undefined;
+  const profileUnresolved = profile === undefined && profileQuery.isPending;
   const blockingProfileError = profileQuery.isError && profile === undefined;
   const blockingStatsError =
     (statsQuery.isError && stats === undefined) ||
@@ -142,7 +143,7 @@ export default function ProfileScreen() {
           actionLabel={t("common.actions.retry")}
           onAction={() => void profileQuery.refetch()}
         />
-      ) : profileLoading ? (
+      ) : profileLoading || profileUnresolved ? (
         <ProfileIdentitySkeleton />
       ) : blockingProfileError ? (
         <StateNotice
@@ -343,6 +344,13 @@ export default function ProfileScreen() {
             />
           ) : null}
         </View>
+      ) : djsQuery.isError ? (
+        <StateNotice
+          kind={online ? "error" : "offline"}
+          title={t("profile.djsUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djsQuery.refetch()}
+        />
       ) : djs !== undefined ? (
         <View style={styles.section}>
           <Text variant="labelCaps" color="onSurfaceVariant" style={styles.sectionLabel}>

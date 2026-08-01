@@ -355,6 +355,41 @@ describe("HomeScreen", () => {
     expect(screen.queryByTestId("library-AI Mixes")).toBeNull();
   });
 
+  it("renders cached short and empty refetch failures as retryable errors", async () => {
+    mockDjsQuery = failedQuery([]);
+    mockRecentQuery = failedQuery([]);
+    mockContextualQuery = failedQuery({ bucket: "morning", tracks: [] });
+    mockAiMixQuery = failedQuery([]);
+    mockFavoritesQuery = failedQuery([]);
+    mockVibeQuery = failedQuery({ hoursThisWeek: 0, topGenre: null, streak: 0 });
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByText("Fresh frequencies are unavailable")).toBeTruthy();
+    expect(screen.getByText("Your DJs are unavailable")).toBeTruthy();
+    expect(screen.getByText("Recommendations are unavailable")).toBeTruthy();
+    expect(screen.getByText("AI Mixes are unavailable")).toBeTruthy();
+    expect(screen.getByText("Favorites are unavailable")).toBeTruthy();
+    expect(screen.getByText("Listening insights are unavailable")).toBeTruthy();
+    expect(screen.queryByText("No fresh frequencies yet")).toBeNull();
+    expect(screen.queryByText("No recommendations yet")).toBeNull();
+    expect(screen.queryByText("No AI mixes are ready yet")).toBeNull();
+    expect(screen.queryByText("Start listening to build your Vibe Check")).toBeNull();
+    expect(screen.queryByText("New DJ")).toBeNull();
+  });
+
+  it("does not render an AI Mix card when every cached row is unplayable", async () => {
+    mockAiMixQuery = settledQuery([
+      { id: "missing-audio", title: "Missing", audio_url: null },
+    ]);
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.queryByTestId("library-AI Mixes")).toBeNull();
+    expect(screen.getByText("No AI mixes are ready yet")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Discover music" })).toBeTruthy();
+  });
+
   it("shows section-local failures and preserves cached rows", async () => {
     mockDjsQuery = settledQuery([]);
     mockRecentQuery = failedQuery([
@@ -414,6 +449,24 @@ describe("HomeScreen", () => {
     expect(retry).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a stale ready Daily Drop visible with a retry notice", async () => {
+    const retry = jest.fn();
+    mockDrop = {
+      status: "ready",
+      stale: true,
+      retry,
+      track: { id: "drop", title: "Drop", audio_url: "drop.mp3" },
+      dj: { name: "DJ One", avatar_url: null, genre: "House" },
+    };
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByTestId("on-air-hero")).toBeTruthy();
+    expect(screen.getByText("Today's drop is unavailable")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the real Daily Drop hero during generation", async () => {
     mockDrop = {
       status: "pending",
@@ -436,6 +489,17 @@ describe("HomeScreen", () => {
     expect(registration).toMatchObject({ ready: false });
     expect(registration?.steps).toEqual([HOME_TOUR_STEPS[2]]);
     expect(registration?.hasPlayableCandidate).toBe(false);
+  });
+
+  it("replaces the first-load offline hero skeleton with an offline notice", async () => {
+    mockOnline = false;
+    mockDjsQuery = { ...initialQuery(), fetchStatus: "paused" };
+    mockRecentQuery = { ...initialQuery(), fetchStatus: "paused" };
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.queryByTestId("home-hero-skeleton")).toBeNull();
+    expect(screen.getAllByText("You're offline").length).toBeGreaterThan(0);
   });
 
   it("registers real Daily Drop and DJ targets with the three Home steps", async () => {

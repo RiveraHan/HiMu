@@ -11,7 +11,7 @@ import { useLocalDate } from "@/src/hooks/use-local-date";
 import { useLocale } from "@/src/i18n/use-locale";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import { OWN_DJ_HERO_WEIGHT, daySeed, weightedPick } from "@/src/utils/home-curation";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type DropDj = {
@@ -46,6 +46,7 @@ export function useDailyDrop(): DailyDrop {
   const dropDate = useLocalDate();
   const { data: djs } = useDJs();
   const { resolvedLanguage } = useLocale();
+  const queryClient = useQueryClient();
   const identity = useMemo(
     () => userId
       ? { key: `${userId}:${dropDate}`, userId, dropDate }
@@ -95,6 +96,9 @@ export function useDailyDrop(): DailyDrop {
     onSuccess: (nextJobId, variables) => {
       if (currentIdentityKey.current !== variables.identityKey) return;
       setJobState({ identityKey: variables.identityKey, jobId: nextJobId });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generationJobs.detail(userId, nextJobId),
+      });
     },
   });
 

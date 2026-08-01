@@ -355,6 +355,17 @@ describe("ProfileScreen", () => {
     expect(screen.getByText("PREFERENCES")).toBeTruthy();
   });
 
+  it("keeps pending-idle profile data unresolved instead of rendering defaults", async () => {
+    mockProfileQuery = { ...initialQuery(), fetchStatus: "idle" };
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByTestId("profile-identity-skeleton")).toBeTruthy();
+    expect(screen.queryByText("Listener")).toBeNull();
+    expect(screen.queryByText("FREE")).toBeNull();
+    expect(screen.queryByText("Free")).toBeNull();
+  });
+
   it("keeps profile identity visible when stats fail and retries both stats reads", async () => {
     mockProfileQuery = settledQuery(profile);
     mockStatsQuery = failedQuery();
@@ -382,6 +393,17 @@ describe("ProfileScreen", () => {
     expect(empty.getByRole("button", { name: "Create a DJ" })).toBeTruthy();
     await fireEvent.press(empty.getByRole("button", { name: "Create a DJ" }));
     expect(mockRouterPush).toHaveBeenCalledWith("/create-dj");
+  });
+
+  it("renders a cached empty DJ refetch failure instead of a create empty state", async () => {
+    mockDjsQuery = failedQuery([]);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("DJs are unavailable")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create a DJ" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockDjsQuery.refetch).toHaveBeenCalledTimes(1);
   });
 
   it("uses offline-before-loading and preserves cached Profile under one banner", async () => {
