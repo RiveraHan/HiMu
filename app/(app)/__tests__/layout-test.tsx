@@ -2,7 +2,7 @@
 import { act, fireEvent, render } from "@testing-library/react-native";
 import { I18nManager, StyleSheet as RNStyleSheet } from "react-native";
 
-import AppLayout from "@/app/(app)/_layout";
+import AppLayout, { resolveTabBarGeometry } from "@/app/(app)/_layout";
 import i18n from "@/src/i18n";
 
 let mockDiscoverFocused = false;
@@ -166,21 +166,33 @@ describe("App tab layout", () => {
       value: isRTL,
     });
     mockWindowWidth = windowWidth;
+    const geometry = resolveTabBarGeometry(windowWidth, I18nManager.isRTL);
+    expect(geometry).toEqual(expect.objectContaining({ width, end: "auto" }));
+    expect(geometry.start).toBeCloseTo(x);
+    expect(geometry.x).toBeCloseTo(x);
     const screen = await render(<AppLayout />);
     const tabBar = screen.getByTestId("rendered-tab-bar");
     const style = RNStyleSheet.flatten(tabBar.props.style);
 
-    expect(style).toEqual(expect.objectContaining({ width, end: "auto" }));
-    expect(style.start).toBeCloseTo(x);
+    expect(style).toEqual(expect.objectContaining({
+      width: geometry.width,
+      start: geometry.start,
+      end: geometry.end,
+    }));
     expect(I18nManager.isRTL).toBe(isRTL);
 
     // React's JS test renderer does not run Yoga, so native layout needs an
     // explicit event. The host remains a real View, as BottomTabBar renders.
     await act(async () => {
       fireEvent(tabBar, "layout", {
-        nativeEvent: { layout: { x, y: 0, width, height: 64 } },
+        nativeEvent: {
+          layout: { x: geometry.x, y: 0, width: geometry.width, height: 64 },
+        },
       });
     });
-    expect(mockMeasuredTabBarLayout).toEqual({ x, width });
+    expect(mockMeasuredTabBarLayout).toEqual({
+      x: geometry.x,
+      width: geometry.width,
+    });
   });
 });

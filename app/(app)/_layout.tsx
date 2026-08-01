@@ -5,6 +5,7 @@ import { Redirect, Tabs } from "expo-router";
 import { Compass, Home, type LucideIcon, User } from "lucide-react-native";
 import {
   ActivityIndicator,
+  I18nManager,
   Platform,
   useWindowDimensions,
   View,
@@ -12,6 +13,17 @@ import {
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
+
+export function resolveTabBarGeometry(
+  windowWidth: number,
+  isRTL: boolean,
+): { width: number; start: number; end: "auto"; x: number } {
+  const width = Math.min(windowWidth * 0.88, 720);
+  const x = (windowWidth - width) / 2;
+  const start = isRTL ? windowWidth - width - x : x;
+
+  return { width, start, end: "auto", x };
+}
 
 function TabIcon({
   Icon,
@@ -72,8 +84,7 @@ export default function Applayout() {
 
   if (!session) return <Redirect href="/(auth)/login" />;
 
-  const tabBarWidth = Math.min(windowWidth * 0.88, 720);
-  const tabBarStart = (windowWidth - tabBarWidth) / 2;
+  const tabBarGeometry = resolveTabBarGeometry(windowWidth, I18nManager.isRTL);
 
   return (
     <Tabs
@@ -82,9 +93,9 @@ export default function Applayout() {
         tabBarShowLabel: false,
         tabBarStyle: {
           position: "absolute",
-          width: tabBarWidth,
-          start: tabBarStart,
-          end: "auto",
+          width: tabBarGeometry.width,
+          start: tabBarGeometry.start,
+          end: tabBarGeometry.end,
           marginHorizontal: 0,
           bottom: insets.bottom + 8,
           height: 64,
