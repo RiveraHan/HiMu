@@ -111,7 +111,7 @@ export function MiniPlayer() {
 const styles = StyleSheet.create((theme) => ({
   root: {
     width: "100%",
-    height: MINI_PLAYER_HEIGHT,
+    minHeight: MINI_PLAYER_HEIGHT,
     paddingHorizontal: theme.spacing.stackSm,
     flexDirection: "row",
     alignItems: "center",

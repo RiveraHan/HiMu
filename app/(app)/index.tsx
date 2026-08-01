@@ -293,7 +293,7 @@ export default function HomeScreen() {
           onAction={() => void djsQuery.refetch()}
         />
       ) : null}
-      {djs !== undefined && !(djsQuery.isError && djs.length === 0) ? (
+      {djs !== undefined ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

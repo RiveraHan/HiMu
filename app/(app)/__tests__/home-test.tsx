@@ -375,7 +375,7 @@ describe("HomeScreen", () => {
     expect(screen.queryByText("No recommendations yet")).toBeNull();
     expect(screen.queryByText("No AI mixes are ready yet")).toBeNull();
     expect(screen.queryByText("Start listening to build your Vibe Check")).toBeNull();
-    expect(screen.queryByText("New DJ")).toBeNull();
+    expect(screen.getByText("New DJ")).toBeTruthy();
 
     const pressRetryFor = async (title: string) => {
       const notice = screen.getByText(title).parent;

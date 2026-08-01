@@ -171,7 +171,7 @@ const styles = StyleSheet.create((theme) => ({
     fontFamily: "Manrope-SemiBold",
     color: theme.colors.onSurfaceVariant,
     textTransform: "uppercase",
-    opacity: 0.3,
+    opacity: 0.7,
   },
   legalDot: {
     width: 4,

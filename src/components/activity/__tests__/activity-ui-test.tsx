@@ -87,7 +87,7 @@ beforeEach(async () => {
 });
 
 describe("ActivityPill", () => {
-  it("is a 48-point named control and opens the panel", async () => {
+  it("keeps a 48-point minimum without a fixed height so scaled text can expand", async () => {
     const openPanel = jest.fn();
     mockUseActivity.mockReturnValue(context({ openPanel }));
     const current = activity();
@@ -95,8 +95,9 @@ describe("ActivityPill", () => {
 
     const pill = screen.getByRole("button", { name: "Generating with Nova" });
     expect(RNStyleSheet.flatten(pill.props.style)).toEqual(
-      expect.objectContaining({ height: 48 }),
+      expect.objectContaining({ minHeight: 48 }),
     );
+    expect(RNStyleSheet.flatten(pill.props.style).height).toBeUndefined();
     await fireEvent.press(pill);
     expect(openPanel).toHaveBeenCalledTimes(1);
   });

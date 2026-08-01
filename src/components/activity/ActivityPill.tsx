@@ -145,7 +145,7 @@ export function ActivityPill({ activity, activeCount, fallbackStatus }: Activity
 
 const styles = StyleSheet.create((theme) => ({
   pill: {
-    height: 48,
+    minHeight: 48,
     maxWidth: 300,
     flexDirection: "row",
     alignItems: "center",

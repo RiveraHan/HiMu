@@ -103,6 +103,18 @@ describe("shared component translations", () => {
     expect(within(player).getAllByRole("button")).toHaveLength(4);
   });
 
+  it("keeps a 64-point minimum without fixing height for large text scaling", async () => {
+    usePlayerStore.getState().setNowPlaying(
+      {
+        id: "track-1", title: "A deliberately long scalable track title", artist: "Artist", audio_url: "https://example.com/a.mp3", album_art_url: null, duration: 180,
+      }, [], 0,
+    );
+    const screen = await render(<MiniPlayer />);
+    const style = RNStyleSheet.flatten(screen.getByTestId("mini-player").props.style);
+    expect(style).toEqual(expect.objectContaining({ minHeight: 64 }));
+    expect(style.height).toBeUndefined();
+  });
+
   it("uses actionable semantics only for interactive avatar and library cards", async () => {
     const screen = await render(
       <View>

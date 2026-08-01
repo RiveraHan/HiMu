@@ -69,6 +69,12 @@ describe("Login translations", () => {
     expect(RNStyleSheet.flatten(privacy.props.style)).toEqual(
       expect.objectContaining({ minHeight: 44, minWidth: 44 }),
     );
+    // Legal copy is normal-sized text and needs a readable foreground contrast.
+    expect(RNStyleSheet.flatten(screen.getByText("Términos").props.style)).toEqual(
+      expect.objectContaining({ opacity: expect.any(Number) }),
+    );
+    expect(RNStyleSheet.flatten(screen.getByText("Términos").props.style).opacity)
+      .toBeGreaterThanOrEqual(0.7);
     expect(screen.getAllByTestId("legal-separator")).toHaveLength(1);
 
     await act(async () => {
