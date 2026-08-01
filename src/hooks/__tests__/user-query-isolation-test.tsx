@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook } from "@testing-library/react-native";
+import { renderHook, waitFor } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 
 import { queryKeys } from "@/src/api/queries";
 import { useGenerationActivity } from "@/src/activity/use-generation-activity";
 import { useDJ, useDJTracks } from "@/src/hooks/use-dj";
+import { useDailyDrop } from "@/src/hooks/use-daily-drop";
 import { useFavorites, useIsFavorited } from "@/src/hooks/use-favorites";
 import {
   useAIMixTracks,
@@ -27,9 +28,24 @@ import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { timeOfDayBucket } from "@/src/utils/home-curation";
 
 let mockUserId = "A";
+const mockInvoke = jest.fn();
 
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => ({ id: mockUserId }),
+}));
+jest.mock("@/src/api/auth-scope", () => {
+  const actual = jest.requireActual("@/src/api/auth-scope");
+  return {
+    ...actual,
+    captureAuthScope: (userId: string) => ({
+      userId,
+      authorization: `Bearer fixture-${userId}`,
+    }),
+    isCurrentMutationUser: (userId: string) => mockUserId === userId,
+  };
+});
+jest.mock("@/src/i18n/use-locale", () => ({
+  useLocale: () => ({ resolvedLanguage: "en" }),
 }));
 jest.mock("@/src/api/supabase", () => {
   const builder: Record<string, (...args: unknown[]) => unknown> = {};
@@ -48,11 +64,16 @@ jest.mock("@/src/api/supabase", () => {
     builder[method] = jest.fn(() => builder);
   }
   builder.then = jest.fn();
-  return { supabase: { from: jest.fn(() => builder) } };
+  return {
+    supabase: {
+      from: jest.fn(() => builder),
+      functions: { invoke: (...args: unknown[]) => mockInvoke(...args) },
+    },
+  };
 });
 
 const preferences = {
-  genres: [],
+  genres: ["Ambient"],
   excludedMoods: [],
   vibeMapping: { organicElectronic: 0.5, melancholicEuphoric: 0.5 },
   aiFrequency: "optimal",
@@ -80,8 +101,9 @@ function useAllUserQueries() {
     useSettings(),
     useOnboarding(1),
   ];
-  useTasteProfile();
-  return queries;
+  const tasteProfile = useTasteProfile();
+  const dailyDrop = useDailyDrop();
+  return { queries, tasteProfile, dailyDrop };
 }
 
 function keys(userId: string) {
@@ -99,6 +121,7 @@ function keys(userId: string) {
     queryKeys.djs.details(userId, "dj"),
     queryKeys.tracks.byDj(userId, "dj"),
     queryKeys.generationJobs.activity(userId),
+    queryKeys.generationJobs.detail(userId, "job"),
     queryKeys.profile.me(userId),
     queryKeys.stats.listening(userId),
     queryKeys.stats.djsHeard(userId),
@@ -110,6 +133,10 @@ function keys(userId: string) {
 }
 
 test("actual RLS query hooks never expose A's fresh cache after rerendering as B", async () => {
+  mockInvoke.mockReset().mockResolvedValue({
+    data: { jobId: "job" },
+    error: null,
+  });
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Infinity, gcTime: Infinity },
@@ -120,7 +147,15 @@ test("actual RLS query hooks never expose A's fresh cache after rerendering as B
     [],
     false,
     preferences,
-    [],
+    [
+      {
+        id: "dj",
+        name: "DJ",
+        avatar_url: null,
+        genre_specialties: ["Ambient"],
+        owner_id: "A",
+      },
+    ],
     [],
     [],
     [],
@@ -129,6 +164,22 @@ test("actual RLS query hooks never expose A's fresh cache after rerendering as B
     { id: "dj" },
     [],
     [],
+    {
+      status: "ready",
+      error: null,
+      track_id: "drop-track",
+      caption: "A caption",
+      caption_audio_url: null,
+      tracks: {
+        id: "drop-track",
+        title: "A drop",
+        artist: "DJ",
+        audio_url: "drop.mp3",
+        album_art_url: null,
+        duration: 180,
+        genre: "Ambient",
+      },
+    },
     { id: "A" },
     0,
     0,
@@ -145,12 +196,32 @@ test("actual RLS query hooks never expose A's fresh cache after rerendering as B
   );
   mockUserId = "A";
   const hook = await renderHook(() => useAllUserQueries(), { wrapper: Wrapper });
-  expect(hook.result.current.every((query) => query.data !== undefined)).toBe(true);
+  expect(
+    hook.result.current.queries.every((query) => query.data !== undefined),
+  ).toBe(true);
+  await waitFor(() => expect(hook.result.current.dailyDrop.status).toBe("ready"));
+  expect(hook.result.current.dailyDrop).toMatchObject({
+    caption: "A caption",
+    track: { id: "drop-track" },
+  });
+  expect(hook.result.current.tasteProfile.topGenre).toBe("Ambient");
+  expect([...hook.result.current.tasteProfile.affineGenres]).toEqual([
+    "Ambient",
+  ]);
+  expect(mockInvoke).toHaveBeenCalledWith("generate-mix", {
+    body: expect.objectContaining({ djId: "dj" }),
+    headers: { Authorization: "Bearer fixture-A" },
+  });
 
   mockUserId = "B";
   await hook.rerender(undefined);
 
-  expect(hook.result.current.every((query) => query.data === undefined)).toBe(true);
+  expect(
+    hook.result.current.queries.every((query) => query.data === undefined),
+  ).toBe(true);
+  expect(hook.result.current.dailyDrop.status).toBe("idle");
+  expect(hook.result.current.tasteProfile).toMatchObject({ topGenre: null });
+  expect(hook.result.current.tasteProfile.affineGenres.size).toBe(0);
   keys("B").forEach((key) => expect(client.getQueryData(key)).toBeUndefined());
   aKeys.forEach((key) => expect(client.getQueryData(key)).toBeDefined());
   await hook.unmount();

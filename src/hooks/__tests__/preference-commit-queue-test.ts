@@ -2,7 +2,30 @@ import {
   PreferenceCommitQueue,
   type PreferencePatch,
 } from "../preference-commit-queue";
+import { queryKeys } from "@/src/api/queries";
+import { useMusicPreferences } from "../use-music-preferences";
 import type { MusicPreferences } from "@/src/types/music-preferences";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react-native";
+import { createElement, type PropsWithChildren } from "react";
+
+const mockPreferenceRead = jest.fn<
+  Promise<{ data: unknown; error: null }>,
+  []
+>();
+
+jest.mock("../use-auth", () => ({
+  useCurrentUser: () => ({ id: "A" }),
+}));
+jest.mock("@/src/api/supabase", () => {
+  const builder: Record<string, (...args: unknown[]) => unknown> = {};
+  for (const method of ["select", "eq", "maybeSingle"]) {
+    builder[method] = jest.fn(() => builder);
+  }
+  builder.then = (onFulfilled: unknown, onRejected: unknown) =>
+    mockPreferenceRead().then(onFulfilled as never, onRejected as never);
+  return { supabase: { from: jest.fn(() => builder) } };
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -282,4 +305,87 @@ test("rolls back a failed second same-chip toggle to the first committed intent"
   await queue.whenIdle();
 
   expect(writes.at(-1)?.genres).toEqual(["Ambient"]);
+});
+
+test("a real deferred refetch cannot overwrite an optimistic serialized save", async () => {
+  const staleRefetch = deferred<{ data: unknown; error: null }>();
+  const save = deferred<void>();
+  const key = queryKeys.musicPreferences.me("A");
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Infinity, gcTime: Infinity },
+    },
+  });
+  client.setQueryData(key, baseline);
+  const Wrapper = ({ children }: PropsWithChildren) =>
+    createElement(QueryClientProvider, { client }, children);
+  mockPreferenceRead
+    .mockReset()
+    .mockReturnValueOnce(staleRefetch.promise)
+    .mockResolvedValue({
+      data: {
+        genres: ["Ambient"],
+        moods: [],
+        vibe_mapping: {
+          organic_electronic: 0.5,
+          melancholic_euphoric: 0.5,
+        },
+        ai_frequency: "optimal",
+        discovery_depth: false,
+      },
+      error: null,
+    });
+  const hook = await renderHook(() => useMusicPreferences(), {
+    wrapper: Wrapper,
+  });
+  expect(hook.result.current.data).toEqual(baseline);
+
+  const refetch = hook.result.current.refetch();
+  await waitFor(() => expect(mockPreferenceRead).toHaveBeenCalledTimes(1));
+  const queue = new PreferenceCommitQueue({
+    baseline,
+    cancel: () => client.cancelQueries({ queryKey: key }),
+    writeOptimistic: (next) => client.setQueryData(key, next),
+    persist: () => save.promise,
+    invalidate: () => client.invalidateQueries({ queryKey: key }),
+    onFailure: jest.fn(),
+  });
+
+  await act(async () => {
+    queue.commit(ensureGenre("Ambient", true));
+    await Promise.resolve();
+  });
+  expect(client.getQueryData<MusicPreferences>(key)?.genres).toEqual([
+    "Ambient",
+  ]);
+
+  await act(async () => {
+    staleRefetch.resolve({
+      data: {
+        genres: [],
+        moods: [],
+        vibe_mapping: {
+          organic_electronic: 0.5,
+          melancholic_euphoric: 0.5,
+        },
+        ai_frequency: "optimal",
+        discovery_depth: false,
+      },
+      error: null,
+    });
+    await refetch;
+  });
+  expect(client.getQueryData<MusicPreferences>(key)?.genres).toEqual([
+    "Ambient",
+  ]);
+
+  await act(async () => {
+    save.resolve();
+    await queue.whenIdle();
+  });
+  expect(client.getQueryData<MusicPreferences>(key)?.genres).toEqual([
+    "Ambient",
+  ]);
+  await hook.unmount();
+  client.clear();
 });

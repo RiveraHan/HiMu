@@ -3,8 +3,8 @@ export const queryKeys = {
   djs: {
     all: ["djs"] as const,
     list: (userId: string | null) => ["djs", "list", userId] as const,
-    details: (userId: string | null, id?: string) =>
-      ["djs", "detail", id === undefined ? null : userId, id ?? userId] as const,
+    details: (userId: string | null, id: string) =>
+      ["djs", "detail", userId, id] as const,
   },
   creators: {
     all: ["creators"] as const,
@@ -22,8 +22,8 @@ export const queryKeys = {
       ["tracks", "detail", userId, id] as const,
     myMood: (userId: string | null, mood: string) =>
       ["tracks", "mood", userId, mood] as const,
-    byDj: (userId: string | null, id?: string) =>
-      ["tracks", "dj", id === undefined ? null : userId, id ?? userId] as const,
+    byDj: (userId: string | null, id: string) =>
+      ["tracks", "dj", userId, id] as const,
     ownership: (userId: string | null, id: string) =>
       ["tracks", "ownership", userId, id] as const,
   },
