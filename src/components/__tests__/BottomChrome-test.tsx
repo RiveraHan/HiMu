@@ -183,6 +183,7 @@ describe("BottomChrome", () => {
     expect(screen.getByTestId("bottom-chrome-stack")).toHaveStyle({
       width: "88%",
       maxWidth: 720,
+      alignSelf: "center",
     });
   });
 

@@ -26,12 +26,8 @@ export function DJAvatar({
   onPress,
   testID,
 }: Props) {
-  return (
-    <Pressable
-      onPress={onPress}
-      testID={testID}
-      style={({ pressed }) => [styles.root, pressed && styles.pressed]}
-    >
+  const content = (
+    <>
       <View>
         <Avatar src={src} fallback={fallback} size={size} />
         {isLive && <View style={styles.liveBadge} />}
@@ -55,12 +51,30 @@ export function DJAvatar({
           {subtitle}
         </Text>
       )}
+    </>
+  );
+
+  if (!onPress) {
+    return <View testID={testID} style={styles.root}>{content}</View>;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={isLive ? `${name}, live` : name}
+      style={({ pressed }) => [styles.root, pressed && styles.pressed]}
+    >
+      {content}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   root: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
     gap: theme.spacing.stackSm,
   },

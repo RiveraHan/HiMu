@@ -528,6 +528,9 @@ export default function DJProfileScreen() {
 const styles = StyleSheet.create((theme) => ({
   root: { flex: 1, backgroundColor: theme.colors.background },
   body: {
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },

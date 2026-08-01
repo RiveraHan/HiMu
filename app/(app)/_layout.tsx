@@ -6,7 +6,8 @@ import { Compass, Home, type LucideIcon, User } from "lucide-react-native";
 import {
   ActivityIndicator,
   Platform,
-  View
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -57,6 +58,7 @@ export default function Applayout() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const { width: windowWidth } = useWindowDimensions();
   const session = useAuthStore((state) => state.session);
   const isLoading = useAuthStore((state) => state.isLoading);
 
@@ -70,6 +72,9 @@ export default function Applayout() {
 
   if (!session) return <Redirect href="/(auth)/login" />;
 
+  const tabBarWidth = Math.min(windowWidth * 0.88, 720);
+  const tabBarStart = (windowWidth - tabBarWidth) / 2;
+
   return (
     <Tabs
       screenOptions={{
@@ -77,7 +82,10 @@ export default function Applayout() {
         tabBarShowLabel: false,
         tabBarStyle: {
           position: "absolute",
-          marginHorizontal: "6%",
+          width: tabBarWidth,
+          start: tabBarStart,
+          end: "auto",
+          marginHorizontal: 0,
           bottom: insets.bottom + 8,
           height: 64,
           borderRadius: theme.borderRadius.full,

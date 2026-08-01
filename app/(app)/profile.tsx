@@ -308,6 +308,8 @@ export default function ProfileScreen() {
               <Pressable
                 key={dj.id}
                 onPress={() => router.push(`/dj/${dj.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel={t("playback.vibe.openDjProfile", { name: dj.name })}
                 style={({ pressed }) => [
                   styles.djCardWrap,
                   pressed && styles.pressed,
@@ -481,6 +483,7 @@ const styles = StyleSheet.create((theme) => ({
   },
 
   djCardWrap: {
+    minHeight: 44,
     flexGrow: 1,
     flexBasis: "45%",
   },

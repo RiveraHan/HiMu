@@ -5,6 +5,7 @@ import AppLayout from "@/app/(app)/_layout";
 import i18n from "@/src/i18n";
 
 let mockDiscoverFocused = false;
+let mockWindowWidth = 390;
 
 jest.mock("expo-router", () => {
   const React = require("react");
@@ -60,6 +61,11 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 844, scale: 1, fontScale: 1 }),
+}));
+
 describe("App tab layout", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
@@ -96,12 +102,20 @@ describe("App tab layout", () => {
     const screen = await render(<AppLayout />);
     const options = screen.getByTestId("tabs").props.screenOptions;
 
-    expect(options.tabBarStyle).toEqual(
-      expect.objectContaining({
-        bottom: 8,
-        height: 64,
-        marginHorizontal: "6%",
-      }),
+    expect(options.tabBarStyle).toEqual(expect.objectContaining({
+      bottom: 8,
+      height: 64,
+      width: 343.2,
+      end: "auto",
+    }));
+    expect(options.tabBarStyle.start).toBeCloseTo(23.4);
+  });
+
+  it("caps and centers the tab bar on tablet widths", async () => {
+    mockWindowWidth = 1024;
+    const screen = await render(<AppLayout />);
+    expect(screen.getByTestId("tabs").props.screenOptions.tabBarStyle).toEqual(
+      expect.objectContaining({ width: 720, start: 152, end: "auto" }),
     );
   });
 });

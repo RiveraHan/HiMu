@@ -75,6 +75,7 @@ export function SettingsInfoRow({
 
 const styles = StyleSheet.create((theme) => ({
   row: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.gutter,

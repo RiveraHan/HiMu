@@ -122,6 +122,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   content: {
     flexGrow: 1,
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     paddingTop: theme.spacing.stackLg * 2,
     paddingBottom: theme.spacing.safeAreaBottom + theme.spacing.stackLg,

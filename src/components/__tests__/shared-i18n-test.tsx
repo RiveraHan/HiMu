@@ -1,9 +1,11 @@
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, within } from "@testing-library/react-native";
 import { StyleSheet as RNStyleSheet, Text as NativeText, View } from "react-native";
 
 import { Button } from "@/src/components/Button";
 import { ConfirmDialogHost } from "@/src/components/ConfirmDialog";
 import { MiniPlayer } from "@/src/components/MiniPlayer";
+import { DJAvatar } from "@/src/components/DJAvatar";
+import { LibraryCard } from "@/src/components/LibraryCard";
 import { PlaylistCard } from "@/src/components/PlaylistCard";
 import { ScreenHeader } from "@/src/components/ScreenHeader";
 import { ToastHost } from "@/src/components/Toast";
@@ -88,6 +90,32 @@ describe("shared component translations", () => {
     expect(screen.getByText("Canción dinámica")).toBeTruthy();
     expect(screen.getByText("Artista dinámico")).toBeTruthy();
     expect(screen.getByText("Título dinámico")).toBeTruthy();
+  });
+
+  it("keeps the MiniPlayer as exactly four sibling controls", async () => {
+    usePlayerStore.getState().setNowPlaying(
+      {
+        id: "track-1", title: "Tema", artist: "Artista", audio_url: "https://example.com/a.mp3", album_art_url: null, duration: 180,
+      }, [], 0,
+    );
+    const screen = await render(<MiniPlayer />);
+    const player = screen.getByTestId("mini-player");
+    expect(within(player).getAllByRole("button")).toHaveLength(4);
+  });
+
+  it("uses actionable semantics only for interactive avatar and library cards", async () => {
+    const screen = await render(
+      <View>
+        <DJAvatar fallback="N" name="Nova" isLive onPress={jest.fn()} testID="interactive-avatar" />
+        <DJAvatar fallback="N" name="Nova" testID="static-avatar" />
+        <LibraryCard label="Generated" title="Night drive" onPress={jest.fn()} testID="interactive-library" />
+        <LibraryCard label="Generated" title="Night drive" testID="static-library" />
+      </View>,
+    );
+    expect(screen.getByRole("button", { name: "Nova, live" })).toHaveStyle({ minHeight: 44, minWidth: 44 });
+    expect(screen.getByRole("button", { name: "Generated: Night drive" })).toBeTruthy();
+    expect(screen.getByTestId("static-avatar").type).toBe("View");
+    expect(screen.getByTestId("static-library").type).toBe("View");
   });
 
   it("localizes shared card metadata", async () => {
@@ -215,6 +243,9 @@ describe("shared component translations", () => {
 
     expect(language).toHaveProp("accessibilityValue", { text: "Español" });
     expect(language).toHaveProp("accessibilityState", { disabled: true });
+    expect(RNStyleSheet.flatten(language.props.style)).toEqual(
+      expect.objectContaining({ minHeight: 44 }),
+    );
     expect(screen.getByText("⌄")).toBeTruthy();
     fireEvent.press(language);
     expect(onPress).not.toHaveBeenCalled();

@@ -76,6 +76,7 @@ const styles = StyleSheet.create((theme) => ({
   stack: {
     width: "88%",
     maxWidth: 720,
+    alignSelf: "center",
     alignItems: "center",
     gap: theme.spacing.stackSm,
   },

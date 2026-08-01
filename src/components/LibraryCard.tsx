@@ -24,16 +24,8 @@ export function LibraryCard({
   height = 180,
   testID,
 }: Props) {
-  return (
-    <Pressable
-      onPress={onPress}
-      testID={testID}
-      style={({ pressed }) => [
-        styles.root,
-        { height },
-        pressed && styles.pressed,
-      ]}
-    >
+  const content = (
+    <>
       {cover ? (
         <Image
           source={cover}
@@ -45,8 +37,6 @@ export function LibraryCard({
         <View style={[styles.cover, styles.coverFallback]} />
       )}
 
-      {/* Gradient scrim: transparent at top → dark at bottom, so any cover
-          stays legible. */}
       <LinearGradient
         colors={["rgba(0,0,0,0.1)", "rgba(0,0,0,0.45)", "rgba(0,0,0,0.8)"]}
         locations={[0, 0.55, 1]}
@@ -64,6 +54,26 @@ export function LibraryCard({
           {right}
         </View>
       </View>
+    </>
+  );
+
+  if (!onPress) {
+    return <View testID={testID} style={[styles.root, { height }]}>{content}</View>;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${title}`}
+      style={({ pressed }) => [
+        styles.root,
+        { height },
+        pressed && styles.pressed,
+      ]}
+    >
+      {content}
     </Pressable>
   );
 }

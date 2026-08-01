@@ -322,6 +322,8 @@ export default function HomeScreen() {
               router.push("/create-dj");
             }}
             style={({ pressed }) => [styles.newDJSlot, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={t("home.newDj")}
           >
             <View style={styles.newDJCircle}>
               <Svg width={48} height={48} style={StyleSheet.absoluteFillObject}>
@@ -389,7 +391,7 @@ export default function HomeScreen() {
             onPress={() => router.push("/profile")}
             accessibilityRole="button"
             accessibilityLabel={t("home.openProfile")}
-            style={({ pressed }) => pressed && styles.pressed}
+            style={({ pressed }) => [styles.profileShortcut, pressed && styles.pressed]}
           >
             <Avatar
               src={user?.user_metadata?.avatar_url}
@@ -870,6 +872,8 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.gutter,
   },
   newDJSlot: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
     gap: theme.spacing.stackXs,
   },
@@ -895,5 +899,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   pressed: {
     transform: [{ scale: 0.97 }],
+  },
+  profileShortcut: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
 }));

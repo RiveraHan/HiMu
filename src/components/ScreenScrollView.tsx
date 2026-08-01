@@ -12,7 +12,7 @@ import Animated, {
 import { StyleSheet } from "react-native-unistyles";
 import { StatusBarScrim } from "./StatusBarScrim";
 
-type Props = ScrollViewProps & {
+type Props = Omit<ScrollViewProps, "onScroll"> & {
   children: ReactNode;
   /** Style for the outer container — the screen background lives here. */
   style?: StyleProp<ViewStyle>;
@@ -27,6 +27,7 @@ type Props = ScrollViewProps & {
 export function ScreenScrollView({
   children,
   style,
+  contentContainerStyle,
   showsVerticalScrollIndicator = false,
   onScrollRef,
   ...rest
@@ -39,11 +40,12 @@ export function ScreenScrollView({
   return (
     <View style={[styles.root, style]}>
       <Animated.ScrollView
+        {...rest}
         ref={onScrollRef}
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={showsVerticalScrollIndicator}
-        {...rest}
+        contentContainerStyle={[contentContainerStyle, styles.centeredContent]}
       >
         {children}
       </Animated.ScrollView>
@@ -54,4 +56,9 @@ export function ScreenScrollView({
 
 const styles = StyleSheet.create(() => ({
   root: { flex: 1 },
+  centeredContent: {
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
+  },
 }));
