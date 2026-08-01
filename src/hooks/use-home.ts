@@ -1,5 +1,6 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { activityMutationKeys } from "@/src/activity/mutation-keys";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import { FOCUS_MOODS } from "@/src/types/music-preferences";
@@ -278,21 +279,30 @@ export function useTrackOwnership(trackId: string | undefined) {
 }
 
 // Regenerate a track's cover, updating it in place on success.
+export type RegenerateCoverInput = {
+  trackId: string;
+  title: string;
+};
+
 export function useRegenerateCover() {
   const qc = useQueryClient();
+  const userId = useCurrentUser()?.id ?? "";
   const setCoverForTrack = usePlayerStore((s) => s.setCoverForTrack);
   return useMutation({
-    mutationFn: async (trackId: string) => {
+    mutationKey: activityMutationKeys.regenerateCover(userId),
+    gcTime: Infinity,
+    mutationFn: async ({ trackId, title }: RegenerateCoverInput) => {
       const { data, error } = await supabase.functions.invoke<{
         album_art_url: string;
       }>("regenerate-cover", { body: { trackId } });
       if (error) throw error;
       if (!data?.album_art_url) throw new Error("no cover returned");
-      return { trackId, albumArtUrl: data.album_art_url };
+      return { trackId, title, albumArtUrl: data.album_art_url };
     },
+    onMutate: () => ({ submittedUserId: userId }),
     onSuccess: ({ trackId, albumArtUrl }) => {
       setCoverForTrack(trackId, albumArtUrl);
-      qc.invalidateQueries({ queryKey: ["tracks"] }); // refresh shelves/DJ page covers
+      void qc.invalidateQueries({ queryKey: queryKeys.tracks.all });
     },
   });
 }

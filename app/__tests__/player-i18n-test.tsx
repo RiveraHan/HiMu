@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import PlayerScreen from "@/app/player";
 import i18n from "@/src/i18n";
 
@@ -14,6 +14,7 @@ const track = {
 };
 let mockShuffle = false;
 let mockRepeatMode: "off" | "all" | "one" = "off";
+const mockRegenerate = jest.fn();
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -43,7 +44,7 @@ jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ seek: jest.fn(), prev: jest.fn(), toggle: jest.fn(), next: jest.fn() }),
 }));
 jest.mock("@/src/hooks/use-home", () => ({
-  useRegenerateCover: () => ({ mutate: jest.fn(), isPending: false }),
+  useRegenerateCover: () => ({ mutate: mockRegenerate, isPending: false }),
   useTrackOwnership: () => ({ data: true }),
 }));
 jest.mock("@/src/hooks/use-favorites", () => ({
@@ -62,8 +63,20 @@ jest.mock("react-native-safe-area-context", () => ({
 
 describe("PlayerScreen localization", () => {
   beforeEach(() => {
+    mockRegenerate.mockClear();
     mockShuffle = false;
     mockRepeatMode = "off";
+  });
+
+  test("submits the current track ID and title for cover activity", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "Regenerate cover" }));
+    expect(mockRegenerate).toHaveBeenCalledWith({
+      trackId: "track-one",
+      title: "Signal Bloom",
+    });
   });
 
   test("renders Spanish player actions and transport controls", async () => {

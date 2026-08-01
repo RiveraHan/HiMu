@@ -17,6 +17,7 @@ import { supabase } from "@/src/api/supabase";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useToast } from "@/src/hooks/use-toast";
 import { useLocale } from "@/src/i18n/use-locale";
+import { usePlayerStore } from "@/src/stores/player-store";
 import {
   createActivityReceiptStore,
   markNotified as markReceiptNotified,
@@ -30,6 +31,7 @@ import {
 } from "./generation-activity";
 import type { ActivityItem } from "./types";
 import { useGenerationActivity } from "./use-generation-activity";
+import { useSessionActivities } from "./use-session-activities";
 
 const ACTIVE_STATUSES = new Set<ActivityItem["status"]>([
   "queued",
@@ -91,7 +93,9 @@ export function ActivityProvider({ children }: PropsWithChildren) {
   const user = useCurrentUser();
   const userId = user?.id ?? null;
   const generationActivity = useGenerationActivity();
+  const mutationActivities = useSessionActivities();
   const queryClient = useQueryClient();
+  const currentTrackId = usePlayerStore((state) => state.currentTrack?.id ?? null);
   const { resolvedLanguage } = useLocale();
   const toast = useToast();
   const { t } = useTranslation();
@@ -103,8 +107,13 @@ export function ActivityProvider({ children }: PropsWithChildren) {
   const [retryingIds, setRetryingIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [mutationReceiptVersion, setMutationReceiptVersion] = useState(0);
   const storesRef = useRef(new Map<string, ReceiptStore>());
   const userSessionsRef = useRef(new Map<string, UserSessionState>());
+  const notifiedMutationIdsByUserRef = useRef(
+    new Map<string, Set<string>>(),
+  );
+  const seenMutationIdsByUserRef = useRef(new Map<string, Set<string>>());
   const generationRef = useRef(0);
   const currentUserIdRef = useRef(userId);
   const retryFlightsRef = useRef(new Map<string, Map<string, symbol>>());
@@ -249,21 +258,95 @@ export function ActivityProvider({ children }: PropsWithChildren) {
     userId,
   ]);
 
-  const mergedActivities = useMemo(() => {
-    const activities = generationActivity.data ?? [];
-    if (!userId || hydrated.userId !== userId) {
-      return activities.filter(isActive);
+  useEffect(() => {
+    if (!userId) return;
+    let notified = notifiedMutationIdsByUserRef.current.get(userId);
+    if (!notified) {
+      notified = new Set();
+      notifiedMutationIdsByUserRef.current.set(userId, notified);
     }
-    return activities.map((activity) => ({
+    const pending = mutationActivities.filter(
+      (activity) =>
+        (activity.status === "ready" || activity.status === "failed") &&
+        !notified.has(activity.id),
+    );
+    if (pending.length === 0) return;
+
+    for (const activity of pending) {
+      notified.add(activity.id);
+      if (activity.kind === "cover") {
+        void queryClient
+          .invalidateQueries({ queryKey: queryKeys.tracks.all })
+          .catch((error) =>
+            console.error("Activity refresh failed", boundedError(error)),
+          );
+      } else {
+        void queryClient
+          .invalidateQueries({ queryKey: queryKeys.djs.all })
+          .catch((error) =>
+            console.error("Activity refresh failed", boundedError(error)),
+          );
+      }
+
+      const titleKey =
+        activity.kind === "create-dj"
+          ? activity.status === "ready"
+            ? "createDjReady"
+            : "createDjFailed"
+          : activity.kind === "update-dj"
+            ? activity.status === "ready"
+              ? "updateDjReady"
+              : "updateDjFailed"
+            : activity.status === "ready"
+              ? "coverReady"
+              : "coverFailed";
+      const title = t(`activity.${titleKey}`, { name: activity.title });
+      if (
+        activity.status === "ready" &&
+        activity.detail === "portraitUnavailable"
+      ) {
+        toast.warning(title, t("activity.portraitUnavailable"));
+      } else if (activity.status === "ready") {
+        toast.info(title);
+      } else {
+        logActivityFailure(activity);
+        toast.error(title, t("activity.operationFailed"));
+      }
+    }
+  }, [mutationActivities, queryClient, t, toast, userId]);
+
+  const mergedActivities = useMemo(() => {
+    void mutationReceiptVersion;
+    const activities = generationActivity.data ?? [];
+    const seenMutationIds = userId
+      ? seenMutationIdsByUserRef.current.get(userId)
+      : undefined;
+    const mutations = mutationActivities.map((activity) => ({
       ...activity,
-      seen:
-        activity.seen ||
-        (activity.source === "server" &&
-          activity.kind === "mix" &&
-          hydrated.receipts[activity.id]?.seenAt !== null &&
-          hydrated.receipts[activity.id]?.seenAt !== undefined),
+      seen: activity.seen || seenMutationIds?.has(activity.id) === true,
     }));
-  }, [generationActivity.data, hydrated, userId]);
+    if (!userId || hydrated.userId !== userId) {
+      return [...activities.filter(isActive), ...mutations];
+    }
+    return [
+      ...activities.map((activity) => ({
+        ...activity,
+        seen:
+          activity.seen ||
+          (activity.source === "server" &&
+            activity.kind === "mix" &&
+            hydrated.receipts[activity.id]?.seenAt !== null &&
+            hydrated.receipts[activity.id]?.seenAt !== undefined),
+      })),
+      ...mutations,
+    ];
+  }, [
+    generationActivity.data,
+    hydrated,
+    mutationActivities,
+    mutationReceiptVersion,
+    userId,
+  ]);
 
   const visibleActivities = useMemo(
     () =>
@@ -290,6 +373,19 @@ export function ActivityProvider({ children }: PropsWithChildren) {
 
   const markSeen = useCallback(
     async (activity: ActivityItem) => {
+      if (activity.source === "mutation") {
+        if (!userId) return;
+        let seen = seenMutationIdsByUserRef.current.get(userId);
+        if (!seen) {
+          seen = new Set();
+          seenMutationIdsByUserRef.current.set(userId, seen);
+        }
+        if (!seen.has(activity.id)) {
+          seen.add(activity.id);
+          setMutationReceiptVersion((version) => version + 1);
+        }
+        return;
+      }
       if (
         !userId ||
         hydrated.userId !== userId ||
@@ -331,14 +427,39 @@ export function ActivityProvider({ children }: PropsWithChildren) {
   );
 
   const canOpenActivity = useCallback(
-    (activity: ActivityItem) =>
-      activity.kind === "mix" && activity.djId !== null,
-    [],
+    (activity: ActivityItem) => {
+      if (activity.kind === "mix") return activity.djId !== null;
+      if (activity.kind === "cover") {
+        return activity.trackId !== null && currentTrackId === activity.trackId;
+      }
+      return activity.djId !== null;
+    },
+    [currentTrackId],
   );
 
   const openActivity = useCallback(
     async (activity: ActivityItem) => {
-      if (!canOpenActivity(activity) || !activity.djId) return;
+      if (!canOpenActivity(activity)) return;
+
+      if (activity.kind === "create-dj" || activity.kind === "update-dj") {
+        if (!activity.djId) return;
+        closePanel();
+        router.push(`/dj/${activity.djId}`);
+        if (activity.status === "ready" || activity.status === "failed") {
+          await markSeen(activity);
+        }
+        return;
+      }
+      if (activity.kind === "cover") {
+        if (currentTrackId !== activity.trackId) return;
+        closePanel();
+        router.push("/player");
+        if (activity.status === "ready" || activity.status === "failed") {
+          await markSeen(activity);
+        }
+        return;
+      }
+      if (!activity.djId) return;
 
       if (activity.status === "ready" && activity.trackId) {
         await markSeen(activity);
@@ -359,7 +480,7 @@ export function ActivityProvider({ children }: PropsWithChildren) {
       closePanel();
       router.push({ pathname: "/dj/[id]", params: { id: activity.djId } });
     },
-    [canOpenActivity, closePanel, markSeen],
+    [canOpenActivity, closePanel, currentTrackId, markSeen],
   );
 
   const retryActivity = useCallback(

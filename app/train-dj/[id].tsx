@@ -1,4 +1,3 @@
-import { getEdgeErrorCode } from "@/src/api/edge-errors";
 import {
   Avatar,
   Button,
@@ -13,7 +12,6 @@ import {
 import { useDJ } from "@/src/hooks/use-dj";
 import { usePhaseRotation } from "@/src/hooks/use-phase-rotation";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
-import { useToast } from "@/src/hooks/use-toast";
 import { useUpdateDJ } from "@/src/hooks/use-update-dj";
 import { router, useLocalSearchParams } from "expo-router";
 import { RefreshCw } from "lucide-react-native";
@@ -77,7 +75,6 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
-  const toast = useToast();
 
   const saved = (dj.personality_traits ?? {}) as {
     energy?: number;
@@ -115,37 +112,11 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
         regenerateAvatar,
       },
       {
-        onSuccess: (data) => {
+        onSuccess: () => {
           if (!regenerateAvatar) {
             router.back();
-            return;
-          }
-          if (data.avatarUrl === null) {
-            toast.warning(
-              t("dj.train.portraitWarningTitle"),
-              t("dj.train.portraitWarning"),
-            );
           }
           // New portrait arrives via the ["djs"] invalidation refetch.
-        },
-        onError: async (e) => {
-          const code = await getEdgeErrorCode(e);
-          if (code === "not_owner" || code === "not_found") {
-            toast.warning(
-              t("dj.train.unavailableTitle"),
-              t("dj.train.unavailable"),
-            );
-            router.back();
-            return;
-          }
-          toast.error(
-            t("dj.train.errorTitle"),
-            code === "avatar_quota_reached"
-              ? t("dj.train.quotaError")
-              : code === "invalid_input"
-                ? t("dj.train.invalidError")
-                : t("dj.train.genericError"),
-          );
         },
       },
     );
@@ -164,7 +135,6 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
         <ScreenHeader
           title={t("dj.train.title")}
           subtitle={t("dj.train.subtitle", { name: dj.name })}
-          disabled={isPending}
         />
 
         {/* Portrait */}

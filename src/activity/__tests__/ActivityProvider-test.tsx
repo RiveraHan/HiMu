@@ -12,9 +12,13 @@ import { useLocale } from "@/src/i18n/use-locale";
 import { ActivityProvider, useActivity } from "../ActivityProvider";
 import type { ActivityItem } from "../types";
 import { useGenerationActivity } from "../use-generation-activity";
+import { useSessionActivities } from "../use-session-activities";
 
 jest.mock("../use-generation-activity", () => ({
   useGenerationActivity: jest.fn(),
+}));
+jest.mock("../use-session-activities", () => ({
+  useSessionActivities: jest.fn(),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: jest.fn() }));
 jest.mock("@/src/hooks/use-toast", () => ({ useToast: jest.fn() }));
@@ -28,10 +32,15 @@ jest.mock("@/src/lib/secure-storage", () => ({
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ load: mockPlayerLoad }),
 }));
+jest.mock("@/src/stores/player-store", () => ({
+  usePlayerStore: (selector: (state: object) => unknown) =>
+    selector({ currentTrack: mockCurrentTrackId ? { id: mockCurrentTrackId } : null }),
+}));
 jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 
 const mockToastInfo = jest.fn();
 const mockToastError = jest.fn();
+const mockToastWarning = jest.fn();
 const mockRefetch = jest.fn(async () => undefined);
 const mockPlayerLoad = jest.fn();
 let mockUserId: string | null = "user-a";
@@ -40,6 +49,8 @@ let mockActivities: ActivityItem[] | undefined = [];
 let mockQueryError: Error | null = null;
 let mockFetchStatus: "idle" | "fetching" | "paused" = "idle";
 let mockIsLoading = false;
+let mockMutationActivities: ActivityItem[] = [];
+let mockCurrentTrackId: string | null = null;
 const mockStored = new Map<string, string>();
 
 function activity(
@@ -107,6 +118,8 @@ beforeEach(() => {
   mockQueryError = null;
   mockFetchStatus = "idle";
   mockIsLoading = false;
+  mockMutationActivities = [];
+  mockCurrentTrackId = null;
 
   jest.mocked(useCurrentUser).mockImplementation(
     () => (mockUserId ? ({ id: mockUserId } as never) : null),
@@ -116,7 +129,7 @@ beforeEach(() => {
   );
   jest.mocked(useToast).mockReturnValue({
     info: mockToastInfo,
-    warning: jest.fn(),
+    warning: mockToastWarning,
     error: mockToastError,
   });
   jest.mocked(useGenerationActivity).mockImplementation(
@@ -129,6 +142,9 @@ beforeEach(() => {
         fetchStatus: mockFetchStatus,
         refetch: mockRefetch,
       }) as never,
+  );
+  jest.mocked(useSessionActivities).mockImplementation(
+    () => mockMutationActivities,
   );
   jest.mocked(secureStorage.getItem).mockImplementation(async (key) => {
     return mockStored.get(key) ?? null;
@@ -150,6 +166,120 @@ test("throws a clear error outside ActivityProvider", async () => {
   await expect(renderHook(() => useActivity())).rejects.toThrow(
     "useActivity must be used within ActivityProvider",
   );
+});
+
+test("merges mutation activity and announces each kind-specific terminal result once", async () => {
+  mockMutationActivities = [
+    activity("mutation:create-dj:1", "ready", {
+      source: "mutation",
+      kind: "create-dj",
+      title: "Luna",
+      djId: "dj-luna",
+      trackId: null,
+    }),
+  ];
+  const queryClient = client();
+  const invalidate = jest
+    .spyOn(queryClient, "invalidateQueries")
+    .mockResolvedValue(undefined);
+  const rendered = await renderActivity(queryClient);
+
+  await waitFor(() =>
+    expect(mockToastInfo).toHaveBeenCalledWith("Luna is ready"),
+  );
+  expect(rendered.result.current.items.map(({ id }) => id)).toContain(
+    "mutation:create-dj:1",
+  );
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.djs.all });
+
+  await rendered.rerender(undefined);
+  expect(mockToastInfo).toHaveBeenCalledTimes(1);
+});
+
+test("uses a warning for portrait partial success and never presents raw mutation errors", async () => {
+  mockMutationActivities = [
+    activity("mutation:update-dj:2", "ready", {
+      source: "mutation",
+      kind: "update-dj",
+      title: "Luna",
+      djId: "dj-luna",
+      detail: "portraitUnavailable",
+    }),
+    activity("mutation:cover:3", "failed", {
+      source: "mutation",
+      kind: "cover",
+      title: "Glow",
+      djId: null,
+      trackId: null,
+      error: "raw secret provider failure",
+      failureReason: "operationFailed",
+    }),
+  ];
+  await renderActivity();
+
+  await waitFor(() => expect(mockToastWarning).toHaveBeenCalled());
+  expect(mockToastWarning).toHaveBeenCalledWith(
+    "Luna was updated",
+    "The DJ is ready, but its new portrait is unavailable.",
+  );
+  expect(mockToastError).toHaveBeenCalledWith(
+    "Artwork for Glow couldn't be created",
+    "The operation couldn't be completed.",
+  );
+  expect(JSON.stringify(mockToastError.mock.calls)).not.toContain("raw secret");
+});
+
+test("retains mutation notification and seen state across an A to B to A switch", async () => {
+  const completed = activity("mutation:create-dj:4", "ready", {
+    source: "mutation",
+    kind: "create-dj",
+    djId: "dj-luna",
+  });
+  mockMutationActivities = [completed];
+  const rendered = await renderActivity();
+  await waitFor(() => expect(mockToastInfo).toHaveBeenCalledTimes(1));
+  await act(async () => rendered.result.current.markSeen(completed));
+  await waitFor(() => expect(rendered.result.current.items).toEqual([]));
+
+  mockUserId = "user-b";
+  mockMutationActivities = [];
+  await rendered.rerender(undefined);
+  mockUserId = "user-a";
+  mockMutationActivities = [completed];
+  await rendered.rerender(undefined);
+
+  expect(mockToastInfo).toHaveBeenCalledTimes(1);
+  expect(rendered.result.current.items).toEqual([]);
+});
+
+test("guards mutation destinations and only returns to the current track player", async () => {
+  const pendingCreate = activity("mutation:create-dj:5", "running", {
+    source: "mutation",
+    kind: "create-dj",
+    djId: null,
+    trackId: null,
+  });
+  const changedCover = activity("mutation:cover:6", "ready", {
+    source: "mutation",
+    kind: "cover",
+    djId: null,
+    trackId: "track-old",
+  });
+  mockCurrentTrackId = "track-current";
+  mockMutationActivities = [pendingCreate, changedCover];
+  const rendered = await renderActivity();
+  await waitFor(() => expect(rendered.result.current.items).toHaveLength(2));
+
+  expect(rendered.result.current.canOpenActivity(pendingCreate)).toBe(false);
+  expect(rendered.result.current.canOpenActivity(changedCover)).toBe(false);
+  await act(async () => rendered.result.current.openActivity(changedCover));
+  expect(router.push).not.toHaveBeenCalled();
+
+  mockCurrentTrackId = "track-old";
+  await rendered.rerender(undefined);
+  expect(rendered.result.current.canOpenActivity(changedCover)).toBe(true);
+  await act(async () => rendered.result.current.openActivity(changedCover));
+  expect(router.push).toHaveBeenCalledWith("/player");
 });
 
 test("announces a running-to-ready transition once, refreshes dependents, and never loads the player", async () => {

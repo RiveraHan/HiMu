@@ -1,15 +1,12 @@
-import { getEdgeErrorCode } from "@/src/api/edge-errors";
 import {
   Button,
   canSubmitDjTraits,
-  DjBirthOverlay,
   DjTraitsForm,
   ScreenHeader,
   type DjTraits,
 } from "@/src/components";
 import { useCreateDJ } from "@/src/hooks/use-create-dj";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
-import { useToast } from "@/src/hooks/use-toast";
 import { router } from "expo-router";
 import { Sparkles } from "lucide-react-native";
 import { useState } from "react";
@@ -23,7 +20,6 @@ export default function CreateDJScreen() {
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
-  const toast = useToast();
 
   const [traits, setTraits] = useState<DjTraits>({
     name: "",
@@ -51,17 +47,6 @@ export default function CreateDJScreen() {
       },
       {
         onSuccess: ({ djId }) => router.replace(`/dj/${djId}`),
-        onError: async (e) => {
-          const code = await getEdgeErrorCode(e);
-          toast.error(
-            t("dj.create.errorTitle"),
-            code === "dj_quota_reached"
-              ? t("dj.create.quotaError")
-              : code === "invalid_input"
-                ? t("dj.create.invalidError")
-                : t("dj.create.genericError"),
-          );
-        },
       },
     );
   }
@@ -79,7 +64,6 @@ export default function CreateDJScreen() {
         <ScreenHeader
           title={t("dj.create.title")}
           subtitle={t("dj.create.subtitle")}
-          disabled={isPending}
         />
 
         <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
@@ -98,7 +82,6 @@ export default function CreateDJScreen() {
         />
       </ScrollView>
 
-      {isPending && <DjBirthOverlay name={displayName} />}
     </View>
   );
 }

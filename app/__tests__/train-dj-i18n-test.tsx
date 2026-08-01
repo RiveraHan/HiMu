@@ -4,6 +4,7 @@ import TrainDJScreen from "@/app/train-dj/[id]";
 import i18n from "@/src/i18n";
 
 const mockUpdate = jest.fn();
+let mockPending = false;
 
 jest.mock("@/src/hooks/use-dj", () => ({
   useDJ: () => ({ data: {
@@ -17,7 +18,7 @@ jest.mock("@/src/hooks/use-dj", () => ({
   }, isLoading: false }),
 }));
 jest.mock("@/src/hooks/use-update-dj", () => ({
-  useUpdateDJ: () => ({ mutate: mockUpdate, isPending: false }),
+  useUpdateDJ: () => ({ mutate: mockUpdate, isPending: mockPending }),
 }));
 jest.mock("@/src/hooks/use-phase-rotation", () => ({ usePhaseRotation: (phases: string[]) => phases[0] }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({ useMiniPlayerPadding: () => 0 }));
@@ -39,8 +40,9 @@ jest.mock("@/src/components", () => {
         subtitle ? React.createElement(Text, null, subtitle) : null,
         children,
       ),
-    ScreenHeader: ({ title, subtitle }: { title: string; subtitle: string }) =>
+    ScreenHeader: ({ title, subtitle, disabled }: { title: string; subtitle: string; disabled?: boolean }) =>
       React.createElement(View, null,
+        React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: "Back", accessibilityState: { disabled }, disabled }),
         React.createElement(Text, null, title),
         React.createElement(Text, null, subtitle),
       ),
@@ -64,6 +66,7 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 test("renders Spanish training and preserves canonical saved values", async () => {
+  mockPending = false;
   await i18n.changeLanguage("es");
   const screen = await render(<TrainDJScreen />);
 
@@ -75,4 +78,11 @@ test("renders Spanish training and preserves canonical saved values", async () =
     expect.objectContaining({ genres: ["Ambient"], moods: ["Focus"] }),
     expect.any(Object),
   );
+});
+
+test("keeps Back available while an update is pending", async () => {
+  mockPending = true;
+  const screen = await render(<TrainDJScreen />);
+
+  expect(screen.getByRole("button", { name: "Back" }).props.accessibilityState.disabled).toBeFalsy();
 });

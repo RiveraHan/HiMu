@@ -2,7 +2,6 @@ import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
 import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
-import { useToast } from "@/src/hooks/use-toast";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -47,7 +46,6 @@ export default function PlayerScreen() {
   const regenerate = useRegenerateCover();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
-  const toast = useToast();
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -145,12 +143,9 @@ export default function PlayerScreen() {
                 )
               }
               onPress={() =>
-                regenerate.mutate(track.id, {
-                  onError: () =>
-                    toast.error(
-                      t("playback.player.cover.title"),
-                      t("playback.player.cover.error"),
-                    ),
+                regenerate.mutate({
+                  trackId: track.id,
+                  title: track.title,
                 })
               }
               accessibilityLabel={t("playback.player.actions.regenerateCover")}

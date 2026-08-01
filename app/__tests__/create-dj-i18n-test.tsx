@@ -4,9 +4,10 @@ import CreateDJScreen from "@/app/create-dj";
 import i18n from "@/src/i18n";
 
 const mockCreate = jest.fn();
+let mockPending = false;
 
 jest.mock("@/src/hooks/use-create-dj", () => ({
-  useCreateDJ: () => ({ mutate: mockCreate, isPending: false }),
+  useCreateDJ: () => ({ mutate: mockCreate, isPending: mockPending }),
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({ useMiniPlayerPadding: () => 0 }));
 jest.mock("@/src/hooks/use-toast", () => ({ useToast: () => ({ error: jest.fn() }) }));
@@ -62,9 +63,10 @@ jest.mock("@/src/components", () => {
   const traits = jest.requireActual("@/src/components/dj/DjTraitsForm");
   return {
     ...traits,
-    DjBirthOverlay: () => React.createElement(View),
-    ScreenHeader: ({ title, subtitle }: { title: string; subtitle: string }) =>
+    DjBirthOverlay: () => React.createElement(View, { testID: "birth-overlay" }),
+    ScreenHeader: ({ title, subtitle, disabled }: { title: string; subtitle: string; disabled?: boolean }) =>
       React.createElement(View, null,
+        React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: "Back", accessibilityState: { disabled }, disabled }),
         React.createElement(Text, null, title),
         React.createElement(Text, null, subtitle),
       ),
@@ -84,6 +86,7 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 test("renders the Spanish DJ wizard and submits canonical catalog values", async () => {
+  mockPending = false;
   await i18n.changeLanguage("es");
   const screen = await render(<CreateDJScreen />);
 
@@ -102,4 +105,12 @@ test("renders the Spanish DJ wizard and submits canonical catalog values", async
       expect.any(Object),
     ),
   );
+});
+
+test("keeps Back available and removes the blocking overlay while creation is pending", async () => {
+  mockPending = true;
+  const screen = await render(<CreateDJScreen />);
+
+  expect(screen.getByRole("button", { name: "Back" }).props.accessibilityState.disabled).toBeFalsy();
+  expect(screen.queryByTestId("birth-overlay")).toBeNull();
 });
