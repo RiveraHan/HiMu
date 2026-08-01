@@ -1,5 +1,5 @@
-import { act, render } from "@testing-library/react-native";
-import { StyleSheet as RNStyleSheet, View } from "react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet as RNStyleSheet, Text as NativeText, View } from "react-native";
 
 import { Button } from "@/src/components/Button";
 import { ConfirmDialogHost } from "@/src/components/ConfirmDialog";
@@ -9,6 +9,8 @@ import { ScreenHeader } from "@/src/components/ScreenHeader";
 import { ToastHost } from "@/src/components/Toast";
 import { TrackCard } from "@/src/components/TrackCard";
 import { Chip } from "@/src/components/preferences/Chip";
+import { SettingRow } from "@/src/components/profile/SettingsRow";
+import { SettingsInfoRow } from "@/src/components/settings/SettingsInfoRow";
 import i18n from "@/src/i18n";
 import { useConfirmStore } from "@/src/stores/confirm-store";
 import { usePlayerStore } from "@/src/stores/player-store";
@@ -167,5 +169,54 @@ describe("shared component translations", () => {
     expect(RNStyleSheet.flatten(ghost.props.style)).toEqual(
       expect.objectContaining({ minHeight: 44, minWidth: 44 }),
     );
+  });
+
+  it("keeps informational settings visible without actionable semantics", async () => {
+    const screen = await render(
+      <View>
+        <SettingRow
+          icon={<View />}
+          label="Suscripción de perfil"
+          right={<NativeText>Premium de perfil</NativeText>}
+        />
+        <SettingsInfoRow
+          icon={<View />}
+          label="Suscripción de cuenta"
+          value="Premium de cuenta"
+        />
+      </View>,
+    );
+
+    expect(screen.getByText("Suscripción de perfil")).toBeTruthy();
+    expect(screen.getByText("Premium de perfil")).toBeTruthy();
+    expect(screen.getByText("Suscripción de cuenta")).toBeTruthy();
+    expect(screen.getByText("Premium de cuenta")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Suscripción de perfil" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Suscripción de cuenta" }),
+    ).toBeNull();
+  });
+
+  it("keeps a disabled settings action semantic and exposes its current value", async () => {
+    const onPress = jest.fn();
+    const screen = await render(
+      <SettingsInfoRow
+        icon={<View />}
+        label="Idioma"
+        value="Español"
+        onPress={onPress}
+        disabled
+        accessory={<NativeText>⌄</NativeText>}
+      />,
+    );
+    const language = screen.getByRole("button", { name: "Idioma" });
+
+    expect(language).toHaveProp("accessibilityValue", { text: "Español" });
+    expect(language).toHaveProp("accessibilityState", { disabled: true });
+    expect(screen.getByText("⌄")).toBeTruthy();
+    fireEvent.press(language);
+    expect(onPress).not.toHaveBeenCalled();
   });
 });

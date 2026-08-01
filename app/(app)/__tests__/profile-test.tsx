@@ -110,18 +110,26 @@ jest.mock("@/src/components", () => {
       label: string;
       onPress?: () => void;
       right?: React.ReactNode;
-    }) =>
-      React.createElement(
-        Pressable,
-        {
-          accessibilityLabel: label,
-          accessibilityRole: "button",
-          disabled: !onPress,
-          onPress,
-        },
+    }) => {
+      const content = React.createElement(
+        React.Fragment,
+        null,
         React.createElement(NativeText, null, label),
         right,
-      ),
+      );
+
+      return onPress
+        ? React.createElement(
+            Pressable,
+            {
+              accessibilityLabel: label,
+              accessibilityRole: "button",
+              onPress,
+            },
+            content,
+          )
+        : React.createElement(View, null, content);
+    },
     StatCard: ({ value, label }: { value: string; label: string }) =>
       React.createElement(NativeText, { testID: `stat-${label}` }, `${value} ${label}`),
     StateNotice: ({ title, actionLabel, onAction }: {
@@ -431,6 +439,8 @@ describe("ProfileScreen", () => {
 
     expect(screen.getByText("PRO")).toBeTruthy();
     expect(screen.getByText("Pro")).toBeTruthy();
+    expect(screen.getByText("Subscription")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Subscription" })).toBeNull();
   });
 
   it("preserves Profile navigation handlers", async () => {

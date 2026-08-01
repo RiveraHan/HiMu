@@ -12,6 +12,7 @@ type Props = {
   valueColor?: ComponentProps<typeof Text>["color"];
   accessory?: ReactNode;
   onPress?: () => void;
+  disabled?: boolean;
 };
 
 export function SettingsInfoRow({
@@ -22,20 +23,12 @@ export function SettingsInfoRow({
   valueColor = "onSurfaceVariant",
   accessory,
   onPress,
+  disabled = false,
 }: Props) {
   const { theme } = useUnistyles();
 
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.row,
-        pressed && !!onPress && styles.pressed,
-      ]}
-    >
+  const content = (
+    <>
       <View style={styles.iconCircle}>{icon}</View>
       <View style={styles.text}>
         <Text variant="bodyLg" numberOfLines={1}>
@@ -56,7 +49,27 @@ export function SettingsInfoRow({
         (onPress ? (
           <ChevronRight size={20} color={theme.colors.outline} />
         ) : null)}
+    </>
+  );
+
+  return onPress ? (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityValue={value ? { text: value } : undefined}
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [
+        styles.row,
+        pressed && styles.pressed,
+        disabled && styles.disabled,
+      ]}
+    >
+      {content}
     </Pressable>
+  ) : (
+    <View style={styles.row}>{content}</View>
   );
 }
 
@@ -67,6 +80,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.gutter,
   },
   pressed: { opacity: 0.6 },
+  disabled: { opacity: 0.5 },
   iconCircle: {
     width: 40,
     height: 40,

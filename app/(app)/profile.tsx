@@ -391,7 +391,7 @@ export default function ProfileScreen() {
               label={t("profile.musicPreferences")}
               onPress={() => router.push("/preferences")}
             />
-            {profile !== undefined ? (
+            {profile ? (
               <SettingRow
                 icon={<Crown size={20} color={theme.colors.tertiary} />}
                 label={t("profile.subscription")}
