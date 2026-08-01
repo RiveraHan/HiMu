@@ -38,6 +38,17 @@ jest.mock("@/src/hooks/use-update-dj", () => {
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => ({ id: "listener" }),
 }));
+jest.mock("@/src/api/auth-scope", () => {
+  const actual = jest.requireActual("@/src/api/auth-scope");
+  return {
+    ...actual,
+    captureAuthScope: (userId: string) => ({
+      userId,
+      authorization: `Bearer fixture-${userId}`,
+    }),
+    isCurrentMutationUser: () => true,
+  };
+});
 jest.mock("@/src/activity/use-generation-activity", () => ({
   useGenerationActivity: () => ({
     data: [],

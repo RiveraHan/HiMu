@@ -193,6 +193,10 @@ jest.mock("@/src/activity", () => ({
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => ({ id: "listener" }),
 }));
+jest.mock("@/src/api/auth-scope", () => ({
+  AuthScopeChangedError: class AuthScopeChangedError extends Error {},
+  isCurrentMutationUser: () => true,
+}));
 jest.mock("@/src/hooks/use-confirm", () => ({
   useConfirm: () => mockConfirm,
 }));

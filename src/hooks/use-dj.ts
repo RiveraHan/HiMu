@@ -1,10 +1,12 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useQuery } from "@tanstack/react-query";
+import { useCurrentUser } from "./use-auth";
 
 export function useDJ(id: string) {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.djs.details(id),
+    queryKey: queryKeys.djs.details(user?.id ?? null, id),
     enabled: !!id,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -22,8 +24,9 @@ export function useDJ(id: string) {
 }
 
 export function useDJTracks(id: string) {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.tracks.byDj(id),
+    queryKey: queryKeys.tracks.byDj(user?.id ?? null, id),
     enabled: !!id,
     queryFn: async () => {
       const { data, error } = await supabase

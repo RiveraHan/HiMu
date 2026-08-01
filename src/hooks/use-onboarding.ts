@@ -15,6 +15,13 @@ import type {
 import { useCurrentUser } from "./use-auth";
 
 import type { OnboardingDatabase } from "@/src/types/onboarding-database";
+import {
+  type AuthScope,
+  assertCurrentMutationUser,
+  authMutationKey,
+  captureAuthScope,
+  setAuthScopeHeader,
+} from "@/src/api/auth-scope";
 
 type OnboardingRow = OnboardingDatabase["public"]["Tables"]["user_onboarding"]["Row"];
 
@@ -92,13 +99,17 @@ function mapOnboardingInsert(record: OnboardingRecord): OnboardingInsert {
 async function readServerOnboarding(
   userId: string,
   version: number,
+  scope?: AuthScope,
 ): Promise<OnboardingRecord | null> {
-  const { data, error } = await supabase
+  const builder = supabase
     .from("user_onboarding")
     .select(ONBOARDING_COLUMNS)
     .eq("user_id", userId)
     .eq("version", version)
     .maybeSingle();
+  const { data, error } = await (scope
+    ? setAuthScopeHeader(builder, scope)
+    : builder);
 
   if (error) throw error;
   return data ? mapOnboardingRow(data) : null;
@@ -195,21 +206,24 @@ export function useOnboarding(version: number) {
 
 export function useSaveOnboarding() {
   const user = useCurrentUser();
+  const userId = user?.id ?? "";
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: authMutationKey("save-onboarding", userId),
     mutationFn: async (next: OnboardingRecord): Promise<OnboardingRecord> => {
-      if (!user || next.userId !== user.id) {
+      if (!userId || next.userId !== userId) {
         throw new Error("Cannot save onboarding for a different user");
       }
 
-      const queryKey = queryKeys.onboarding.current(user.id, next.version);
+      const queryKey = queryKeys.onboarding.current(userId, next.version);
       let localError: unknown;
       let reconciled = next;
       await withSerializedLocalRecord(
-        user.id,
+        userId,
         next.version,
         async (local) => {
+          assertCurrentMutationUser(userId);
           const cached =
             queryClient.getQueryData<OnboardingRecord | null>(queryKey) ?? null;
           reconciled = reconcileAvailable([cached, local, next]) ?? next;
@@ -224,8 +238,9 @@ export function useSaveOnboarding() {
 
       let server: OnboardingRecord | null = null;
       let serverError: unknown = null;
+      const scope = captureAuthScope(userId);
       try {
-        server = await readServerOnboarding(user.id, next.version);
+        server = await readServerOnboarding(userId, next.version, scope);
       } catch (error) {
         serverError = error;
       }
@@ -233,12 +248,17 @@ export function useSaveOnboarding() {
 
       if (!serverError) {
         try {
-          const result = await supabase.from("user_onboarding").upsert(
-            mapOnboardingInsert(reconciled),
-            { onConflict: "user_id,version" },
-          )
-            .select(ONBOARDING_COLUMNS)
-            .single();
+          assertCurrentMutationUser(userId);
+          const result = await setAuthScopeHeader(
+            supabase
+              .from("user_onboarding")
+              .upsert(mapOnboardingInsert(reconciled), {
+                onConflict: "user_id,version",
+              })
+              .select(ONBOARDING_COLUMNS)
+              .single(),
+            scope,
+          );
           serverError = result.error;
           if (!serverError && result.data) {
             reconciled =
@@ -251,9 +271,10 @@ export function useSaveOnboarding() {
       }
 
       await withSerializedLocalRecord(
-        user.id,
+        userId,
         next.version,
         async (latestLocal) => {
+          assertCurrentMutationUser(userId);
           const latestCached =
             queryClient.getQueryData<OnboardingRecord | null>(queryKey) ?? null;
           reconciled =

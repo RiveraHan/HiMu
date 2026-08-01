@@ -20,6 +20,23 @@ jest.mock("../use-generation-activity", () => ({
   useGenerationActivity: jest.fn(),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: jest.fn() }));
+jest.mock("@/src/api/auth-scope", () => {
+  const actual = jest.requireActual("@/src/api/auth-scope");
+  return {
+    ...actual,
+    captureAuthScope: (userId: string) => {
+      if (mockUserId !== userId) throw new actual.AuthScopeChangedError();
+      return {
+        userId,
+        authorization: `Bearer fixture-${userId}`,
+      };
+    },
+    assertCurrentMutationUser: (userId: string) => {
+      if (mockUserId !== userId) throw new actual.AuthScopeChangedError();
+    },
+    isCurrentMutationUser: (userId: string) => mockUserId === userId,
+  };
+});
 jest.mock("@/src/hooks/use-toast", () => ({ useToast: jest.fn() }));
 jest.mock("@/src/i18n/use-locale", () => ({ useLocale: jest.fn() }));
 jest.mock("@/src/api/supabase", () => ({
@@ -53,6 +70,16 @@ let mockFetchStatus: "idle" | "fetching" | "paused" = "idle";
 let mockIsLoading = false;
 let mockCurrentTrackId: string | null = null;
 const mockStored = new Map<string, string>();
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function activity(
   id: string,
@@ -386,10 +413,10 @@ test("announces a running-to-ready transition once, refreshes dependents, and ne
   );
   expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tracks.all });
   expect(invalidate).toHaveBeenCalledWith({
-    queryKey: queryKeys.tracks.byDj("dj-1"),
+    queryKey: queryKeys.tracks.byDj("user-a", "dj-1"),
   });
   expect(invalidate).toHaveBeenCalledWith({
-    queryKey: queryKeys.djs.details("dj-1"),
+    queryKey: queryKeys.djs.details("user-a", "dj-1"),
   });
   expect(mockPlayerLoad).not.toHaveBeenCalled();
 
@@ -622,6 +649,7 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
       localHour: 17,
       lyrics: "neon rain",
     },
+    headers: { Authorization: "Bearer fixture-user-a" },
   });
   expect(queryClient.getQueryData(queryKeys.generationJobs.activity("user-a"))).toEqual([
     expect.objectContaining({
@@ -638,6 +666,48 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
   expect(receipts["generation:old-job"].seenAt).not.toBeNull();
   expect(result.current.retryingIds.has("generation:old-job")).toBe(false);
   expect(result.current.activeCount).toBe(1);
+});
+
+test("keeps an in-flight retry scoped to user A after rendering user B", async () => {
+  const invoke = deferred<{ data: { jobId: string }; error: null }>();
+  jest.mocked(supabase.functions.invoke).mockReturnValue(invoke.promise as never);
+  const failed = activity("generation:scope-race", "failed");
+  mockActivities = [failed];
+  const queryClient = client();
+  queryClient.setQueryData(queryKeys.generationJobs.activity("user-a"), [failed]);
+  const rendered = await renderActivity(queryClient);
+  await waitFor(() => expect(rendered.result.current.items).toHaveLength(1));
+  mockToastInfo.mockClear();
+  mockToastError.mockClear();
+
+  let retry!: Promise<void>;
+  await act(async () => {
+    retry = rendered.result.current.retryActivity(failed);
+    await Promise.resolve();
+  });
+  expect(supabase.functions.invoke).toHaveBeenCalledWith("generate-mix", {
+    body: expect.objectContaining({ djId: "dj-1" }),
+    headers: { Authorization: "Bearer fixture-user-a" },
+  });
+
+  mockUserId = "user-b";
+  mockActivities = [];
+  await rendered.rerender(undefined);
+  await waitFor(() => expect(rendered.result.current.items).toEqual([]));
+
+  await act(async () => {
+    invoke.resolve({ data: { jobId: "must-not-reach-b" }, error: null });
+    await retry;
+  });
+
+  expect(
+    queryClient.getQueryData(queryKeys.generationJobs.activity("user-b")),
+  ).toBeUndefined();
+  expect(
+    queryClient.getQueryData(queryKeys.generationJobs.activity("user-a")),
+  ).toEqual([failed]);
+  expect(mockToastInfo).not.toHaveBeenCalled();
+  expect(mockToastError).not.toHaveBeenCalled();
 });
 
 test("same-ID retry refreshes cache without creating a seen receipt", async () => {

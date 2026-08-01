@@ -14,6 +14,7 @@ import {
   Text,
 } from "@/src/components";
 import { useDJs } from "@/src/hooks/use-home";
+import { useCurrentUser } from "@/src/hooks/use-auth";
 import {
   useDjsHeard,
   useListeningTotals,
@@ -47,6 +48,7 @@ import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 export default function ProfileScreen() {
+  const user = useCurrentUser();
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const insets = useSafeAreaInsets();
@@ -77,9 +79,10 @@ export default function ProfileScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats.listening });
-      queryClient.invalidateQueries({ queryKey: queryKeys.stats.djsHeard });
-    }, [queryClient]),
+      if (!user) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats.listening(user.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats.djsHeard(user.id) });
+    }, [queryClient, user]),
   );
 
   const isPro = profile?.subscriptionTier === "premium";

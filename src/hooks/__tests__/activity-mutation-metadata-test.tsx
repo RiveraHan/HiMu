@@ -19,6 +19,17 @@ jest.mock("@/src/api/supabase", () => ({
   supabase: { functions: { invoke: jest.fn() } },
 }));
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: jest.fn() }));
+jest.mock("@/src/api/auth-scope", () => {
+  const actual = jest.requireActual("@/src/api/auth-scope");
+  return {
+    ...actual,
+    captureAuthScope: (userId: string) => ({
+      userId,
+      authorization: `Bearer fixture-${userId}`,
+    }),
+    isCurrentMutationUser: () => true,
+  };
+});
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) =>
     selector({ setCoverForTrack: jest.fn() }),

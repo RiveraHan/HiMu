@@ -27,6 +27,8 @@ export const common = {
     reconnect: "Vuelve a conectarte para actualizar este contenido.",
     generic: "Algo salió mal. Inténtalo de nuevo.",
     savePreference: "No pudimos sincronizar tu preferencia. Se conservará en este dispositivo.",
+    saveFailedTitle: "No se pudo guardar",
+    saveRestoredMessage: "Se restauraron tus ajustes anteriores.",
   },
   navigation: {
     home: "Inicio",

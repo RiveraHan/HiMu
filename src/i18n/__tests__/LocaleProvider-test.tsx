@@ -24,6 +24,9 @@ const mockShowToast = jest.fn();
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => mockUser,
 }));
+jest.mock("@/src/api/auth-scope", () => ({
+  isCurrentMutationUser: (userId: string) => mockUser?.id === userId,
+}));
 jest.mock("@/src/hooks/use-settings", () => ({
   useSettings: () => ({ data: mockSettings }),
   useUpdateSettings: () => ({ mutateAsync: mockMutateAsync }),
@@ -466,3 +469,87 @@ test("overlapping selections persist the newest preference last", async () => {
   expect(mockMutateAsync).toHaveBeenLastCalledWith({ language: "en" });
   expect(currentLocale?.preference).toBe("en");
 });
+
+test("unmounted A persistence cannot toast, update state, or write B settings", async () => {
+  const oldWrite = deferred<void>();
+  mockUser = { id: "user-1" };
+  mockSettings = preferences("en");
+  const a = await renderProvider();
+  await waitFor(() => expect(currentLocale?.preference).toBe("en"));
+  jest.clearAllMocks();
+  jest.mocked(writeLanguageState).mockImplementationOnce(() => oldWrite.promise);
+
+  let oldSave!: Promise<void>;
+  await act(async () => {
+    oldSave = currentLocale!.setPreference("es");
+    await Promise.resolve();
+  });
+  await a.unmount();
+
+  mockUser = { id: "user-2" };
+  mockSettings = preferences("en");
+  await renderProvider();
+  oldWrite.reject(new Error("old A failure"));
+  await act(async () => {
+    await oldSave;
+  });
+
+  expect(mockShowToast).not.toHaveBeenCalled();
+  expect(mockMutateAsync).not.toHaveBeenCalledWith({ language: "es" });
+  expect(currentLocale?.preference).toBe("en");
+});
+
+test.each(["resolve", "reject"] as const)(
+  "a keyed direct A to B switch ignores a stale local-write %s",
+  async (outcome) => {
+    const oldWrite = deferred<void>();
+    mockUser = { id: "user-1" };
+    mockSettings = preferences("en");
+    const view = await render(
+      <LocaleProvider key="user-1">
+        <Probe />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(currentLocale?.preference).toBe("en"));
+    jest.clearAllMocks();
+    jest.mocked(writeLanguageState).mockImplementation((userId, state) => {
+      if (
+        userId === "user-1" &&
+        state.preference === "es" &&
+        state.pendingSync
+      ) {
+        return oldWrite.promise;
+      }
+      return Promise.resolve();
+    });
+
+    let staleSave!: Promise<void>;
+    await act(async () => {
+      staleSave = currentLocale!.setPreference("es");
+      await Promise.resolve();
+    });
+
+    mockUser = { id: "user-2" };
+    mockSettings = preferences("en");
+    await view.rerender(
+      <LocaleProvider key="user-2">
+        <Probe />
+      </LocaleProvider>,
+    );
+    await waitFor(() => expect(currentLocale?.preference).toBe("en"));
+
+    await act(async () => {
+      if (outcome === "resolve") oldWrite.resolve();
+      else oldWrite.reject(new Error("stale A write"));
+      await staleSave;
+    });
+
+    expect(mockShowToast).not.toHaveBeenCalled();
+    expect(mockMutateAsync).not.toHaveBeenCalledWith({ language: "es" });
+    expect(writeLanguageState).not.toHaveBeenCalledWith("user-2", {
+      preference: "es",
+      pendingSync: expect.any(Boolean),
+    });
+    expect(currentLocale?.preference).toBe("en");
+  },
+);

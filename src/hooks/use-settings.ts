@@ -8,6 +8,13 @@ import {
   type UserPreferencesPatch,
 } from "@/src/types/preferences";
 import { supabase } from "@/src/api/supabase";
+import {
+  assertCurrentMutationUser,
+  authMutationKey,
+  captureAuthScope,
+  isCurrentMutationUser,
+  setAuthScopeHeader,
+} from "@/src/api/auth-scope";
 
 const updateQueues = new Map<string, Promise<void>>();
 
@@ -15,19 +22,27 @@ async function persistSettingsPatch(
   userId: string,
   patch: UserPreferencesPatch,
 ): Promise<void> {
-  const { data, error: readError } = await supabase
-    .from("profiles")
-    .select("preferences")
-    .eq("id", userId)
-    .maybeSingle();
+  const scope = captureAuthScope(userId);
+  const { data, error: readError } = await setAuthScopeHeader(
+    supabase
+      .from("profiles")
+      .select("preferences")
+      .eq("id", userId)
+      .maybeSingle(),
+    scope,
+  );
 
   if (readError) throw readError;
 
   const next = patchPreferences(mergePreferences(data?.preferences), patch);
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ preferences: next })
-    .eq("id", userId);
+  assertCurrentMutationUser(userId);
+  const { error: updateError } = await setAuthScopeHeader(
+    supabase
+      .from("profiles")
+      .update({ preferences: next })
+      .eq("id", userId),
+    scope,
+  );
 
   if (updateError) throw updateError;
 }
@@ -75,12 +90,13 @@ export function useSettings() {
 export function useUpdateSettings() {
   const user = useCurrentUser();
   const queryClient = useQueryClient();
+  const userId = user?.id ?? "";
   const queryKey = queryKeys.settings.me(user?.id ?? null);
 
   return useMutation({
+    mutationKey: authMutationKey("update-settings", userId),
     mutationFn: async (patch: UserPreferencesPatch) => {
-      if (!user) throw new Error("Cannot update settings without a user");
-      await enqueueSettingsPatch(user.id, patch);
+      await enqueueSettingsPatch(userId, patch);
     },
 
     // Optimistically merge only the fields owned by this mutation.
@@ -97,11 +113,12 @@ export function useUpdateSettings() {
       return { previous };
     },
     onError: (_err, _next, context) => {
-      if (context?.previous) {
+      if (context?.previous && isCurrentMutationUser(userId)) {
         queryClient.setQueryData(queryKey, context.previous);
       }
     },
     onSettled: () => {
+      if (!isCurrentMutationUser(userId)) return;
       queryClient.invalidateQueries({ queryKey });
     },
   });

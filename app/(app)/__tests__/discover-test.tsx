@@ -7,6 +7,8 @@ const mockUseAudiusSearch = jest.fn();
 const mockUseAudiusTrending = jest.fn();
 const mockRegisterContextTarget = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockSearchRefetch = jest.fn();
+let mockOnline = true;
 
 jest.mock("@/src/hooks/use-audius", () => ({
   useAudiusSearch: (...args: unknown[]) => mockUseAudiusSearch(...args),
@@ -24,6 +26,17 @@ jest.mock("@/src/components", () => {
       React.createElement(View, null, children),
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
+    StateNotice: ({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) =>
+      React.createElement(View, null,
+        React.createElement(NativeText, null, title),
+        actionLabel && onAction
+          ? React.createElement(require("react-native").Pressable, {
+              accessibilityRole: "button",
+              accessibilityLabel: actionLabel,
+              onPress: onAction,
+            }, React.createElement(NativeText, null, actionLabel))
+          : null,
+      ),
     TrackCard: (props: object) =>
       React.createElement(View, { ...props, testID: "track-card" }),
     TrackRowSkeleton: () =>
@@ -57,6 +70,9 @@ jest.mock("@/src/audio/use-player", () => ({
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useTabBarPadding: () => 0,
 }));
+jest.mock("@/src/hooks/use-online-status", () => ({
+  useOnlineStatus: () => mockOnline,
+}));
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) =>
     selector({ currentTrack: null, setRepeatMode: jest.fn() }),
@@ -75,6 +91,9 @@ describe("DiscoverScreen", () => {
       data: undefined,
       isPending: true,
       fetchStatus: "idle",
+      isError: false,
+      isPlaceholderData: false,
+      refetch: mockSearchRefetch,
     });
     mockUseAudiusTrending.mockReset().mockReturnValue({
       data: [],
@@ -84,6 +103,8 @@ describe("DiscoverScreen", () => {
     });
     mockRegisterContextTarget.mockReset().mockReturnValue(jest.fn());
     mockInvalidateQueries.mockReset();
+    mockSearchRefetch.mockReset();
+    mockOnline = true;
   });
 
   it("renders the Discover surface in Spanish", async () => {
@@ -226,7 +247,7 @@ describe("DiscoverScreen", () => {
     ).toBeTruthy();
   });
 
-  it("localizes Audius errors, retry, and the retry action", async () => {
+  it("keeps independently stateful shelves mounted when trending fails", async () => {
     await i18n.changeLanguage("es");
     mockUseAudiusTrending.mockReturnValue({
       data: undefined,
@@ -237,13 +258,8 @@ describe("DiscoverScreen", () => {
 
     const screen = await render(<DiscoverScreen />);
 
-    expect(
-      screen.getByText("No se pudo conectar con Audius en este momento."),
-    ).toBeTruthy();
-    await fireEvent.press(screen.getByText("Reintentar"));
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["audius"],
-    });
+    expect(screen.getByTestId("audius-shelf-trending")).toBeTruthy();
+    expect(screen.getByTestId("audius-shelf-Ambient")).toBeTruthy();
   });
 
   it("preserves search content while exposing Spanish play accessibility", async () => {
@@ -272,5 +288,112 @@ describe("DiscoverScreen", () => {
     expect(card.props.accessibilityLabel).toBe(
       "Reproducir Luz Original de Artista Real",
     );
+  });
+
+  it("shows a retryable search error without clearing the query", async () => {
+    await i18n.changeLanguage("en");
+    mockUseAudiusSearch.mockImplementation((query: string) =>
+      query.trim().length >= 2
+        ? {
+            data: undefined,
+            isPending: false,
+            fetchStatus: "idle",
+            isError: true,
+            isPlaceholderData: false,
+            refetch: mockSearchRefetch,
+          }
+        : { data: undefined, isPending: true, fetchStatus: "idle" },
+    );
+
+    const screen = await searchForAmbient();
+
+    expect(screen.getByText("Search is unavailable")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockSearchRefetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByDisplayValue("ambient")).toBeTruthy();
+  });
+
+  it("shows offline state before skeletons for a paused first search", async () => {
+    await i18n.changeLanguage("en");
+    mockOnline = false;
+    mockUseAudiusSearch.mockImplementation((query: string) =>
+      query.trim().length >= 2
+        ? {
+            data: undefined,
+            isPending: true,
+            fetchStatus: "paused",
+            isError: false,
+            isPlaceholderData: false,
+            refetch: mockSearchRefetch,
+          }
+        : { data: undefined, isPending: true, fetchStatus: "idle" },
+    );
+
+    const screen = await searchForAmbient();
+
+    expect(screen.getByText("You're offline")).toBeTruthy();
+    expect(screen.queryByTestId("track-row-skeleton")).toBeNull();
+  });
+
+  it("keeps online placeholder rows while a new search key is fetching", async () => {
+    await i18n.changeLanguage("en");
+    const ambient = [{ id: "ambient", title: "Ambient", artist: "Artist" }];
+    mockUseAudiusSearch.mockImplementation((query: string) => {
+      if (query === "ambient") {
+        return {
+          data: ambient,
+          isPending: false,
+          fetchStatus: "idle",
+          isError: false,
+          isPlaceholderData: false,
+          refetch: mockSearchRefetch,
+        };
+      }
+      if (query === "techno") {
+        return {
+          data: ambient,
+          isPending: false,
+          fetchStatus: "fetching",
+          isError: false,
+          isPlaceholderData: true,
+          refetch: mockSearchRefetch,
+        };
+      }
+      return { data: undefined, isPending: true, fetchStatus: "idle" };
+    });
+    const screen = await render(<DiscoverScreen />);
+    await fireEvent.changeText(screen.getByTestId("search-input"), "ambient");
+    await act(() => jest.advanceTimersByTime(300));
+    expect(screen.getByTestId("track-card")).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByTestId("search-input"), "techno");
+    await act(() => jest.advanceTimersByTime(300));
+
+    expect(screen.getByTestId("track-card")).toBeTruthy();
+    expect(screen.queryByText(/No results/)).toBeNull();
+  });
+
+  it("hides previous-key placeholder rows behind offline state", async () => {
+    await i18n.changeLanguage("en");
+    const ambient = [{ id: "ambient", title: "Ambient", artist: "Artist" }];
+    mockUseAudiusSearch.mockImplementation((query: string) => ({
+      data: query.trim().length >= 2 ? ambient : undefined,
+      isPending: false,
+      fetchStatus: query === "techno" ? "paused" : "idle",
+      isError: false,
+      isPlaceholderData: query === "techno",
+      refetch: mockSearchRefetch,
+    }));
+    const screen = await render(<DiscoverScreen />);
+    await fireEvent.changeText(screen.getByTestId("search-input"), "ambient");
+    await act(() => jest.advanceTimersByTime(300));
+    expect(screen.getByTestId("track-card")).toBeTruthy();
+
+    mockOnline = false;
+    await fireEvent.changeText(screen.getByTestId("search-input"), "techno");
+    await act(() => jest.advanceTimersByTime(300));
+
+    expect(screen.getByText("You're offline")).toBeTruthy();
+    expect(screen.queryByTestId("track-card")).toBeNull();
   });
 });

@@ -12,6 +12,17 @@ jest.mock("@/src/api/supabase", () => ({
   supabase: { from: jest.fn(), functions: { invoke: jest.fn() } },
 }));
 jest.mock("../use-auth", () => ({ useCurrentUser: jest.fn() }));
+jest.mock("@/src/api/auth-scope", () => {
+  const actual = jest.requireActual("@/src/api/auth-scope");
+  return {
+    ...actual,
+    captureAuthScope: (userId: string) => ({
+      userId,
+      authorization: `Bearer fixture-${userId}`,
+    }),
+    isCurrentMutationUser: () => true,
+  };
+});
 jest.mock("../use-home", () => ({
   toPlayerTrack: jest.fn((track) => track),
   useDJs: jest.fn(),
@@ -48,6 +59,7 @@ function wrapper(language: () => "en" | "es", client: QueryClient) {
 describe("generation language", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(useCurrentUser).mockReturnValue({ id: "user-1" } as never);
     jest.mocked(supabase.functions.invoke).mockResolvedValue({
       data: { jobId: "job-1" },
       error: null,
@@ -75,6 +87,7 @@ describe("generation language", () => {
           language: "es",
           lyrics: "[Verso 1]\nSigo aquí",
         }),
+        headers: { Authorization: "Bearer fixture-user-1" },
       }),
     );
   });
@@ -106,6 +119,7 @@ describe("generation language", () => {
           dropDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           language: "en",
         }),
+        headers: { Authorization: "Bearer fixture-user-1" },
       }),
     );
 

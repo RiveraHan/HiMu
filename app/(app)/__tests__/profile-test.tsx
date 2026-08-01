@@ -131,6 +131,9 @@ jest.mock("@/src/onboarding", () => ({
 jest.mock("@/src/hooks/use-confirm", () => ({
   useConfirm: () => mockConfirm,
 }));
+jest.mock("@/src/hooks/use-auth", () => ({
+  useCurrentUser: () => ({ id: "listener-one" }),
+}));
 jest.mock("@/src/hooks/use-home", () => ({
   useDJs: () => mockUseDJs(),
 }));
@@ -366,8 +369,8 @@ describe("ProfileScreen", () => {
       expect.objectContaining({ flex: 1, backgroundColor: "#0D0D12" }),
     );
     expect(mockInvalidateQueries.mock.calls).toEqual([
-      [{ queryKey: queryKeys.stats.listening }],
-      [{ queryKey: queryKeys.stats.djsHeard }],
+      [{ queryKey: queryKeys.stats.listening("listener-one") }],
+      [{ queryKey: queryKeys.stats.djsHeard("listener-one") }],
     ]);
   });
 });

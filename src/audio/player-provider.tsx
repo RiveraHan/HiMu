@@ -1,6 +1,14 @@
 import { supabase } from "@/src/api/supabase";
+import {
+  type AuthScope,
+  assertCurrentMutationUser,
+  captureAuthScope,
+  setAuthScopeHeader,
+} from "@/src/api/auth-scope";
+import { useConfirmStore } from "@/src/stores/confirm-store";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
+import { useToastStore } from "@/src/stores/toast-store";
 import {
   setAudioModeAsync,
   useAudioPlayer,
@@ -11,7 +19,9 @@ import {
   ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
 } from "react";
 import { AppState } from "react-native";
@@ -26,23 +36,22 @@ function isExternalTrack(trackId: string): boolean {
 }
 
 // Best-effort: record that the signed-in user has listened to this track's DJ.
-async function recordDjListen(trackId: string) {
+async function recordDjListen(trackId: string, scope: AuthScope) {
   try {
     if (isExternalTrack(trackId)) return;
-    const uid = useAuthStore.getState().session?.user?.id;
-    if (!uid) return;
-    const { data } = await supabase
-      .from("tracks")
-      .select("dj_id")
-      .eq("id", trackId)
-      .maybeSingle();
+    const { data } = await setAuthScopeHeader(
+      supabase.from("tracks").select("dj_id").eq("id", trackId).maybeSingle(),
+      scope,
+    );
     if (!data?.dj_id) return;
-    await supabase
-      .from("dj_listens")
-      .upsert(
-        { user_id: uid, dj_id: data.dj_id },
+    assertCurrentMutationUser(scope.userId);
+    await setAuthScopeHeader(
+      supabase.from("dj_listens").upsert(
+        { user_id: scope.userId, dj_id: data.dj_id },
         { onConflict: "user_id,dj_id", ignoreDuplicates: true },
-      );
+      ),
+      scope,
+    );
   } catch {}
 }
 
@@ -50,14 +59,16 @@ async function recordDjListen(trackId: string) {
 async function recordListeningEvent(
   trackId: string,
   event: "completed" | "skipped",
+  scope: AuthScope,
 ) {
   try {
     if (isExternalTrack(trackId)) return;
-    const uid = useAuthStore.getState().session?.user?.id;
-    if (!uid) return;
-    const { error } = await supabase
-      .from("listening_events")
-      .insert({ user_id: uid, track_id: trackId, event });
+    const { error } = await setAuthScopeHeader(
+      supabase
+        .from("listening_events")
+        .insert({ user_id: scope.userId, track_id: trackId, event }),
+      scope,
+    );
     if (error) console.warn("[listening_events]", error.message);
   } catch (e) {
     console.warn("[listening_events]", e);
@@ -112,6 +123,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const statusSequenceRef = useRef(0);
   const ownerUserIdRef = useRef(session?.user.id ?? null);
   const ownerGenerationRef = useRef(0);
+  const committedUserIdRef = useRef(session?.user.id ?? null);
+  const observedUserId = session?.user.id ?? null;
+  const [, releaseScopeGate] = useReducer((value: number) => value + 1, 0);
   const playbackConfirmationRef = useRef(new PlaybackConfirmation(8_000));
 
   useEffect(() => () => playbackConfirmationRef.current.dispose(), []);
@@ -127,18 +141,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // Stop playback and clear all per-user state on logout or direct A -> B
   // replacement. PlayerProvider intentionally remains mounted across auth
   // changes so it can observe and tear down the outgoing account itself.
-  useEffect(() => {
-    const nextUserId = session?.user.id ?? null;
-    const previousUserId = ownerUserIdRef.current;
-    const ownerChanged = previousUserId !== nextUserId;
-    ownerUserIdRef.current = nextUserId;
-    if (ownerChanged) ownerGenerationRef.current += 1;
+  useLayoutEffect(() => {
+    const previousUserId = committedUserIdRef.current;
+    if (previousUserId === observedUserId) return;
 
-    const replacingAccount =
-      previousUserId !== null &&
-      nextUserId !== null &&
-      previousUserId !== nextUserId;
-    if (session && !replacingAccount) return;
+    ownerUserIdRef.current = observedUserId;
+    ownerGenerationRef.current += 1;
 
     // Discard all playback/stat state owned by the outgoing account so it can
     // neither render nor be credited after the identity transition.
@@ -159,7 +167,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Tear down the media session/foreground service for the outgoing owner.
     player.clearLockScreenControls();
     lockScreenActiveRef.current = false;
-  }, [session, player, store]);
+    useToastStore.getState().dismiss();
+    useConfirmStore.getState().resolve(false);
+
+    committedUserIdRef.current = observedUserId;
+    releaseScopeGate();
+  }, [observedUserId, player, store]);
 
   const flush = useCallback(async (opts?: { final: boolean }) => {
     const ownerUserId = ownerUserIdRef.current;
@@ -170,6 +183,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     ) {
       return;
     }
+    const scope = captureAuthScope(ownerUserId);
 
     let minutes = Math.floor(listenSecondsRef.current / 60);
 
@@ -186,11 +200,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       : listenSecondsRef.current - minutes * 60;
     trackPlayedRef.current = 0;
 
-    const { error } = await supabase.rpc("record_listening_stats", {
-      p_minutes: minutes,
-      p_tracks: tracks,
-      p_top_genre: lastGenreRef.current ?? undefined,
-    });
+    const { error } = await setAuthScopeHeader(
+      supabase.rpc("record_listening_stats", {
+        p_minutes: minutes,
+        p_tracks: tracks,
+        p_top_genre: lastGenreRef.current ?? undefined,
+      }),
+      scope,
+    );
 
     if (
       error &&
@@ -227,7 +244,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       trackPlayedRef.current += 1;
       const played = store.getState().currentTrack;
       lastGenreRef.current = played?.genre ?? lastGenreRef.current;
-      if (played) void recordDjListen(played.id);
+      const ownerUserId = ownerUserIdRef.current;
+      if (played && ownerUserId) {
+        try {
+          void recordDjListen(played.id, captureAuthScope(ownerUserId));
+        } catch {}
+      }
     }
 
     trackSecondsRef.current = 0;
@@ -248,9 +270,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!track) return;
 
       outgoingSettledRef.current = true;
+      const recordEvent = (event: "completed" | "skipped") => {
+        const ownerUserId = ownerUserIdRef.current;
+        if (!ownerUserId) return;
+        try {
+          void recordListeningEvent(
+            track.id,
+            event,
+            captureAuthScope(ownerUserId),
+          );
+        } catch {}
+      };
 
       if (finished) {
-        void recordListeningEvent(track.id, "completed");
+        recordEvent("completed");
         return;
       }
 
@@ -258,9 +291,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const played = trackSecondsRef.current;
       const ratio = duration > 0 ? played / duration : 0;
 
-      if (ratio >= 0.9) void recordListeningEvent(track.id, "completed");
-      else if (played > 3 && ratio < 0.3)
-        void recordListeningEvent(track.id, "skipped");
+      if (ratio >= 0.9) recordEvent("completed");
+      else if (played > 3 && ratio < 0.3) recordEvent("skipped");
       // 30–90%: ambiguous, no event.
     },
     [store],
@@ -405,6 +437,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }),
     [load, toggle, next, prev, seek, flushListeningStats],
   );
+
+  if (committedUserIdRef.current !== observedUserId) return null;
 
   return (
     <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>

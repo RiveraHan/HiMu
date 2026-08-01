@@ -1,6 +1,7 @@
 import {
   GlassInput,
   ScreenScrollView,
+  StateNotice,
   Text,
   TrackCard,
   TrackRowSkeleton,
@@ -8,13 +9,13 @@ import {
 import { AudiusShelf } from "@/src/components/discover/AudiusShelf";
 import { usePlayer } from "@/src/audio/use-player";
 import { useAudiusSearch, useAudiusTrending } from "@/src/hooks/use-audius";
+import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { TourTarget, useAppTour } from "@/src/onboarding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -37,7 +38,7 @@ export default function DiscoverScreen() {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
-  const qc = useQueryClient();
+  const online = useOnlineStatus();
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
@@ -55,6 +56,25 @@ export default function DiscoverScreen() {
   const searchQuery = useAudiusSearch(debounced);
   const results = searchQuery.data;
   const searchLoading = isInitialQueryLoading(searchQuery);
+  const searchOfflineWithoutData =
+    !online &&
+    searchQuery.fetchStatus === "paused" &&
+    (results === undefined || searchQuery.isPlaceholderData);
+  const showingOnlinePlaceholder =
+    online &&
+    searchQuery.isPlaceholderData &&
+    searchQuery.fetchStatus === "fetching";
+  const visibleResults =
+    results &&
+    results.length > 0 &&
+    (!searchQuery.isPlaceholderData || showingOnlinePlaceholder)
+      ? results
+      : undefined;
+  const placeholderNeedsSkeleton =
+    showingOnlinePlaceholder && !results?.length;
+  const blockingSearchError =
+    searchQuery.isError &&
+    (searchQuery.isPlaceholderData || !results || results.length === 0);
 
   // Shares its cache with the first shelf (same query key) — drives the error
   // banner without a second network request.
@@ -110,12 +130,28 @@ export default function DiscoverScreen() {
 
         {searching ? (
           <View style={styles.results}>
-            {searchLoading ? (
+            {searchOfflineWithoutData ? (
+              <StateNotice
+                kind="offline"
+                title={t("common.errors.offline")}
+                message={t("common.errors.reconnect")}
+                actionLabel={t("common.actions.retry")}
+                onAction={() => void searchQuery.refetch()}
+              />
+            ) : searchLoading || placeholderNeedsSkeleton ? (
               [0, 1, 2, 3].map((index) => (
                 <TrackRowSkeleton key={index} />
               ))
-            ) : results && results.length > 0 ? (
-              results.map((track, index) => (
+            ) : blockingSearchError ? (
+              <StateNotice
+                kind={online ? "error" : "offline"}
+                title={t("discover.searchUnavailableTitle")}
+                message={t("discover.searchUnavailableMessage")}
+                actionLabel={t("common.actions.retry")}
+                onAction={() => void searchQuery.refetch()}
+              />
+            ) : visibleResults ? (
+              visibleResults.map((track, index) => (
                 <TrackCard
                   key={track.id}
                   variant="row"
@@ -127,29 +163,31 @@ export default function DiscoverScreen() {
                     title: track.title,
                     artist: track.artist,
                   })}
-                  onPress={() => playFrom(results, track, index)}
+                  onPress={() => playFrom(visibleResults, track, index)}
                 />
               ))
             ) : (
-              <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-                {t("discover.noResults", { query: debounced.trim() })}
-              </Text>
+              <StateNotice
+                kind="empty"
+                title={t("discover.noResults", { query: debounced.trim() })}
+              />
             )}
-          </View>
-        ) : trending.isError ? (
-          <View style={styles.results}>
-            <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-              {t("discover.unavailable")}
-            </Text>
-            <Pressable
-              onPress={() => qc.invalidateQueries({ queryKey: ["audius"] })}
-              accessibilityRole="button"
-              style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
-            >
-              <Text variant="bodyMd" color="primary">
-                {t("discover.retry")}
-              </Text>
-            </Pressable>
+            {results &&
+            results.length > 0 &&
+            !searchQuery.isPlaceholderData &&
+            (!online || searchQuery.isError) ? (
+              <StateNotice
+                compact
+                kind={online ? "error" : "offline"}
+                title={
+                  online
+                    ? t("discover.searchUnavailableTitle")
+                    : t("common.errors.offline")
+                }
+                actionLabel={t("common.actions.retry")}
+                onAction={() => void searchQuery.refetch()}
+              />
+            ) : null}
           </View>
         ) : (
           <>
@@ -183,7 +221,5 @@ const styles = StyleSheet.create((theme) => ({
   },
   header: { gap: theme.spacing.stackXs },
   results: { gap: theme.spacing.stackMd },
-  retry: { alignSelf: "flex-start" },
   attribution: { textAlign: "center", marginTop: theme.spacing.stackMd },
-  pressed: { transform: [{ scale: 0.97 }] },
 }));

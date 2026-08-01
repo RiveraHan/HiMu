@@ -3,6 +3,7 @@ import { supabase } from "@/src/api/supabase";
 import { activityMutationKeys } from "@/src/activity/mutation-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
+import { captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
 
 export type CreateDJInput = {
   name: string;
@@ -21,10 +22,11 @@ export function useCreateDJ() {
     mutationKey: activityMutationKeys.createDj(userId),
     gcTime: Infinity,
     mutationFn: async (input: CreateDJInput) => {
-      const { data, error } = await supabase.functions.invoke<{
+      const scope = captureAuthScope(userId);
+      const { data, error } = await invokeWithAuthScope<{
         djId: string;
         avatarReady: boolean;
-      }>("create-dj", {
+      }>(supabase.functions, scope, "create-dj", {
         body: input,
       });
 
@@ -36,6 +38,7 @@ export function useCreateDJ() {
     },
     onMutate: () => ({ submittedUserId: userId }),
     onSuccess: () => {
+      if (!isCurrentMutationUser(userId)) return;
       void queryClient.invalidateQueries({ queryKey: queryKeys.djs.all });
     },
   });

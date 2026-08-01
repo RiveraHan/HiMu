@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import FavoritesScreen from "@/app/favorites";
 import i18n from "@/src/i18n";
 
@@ -7,7 +7,13 @@ type MockQuery = {
   data: unknown;
   isPending: boolean;
   fetchStatus: "fetching" | "paused" | "idle";
+  isError?: boolean;
+  refetch?: jest.Mock;
 };
+
+const mockRefetch = jest.fn();
+const mockReplace = jest.fn();
+let mockOnline = true;
 
 const initialQuery = (): MockQuery => ({
   data: undefined,
@@ -41,6 +47,17 @@ jest.mock("@/src/components", () => {
       React.createElement(View, null, children),
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
+    StateNotice: ({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) =>
+      React.createElement(View, null,
+        React.createElement(NativeText, null, title),
+        actionLabel && onAction
+          ? React.createElement(require("react-native").Pressable, {
+              accessibilityRole: "button",
+              accessibilityLabel: actionLabel,
+              onPress: onAction,
+            }, React.createElement(NativeText, null, actionLabel))
+          : null,
+      ),
     TrackCard: () => React.createElement(View, { testID: "track-card" }),
     TrackRowSkeleton: () =>
       React.createElement(View, { testID: "track-row-skeleton" }),
@@ -56,6 +73,12 @@ jest.mock("@/src/audio/use-player", () => ({
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
 }));
+jest.mock("@/src/hooks/use-online-status", () => ({
+  useOnlineStatus: () => mockOnline,
+}));
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ replace: mockReplace }),
+}));
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) =>
     selector({ currentTrack: null, setRepeatMode: jest.fn() }),
@@ -67,6 +90,11 @@ jest.mock("react-native-safe-area-context", () => ({
 describe("FavoritesScreen", () => {
   beforeEach(() => {
     mockFavoritesQuery = initialQuery();
+    mockFavoritesQuery.refetch = mockRefetch;
+    mockFavoritesQuery.isError = false;
+    mockRefetch.mockReset();
+    mockReplace.mockReset();
+    mockOnline = true;
   });
 
   it("renders the Favorites title in Spanish", async () => {
@@ -117,5 +145,86 @@ describe("FavoritesScreen", () => {
       ),
     ).toBeTruthy();
     expect(screen.queryByTestId("track-row-skeleton")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "Discover music" }));
+    expect(mockReplace).toHaveBeenCalledWith("/(app)/discover");
+  });
+
+  it("renders a retryable blocking error instead of the empty state", async () => {
+    mockFavoritesQuery = {
+      ...settledQuery(undefined),
+      isError: true,
+      refetch: mockRefetch,
+    };
+
+    const screen = await render(<FavoritesScreen />);
+
+    expect(screen.getByText("Favorites are unavailable")).toBeTruthy();
+    expect(screen.queryByText(/No favorites yet/)).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows offline state before skeletons for a paused first load", async () => {
+    mockOnline = false;
+    mockFavoritesQuery = {
+      data: undefined,
+      isPending: true,
+      fetchStatus: "paused",
+      isError: false,
+      refetch: mockRefetch,
+    };
+
+    const screen = await render(<FavoritesScreen />);
+
+    expect(screen.getByText("You're offline")).toBeTruthy();
+    expect(screen.queryByTestId("track-row-skeleton")).toBeNull();
+  });
+
+  it("keeps cached favorites with a retry notice after a refetch error", async () => {
+    mockFavoritesQuery = {
+      ...settledQuery([
+        {
+          id: "cached",
+          title: "Cached",
+          artist: "Artist",
+          audio_url: "cached.mp3",
+          album_art_url: null,
+          duration: 180,
+          genre: "House",
+          favoritedAt: "2026-07-15T00:00:00Z",
+        },
+      ]),
+      isError: true,
+      refetch: mockRefetch,
+    };
+
+    const screen = await render(<FavoritesScreen />);
+
+    expect(screen.getByTestId("track-card")).toBeTruthy();
+    expect(screen.getByText("Favorites are unavailable")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps cached favorites visible while offline", async () => {
+    mockOnline = false;
+    mockFavoritesQuery = settledQuery([
+      {
+        id: "cached",
+        title: "Cached",
+        artist: "Artist",
+        audio_url: "cached.mp3",
+        album_art_url: null,
+        duration: 180,
+        genre: "House",
+        favoritedAt: "2026-07-15T00:00:00Z",
+      },
+    ], "paused");
+    mockFavoritesQuery.refetch = mockRefetch;
+
+    const screen = await render(<FavoritesScreen />);
+
+    expect(screen.getByTestId("track-card")).toBeTruthy();
+    expect(screen.getByText("You're offline")).toBeTruthy();
   });
 });

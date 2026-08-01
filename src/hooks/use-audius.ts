@@ -1,7 +1,7 @@
 import { getTrending, searchTracks } from "@/src/api/audius";
 import { queryKeys } from "@/src/api/queries";
 import type { PlayerTrack } from "@/src/stores/player-store";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 const TEN_MIN = 10 * 60 * 1000;
 
@@ -22,5 +22,6 @@ export function useAudiusSearch(query: string) {
     queryFn: () => searchTracks(q),
     enabled: q.length >= 2,
     staleTime: TEN_MIN,
+    placeholderData: keepPreviousData,
   });
 }

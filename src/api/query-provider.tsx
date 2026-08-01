@@ -7,12 +7,9 @@ import {
 } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
+import { useAuthStore } from "@/src/stores/auth-store";
 
-onlineManager.setEventListener((setOnline) =>
-  NetInfo.addEventListener((state) => setOnline(!!state.isConnected)),
-);
-
-export function QueryProvider({ children }: { children: React.ReactNode }) {
+function ScopedQueryRuntime({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -26,6 +23,14 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       }),
   );
 
+  useEffect(
+    () =>
+      onlineManager.setEventListener((setOnline) =>
+        NetInfo.addEventListener((state) => setOnline(!!state.isConnected)),
+      ),
+    [],
+  );
+
   useEffect(() => {
     if (process.env.EXPO_OS === "web") return;
     const subscription = AppState.addEventListener("change", (status) => {
@@ -34,7 +39,19 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, []);
 
+  useEffect(() => () => queryClient.clear(), [queryClient]);
+
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
+}
+
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+  const scopeKey = useAuthStore(
+    (state) => state.session?.user.id ?? "signed-out",
+  );
+
+  return (
+    <ScopedQueryRuntime key={scopeKey}>{children}</ScopedQueryRuntime>
   );
 }

@@ -1,4 +1,8 @@
 import { getEdgeErrorCode } from "@/src/api/edge-errors";
+import {
+  AuthScopeChangedError,
+  isCurrentMutationUser,
+} from "@/src/api/auth-scope";
 import { useActivity } from "@/src/activity";
 import { usePlayer } from "@/src/audio/use-player";
 import {
@@ -126,6 +130,8 @@ export default function DJProfileScreen() {
 
   function onGeneratePress() {
     if (isGenerating || !dj) return;
+    const submittedUserId = user?.id;
+    if (!submittedUserId) return;
     const lyrics = lyricsText.trim();
     generate(
       {
@@ -135,7 +141,12 @@ export default function DJProfileScreen() {
       },
       {
         onError: async (e) => {
+          if (
+            e instanceof AuthScopeChangedError ||
+            !isCurrentMutationUser(submittedUserId)
+          ) return;
           const code = await getEdgeErrorCode(e);
+          if (!isCurrentMutationUser(submittedUserId)) return;
           toast.error(
             t("dj.profile.startErrorTitle"),
             code === "daily_quota_reached"
@@ -150,7 +161,8 @@ export default function DJProfileScreen() {
   }
 
   const onDeletePress = async () => {
-    if (!dj) return;
+    const submittedUserId = user?.id;
+    if (!dj || !submittedUserId) return;
     const ok = await confirm({
       title: t("dj.profile.delete.title"),
       message: knownTrackCount === null || tracksLoading
@@ -162,16 +174,23 @@ export default function DJProfileScreen() {
       confirmLabel: t("dj.profile.delete.confirm"),
       destructive: true,
     });
-    if (!ok) return;
+    if (!ok || !isCurrentMutationUser(submittedUserId)) return;
     deleteDJ(
       { djId: id },
       {
-        onSuccess: () => router.back(),
-        onError: () =>
+        onSuccess: () => {
+          if (isCurrentMutationUser(submittedUserId)) router.back();
+        },
+        onError: (error) => {
+          if (
+            error instanceof AuthScopeChangedError ||
+            !isCurrentMutationUser(submittedUserId)
+          ) return;
           toast.error(
             t("dj.profile.delete.errorTitle"),
             t("dj.profile.delete.error"),
-          ),
+          );
+        },
       },
     );
   };

@@ -19,7 +19,7 @@ export function useTasteProfile(): TasteWeights {
   const { data: prefs } = useMusicPreferences();
 
   const { data: topGenre } = useQuery({
-    queryKey: queryKeys.stats.topGenre,
+    queryKey: queryKeys.stats.topGenre(user?.id ?? null),
     enabled: !!user,
     queryFn: async (): Promise<string | null> => {
       const since = new Date(Date.now() - TOP_GENRE_DAYS * 24 * 60 * 60 * 1000)

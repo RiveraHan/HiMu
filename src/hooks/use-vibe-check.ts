@@ -10,7 +10,7 @@ export function useVibeCheck() {
   const user = useCurrentUser();
 
   return useQuery({
-    queryKey: queryKeys.stats.vibeCheck,
+    queryKey: queryKeys.stats.vibeCheck(user?.id ?? null),
     enabled: !!user,
     staleTime: 30_000,
     queryFn: async () => {

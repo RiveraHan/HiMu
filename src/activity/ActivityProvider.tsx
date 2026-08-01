@@ -13,6 +13,13 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { queryKeys } from "@/src/api/queries";
+import {
+  AuthScopeChangedError,
+  assertCurrentMutationUser,
+  captureAuthScope,
+  invokeWithAuthScope,
+  isCurrentMutationUser,
+} from "@/src/api/auth-scope";
 import { supabase } from "@/src/api/supabase";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useToast } from "@/src/hooks/use-toast";
@@ -201,7 +208,8 @@ export function ActivityProvider({ children }: PropsWithChildren) {
       .then((receipts) => {
         if (
           generationRef.current !== generation ||
-          currentUserIdRef.current !== userId
+          currentUserIdRef.current !== userId ||
+          !isCurrentMutationUser(userId)
         ) {
           return;
         }
@@ -216,14 +224,14 @@ export function ActivityProvider({ children }: PropsWithChildren) {
           if (activity.djId) {
             void queryClient
               .invalidateQueries({
-                queryKey: queryKeys.tracks.byDj(activity.djId),
+                queryKey: queryKeys.tracks.byDj(userId, activity.djId),
               })
               .catch((error) =>
                 console.error("Activity refresh failed", boundedError(error)),
               );
             void queryClient
               .invalidateQueries({
-                queryKey: queryKeys.djs.details(activity.djId),
+                queryKey: queryKeys.djs.details(userId, activity.djId),
               })
               .catch((error) =>
                 console.error("Activity refresh failed", boundedError(error)),
@@ -505,9 +513,11 @@ export function ActivityProvider({ children }: PropsWithChildren) {
       setRetryingIds(new Set(userRetryFlights.keys()));
       const generation = generationRef.current;
       try {
-        const { data, error } = await supabase.functions.invoke<{
+        const scope = captureAuthScope(userId);
+        assertCurrentMutationUser(userId);
+        const { data, error } = await invokeWithAuthScope<{
           jobId: string;
-        }>("generate-mix", {
+        }>(supabase.functions, scope, "generate-mix", {
           body: {
             djId,
             language: resolvedLanguage,
@@ -523,7 +533,8 @@ export function ActivityProvider({ children }: PropsWithChildren) {
         }
         if (
           generationRef.current !== generation ||
-          currentUserIdRef.current !== userId
+          currentUserIdRef.current !== userId ||
+          !isCurrentMutationUser(userId)
         ) {
           return;
         }
@@ -551,17 +562,22 @@ export function ActivityProvider({ children }: PropsWithChildren) {
             console.error("Activity refresh failed", boundedError(refreshError)),
           );
       } catch (error) {
+        if (error instanceof AuthScopeChangedError) return;
         console.error("Activity retry failed", boundedError(error));
         if (
           generationRef.current === generation &&
-          currentUserIdRef.current === userId
+          currentUserIdRef.current === userId &&
+          isCurrentMutationUser(userId)
         ) {
           toast.error(t("activity.operationFailed"));
         }
       } finally {
         if (userRetryFlights.get(activity.id) === retryToken) {
           userRetryFlights.delete(activity.id);
-          if (currentUserIdRef.current === userId) {
+          if (
+            currentUserIdRef.current === userId &&
+            isCurrentMutationUser(userId)
+          ) {
             setRetryingIds(new Set(userRetryFlights.keys()));
           }
         }

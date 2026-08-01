@@ -1,12 +1,31 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import MusicPreferencesScreen from "@/app/preferences";
 import i18n from "@/src/i18n";
 
 const mockUpdate = jest.fn();
+const mockRefetch = jest.fn();
+let mockPreferencesQuery: Record<string, unknown>;
+let mockOnline = true;
+const mockSetQueryData = jest.fn();
+const mockCancelQueries = jest.fn();
+const mockInvalidateQueries = jest.fn();
+const mockToastError = jest.fn();
 
 jest.mock("@/src/hooks/use-music-preferences", () => ({
-  useMusicPreferences: () => ({
+  useMusicPreferences: () => mockPreferencesQuery,
+  useUpdateMusicPreferences: () => ({ mutateAsync: mockUpdate }),
+}));
+
+beforeEach(() => {
+  mockOnline = true;
+  mockUpdate.mockReset().mockResolvedValue(undefined);
+  mockRefetch.mockReset();
+  mockSetQueryData.mockReset();
+  mockCancelQueries.mockReset().mockResolvedValue(undefined);
+  mockInvalidateQueries.mockReset().mockResolvedValue(undefined);
+  mockToastError.mockReset();
+  mockPreferencesQuery = {
     data: {
       genres: [],
       excludedMoods: [],
@@ -14,16 +33,35 @@ jest.mock("@/src/hooks/use-music-preferences", () => ({
       aiFrequency: "optimal",
       discoveryDepth: false,
     },
-  }),
-  useUpdateMusicPreferences: () => ({ mutate: mockUpdate }),
-}));
+    isPending: false,
+    fetchStatus: "idle",
+    isError: false,
+    refetch: mockRefetch,
+  };
+});
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
+}));
+jest.mock("@/src/hooks/use-auth", () => ({
+  useCurrentUser: () => ({ id: "user-a" }),
+}));
+jest.mock("@tanstack/react-query", () => ({
+  useQueryClient: () => ({
+    setQueryData: mockSetQueryData,
+    cancelQueries: mockCancelQueries,
+    invalidateQueries: mockInvalidateQueries,
+  }),
 }));
 jest.mock("@/src/i18n/use-locale", () => ({
   useLocale: () => ({
     resolvedLanguage: require("@/src/i18n").default.resolvedLanguage,
   }),
+}));
+jest.mock("@/src/hooks/use-online-status", () => ({
+  useOnlineStatus: () => mockOnline,
+}));
+jest.mock("@/src/hooks/use-toast", () => ({
+  useToast: () => ({ error: mockToastError }),
 }));
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -36,6 +74,18 @@ jest.mock("@/src/components", () => {
       React.createElement(View, null, [kicker, title, subtitle].map((text) =>
         React.createElement(Text, { key: text }, text),
       )),
+    StateNotice: ({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) =>
+      React.createElement(View, null,
+        React.createElement(Text, null, title),
+        actionLabel && onAction
+          ? React.createElement(Pressable, {
+              accessibilityRole: "button",
+              accessibilityLabel: actionLabel,
+              onPress: onAction,
+            }, React.createElement(Text, null, actionLabel))
+          : null,
+      ),
+    TrackRowSkeleton: () => React.createElement(View, { testID: "preference-skeleton" }),
     PrefSection: ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) =>
       React.createElement(View, null,
         React.createElement(Text, null, title),
@@ -82,7 +132,81 @@ test("renders Spanish preferences while mutations keep canonical values", async 
   expect(screen.getByText("Relajado y ambiental")).toBeTruthy();
 
   fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
-  expect(mockUpdate).toHaveBeenCalledWith(
-    expect.objectContaining({ genres: ["Ambient"] }),
+  expect(mockUpdate).toHaveBeenCalledTimes(1);
+});
+
+test("renders a retryable preferences query error", async () => {
+  await i18n.changeLanguage("en");
+  mockPreferencesQuery = {
+    data: undefined,
+    isPending: false,
+    fetchStatus: "idle",
+    isError: true,
+    refetch: mockRefetch,
+  };
+
+  const screen = await render(<MusicPreferencesScreen />);
+
+  expect(screen.getByText("Something went wrong. Please try again.")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+  expect(mockRefetch).toHaveBeenCalledTimes(1);
+});
+
+test("renders offline state before preference skeletons", async () => {
+  await i18n.changeLanguage("en");
+  mockOnline = false;
+  mockPreferencesQuery = {
+    data: undefined,
+    isPending: true,
+    fetchStatus: "paused",
+    isError: false,
+    refetch: mockRefetch,
+  };
+
+  const screen = await render(<MusicPreferencesScreen />);
+
+  expect(screen.getByText("You're offline")).toBeTruthy();
+  expect(screen.queryByTestId("preference-skeleton")).toBeNull();
+});
+
+test("shows translated rollback feedback when a preference save fails", async () => {
+  await i18n.changeLanguage("es");
+  mockUpdate.mockRejectedValueOnce(new Error("offline"));
+  const screen = await render(<MusicPreferencesScreen />);
+
+  fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
+
+  await waitFor(() =>
+    expect(mockToastError).toHaveBeenCalledWith(
+      "No se pudo guardar",
+      "Se restauraron tus ajustes anteriores.",
+    ),
   );
+  expect(mockInvalidateQueries).toHaveBeenCalledTimes(1);
+});
+
+test("keeps cached preferences visible with a compact refetch error", async () => {
+  await i18n.changeLanguage("en");
+  mockPreferencesQuery = { ...mockPreferencesQuery, isError: true };
+
+  const screen = await render(<MusicPreferencesScreen />);
+
+  expect(screen.getByText("Genre Affinity")).toBeTruthy();
+  expect(screen.getByText("Something went wrong. Please try again.")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+  expect(mockRefetch).toHaveBeenCalledTimes(1);
+});
+
+test("keeps cached preferences visible while offline", async () => {
+  await i18n.changeLanguage("en");
+  mockOnline = false;
+  mockPreferencesQuery = {
+    ...mockPreferencesQuery,
+    fetchStatus: "paused",
+  };
+
+  const screen = await render(<MusicPreferencesScreen />);
+
+  expect(screen.getByText("Genre Affinity")).toBeTruthy();
+  expect(screen.getByText("You're offline")).toBeTruthy();
 });

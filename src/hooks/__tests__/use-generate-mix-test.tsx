@@ -7,6 +7,7 @@ import { supabase } from "@/src/api/supabase";
 import type { ActivityItem } from "@/src/activity/types";
 import { LocaleContext, type LocaleContextValue } from "@/src/i18n/use-locale";
 import { useCurrentUser } from "../use-auth";
+import { useDeleteDJ } from "../use-delete-dj";
 import { useGenerateMix } from "../use-generate-mix";
 
 type GenerateVariables = Parameters<
@@ -24,6 +25,30 @@ jest.mock("@/src/api/supabase", () => ({
   supabase: { functions: { invoke: jest.fn() } },
 }));
 jest.mock("../use-auth", () => ({ useCurrentUser: jest.fn() }));
+jest.mock("@/src/api/auth-scope", () => {
+  const actual = jest.requireActual("@/src/api/auth-scope");
+  return {
+    ...actual,
+    captureAuthScope: (userId: string) => {
+      if (mockUserId !== userId) throw new actual.AuthScopeChangedError();
+      return {
+        userId,
+        authorization: `Bearer fixture-${userId}`,
+      };
+    },
+    isCurrentMutationUser: (userId: string) => mockUserId === userId,
+  };
+});
+
+let mockUserId = "listener";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 const localeValue: LocaleContextValue = {
   preference: "en",
@@ -76,7 +101,10 @@ function activity(status: ActivityItem["status"]): ActivityItem {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useRealTimers();
-  jest.mocked(useCurrentUser).mockReturnValue({ id: "listener" } as never);
+  mockUserId = "listener";
+  jest.mocked(useCurrentUser).mockImplementation(
+    () => ({ id: mockUserId }) as never,
+  );
   jest.mocked(supabase.functions.invoke).mockResolvedValue({
     data: { jobId: "job-1" },
     error: null,
@@ -112,6 +140,7 @@ test("seeds the confirmed job before activity invalidation settles without sendi
       localHour: 17,
       lyrics: "neon rain",
     },
+    headers: { Authorization: "Bearer fixture-listener" },
   });
   expect(queryClient.getQueryData(queryKeys.generationJobs.activity("listener"))).toEqual([
     expect.objectContaining({
@@ -166,4 +195,71 @@ test("rejects a successful Edge response without a job id", async () => {
   });
 
   await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+});
+
+test("a generate completion after rerendering A as B has no B callback effects", async () => {
+  const invoke = deferred<{ data: { jobId: string }; error: null }>();
+  jest.mocked(supabase.functions.invoke).mockReturnValue(invoke.promise as never);
+  const queryClient = client();
+  const invalidate = jest.spyOn(queryClient, "invalidateQueries");
+  const hook = await renderHook(() => useGenerateMix(), {
+    wrapper: wrapper(queryClient),
+  });
+
+  let pending!: Promise<string>;
+  await act(async () => {
+    pending = hook.result.current.generateAsync({
+      djId: "dj-one",
+      title: "DJ One",
+    });
+    await Promise.resolve();
+  });
+  expect(supabase.functions.invoke).toHaveBeenCalledWith("generate-mix", {
+    body: expect.objectContaining({ djId: "dj-one" }),
+    headers: { Authorization: "Bearer fixture-listener" },
+  });
+
+  mockUserId = "B";
+  await hook.rerender(undefined);
+  await act(async () => {
+    invoke.resolve({ data: { jobId: "job-a" }, error: null });
+    await pending;
+  });
+
+  expect(
+    queryClient.getQueryData(queryKeys.generationJobs.activity("listener")),
+  ).toBeUndefined();
+  expect(
+    queryClient.getQueryData(queryKeys.generationJobs.activity("B")),
+  ).toBeUndefined();
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
+test("a delete completion after rerendering A as B does not invalidate B", async () => {
+  const invoke = deferred<{ data: { ok: true }; error: null }>();
+  jest.mocked(supabase.functions.invoke).mockReturnValue(invoke.promise as never);
+  const queryClient = client();
+  const invalidate = jest.spyOn(queryClient, "invalidateQueries");
+  const hook = await renderHook(() => useDeleteDJ(), {
+    wrapper: wrapper(queryClient),
+  });
+
+  let pending!: Promise<{ ok: boolean } | null>;
+  await act(async () => {
+    pending = hook.result.current.mutateAsync({ djId: "dj-a" });
+    await Promise.resolve();
+  });
+  expect(supabase.functions.invoke).toHaveBeenCalledWith("delete-dj", {
+    body: { djId: "dj-a" },
+    headers: { Authorization: "Bearer fixture-listener" },
+  });
+
+  mockUserId = "B";
+  await hook.rerender(undefined);
+  await act(async () => {
+    invoke.resolve({ data: { ok: true }, error: null });
+    await pending;
+  });
+
+  expect(invalidate).not.toHaveBeenCalled();
 });

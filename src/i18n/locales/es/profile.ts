@@ -27,6 +27,8 @@ export const profile = {
     kicker: "BIBLIOTECA PERSONALIZADA",
     title: "Favoritos",
     empty: "Aún no tienes favoritos. Toca el corazón en Reproduciendo para guardar una canción.",
+    unavailable: "Los favoritos no están disponibles",
+    discoverAction: "Descubrir música",
   },
   community: {
     title: "Comunidad",

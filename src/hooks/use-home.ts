@@ -15,6 +15,7 @@ import {
 } from "@/src/utils/home-curation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
 
 export type PlayableTrack = {
   id: string;
@@ -55,8 +56,9 @@ export function toPlayerTrack(t: PlayableTrack): PlayerTrack {
 }
 
 export function useDJs() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.djs.all,
+    queryKey: queryKeys.djs.list(user?.id ?? null),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("djs")
@@ -88,8 +90,9 @@ export function useLiveDJIds() {
 }
 
 export function useAIMixTracks() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.tracks.aiMix,
+    queryKey: queryKeys.tracks.aiMix(user?.id ?? null),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
@@ -108,8 +111,9 @@ export function useAIMixTracks() {
 }
 
 export function useFocusTracks() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.tracks.focus,
+    queryKey: queryKeys.tracks.focus(user?.id ?? null),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
@@ -130,8 +134,9 @@ export function useFocusTracks() {
 // Workhorse: newest playable tracks with their DJ embedded. Powers the
 // "Fresh from your DJs" shelf and the On-Air hero.
 export function useRecentTracks(limit = 60) {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.tracks.recent,
+    queryKey: queryKeys.tracks.recent(user?.id ?? null, limit),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
@@ -152,11 +157,12 @@ export function useRecentTracks(limit = 60) {
 // Mood-appropriate tracks for the current hour. Keyed by bucket so a new
 // time-of-day fetches its own set instead of serving a stale one from cache.
 export function useTimeOfDayShelf() {
+  const user = useCurrentUser();
   const bucket: TimeOfDayBucket = timeOfDayBucket(new Date().getHours());
   const moods = TIME_OF_DAY_MOODS[bucket];
 
   return useQuery({
-    queryKey: queryKeys.tracks.contextual(bucket),
+    queryKey: queryKeys.tracks.contextual(user?.id ?? null, bucket),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
@@ -259,7 +265,7 @@ export function useTrackOwnership(trackId: string | undefined) {
   const user = useCurrentUser();
   const isExternal = trackId?.startsWith("audius:") ?? false;
   return useQuery({
-    queryKey: queryKeys.tracks.ownership(trackId ?? ""),
+    queryKey: queryKeys.tracks.ownership(user?.id ?? null, trackId ?? ""),
     enabled: !!trackId && !!user && !isExternal,
     queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
@@ -292,15 +298,17 @@ export function useRegenerateCover() {
     mutationKey: activityMutationKeys.regenerateCover(userId),
     gcTime: Infinity,
     mutationFn: async ({ trackId, title }: RegenerateCoverInput) => {
-      const { data, error } = await supabase.functions.invoke<{
+      const scope = captureAuthScope(userId);
+      const { data, error } = await invokeWithAuthScope<{
         album_art_url: string;
-      }>("regenerate-cover", { body: { trackId } });
+      }>(supabase.functions, scope, "regenerate-cover", { body: { trackId } });
       if (error) throw error;
       if (!data?.album_art_url) throw new Error("no cover returned");
       return { trackId, title, albumArtUrl: data.album_art_url };
     },
     onMutate: () => ({ submittedUserId: userId }),
     onSuccess: ({ trackId, albumArtUrl }) => {
+      if (!isCurrentMutationUser(userId)) return;
       setCoverForTrack(trackId, albumArtUrl);
       void qc.invalidateQueries({ queryKey: queryKeys.tracks.all });
     },

@@ -2,14 +2,16 @@ import { usePlayer } from "@/src/audio/use-player";
 import {
   ScreenHeader,
   ScreenScrollView,
-  Text,
+  StateNotice,
   TrackCard,
   TrackRowSkeleton,
 } from "@/src/components";
 import { useFavorites } from "@/src/hooks/use-favorites";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
+import { useRouter } from "expo-router";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -21,11 +23,19 @@ export default function FavoritesScreen() {
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const favoritesQuery = useFavorites();
+  const online = useOnlineStatus();
+  const router = useRouter();
   const favorites = favoritesQuery.data;
   const favoritesLoading = isInitialQueryLoading(favoritesQuery);
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
+  const favoritesOfflineWithoutData =
+    !online &&
+    favoritesQuery.fetchStatus === "paused" &&
+    favorites === undefined;
+  const blockingFavoritesError =
+    favoritesQuery.isError && (!favorites || favorites.length === 0);
 
   function play(track: PlayerTrack, index: number) {
     if (!favorites) return;
@@ -46,30 +56,63 @@ export default function FavoritesScreen() {
         title={t("profile.favorites.title")}
       />
 
-      {favoritesLoading ? (
+      {favoritesOfflineWithoutData ? (
+        <StateNotice
+          kind="offline"
+          title={t("common.errors.offline")}
+          message={t("common.errors.reconnect")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void favoritesQuery.refetch()}
+        />
+      ) : favoritesLoading ? (
         <View style={styles.list}>
           {[0, 1, 2, 3, 4].map((index) => (
             <TrackRowSkeleton key={index} />
           ))}
         </View>
+      ) : blockingFavoritesError ? (
+        <StateNotice
+          kind={online ? "error" : "offline"}
+          title={t("profile.favorites.unavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void favoritesQuery.refetch()}
+        />
       ) : favorites && favorites.length > 0 ? (
-        <View style={styles.list}>
-          {favorites.map((track, index) => (
-            <TrackCard
-              key={track.id}
-              variant="row"
-              title={track.title}
-              artist={track.artist}
-              cover={track.album_art_url}
-              isPlaying={currentId === track.id}
-              onPress={() => play(track, index)}
+        <>
+          <View style={styles.list}>
+            {favorites.map((track, index) => (
+              <TrackCard
+                key={track.id}
+                variant="row"
+                title={track.title}
+                artist={track.artist}
+                cover={track.album_art_url}
+                isPlaying={currentId === track.id}
+                onPress={() => play(track, index)}
+              />
+            ))}
+          </View>
+          {favoritesQuery.isError || !online ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={
+                online
+                  ? t("profile.favorites.unavailable")
+                  : t("common.errors.offline")
+              }
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void favoritesQuery.refetch()}
             />
-          ))}
-        </View>
+          ) : null}
+        </>
       ) : (
-        <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6}>
-          {t("profile.favorites.empty")}
-        </Text>
+        <StateNotice
+          kind="empty"
+          title={t("profile.favorites.empty")}
+          actionLabel={t("profile.favorites.discoverAction")}
+          onAction={() => router.replace("/(app)/discover")}
+        />
       )}
     </ScreenScrollView>
   );

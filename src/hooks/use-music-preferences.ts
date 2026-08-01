@@ -1,6 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import {
+  authMutationKey,
+  captureAuthScope,
+  setAuthScopeHeader,
+} from "@/src/api/auth-scope";
 import {
   mergeMusicPreferences,
   MusicPreferences,
@@ -11,7 +16,7 @@ export function useMusicPreferences() {
   const user = useCurrentUser();
 
   return useQuery({
-    queryKey: queryKeys.musicPreferences.me,
+    queryKey: queryKeys.musicPreferences.me(user?.id ?? null),
     enabled: !!user,
     queryFn: async (): Promise<MusicPreferences> => {
       const { data, error } = await supabase
@@ -29,52 +34,30 @@ export function useMusicPreferences() {
 
 export function useUpdateMusicPreferences() {
   const user = useCurrentUser();
-  const queryClient = useQueryClient();
+  const userId = user?.id ?? "";
 
   return useMutation({
+    mutationKey: authMutationKey("update-music-preferences", userId),
     mutationFn: async (next: MusicPreferences) => {
-      const { error } = await supabase.from("music_preferences").upsert(
-        {
-          user_id: user!.id,
-          genres: next.genres,
-          moods: next.excludedMoods,
-          vibe_mapping: {
-            organic_electronic: next.vibeMapping.organicElectronic,
-            melancholic_euphoric: next.vibeMapping.melancholicEuphoric,
+      const scope = captureAuthScope(userId);
+      const { error } = await setAuthScopeHeader(
+        supabase.from("music_preferences").upsert(
+          {
+            user_id: scope.userId,
+            genres: next.genres,
+            moods: next.excludedMoods,
+            vibe_mapping: {
+              organic_electronic: next.vibeMapping.organicElectronic,
+              melancholic_euphoric: next.vibeMapping.melancholicEuphoric,
+            },
+            ai_frequency: next.aiFrequency,
+            discovery_depth: next.discoveryDepth,
           },
-          ai_frequency: next.aiFrequency,
-          discovery_depth: next.discoveryDepth,
-        },
-        { onConflict: "user_id" },
+          { onConflict: "user_id" },
+        ),
+        scope,
       );
       if (error) throw error;
-    },
-
-    onMutate: async (next) => {
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.musicPreferences.me,
-      });
-
-      const previous = queryClient.getQueryData<MusicPreferences>(
-        queryKeys.musicPreferences.me,
-      );
-
-      queryClient.setQueryData(queryKeys.musicPreferences.me, next);
-
-      return { previous };
-    },
-    onError: (_err, _next, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData<MusicPreferences>(
-          queryKeys.musicPreferences.me,
-          context.previous,
-        );
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.musicPreferences.me,
-      });
     },
   });
 }

@@ -12,6 +12,7 @@ import {
 } from "@/src/utils/home-curation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { authMutationKey, captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
 
 export type DailyDrop = {
   status: "pending" | "ready" | "failed" | "idle";
@@ -33,6 +34,7 @@ export function useDailyDrop(): DailyDrop {
   const { resolvedLanguage } = useLocale();
   const [jobId, setJobId] = useState<string | null>(null);
   const triggered = useRef(false);
+  const userId = user?.id ?? "";
 
   // Resident DJ of the day: same day-seed pick as the hero, over all DJs
   // (no recent-track requirement — we generate one).
@@ -54,10 +56,12 @@ export function useDailyDrop(): DailyDrop {
   }, [user, djs]);
 
   const ensure = useMutation({
+    mutationKey: authMutationKey("ensure-daily-drop", userId),
     mutationFn: async (djId: string) => {
-      const { data, error } = await supabase.functions.invoke<{
+      const scope = captureAuthScope(userId);
+      const { data, error } = await invokeWithAuthScope<{
         jobId: string;
-      }>("generate-mix", {
+      }>(supabase.functions, scope, "generate-mix", {
         body: {
           djId,
           language: resolvedLanguage,
@@ -69,7 +73,9 @@ export function useDailyDrop(): DailyDrop {
       if (!data?.jobId) throw new Error("generate-mix did not return a jobId");
       return data.jobId;
     },
-    onSuccess: setJobId,
+    onSuccess: (nextJobId) => {
+      if (isCurrentMutationUser(userId)) setJobId(nextJobId);
+    },
   });
 
   // Fire the ensure once per mount, as soon as a DJ is known.
@@ -81,7 +87,7 @@ export function useDailyDrop(): DailyDrop {
   }, [dj, mutate]);
 
   const job = useQuery({
-    queryKey: queryKeys.generationJobs.detail(jobId),
+    queryKey: queryKeys.generationJobs.detail(user?.id ?? null, jobId),
     enabled: !!jobId,
     refetchInterval: (query) => {
       const s = query.state.data?.status;
