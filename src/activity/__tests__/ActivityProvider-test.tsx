@@ -372,6 +372,18 @@ test("does not offer or open a mix without a DJ destination", async () => {
   await waitFor(() => expect(result.current.items).toHaveLength(0));
 });
 
+test("removes a dismissed terminal activity from both items and primary", async () => {
+  const failed = activity("generation:dismissed", "failed", { djId: null });
+  mockActivities = [failed];
+  const { result } = await renderActivity();
+  await waitFor(() => expect(result.current.primary?.id).toBe(failed.id));
+
+  await act(async () => result.current.markSeen(failed));
+
+  await waitFor(() => expect(result.current.items).toHaveLength(0));
+  expect(result.current.primary).toBeNull();
+});
+
 test("retries a recoverable slow mix, replaces it in cache, and keeps one active item through a failed refetch", async () => {
   jest.spyOn(Date.prototype, "getHours").mockReturnValue(17);
   const slow = activity("generation:old-job", "slow", {
@@ -494,6 +506,59 @@ test("guards unsupported retries and duplicate taps until the accepted request s
     await first;
   });
   expect(result.current.retryingIds.has(failed.id)).toBe(false);
+});
+
+test("preserves each user's retry flight across account switches", async () => {
+  const invokeResolvers: ((value: unknown) => void)[] = [];
+  jest.mocked(supabase.functions.invoke).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        invokeResolvers.push(resolve);
+      }) as never,
+  );
+  const failed = activity("generation:account-race", "failed");
+  mockActivities = [failed];
+  const rendered = await renderActivity();
+  await waitFor(() => expect(rendered.result.current.items).toHaveLength(1));
+
+  let first!: Promise<void>;
+  await act(async () => {
+    first = rendered.result.current.retryActivity(failed);
+    await Promise.resolve();
+  });
+  await waitFor(() =>
+    expect(rendered.result.current.retryingIds.has(failed.id)).toBe(true),
+  );
+
+  mockUserId = "user-b";
+  mockActivities = [];
+  await rendered.rerender(undefined);
+  await waitFor(() => expect(rendered.result.current.retryingIds.size).toBe(0));
+
+  mockUserId = "user-a";
+  mockActivities = [failed];
+  await rendered.rerender(undefined);
+  await waitFor(() =>
+    expect(rendered.result.current.retryingIds.has(failed.id)).toBe(true),
+  );
+
+  let second!: Promise<void>;
+  await act(async () => {
+    second = rendered.result.current.retryActivity(failed);
+    await Promise.resolve();
+  });
+  const invokeCountBeforeSettlement = jest.mocked(supabase.functions.invoke)
+    .mock.calls.length;
+
+  await act(async () => {
+    invokeResolvers.forEach((resolve) =>
+      resolve({ data: { jobId: "account-race" }, error: null }),
+    );
+    await Promise.all([first, second]);
+  });
+
+  expect(invokeCountBeforeSettlement).toBe(1);
+  expect(rendered.result.current.retryingIds.has(failed.id)).toBe(false);
 });
 
 test("logs bounded raw activity errors but never displays them in a toast", async () => {

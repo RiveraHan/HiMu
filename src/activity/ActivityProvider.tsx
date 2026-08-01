@@ -107,7 +107,7 @@ export function ActivityProvider({ children }: PropsWithChildren) {
   const userSessionsRef = useRef(new Map<string, UserSessionState>());
   const generationRef = useRef(0);
   const currentUserIdRef = useRef(userId);
-  const retryingIdsRef = useRef(new Set<string>());
+  const retryFlightsRef = useRef(new Map<string, Map<string, symbol>>());
   currentUserIdRef.current = userId;
 
   const sessionFor = useCallback((id: string): UserSessionState => {
@@ -119,12 +119,20 @@ export function ActivityProvider({ children }: PropsWithChildren) {
     return session;
   }, []);
 
+  const retryFlightsFor = useCallback((id: string): Map<string, symbol> => {
+    let flights = retryFlightsRef.current.get(id);
+    if (!flights) {
+      flights = new Map();
+      retryFlightsRef.current.set(id, flights);
+    }
+    return flights;
+  }, []);
+
   useEffect(() => {
     const generation = ++generationRef.current;
     setPanelOpen(false);
     setHydrated({ userId: null, receipts: {} });
-    setRetryingIds(new Set());
-    retryingIdsRef.current.clear();
+    setRetryingIds(userId ? new Set(retryFlightsFor(userId).keys()) : new Set());
 
     if (!userId) return;
 
@@ -144,7 +152,7 @@ export function ActivityProvider({ children }: PropsWithChildren) {
       }
       setHydrated({ userId, receipts });
     });
-  }, [sessionFor, userId]);
+  }, [retryFlightsFor, sessionFor, userId]);
 
   useEffect(
     () => () => {
@@ -257,18 +265,20 @@ export function ActivityProvider({ children }: PropsWithChildren) {
     }));
   }, [generationActivity.data, hydrated, userId]);
 
-  const items = useMemo(
+  const visibleActivities = useMemo(
     () =>
-      sortPanelActivities(
-        mergedActivities.filter(
-          (activity) => isActive(activity) || !activity.seen,
-        ),
+      mergedActivities.filter(
+        (activity) => isActive(activity) || !activity.seen,
       ),
     [mergedActivities],
   );
+  const items = useMemo(
+    () => sortPanelActivities(visibleActivities),
+    [visibleActivities],
+  );
   const primary = useMemo(
-    () => primaryActivity(mergedActivities) ?? null,
-    [mergedActivities],
+    () => primaryActivity(visibleActivities) ?? null,
+    [visibleActivities],
   );
   const activeCount = useMemo(
     () => mergedActivities.filter(isActive).length,
@@ -355,21 +365,23 @@ export function ActivityProvider({ children }: PropsWithChildren) {
   const retryActivity = useCallback(
     async (activity: ActivityItem) => {
       const djId = activity.djId;
-      const retryKey = `${userId ?? "anonymous"}:${activity.id}`;
+      const userRetryFlights = userId ? retryFlightsFor(userId) : null;
       if (
         !userId ||
+        !userRetryFlights ||
         activity.source !== "server" ||
         activity.kind !== "mix" ||
         !djId ||
         (activity.status !== "failed" &&
           !(activity.status === "slow" && activity.recoveryAvailable)) ||
-        retryingIdsRef.current.has(retryKey)
+        userRetryFlights.has(activity.id)
       ) {
         return;
       }
 
-      retryingIdsRef.current.add(retryKey);
-      setRetryingIds((current) => new Set(current).add(activity.id));
+      const retryToken = Symbol(activity.id);
+      userRetryFlights.set(activity.id, retryToken);
+      setRetryingIds(new Set(userRetryFlights.keys()));
       const generation = generationRef.current;
       try {
         const { data, error } = await supabase.functions.invoke<{
@@ -426,17 +438,23 @@ export function ActivityProvider({ children }: PropsWithChildren) {
           toast.error(t("activity.operationFailed"));
         }
       } finally {
-        retryingIdsRef.current.delete(retryKey);
-        if (currentUserIdRef.current === userId) {
-          setRetryingIds((current) => {
-            const next = new Set(current);
-            next.delete(activity.id);
-            return next;
-          });
+        if (userRetryFlights.get(activity.id) === retryToken) {
+          userRetryFlights.delete(activity.id);
+          if (currentUserIdRef.current === userId) {
+            setRetryingIds(new Set(userRetryFlights.keys()));
+          }
         }
       }
     },
-    [markSeen, queryClient, resolvedLanguage, t, toast, userId],
+    [
+      markSeen,
+      queryClient,
+      resolvedLanguage,
+      retryFlightsFor,
+      t,
+      toast,
+      userId,
+    ],
   );
 
   const activeMixForDj = useCallback(
