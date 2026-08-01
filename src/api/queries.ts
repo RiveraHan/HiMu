@@ -21,6 +21,8 @@ export const queryKeys = {
   },
   generationJobs: {
     detail: (jobId: string | null) => ["generation-job", jobId] as const,
+    activity: (userId: string | null) =>
+      ["generation-jobs", "activity", userId] as const,
   },
   playlists: {
     details: (id: string) => ["playlists", id] as const,
