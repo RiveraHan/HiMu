@@ -452,6 +452,17 @@ describe("DJProfileScreen", () => {
     expect(screen.getByText("Tracks unavailable")).toBeTruthy();
   });
 
+  it("keeps an empty cached track refetch error actionable instead of claiming no tracks", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = { ...settledQuery([]), isError: true };
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByTestId("dj-hero")).toBeTruthy();
+    expect(screen.getByText("Tracks unavailable")).toBeTruthy();
+    expect(screen.queryByText("No tracks yet.")).toBeNull();
+  });
+
   it("omits an unresolved track count from the owner Delete confirmation", async () => {
     mockDjQuery = settledQuery(ownedDj);
 

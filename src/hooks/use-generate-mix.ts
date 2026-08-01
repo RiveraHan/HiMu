@@ -12,8 +12,6 @@ type GenerateMixInput = {
   lyrics?: string;
 };
 
-type LegacyGenerate = (variables: Omit<GenerateMixInput, "title">) => void;
-
 export function useGenerateMix() {
   const { resolvedLanguage } = useLocale();
   const user = useCurrentUser();
@@ -54,7 +52,7 @@ export function useGenerateMix() {
   });
 
   return {
-    generate: start.mutate as typeof start.mutate & LegacyGenerate,
+    generate: start.mutate,
     generateAsync: start.mutateAsync,
     isStarting: start.isPending,
     error: start.error,

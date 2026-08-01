@@ -61,7 +61,11 @@ describe("generation language", () => {
     });
 
     await act(async () => {
-      result.current.generate({ djId: "dj-1", lyrics: "[Verso 1]\nSigo aquí" });
+      result.current.generate({
+        djId: "dj-1",
+        title: "DJ One",
+        lyrics: "[Verso 1]\nSigo aquí",
+      });
     });
 
     await waitFor(() =>

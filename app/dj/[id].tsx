@@ -458,7 +458,7 @@ export default function DJProfileScreen() {
                   actionLabel={t("dj.profile.retry")}
                   onAction={() => void tracksQuery.refetch()}
                 />
-              ) : queue.length > 0 || isGenerating ? (
+              ) : tracksQuery.isError || queue.length > 0 || isGenerating ? (
                 <View style={styles.trackList}>
                   {isGenerating && <GeneratingTrackCard vocal={isVocal} />}
                   {tracksQuery.isError ? (

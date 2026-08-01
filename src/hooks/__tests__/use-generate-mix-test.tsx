@@ -9,6 +9,17 @@ import { LocaleContext, type LocaleContextValue } from "@/src/i18n/use-locale";
 import { useCurrentUser } from "../use-auth";
 import { useGenerateMix } from "../use-generate-mix";
 
+type GenerateVariables = Parameters<
+  ReturnType<typeof useGenerateMix>["generate"]
+>[0];
+const generateInputRequiresTitle: {
+  djId: string;
+  lyrics: string;
+} extends GenerateVariables
+  ? false
+  : true = true;
+void generateInputRequiresTitle;
+
 jest.mock("@/src/api/supabase", () => ({
   supabase: { functions: { invoke: jest.fn() } },
 }));
@@ -115,7 +126,7 @@ test("seeds the confirmed job before activity invalidation settles without sendi
     queryKey: queryKeys.generationJobs.activity("listener"),
   });
 
-  finishInvalidation();
+  await act(async () => finishInvalidation());
 });
 
 test("does not downgrade a running cache item when the start response races activity polling", async () => {
