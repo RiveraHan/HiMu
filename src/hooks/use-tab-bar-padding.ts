@@ -1,6 +1,7 @@
 import { useActivity } from "@/src/activity";
 import { bottomChromePadding } from "@/src/components/bottom-chrome-metrics";
 import { usePlayerStore } from "@/src/stores/player-store";
+import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUnistyles } from "react-native-unistyles";
 
@@ -23,6 +24,7 @@ function useChromePresence() {
 export function useTabBarPadding() {
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const { fontScale } = useWindowDimensions();
   const { hasPlayer, hasActivity } = useChromePresence();
 
   return bottomChromePadding({
@@ -32,6 +34,7 @@ export function useTabBarPadding() {
     hasActivity,
     gap: theme.spacing.stackSm,
     tail: theme.spacing.stackLg,
+    fontScale,
   });
 }
 
@@ -43,6 +46,7 @@ export function useTabBarPadding() {
 export function useMiniPlayerPadding() {
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const { fontScale } = useWindowDimensions();
   const { hasPlayer, hasActivity } = useChromePresence();
 
   return bottomChromePadding({
@@ -52,5 +56,6 @@ export function useMiniPlayerPadding() {
     hasActivity,
     gap: theme.spacing.stackSm,
     tail: theme.spacing.stackLg,
+    fontScale,
   });
 }

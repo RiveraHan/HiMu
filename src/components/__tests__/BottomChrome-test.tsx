@@ -11,6 +11,7 @@ import { usePlayerStore } from "@/src/stores/player-store";
 let mockSegments: string[] = ["(app)"];
 let mockPhase = "idle";
 let mockWindowWidth = 390;
+let mockFontScale = 1;
 let mockActivity = createActivityState();
 
 function createActivityState(
@@ -67,7 +68,7 @@ jest.mock("react-native-safe-area-context", () => ({
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
-  default: () => ({ width: mockWindowWidth, height: 844, scale: 1, fontScale: 1 }),
+  default: () => ({ width: mockWindowWidth, height: 844, scale: 1, fontScale: mockFontScale }),
 }));
 
 describe("bottom chrome geometry", () => {
@@ -80,8 +81,23 @@ describe("bottom chrome geometry", () => {
         hasActivity: true,
         gap: 8,
         tail: 32,
+        fontScale: 1,
       }),
     ).toBe(252);
+  });
+
+  it("reserves scalable player and activity chrome at 200% font scale", () => {
+    expect(
+      bottomChromePadding({
+        safeBottom: 20,
+        hasTabBar: true,
+        hasPlayer: true,
+        hasActivity: true,
+        gap: 8,
+        tail: 32,
+        fontScale: 2,
+      }),
+    ).toBe(364);
   });
 
   it("reserves a pushed-screen activity trigger without player or tab bar", () => {
@@ -93,6 +109,7 @@ describe("bottom chrome geometry", () => {
         hasActivity: true,
         gap: 8,
         tail: 32,
+        fontScale: 1,
       }),
     ).toBe(108);
   });
@@ -119,6 +136,27 @@ describe("bottom chrome geometry", () => {
     expect(padding.result.current).toEqual([252, 180]);
     await padding.unmount();
   });
+
+  it("scales both content-padding hooks so 200% chrome cannot cover content", async () => {
+    mockFontScale = 2;
+    mockActivity = createActivityState({ isOffline: true });
+    usePlayerStore.getState().setNowPlaying(
+      {
+        id: "track-1",
+        title: "Night Bloom",
+        artist: "Luna",
+        audio_url: "https://example.com/night-bloom.mp3",
+        album_art_url: null,
+        duration: 180,
+      },
+      [],
+      0,
+    );
+
+    const padding = await renderHook(() => [useTabBarPadding(), useMiniPlayerPadding()]);
+    expect(padding.result.current).toEqual([364, 292]);
+    await padding.unmount();
+  });
 });
 
 describe("BottomChrome", () => {
@@ -127,6 +165,7 @@ describe("BottomChrome", () => {
     mockSegments = ["(app)"];
     mockPhase = "idle";
     mockWindowWidth = 390;
+    mockFontScale = 1;
     mockActivity = createActivityState({ isInitialLoading: true });
     usePlayerStore.getState().reset();
     usePlayerStore.getState().setNowPlaying(

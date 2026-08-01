@@ -10,6 +10,7 @@ type BottomChromePaddingInput = {
   hasActivity: boolean;
   gap: number;
   tail: number;
+  fontScale: number;
 };
 
 export function bottomChromePadding({
@@ -19,12 +20,15 @@ export function bottomChromePadding({
   hasActivity,
   gap,
   tail,
+  fontScale,
 }: BottomChromePaddingInput): number {
+  const chromeScale = Math.max(1, fontScale);
+
   return (
     safeBottom +
     (hasTabBar ? TAB_BAR_BOTTOM + TAB_BAR_HEIGHT : 0) +
-    (hasPlayer ? gap + MINI_PLAYER_HEIGHT : 0) +
-    (hasActivity ? gap + ACTIVITY_PILL_HEIGHT : 0) +
+    (hasPlayer ? gap + MINI_PLAYER_HEIGHT * chromeScale : 0) +
+    (hasActivity ? gap + ACTIVITY_PILL_HEIGHT * chromeScale : 0) +
     tail
   );
 }

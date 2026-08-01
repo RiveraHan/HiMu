@@ -169,9 +169,8 @@ const styles = StyleSheet.create((theme) => ({
     lineHeight: 10,
     letterSpacing: 0.1 * 10,
     fontFamily: "Manrope-SemiBold",
-    color: theme.colors.onSurfaceVariant,
+    color: theme.colors.onSurface,
     textTransform: "uppercase",
-    opacity: 0.7,
   },
   legalDot: {
     width: 4,

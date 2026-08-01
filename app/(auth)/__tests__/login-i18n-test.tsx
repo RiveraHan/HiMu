@@ -3,8 +3,26 @@ import { Linking, StyleSheet as RNStyleSheet } from "react-native";
 
 import LoginScreen from "@/app/(auth)/login";
 import i18n from "@/src/i18n";
+import { darkTheme, lightTheme } from "@/src/theme/theme";
 
 const mockToastError = jest.fn();
+
+function relativeLuminance(hex: string) {
+  const channels = hex.match(/\w\w/g)?.map((channel) => Number.parseInt(channel, 16) / 255);
+  if (!channels || channels.length !== 3) throw new Error(`Expected hex color, received ${hex}`);
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const [lighter, darker] = [
+    relativeLuminance(foreground),
+    relativeLuminance(background),
+  ].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 jest.mock("@/src/api/auth", () => ({
   authApi: { signInWithGoogle: jest.fn() },
@@ -69,12 +87,16 @@ describe("Login translations", () => {
     expect(RNStyleSheet.flatten(privacy.props.style)).toEqual(
       expect.objectContaining({ minHeight: 44, minWidth: 44 }),
     );
-    // Legal copy is normal-sized text and needs a readable foreground contrast.
-    expect(RNStyleSheet.flatten(screen.getByText("Términos").props.style)).toEqual(
-      expect.objectContaining({ opacity: expect.any(Number) }),
-    );
-    expect(RNStyleSheet.flatten(screen.getByText("Términos").props.style).opacity)
-      .toBeGreaterThanOrEqual(0.7);
+    // Legal copy is normal-sized text: use the opaque onSurface token in both themes.
+    for (const theme of [darkTheme, lightTheme]) {
+      expect(contrastRatio(theme.colors.onSurface, theme.colors.background))
+        .toBeGreaterThanOrEqual(4.5);
+    }
+    const legalTextStyle = RNStyleSheet.flatten(screen.getByText("Términos").props.style);
+    expect(legalTextStyle).toEqual(expect.objectContaining({
+      color: darkTheme.colors.onSurface,
+    }));
+    expect(legalTextStyle.opacity).toBeUndefined();
     expect(screen.getAllByTestId("legal-separator")).toHaveLength(1);
 
     await act(async () => {
