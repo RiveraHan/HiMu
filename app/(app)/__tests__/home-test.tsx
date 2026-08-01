@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, within } from "@testing-library/react-native";
 import HomeScreen from "@/app/(app)/index";
 import i18n from "@/src/i18n";
 import { HOME_TOUR_STEPS } from "@/src/onboarding/constants";
@@ -376,6 +376,25 @@ describe("HomeScreen", () => {
     expect(screen.queryByText("No AI mixes are ready yet")).toBeNull();
     expect(screen.queryByText("Start listening to build your Vibe Check")).toBeNull();
     expect(screen.queryByText("New DJ")).toBeNull();
+
+    const pressRetryFor = async (title: string) => {
+      const notice = screen.getByText(title).parent;
+      expect(notice).not.toBeNull();
+      await fireEvent.press(within(notice!).getByRole("button", { name: "Retry" }));
+    };
+    await pressRetryFor("Your DJs are unavailable");
+    await pressRetryFor("Fresh frequencies are unavailable");
+    await pressRetryFor("Recommendations are unavailable");
+    await pressRetryFor("AI Mixes are unavailable");
+    await pressRetryFor("Favorites are unavailable");
+    await pressRetryFor("Listening insights are unavailable");
+
+    expect(mockDjsQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(mockRecentQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(mockContextualQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(mockAiMixQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(mockFavoritesQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(mockVibeQuery.refetch).toHaveBeenCalledTimes(1);
   });
 
   it("does not render an AI Mix card when every cached row is unplayable", async () => {
@@ -467,6 +486,25 @@ describe("HomeScreen", () => {
     expect(retry).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a stale pending Daily Drop hero visible with a retry notice", async () => {
+    const retry = jest.fn();
+    mockDrop = {
+      status: "pending",
+      stale: true,
+      retry,
+      dj: { name: "DJ One", avatar_url: null, genre: "House" },
+    };
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByTestId("on-air-hero")).toBeTruthy();
+    expect(screen.queryByTestId("home-hero-skeleton")).toBeNull();
+    const notice = screen.getByText("Today's drop is unavailable").parent;
+    expect(notice).not.toBeNull();
+    await fireEvent.press(within(notice!).getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the real Daily Drop hero during generation", async () => {
     mockDrop = {
       status: "pending",
@@ -499,7 +537,27 @@ describe("HomeScreen", () => {
     const screen = await render(<HomeScreen />);
 
     expect(screen.queryByTestId("home-hero-skeleton")).toBeNull();
-    expect(screen.getAllByText("You're offline").length).toBeGreaterThan(0);
+    const offlineNotices = screen.getAllByText("You're offline")
+      .map((title) => title.parent!)
+      .filter((notice) => within(notice).queryByRole("button", { name: "Retry" }));
+    expect(offlineNotices).toHaveLength(3);
+
+    let heroNotice: (typeof offlineNotices)[number] | undefined;
+    for (const notice of offlineNotices) {
+      mockDjsQuery.refetch.mockClear();
+      mockRecentQuery.refetch.mockClear();
+      const retry = within(notice).getByRole("button", { name: "Retry" });
+      await fireEvent.press(retry);
+      if (
+        mockDjsQuery.refetch.mock.calls.length === 1 &&
+        mockRecentQuery.refetch.mock.calls.length === 1
+      ) {
+        heroNotice = notice;
+      }
+    }
+
+    expect(heroNotice).toBeDefined();
+    expect(within(heroNotice!).getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 
   it("registers real Daily Drop and DJ targets with the three Home steps", async () => {
