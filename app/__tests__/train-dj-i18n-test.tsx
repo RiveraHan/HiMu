@@ -139,9 +139,14 @@ function IntegrationHarness({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(console, "error").mockImplementation(() => undefined);
   mockPending = false;
   mockUseRealUpdate = false;
   mockLatestActivity = null;
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 test("renders Spanish training and preserves canonical saved values", async () => {
@@ -166,7 +171,10 @@ test("keeps Back available while an update is pending", async () => {
   expect(screen.getByRole("button", { name: "Back" }).props.accessibilityState.disabled).toBeFalsy();
 });
 
-test("keeps real portrait regeneration globally visible after its origin unmounts and warns once", async () => {
+test.each([
+  ["mounted", true],
+  ["unmounted", false],
+] as const)("warns once for real portrait partial success with its origin %s", async (_label, keepOriginMounted) => {
   mockUseRealUpdate = true;
   await i18n.changeLanguage("en");
   let finishUpdate!: (value: unknown) => void;
@@ -196,9 +204,11 @@ test("keeps real portrait regeneration globally visible after its origin unmount
       .disabled,
   ).toBeFalsy();
 
-  await screen.rerender(
-    <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
-  );
+  if (!keepOriginMounted) {
+    await screen.rerender(
+      <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+    );
+  }
   await act(async () => {
     finishUpdate({
       data: { djId: "dj-one", avatarUrl: null },
@@ -222,9 +232,78 @@ test("keeps real portrait regeneration globally visible after its origin unmount
   expect(mockToastWarning).toHaveBeenCalledTimes(1);
 
   await screen.rerender(
-    <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+    <IntegrationHarness
+      queryClient={queryClient}
+      showOrigin={keepOriginMounted}
+    />,
   );
   expect(mockToastWarning).toHaveBeenCalledTimes(1);
+  await screen.unmount();
+  queryClient.getMutationCache().getAll().forEach((mutation) => {
+    queryClient.getMutationCache().remove(mutation);
+  });
+});
+
+test.each([
+  ["mounted", true],
+  ["unmounted", false],
+] as const)("announces real update failure once with its origin %s", async (_label, keepOriginMounted) => {
+  mockUseRealUpdate = true;
+  await i18n.changeLanguage("en");
+  let finishUpdate!: (value: unknown) => void;
+  jest.mocked(supabase.functions.invoke).mockImplementation(
+    () => new Promise((resolve) => (finishUpdate = resolve)) as never,
+  );
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false },
+    },
+  });
+  const screen = await render(
+    <IntegrationHarness queryClient={queryClient} showOrigin />,
+  );
+
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Regenerate portrait" }),
+  );
+  await waitFor(() =>
+    expect(mockLatestActivity?.items).toEqual([
+      expect.objectContaining({ kind: "update-dj", status: "running" }),
+    ]),
+  );
+
+  if (!keepOriginMounted) {
+    await screen.rerender(
+      <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+    );
+  }
+  await act(async () => {
+    finishUpdate({
+      data: null,
+      error: new Error("raw secret provider failure"),
+    });
+  });
+
+  await waitFor(() =>
+    expect(mockLatestActivity?.items).toEqual([
+      expect.objectContaining({ kind: "update-dj", status: "failed" }),
+    ]),
+  );
+  expect(mockToastError).toHaveBeenCalledWith(
+    "Couldn't update Lumen",
+    "The operation couldn't be completed.",
+  );
+  expect(mockToastError).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(mockToastError.mock.calls)).not.toContain("raw secret");
+
+  await screen.rerender(
+    <IntegrationHarness
+      queryClient={queryClient}
+      showOrigin={keepOriginMounted}
+    />,
+  );
+  expect(mockToastError).toHaveBeenCalledTimes(1);
   await screen.unmount();
   queryClient.getMutationCache().getAll().forEach((mutation) => {
     queryClient.getMutationCache().remove(mutation);

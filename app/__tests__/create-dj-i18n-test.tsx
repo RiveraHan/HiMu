@@ -161,9 +161,14 @@ function IntegrationHarness({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(console, "error").mockImplementation(() => undefined);
   mockPending = false;
   mockUseRealCreate = false;
   mockLatestActivity = null;
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 test("renders the Spanish DJ wizard and submits canonical catalog values", async () => {
@@ -196,7 +201,10 @@ test("keeps Back available and removes the blocking overlay while creation is pe
   expect(screen.queryByTestId("birth-overlay")).toBeNull();
 });
 
-test("keeps real creation globally visible after its origin unmounts and announces completion once", async () => {
+test.each([
+  ["mounted", true],
+  ["unmounted", false],
+] as const)("announces real creation success once with its origin %s", async (_label, keepOriginMounted) => {
   mockUseRealCreate = true;
   await i18n.changeLanguage("en");
   let finishCreate!: (value: unknown) => void;
@@ -231,9 +239,11 @@ test("keeps real creation globally visible after its origin unmounts and announc
       .disabled,
   ).toBeFalsy();
 
-  await screen.rerender(
-    <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
-  );
+  if (!keepOriginMounted) {
+    await screen.rerender(
+      <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+    );
+  }
   await act(async () => {
     finishCreate({
       data: { djId: "dj-lumen", avatarReady: true },
@@ -254,9 +264,82 @@ test("keeps real creation globally visible after its origin unmounts and announc
   expect(mockToastInfo).toHaveBeenCalledTimes(1);
 
   await screen.rerender(
-    <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+    <IntegrationHarness
+      queryClient={queryClient}
+      showOrigin={keepOriginMounted}
+    />,
   );
   expect(mockToastInfo).toHaveBeenCalledTimes(1);
+  await screen.unmount();
+  queryClient.getMutationCache().getAll().forEach((mutation) => {
+    queryClient.getMutationCache().remove(mutation);
+  });
+});
+
+test.each([
+  ["mounted", true],
+  ["unmounted", false],
+] as const)("announces real creation failure once with its origin %s", async (_label, keepOriginMounted) => {
+  mockUseRealCreate = true;
+  await i18n.changeLanguage("en");
+  let finishCreate!: (value: unknown) => void;
+  jest.mocked(supabase.functions.invoke).mockImplementation(
+    () => new Promise((resolve) => (finishCreate = resolve)) as never,
+  );
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false },
+    },
+  });
+  const screen = await render(
+    <IntegrationHarness queryClient={queryClient} showOrigin />,
+  );
+
+  await fireEvent.changeText(
+    screen.getByPlaceholderText("e.g. Lumen"),
+    "Lumen",
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
+  await waitFor(() =>
+    expect(mockLatestActivity?.items).toEqual([
+      expect.objectContaining({ kind: "create-dj", status: "running" }),
+    ]),
+  );
+
+  if (!keepOriginMounted) {
+    await screen.rerender(
+      <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+    );
+  }
+  await act(async () => {
+    finishCreate({
+      data: null,
+      error: new Error("raw secret provider failure"),
+    });
+  });
+
+  await waitFor(() =>
+    expect(mockLatestActivity?.items).toEqual([
+      expect.objectContaining({ kind: "create-dj", status: "failed" }),
+    ]),
+  );
+  expect(mockToastError).toHaveBeenCalledWith(
+    "Couldn't create Lumen",
+    "The operation couldn't be completed.",
+  );
+  expect(mockToastError).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(mockToastError.mock.calls)).not.toContain("raw secret");
+
+  await screen.rerender(
+    <IntegrationHarness
+      queryClient={queryClient}
+      showOrigin={keepOriginMounted}
+    />,
+  );
+  expect(mockToastError).toHaveBeenCalledTimes(1);
   await screen.unmount();
   queryClient.getMutationCache().getAll().forEach((mutation) => {
     queryClient.getMutationCache().remove(mutation);
