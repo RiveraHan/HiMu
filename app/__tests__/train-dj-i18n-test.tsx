@@ -10,20 +10,54 @@ const mockUpdate = jest.fn();
 const mockToastInfo = jest.fn();
 const mockToastWarning = jest.fn();
 const mockToastError = jest.fn();
+const mockDjRefetch = jest.fn();
 let mockPending = false;
 let mockUseRealUpdate = false;
 let mockLatestActivity: ReturnType<typeof useActivity> | null = null;
+let mockOnline = true;
+let mockUser: { id: string } | null = { id: "listener" };
+
+const ownedDj = {
+  id: "dj-one",
+  owner_id: "listener",
+  name: "Lumen",
+  avatar_url: null,
+  genre_specialties: ["Ambient"],
+  mood_tags: ["Focus"],
+  personality_traits: { energy: 5, vibe: "", isInstrumental: true },
+};
+
+type MockDjQuery = {
+  data:
+    | (Omit<typeof ownedDj, "owner_id"> & { owner_id: string | null })
+    | null
+    | undefined;
+  isLoading: boolean;
+  isPending: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  fetchStatus: "fetching" | "paused" | "idle";
+  refetch: jest.Mock;
+};
+
+const settledDjQuery = (
+  data: MockDjQuery["data"],
+  overrides: Partial<MockDjQuery> = {},
+): MockDjQuery => ({
+  data,
+  isLoading: false,
+  isPending: false,
+  isError: false,
+  isSuccess: true,
+  fetchStatus: "idle",
+  refetch: mockDjRefetch,
+  ...overrides,
+});
+
+let mockDjQuery = settledDjQuery(ownedDj);
 
 jest.mock("@/src/hooks/use-dj", () => ({
-  useDJ: () => ({ data: {
-    id: "dj-one",
-    owner_id: "listener",
-    name: "Lumen",
-    avatar_url: null,
-    genre_specialties: ["Ambient"],
-    mood_tags: ["Focus"],
-    personality_traits: { energy: 5, vibe: "", isInstrumental: true },
-  }, isLoading: false }),
+  useDJ: () => mockDjQuery,
 }));
 jest.mock("@/src/hooks/use-update-dj", () => {
   const actual = jest.requireActual("@/src/hooks/use-update-dj");
@@ -36,8 +70,9 @@ jest.mock("@/src/hooks/use-update-dj", () => {
   };
 });
 jest.mock("@/src/hooks/use-auth", () => ({
-  useCurrentUser: () => ({ id: "listener" }),
+  useCurrentUser: () => mockUser,
 }));
+jest.mock("@/src/hooks/use-online-status", () => ({ useOnlineStatus: () => mockOnline }));
 jest.mock("@/src/api/auth-scope", () => {
   const actual = jest.requireActual("@/src/api/auth-scope");
   return {
@@ -94,6 +129,11 @@ jest.mock("@/src/components", () => {
     Avatar: () => React.createElement(View),
     DjTraitsForm: () => React.createElement(View),
     EqualizerBars: () => React.createElement(View),
+    TrainDjSkeleton: () => React.createElement(View, { testID: "train-dj-skeleton" },
+      React.createElement(View, { testID: "portrait-skeleton" }),
+      React.createElement(View, { testID: "trait-row-skeleton" }),
+      React.createElement(View, { testID: "submit-skeleton" }),
+    ),
     Text: ({ children }: { children: React.ReactNode }) => React.createElement(Text, null, children),
     PrefSection: ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) =>
       React.createElement(View, null,
@@ -101,12 +141,27 @@ jest.mock("@/src/components", () => {
         subtitle ? React.createElement(Text, null, subtitle) : null,
         children,
       ),
-    ScreenHeader: ({ title, subtitle, disabled }: { title: string; subtitle: string; disabled?: boolean }) =>
+    ScreenHeader: ({ title, subtitle, disabled, fallbackHref }: { title: string; subtitle?: string; disabled?: boolean; fallbackHref?: string }) =>
       React.createElement(View, null,
-        React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: "Back", accessibilityState: { disabled }, disabled }),
+        React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: "Back", accessibilityState: { disabled }, disabled, testID: "train-back", fallbackHref }),
         React.createElement(Text, null, title),
-        React.createElement(Text, null, subtitle),
+        subtitle ? React.createElement(Text, null, subtitle) : null,
       ),
+    ScreenScrollView: ({ children, ...props }: { children: React.ReactNode }) =>
+      React.createElement(View, { testID: "screen-scroll-view", ...props }, children),
+    StateNotice: ({ title, message, actionLabel, onAction, compact }: {
+      title: string;
+      message?: string;
+      actionLabel?: string;
+      onAction?: () => void;
+      compact?: boolean;
+    }) => React.createElement(View, { testID: compact ? "compact-notice" : "state-notice" },
+      React.createElement(Text, null, title),
+      message ? React.createElement(Text, null, message) : null,
+      actionLabel && onAction
+        ? React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: actionLabel, onPress: onAction }, React.createElement(Text, null, actionLabel))
+        : null,
+    ),
     Button: ({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) =>
       React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: label, disabled, onPress },
         React.createElement(Text, null, label)),
@@ -114,7 +169,7 @@ jest.mock("@/src/components", () => {
   };
 });
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), push: jest.fn() },
+  router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true, replace: jest.fn() },
   useLocalSearchParams: () => ({ id: "dj-one" }),
 }));
 jest.mock("lucide-react-native", () => {
@@ -154,10 +209,85 @@ beforeEach(() => {
   mockPending = false;
   mockUseRealUpdate = false;
   mockLatestActivity = null;
+  mockOnline = true;
+  mockUser = { id: "listener" };
+  mockDjQuery = settledDjQuery(ownedDj);
 });
 
 afterEach(() => {
   jest.restoreAllMocks();
+});
+
+test("keeps the Back header and form-shaped skeleton in the normal shell while loading", async () => {
+  mockDjQuery = settledDjQuery(undefined, {
+    isLoading: true,
+    isPending: true,
+    isSuccess: false,
+    fetchStatus: "fetching",
+  });
+  const screen = await render(<TrainDJScreen />);
+
+  expect(screen.getByTestId("screen-scroll-view")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+  expect(screen.getByText("Train your DJ")).toBeTruthy();
+  expect(screen.getByTestId("train-dj-skeleton")).toBeTruthy();
+  expect(screen.getByTestId("portrait-skeleton")).toBeTruthy();
+  expect(screen.getByTestId("trait-row-skeleton")).toBeTruthy();
+  expect(screen.getByTestId("submit-skeleton")).toBeTruthy();
+});
+
+test.each([
+  [false, "paused", "You're offline"],
+  [true, "idle", "DJ unavailable"],
+] as const)("shows a retryable blocking state online=%s", async (online, fetchStatus, title) => {
+  mockOnline = online;
+  mockDjQuery = settledDjQuery(undefined, {
+    isError: online,
+    isSuccess: false,
+    fetchStatus,
+  });
+  const screen = await render(<TrainDJScreen />);
+
+  expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
+  expect(screen.getByText(title)).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+  expect(mockDjRefetch).toHaveBeenCalledTimes(1);
+});
+
+test("reserves not-found copy for a successful null result", async () => {
+  mockDjQuery = settledDjQuery(null);
+  const screen = await render(<TrainDJScreen />);
+
+  expect(screen.getByText("DJ not found")).toBeTruthy();
+  expect(screen.queryByText("This DJ can't be edited.")).toBeNull();
+});
+
+test.each([
+  [null, { id: "listener" }],
+  ["another-listener", { id: "listener" }],
+  ["listener", null],
+] as const)("shows authorization copy for owner=%s user=%o", async (ownerId, user) => {
+  mockUser = user;
+  mockDjQuery = settledDjQuery({ ...ownedDj, owner_id: ownerId });
+  const screen = await render(<TrainDJScreen />);
+
+  expect(screen.getByText("This DJ can't be edited.")).toBeTruthy();
+  expect(screen.queryByText("DJ not found")).toBeNull();
+});
+
+test.each([
+  [true, "idle", "DJ unavailable"],
+  [false, "paused", "You're offline"],
+] as const)("keeps cached editable DJ visible on refresh failure online=%s", async (online, fetchStatus, title) => {
+  mockOnline = online;
+  mockDjQuery = settledDjQuery(ownedDj, { isError: online, fetchStatus });
+  const screen = await render(<TrainDJScreen />);
+
+  expect(screen.getByText("Save changes")).toBeTruthy();
+  expect(screen.getByText(title)).toBeTruthy();
+  expect(screen.getByTestId("compact-notice")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+  expect(mockDjRefetch).toHaveBeenCalledTimes(1);
 });
 
 test("renders Spanish training and preserves canonical saved values", async () => {

@@ -55,6 +55,8 @@ export const dj = {
     title: "Train your DJ",
     subtitle: "Refine how {{name}} shapes its music.",
     notFound: "DJ not found",
+    loadUnavailableTitle: "DJ unavailable",
+    loadUnavailable: "We couldn't load this DJ.",
     portrait: "Portrait",
     portraitSubtitle: "Regenerated from the traits below",
     regenerate: "Regenerate portrait",

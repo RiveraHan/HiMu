@@ -65,3 +65,4 @@ export * from "./dj/DjBirthOverlay";
 export * from "./dj/DjHero";
 export * from "./dj/DjTraitsForm";
 export * from "./dj/GeneratingTrackCard";
+export * from "./dj/TrainDjSkeleton";

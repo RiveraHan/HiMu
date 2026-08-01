@@ -38,6 +38,8 @@ export const playback = {
   },
   focus: {
     title: "Modo concentración",
+    unavailable: "El audio de enfoque no está disponible",
+    empty: "No hay canciones de enfoque disponibles",
     status: {
       idle: "LISTO",
       running: "CONCENTRACIÓN PROFUNDA",
@@ -58,6 +60,11 @@ export const playback = {
     kicker: "ESTA SEMANA",
     title: "Vibe Check",
     subtitle: "Tu evolución sonora esta semana.",
+    unavailable: "Los datos de escucha no están disponibles",
+    empty: "Empieza a escuchar para crear tu Vibe Check",
+    djsUnavailable: "Los datos de DJs no están disponibles",
+    noDjs: "Aún no hay DJs para clasificar",
+    goHome: "Ir al inicio",
     resonanceFlow: "Flujo de resonancia",
     mostlyGenre: "Principalmente {{genre}}",
     thisWeek: "Esta semana",

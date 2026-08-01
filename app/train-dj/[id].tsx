@@ -6,17 +6,23 @@ import {
   EqualizerBars,
   PrefSection,
   ScreenHeader,
+  ScreenScrollView,
+  StateNotice,
   Text,
+  TrainDjSkeleton,
   type DjTraits,
 } from "@/src/components";
+import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useDJ } from "@/src/hooks/use-dj";
+import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { usePhaseRotation } from "@/src/hooks/use-phase-rotation";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useUpdateDJ } from "@/src/hooks/use-update-dj";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { router, useLocalSearchParams } from "expo-router";
 import { RefreshCw } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -48,32 +54,89 @@ function RegenStatus() {
 export default function TrainDJScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: dj, isLoading } = useDJ(id);
+  const djQuery = useDJ(id);
+  const dj = djQuery.data;
+  const user = useCurrentUser();
+  const online = useOnlineStatus();
+  const insets = useSafeAreaInsets();
+  const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
+  const offlineWithoutDj =
+    !online && djQuery.fetchStatus === "paused" && dj === undefined;
+  const djLoading = isInitialQueryLoading(djQuery);
+  const blockingDjError = djQuery.isError && dj === undefined;
+  const fallbackHref = dj ? (`/dj/${dj.id}` as const) : "/";
 
-  if (isLoading) {
-    return (
-      <View style={[styles.root, styles.center]}>
-        <ActivityIndicator color={theme.colors.primary} />
-      </View>
-    );
-  }
+  return (
+    <ScreenScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
+      ]}
+      keyboardShouldPersistTaps="handled"
+    >
+      <ScreenHeader
+        title={t("dj.train.title")}
+        subtitle={dj ? t("dj.train.subtitle", { name: dj.name }) : undefined}
+        fallbackHref={fallbackHref}
+      />
 
-  if (!dj || !dj.owner_id) {
-    return (
-      <View style={[styles.root, styles.center]}>
-        <Text variant="h2">{t("dj.train.notFound")}</Text>
-      </View>
-    );
-  }
-
-  return <TrainForm djId={id} dj={dj} />;
+      {offlineWithoutDj ? (
+        <StateNotice
+          kind="offline"
+          title={t("common.errors.offline")}
+          message={t("common.errors.reconnect")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djQuery.refetch()}
+        />
+      ) : djLoading ? (
+        <TrainDjSkeleton />
+      ) : blockingDjError ? (
+        <StateNotice
+          kind="error"
+          title={t("dj.train.loadUnavailableTitle")}
+          message={t("dj.train.loadUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djQuery.refetch()}
+        />
+      ) : djQuery.isSuccess && dj === null ? (
+        <StateNotice kind="empty" title={t("dj.train.notFound")} />
+      ) : !dj ? (
+        <StateNotice
+          kind="error"
+          title={t("dj.train.loadUnavailableTitle")}
+          message={t("dj.train.loadUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djQuery.refetch()}
+        />
+      ) : dj.owner_id !== user?.id ? (
+        <StateNotice kind="empty" title={t("dj.train.unavailable")} />
+      ) : (
+        <>
+          <TrainForm djId={id} dj={dj} />
+          {djQuery.isError || !online ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={
+                online
+                  ? t("dj.train.loadUnavailableTitle")
+                  : t("common.errors.offline")
+              }
+              message={online ? t("dj.train.loadUnavailable") : undefined}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void djQuery.refetch()}
+            />
+          ) : null}
+        </>
+      )}
+    </ScreenScrollView>
+  );
 }
 
 function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
 
   const saved = (dj.personality_traits ?? {}) as {
@@ -123,57 +186,40 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
   }
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+    <>
+      <PrefSection
+        title={t("dj.train.portrait")}
+        subtitle={t("dj.train.portraitSubtitle")}
       >
-        <ScreenHeader
-          title={t("dj.train.title")}
-          subtitle={t("dj.train.subtitle", { name: dj.name })}
-        />
-
-        {/* Portrait */}
-        <PrefSection
-          title={t("dj.train.portrait")}
-          subtitle={t("dj.train.portraitSubtitle")}
-        >
-          <View style={styles.portraitRow}>
-            <View style={regenerating && styles.portraitDim}>
-              <Avatar src={dj.avatar_url} fallback={dj.name} size="2xl" />
-            </View>
-            {regenerating ? (
-              <RegenStatus />
-            ) : (
-              <Button
-                variant="glass"
-                label={t("dj.train.regenerate")}
-                leftIcon={
-                  <RefreshCw size={16} color={theme.colors.onSurface} />
-                }
-                onPress={() => submit(true)}
-                disabled={!canSubmit || isPending}
-                style={styles.regenBtn}
-              />
-            )}
+        <View style={styles.portraitRow}>
+          <View style={regenerating && styles.portraitDim}>
+            <Avatar src={dj.avatar_url} fallback={dj.name} size="2xl" />
           </View>
-        </PrefSection>
+          {regenerating ? (
+            <RegenStatus />
+          ) : (
+            <Button
+              variant="glass"
+              label={t("dj.train.regenerate")}
+              leftIcon={<RefreshCw size={16} color={theme.colors.onSurface} />}
+              onPress={() => submit(true)}
+              disabled={!canSubmit || isPending}
+              style={styles.regenBtn}
+            />
+          )}
+        </View>
+      </PrefSection>
 
-        <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
+      <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
 
-        <Button
-          label={t("dj.train.save")}
-          loadingLabel={t("dj.train.saving")}
-          loading={isPending && action === "save"}
-          disabled={!canSubmit || isPending}
-          onPress={() => submit(false)}
-        />
-      </ScrollView>
-    </View>
+      <Button
+        label={t("dj.train.save")}
+        loadingLabel={t("dj.train.saving")}
+        loading={isPending && action === "save"}
+        disabled={!canSubmit || isPending}
+        onPress={() => submit(false)}
+      />
+    </>
   );
 }
 
@@ -181,10 +227,6 @@ const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
     backgroundColor: theme.colors.background,
-  },
-  center: {
-    alignItems: "center",
-    justifyContent: "center",
   },
   content: {
     paddingHorizontal: theme.spacing.pageMargin,

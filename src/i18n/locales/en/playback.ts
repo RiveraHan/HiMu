@@ -38,6 +38,8 @@ export const playback = {
   },
   focus: {
     title: "Focus Mode",
+    unavailable: "Focus audio is unavailable",
+    empty: "No focus tracks are available",
     status: {
       idle: "READY",
       running: "DEEP FOCUS",
@@ -58,6 +60,11 @@ export const playback = {
     kicker: "THIS WEEK",
     title: "Vibe Check",
     subtitle: "Your sonic evolution this week.",
+    unavailable: "Listening insights are unavailable",
+    empty: "Start listening to build your Vibe Check",
+    djsUnavailable: "DJ insights are unavailable",
+    noDjs: "No DJs to rank yet",
+    goHome: "Go to Home",
     resonanceFlow: "Resonance Flow",
     mostlyGenre: "Mostly {{genre}}",
     thisWeek: "This week",
