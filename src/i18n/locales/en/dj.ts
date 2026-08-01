@@ -87,6 +87,10 @@ export const dj = {
     },
   },
   profile: {
+    unavailable: "DJ unavailable",
+    tracksUnavailable: "Tracks unavailable",
+    retry: "Retry",
+    trackCountUnavailable: "Track count unavailable",
     notFound: "DJ not found",
     notFoundDescription: "This DJ doesn’t exist or was removed.",
     generationFailedTitle: "Generation failed",
@@ -97,7 +101,7 @@ export const dj = {
     genericError: "Something went wrong. Please try again.",
     delete: {
       title: "Delete DJ",
-      messageUnknown: "This will delete {{name}}.",
+      messageUnknown: "Delete this DJ? Its tracks could not be counted.",
       message_one: "This will delete {{name}} and its {{count}} track.",
       message_other: "This will delete {{name}} and its {{count}} tracks.",
       confirm: "Delete",
@@ -125,5 +129,7 @@ export const dj = {
     curatedGenres: "CURATED GENRES",
     tracks: "TRACKS",
     noTracks: "No tracks yet.",
+    newlyGeneratedHint: "Newly generated mix",
+    newBadge: "New",
   },
 } as const;

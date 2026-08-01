@@ -23,6 +23,8 @@ export const common = {
     tracks_other: "{{count}} pistas",
   },
   errors: {
+    offline: "No tienes conexión",
+    reconnect: "Vuelve a conectarte para actualizar este contenido.",
     generic: "Algo salió mal. Inténtalo de nuevo.",
     savePreference: "No pudimos sincronizar tu preferencia. Se conservará en este dispositivo.",
   },

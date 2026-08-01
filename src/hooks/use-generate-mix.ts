@@ -1,16 +1,26 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { upsertQueuedGenerationActivity } from "@/src/activity/generation-activity";
+import type { ActivityItem } from "@/src/activity/types";
 import { useLocale } from "@/src/i18n/use-locale";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCurrentUser } from "./use-auth";
 
-// Requests a new mix from a DJ and polls the job until it's ready.
+type GenerateMixInput = {
+  djId: string;
+  title: string;
+  lyrics?: string;
+};
+
+type LegacyGenerate = (variables: Omit<GenerateMixInput, "title">) => void;
+
 export function useGenerateMix() {
-  const [jobId, setJobId] = useState<string | null>(null);
   const { resolvedLanguage } = useLocale();
+  const user = useCurrentUser();
+  const queryClient = useQueryClient();
 
   const start = useMutation({
-    mutationFn: async ({ djId, lyrics }: { djId: string; lyrics?: string }) => {
+    mutationFn: async ({ djId, lyrics }: GenerateMixInput) => {
       const { data, error } = await supabase.functions.invoke<{
         jobId: string;
       }>("generate-mix", {
@@ -22,41 +32,31 @@ export function useGenerateMix() {
         },
       });
       if (error) throw error;
-      if (!data?.jobId) throw new Error("generate-mix did not return a jobId");
+      if (typeof data?.jobId !== "string" || data.jobId.trim().length === 0) {
+        throw new Error("generate-mix did not return a jobId");
+      }
       return data.jobId;
     },
-    onSuccess: setJobId,
-  });
-
-  const job = useQuery({
-    queryKey: queryKeys.generationJobs.detail(jobId),
-    enabled: !!jobId,
-    // Poll state machine: every 3s until it finishes.
-    refetchInterval: (query) => {
-      const s = query.state.data?.status;
-      return s === "ready" || s === "failed" ? false : 3000;
-    },
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("generation_jobs")
-        .select("status, error, track_id, tracks(*)")
-        .eq("id", jobId!)
-        .single();
-
-      if (error) throw error;
-
-      return data;
+    onSuccess: (jobId, variables) => {
+      if (!user) return;
+      const queryKey = queryKeys.generationJobs.activity(user.id);
+      queryClient.setQueryData<ActivityItem[]>(queryKey, (current) =>
+        upsertQueuedGenerationActivity(current, {
+          jobId,
+          djId: variables.djId,
+          title: variables.title,
+          retryLyrics: variables.lyrics ?? null,
+          nowMs: Date.now(),
+        }),
+      );
+      void queryClient.invalidateQueries({ queryKey });
     },
   });
-
-  const reset = () => setJobId(null);
 
   return {
-    generate: start.mutate,
+    generate: start.mutate as typeof start.mutate & LegacyGenerate,
+    generateAsync: start.mutateAsync,
     isStarting: start.isPending,
-    status: job.data?.status ?? (start.isPending ? "queued" : null),
-    track: job.data?.tracks ?? null, // ready for load() when status === "ready"
-    error: job.data?.error ?? null,
-    reset,
+    error: start.error,
   };
 }

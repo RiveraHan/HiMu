@@ -7,12 +7,16 @@ type MockQuery = {
   data: unknown;
   isPending: boolean;
   fetchStatus: "fetching" | "paused" | "idle";
+  isError: boolean;
+  refetch: jest.Mock;
 };
 
 const initialQuery = (): MockQuery => ({
   data: undefined,
   isPending: true,
   fetchStatus: "fetching",
+  isError: false,
+  refetch: jest.fn(),
 });
 
 const settledQuery = <T,>(
@@ -22,6 +26,8 @@ const settledQuery = <T,>(
   data,
   isPending: false,
   fetchStatus,
+  isError: false,
+  refetch: jest.fn(),
 });
 
 const dj = {
@@ -35,18 +41,30 @@ const dj = {
   personality_traits: null,
 };
 const ownedDj = { ...dj, owner_id: "listener" };
+const trackFixture = (id: string) => ({
+  id,
+  title: id,
+  artist: "Artist",
+  audio_url: `${id}.mp3`,
+  album_art_url: null,
+  duration: 180,
+  genre: "House",
+});
 
 let mockDjQuery = initialQuery();
 let mockTracksQuery = initialQuery();
 const mockConfirm = jest.fn().mockResolvedValue(false);
 const mockRegisterContextTarget = jest.fn();
 let mockDjId = "dj-one";
+let mockHighlightTrackId: string | undefined;
+let mockOnline = true;
+let mockActiveMix: { id: string; status: string; djId: string } | null = null;
+const mockPlayerLoad = jest.fn();
 let mockGenerateMix = {
   generate: jest.fn(),
+  generateAsync: jest.fn(),
   isStarting: false,
-  status: "idle",
-  track: null,
-  reset: jest.fn(),
+  error: null,
 };
 
 jest.mock("@/src/components", () => {
@@ -86,10 +104,58 @@ jest.mock("@/src/components", () => {
         React.createElement(NativeText, null, `${value} ${label}`),
       ),
     StatCardSkeleton: placeholder("stat-card-skeleton"),
+    StateNotice: ({
+      actionLabel,
+      onAction,
+      title,
+    }: {
+      actionLabel?: string;
+      onAction?: () => void;
+      title: string;
+    }) =>
+      React.createElement(
+        View,
+        { testID: "state-notice" },
+        React.createElement(NativeText, null, title),
+        actionLabel && onAction
+          ? React.createElement(
+              Pressable,
+              {
+                accessibilityLabel: actionLabel,
+                accessibilityRole: "button",
+                onPress: onAction,
+              },
+              React.createElement(NativeText, null, actionLabel),
+            )
+          : null,
+      ),
     Tag: placeholder("tag"),
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
-    TrackCard: placeholder("track-card"),
+    TrackCard: ({
+      accessibilityHint,
+      highlighted,
+      highlightedLabel,
+      onPress,
+    }: {
+      accessibilityHint?: string;
+      highlighted?: boolean;
+      highlightedLabel?: string;
+      onPress?: () => void;
+    }) =>
+      React.createElement(
+        Pressable,
+        {
+          accessibilityHint,
+          accessibilityRole: "button",
+          accessibilityState: { selected: highlighted },
+          onPress,
+          testID: "track-card",
+        },
+        highlighted && highlightedLabel
+          ? React.createElement(NativeText, null, highlightedLabel)
+          : null,
+      ),
   };
 });
 jest.mock("@/src/components/dj/DjProfileSkeleton", () => {
@@ -119,7 +185,10 @@ jest.mock("@/src/hooks/use-dj", () => ({
   useDJTracks: () => mockTracksQuery,
 }));
 jest.mock("@/src/audio/use-player", () => ({
-  usePlayer: () => ({ load: jest.fn() }),
+  usePlayer: () => ({ load: mockPlayerLoad }),
+}));
+jest.mock("@/src/activity", () => ({
+  useActivity: () => ({ activeMixForDj: () => mockActiveMix }),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => ({ id: "listener" }),
@@ -135,6 +204,9 @@ jest.mock("@/src/hooks/use-generate-mix", () => ({
 }));
 jest.mock("@/src/hooks/use-home", () => ({
   useLiveDJIds: () => ({ data: new Set() }),
+}));
+jest.mock("@/src/hooks/use-online-status", () => ({
+  useOnlineStatus: () => mockOnline,
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
@@ -156,7 +228,10 @@ jest.mock("@tanstack/react-query", () => ({
 }));
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn() },
-  useLocalSearchParams: () => ({ id: mockDjId }),
+  useLocalSearchParams: () => ({
+    id: mockDjId,
+    highlightTrackId: mockHighlightTrackId,
+  }),
 }));
 jest.mock("lucide-react-native", () => {
   const React = require("react");
@@ -175,18 +250,22 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 describe("DJProfileScreen", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
     mockDjQuery = initialQuery();
     mockTracksQuery = initialQuery();
     mockDjId = "dj-one";
+    mockHighlightTrackId = undefined;
+    mockOnline = true;
+    mockActiveMix = null;
+    mockPlayerLoad.mockReset();
     mockRegisterContextTarget.mockReset().mockReturnValue(jest.fn());
     mockConfirm.mockReset().mockResolvedValue(false);
     mockGenerateMix = {
       generate: jest.fn(),
+      generateAsync: jest.fn(),
       isStarting: false,
-      status: "idle",
-      track: null,
-      reset: jest.fn(),
+      error: null,
     };
   });
 
@@ -267,6 +346,26 @@ describe("DJProfileScreen", () => {
     expect(screen.queryByTestId("dj-profile-skeleton")).toBeNull();
   });
 
+  it("shows a retryable DJ error instead of claiming the DJ was not found", async () => {
+    mockDjQuery = { ...settledQuery(null), isError: true };
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByText("DJ unavailable")).toBeTruthy();
+    expect(screen.queryByText("DJ not found")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockDjQuery.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows offline before the first-load skeleton when no DJ is cached", async () => {
+    mockOnline = false;
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByText("You're offline")).toBeTruthy();
+    expect(screen.queryByTestId("dj-profile-skeleton")).toBeNull();
+  });
+
   it("localizes the settled not-found state in Spanish", async () => {
     await i18n.changeLanguage("es");
     mockDjQuery = settledQuery(null);
@@ -312,6 +411,47 @@ describe("DJProfileScreen", () => {
     expect(screen.queryByTestId("dj-tracks-skeleton")).toBeNull();
   });
 
+  it("keeps the DJ hero and an unknown count when the initial tracks query fails", async () => {
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = { ...settledQuery(undefined), isError: true };
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByTestId("dj-hero")).toBeTruthy();
+    expect(screen.getByText("— Track count unavailable")).toBeTruthy();
+    expect(screen.getByText("Tracks unavailable")).toBeTruthy();
+    expect(screen.queryByText("No tracks yet.")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Delete DJ"));
+    await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
+    expect(mockConfirm.mock.calls[0][0].message).toBe(
+      "Delete this DJ? Its tracks could not be counted.",
+    );
+  });
+
+  it("keeps cached tracks visible and appends a compact notice after a refetch error", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = {
+      ...settledQuery([
+        {
+          id: "track-one",
+          title: "Track One",
+          artist: "Artist",
+          audio_url: "track-one.mp3",
+          album_art_url: null,
+          duration: 180,
+          genre: "House",
+        },
+      ]),
+      isError: true,
+    };
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByTestId("dj-hero")).toBeTruthy();
+    expect(screen.getByTestId("track-card")).toBeTruthy();
+    expect(screen.getByText("Tracks unavailable")).toBeTruthy();
+  });
+
   it("omits an unresolved track count from the owner Delete confirmation", async () => {
     mockDjQuery = settledQuery(ownedDj);
 
@@ -321,7 +461,9 @@ describe("DJProfileScreen", () => {
     await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
     const options = mockConfirm.mock.calls[0][0];
 
-    expect(options.message).toBe("This will delete DJ One.");
+    expect(options.message).toBe(
+      "Delete this DJ? Its tracks could not be counted.",
+    );
     expect(options.message).not.toContain("0 tracks");
     expect(options).toMatchObject({
       title: "Delete DJ",
@@ -333,8 +475,8 @@ describe("DJProfileScreen", () => {
   it("includes the accurate settled track count in owner Delete confirmation", async () => {
     mockDjQuery = settledQuery(ownedDj);
     mockTracksQuery = settledQuery([
-      { id: "track-one" },
-      { id: "track-two" },
+      trackFixture("track-one"),
+      trackFixture("track-two"),
     ]);
 
     const screen = await render(<DJProfileScreen />);
@@ -354,7 +496,9 @@ describe("DJProfileScreen", () => {
     await i18n.changeLanguage("es");
     mockDjQuery = settledQuery(ownedDj);
     mockTracksQuery = settledQuery(
-      Array.from({ length: count }, (_, index) => ({ id: `track-${index}` })),
+      Array.from({ length: count }, (_, index) =>
+        trackFixture(`track-${index}`),
+      ),
     );
 
     const screen = await render(<DJProfileScreen />);
@@ -370,7 +514,7 @@ describe("DJProfileScreen", () => {
       ...dj,
       genre_specialties: ["House", "Ambient"],
     });
-    mockTracksQuery = settledQuery([{ id: "one" }, { id: "two" }]);
+    mockTracksQuery = settledQuery([trackFixture("one"), trackFixture("two")]);
 
     const screen = await render(<DJProfileScreen />);
 
@@ -384,10 +528,9 @@ describe("DJProfileScreen", () => {
     mockTracksQuery = settledQuery([]);
     mockGenerateMix = {
       generate: jest.fn(),
+      generateAsync: jest.fn(),
       isStarting: true,
-      status: "idle",
-      track: null,
-      reset: jest.fn(),
+      error: null,
     };
 
     const screen = await render(<DJProfileScreen />);
@@ -400,5 +543,85 @@ describe("DJProfileScreen", () => {
     }
     expect(screen.getByText("GENERATING…")).toBeTruthy();
     expect(screen.getByTestId("generating-track-card")).toBeTruthy();
+  });
+
+  it("preserves durable generation feedback across remounts and blocks duplicate starts", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = settledQuery([]);
+    mockActiveMix = {
+      id: "generation:job-1",
+      status: "running",
+      djId: "dj-one",
+    };
+    const first = await render(<DJProfileScreen />);
+
+    expect(first.getByText("GENERATING…")).toBeTruthy();
+    expect(first.getByTestId("generating-track-card")).toBeTruthy();
+    await first.unmount();
+
+    const second = await render(<DJProfileScreen />);
+    expect(second.getByText("GENERATING…")).toBeTruthy();
+    fireEvent.press(
+      second.getByRole("button", { name: "Generate a new mix" }),
+    );
+    expect(mockGenerateMix.generate).not.toHaveBeenCalled();
+  });
+
+  it("never auto-loads a player track when durable activity reports ready", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = settledQuery([]);
+    mockActiveMix = {
+      id: "generation:job-1",
+      status: "ready",
+      djId: "dj-one",
+    };
+
+    await render(<DJProfileScreen />);
+
+    expect(mockPlayerLoad).not.toHaveBeenCalled();
+  });
+
+  it("passes the DJ display title locally when starting a generation", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = settledQuery([]);
+    const screen = await render(<DJProfileScreen />);
+
+    fireEvent.press(
+      screen.getByRole("button", { name: "Generate a new mix" }),
+    );
+
+    expect(mockGenerateMix.generate).toHaveBeenCalledWith(
+      { djId: "dj-one", title: "DJ One", lyrics: undefined },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
+  });
+
+  it("marks an explicitly opened result as selected with a visible New badge", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = settledQuery([
+      {
+        id: "track-one",
+        title: "Track One",
+        artist: "Artist",
+        audio_url: "track-one.mp3",
+        album_art_url: null,
+        duration: 180,
+        genre: "House",
+      },
+    ]);
+    mockHighlightTrackId = "track-one";
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByText("New")).toBeTruthy();
+    expect(screen.getByTestId("track-card")).toHaveProp(
+      "accessibilityState",
+      { selected: true },
+    );
+    expect(screen.getByTestId("track-card")).toHaveProp(
+      "accessibilityHint",
+      "Newly generated mix",
+    );
+    expect(mockPlayerLoad).not.toHaveBeenCalled();
   });
 });

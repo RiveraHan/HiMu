@@ -107,6 +107,23 @@ describe("shared component translations", () => {
     expect(screen.getByText("Lista dinámica")).toBeTruthy();
   });
 
+  it("renders highlighted track state with localized visible and spoken cues", async () => {
+    const screen = await render(
+      <TrackCard
+        title="Mezcla nueva"
+        artist="DJ Uno"
+        variant="row"
+        highlighted
+        highlightedLabel="Nueva"
+        accessibilityHint="Mezcla recién generada"
+      />,
+    );
+
+    expect(screen.getByText("Nueva")).toBeTruthy();
+    const row = screen.getByA11yHint("Mezcla recién generada");
+    expect(row).toHaveProp("accessibilityState", { selected: true });
+  });
+
   it("localizes default confirmation actions and preserves overrides", async () => {
     void useConfirmStore.getState().request({ title: "Título dinámico" });
     const screen = await render(<ConfirmDialogHost />);

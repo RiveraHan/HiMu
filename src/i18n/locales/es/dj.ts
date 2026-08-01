@@ -87,6 +87,10 @@ export const dj = {
     },
   },
   profile: {
+    unavailable: "DJ no disponible",
+    tracksUnavailable: "Canciones no disponibles",
+    retry: "Reintentar",
+    trackCountUnavailable: "Cantidad de canciones no disponible",
     notFound: "DJ no encontrado",
     notFoundDescription: "Este DJ no existe o fue eliminado.",
     generationFailedTitle: "Falló la generación",
@@ -97,7 +101,7 @@ export const dj = {
     genericError: "Algo salió mal. Inténtalo de nuevo.",
     delete: {
       title: "Eliminar DJ",
-      messageUnknown: "Esto eliminará a {{name}}.",
+      messageUnknown: "¿Eliminar este DJ? No se pudieron contar sus canciones.",
       message_one: "Esto eliminará a {{name}} y su {{count}} canción.",
       message_other: "Esto eliminará a {{name}} y sus {{count}} canciones.",
       confirm: "Eliminar",
@@ -125,5 +129,7 @@ export const dj = {
     curatedGenres: "GÉNEROS SELECCIONADOS",
     tracks: "CANCIONES",
     noTracks: "Aún no hay canciones.",
+    newlyGeneratedHint: "Mezcla recién generada",
+    newBadge: "Nueva",
   },
 } as const;

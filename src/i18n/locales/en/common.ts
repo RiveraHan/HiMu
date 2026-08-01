@@ -23,6 +23,8 @@ export const common = {
     tracks_other: "{{count}} tracks",
   },
   errors: {
+    offline: "You're offline",
+    reconnect: "Reconnect to update this content.",
     generic: "Something went wrong. Please try again.",
     savePreference: "We couldn't sync your preference. It will be kept on this device.",
   },

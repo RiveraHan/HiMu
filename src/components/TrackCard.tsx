@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { Music } from "lucide-react-native";
+import { Check, Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -15,6 +15,9 @@ type Props = {
   onPress?: () => void;
   onLongPress?: () => void;
   accessibilityLabel?: string;
+  accessibilityHint?: string;
+  highlighted?: boolean;
+  highlightedLabel?: string;
   testID?: string;
 };
 export function TrackCard({
@@ -27,6 +30,9 @@ export function TrackCard({
   onPress,
   onLongPress,
   accessibilityLabel,
+  accessibilityHint,
+  highlighted = false,
+  highlightedLabel,
   testID,
 }: Props) {
   const { t } = useTranslation();
@@ -53,10 +59,13 @@ export function TrackCard({
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityRole={onPress ? "button" : undefined}
+      accessibilityState={{ selected: highlighted }}
       testID={testID}
       style={({ pressed }) => [
         isRow ? styles.rootRow : styles.rootTile,
+        isRow && highlighted && styles.highlightedRow,
         pressed && styles.pressed,
       ]}
     >
@@ -78,6 +87,14 @@ export function TrackCard({
             {t("common.states.nowPlaying")}
           </Text>
         )}
+        {highlighted && highlightedLabel ? (
+          <View style={styles.highlightBadge}>
+            <Check size={14} color={theme.colors.primary} />
+            <Text variant="labelCaps" color="primary">
+              {highlightedLabel}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -91,6 +108,13 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.stackSm,
+  },
+  highlightedRow: {
+    padding: theme.spacing.stackSm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.glassTintStrong,
   },
   pressed: {
     transform: [{ scale: 0.95 }],
@@ -119,5 +143,11 @@ const styles = StyleSheet.create((theme) => ({
   metaRow: {
     flex: 1,
     gap: 2,
+  },
+  highlightBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: theme.spacing.stackXs,
   },
 }));
