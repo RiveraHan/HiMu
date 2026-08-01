@@ -1,16 +1,66 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import CreateDJScreen from "@/app/create-dj";
+import { ActivityProvider, useActivity } from "@/src/activity/ActivityProvider";
+import { supabase } from "@/src/api/supabase";
 import i18n from "@/src/i18n";
 
 const mockCreate = jest.fn();
+const mockToastInfo = jest.fn();
+const mockToastWarning = jest.fn();
+const mockToastError = jest.fn();
 let mockPending = false;
+let mockUseRealCreate = false;
+let mockLatestActivity: ReturnType<typeof useActivity> | null = null;
 
-jest.mock("@/src/hooks/use-create-dj", () => ({
-  useCreateDJ: () => ({ mutate: mockCreate, isPending: mockPending }),
+jest.mock("@/src/hooks/use-create-dj", () => {
+  const actual = jest.requireActual("@/src/hooks/use-create-dj");
+  return {
+    ...actual,
+    useCreateDJ: () =>
+      mockUseRealCreate
+        ? actual.useCreateDJ()
+        : { mutate: mockCreate, isPending: mockPending },
+  };
+});
+jest.mock("@/src/hooks/use-auth", () => ({
+  useCurrentUser: () => ({ id: "listener" }),
+}));
+jest.mock("@/src/activity/use-generation-activity", () => ({
+  useGenerationActivity: () => ({
+    data: [],
+    error: null,
+    isLoading: false,
+    isPending: false,
+    fetchStatus: "idle",
+    refetch: jest.fn(),
+  }),
+}));
+jest.mock("@/src/api/supabase", () => ({
+  supabase: { functions: { invoke: jest.fn() } },
+}));
+jest.mock("@/src/lib/secure-storage", () => ({
+  secureStorage: {
+    getItem: jest.fn(async () => null),
+    setItem: jest.fn(async () => undefined),
+  },
+}));
+jest.mock("@/src/audio/use-player", () => ({
+  usePlayer: () => ({ load: jest.fn() }),
+}));
+jest.mock("@/src/stores/player-store", () => ({
+  usePlayerStore: (selector: (state: object) => unknown) =>
+    selector({ currentTrack: null }),
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({ useMiniPlayerPadding: () => 0 }));
-jest.mock("@/src/hooks/use-toast", () => ({ useToast: () => ({ error: jest.fn() }) }));
+jest.mock("@/src/hooks/use-toast", () => ({
+  useToast: () => ({
+    info: mockToastInfo,
+    warning: mockToastWarning,
+    error: mockToastError,
+  }),
+}));
 jest.mock("@/src/i18n/use-locale", () => ({
   useLocale: () => ({ resolvedLanguage: require("@/src/i18n").default.resolvedLanguage }),
 }));
@@ -75,7 +125,9 @@ jest.mock("@/src/components", () => {
         React.createElement(Text, null, label)),
   };
 });
-jest.mock("expo-router", () => ({ router: { replace: jest.fn() } }));
+jest.mock("expo-router", () => ({
+  router: { replace: jest.fn(), push: jest.fn() },
+}));
 jest.mock("lucide-react-native", () => {
   const React = require("react");
   const { View } = require("react-native");
@@ -84,6 +136,35 @@ jest.mock("lucide-react-native", () => {
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+
+function ActivityProbe() {
+  mockLatestActivity = useActivity();
+  return null;
+}
+
+function IntegrationHarness({
+  queryClient,
+  showOrigin,
+}: {
+  queryClient: QueryClient;
+  showOrigin: boolean;
+}) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ActivityProvider>
+        {showOrigin ? <CreateDJScreen /> : null}
+        <ActivityProbe />
+      </ActivityProvider>
+    </QueryClientProvider>
+  );
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockPending = false;
+  mockUseRealCreate = false;
+  mockLatestActivity = null;
+});
 
 test("renders the Spanish DJ wizard and submits canonical catalog values", async () => {
   mockPending = false;
@@ -113,4 +194,71 @@ test("keeps Back available and removes the blocking overlay while creation is pe
 
   expect(screen.getByRole("button", { name: "Back" }).props.accessibilityState.disabled).toBeFalsy();
   expect(screen.queryByTestId("birth-overlay")).toBeNull();
+});
+
+test("keeps real creation globally visible after its origin unmounts and announces completion once", async () => {
+  mockUseRealCreate = true;
+  await i18n.changeLanguage("en");
+  let finishCreate!: (value: unknown) => void;
+  jest.mocked(supabase.functions.invoke).mockImplementation(
+    () => new Promise((resolve) => (finishCreate = resolve)) as never,
+  );
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      mutations: { retry: false },
+    },
+  });
+  const screen = await render(
+    <IntegrationHarness queryClient={queryClient} showOrigin />,
+  );
+
+  await fireEvent.changeText(
+    screen.getByPlaceholderText("e.g. Lumen"),
+    "Lumen",
+  );
+  await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
+
+  await waitFor(() =>
+    expect(mockLatestActivity?.items).toEqual([
+      expect.objectContaining({ kind: "create-dj", status: "running" }),
+    ]),
+  );
+  expect(
+    screen.getByRole("button", { name: "Back" }).props.accessibilityState
+      .disabled,
+  ).toBeFalsy();
+
+  await screen.rerender(
+    <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+  );
+  await act(async () => {
+    finishCreate({
+      data: { djId: "dj-lumen", avatarReady: true },
+      error: null,
+    });
+  });
+
+  await waitFor(() =>
+    expect(mockLatestActivity?.items).toEqual([
+      expect.objectContaining({
+        kind: "create-dj",
+        status: "ready",
+        djId: "dj-lumen",
+      }),
+    ]),
+  );
+  expect(mockToastInfo).toHaveBeenCalledWith("Lumen is ready");
+  expect(mockToastInfo).toHaveBeenCalledTimes(1);
+
+  await screen.rerender(
+    <IntegrationHarness queryClient={queryClient} showOrigin={false} />,
+  );
+  expect(mockToastInfo).toHaveBeenCalledTimes(1);
+  await screen.unmount();
+  queryClient.getMutationCache().getAll().forEach((mutation) => {
+    queryClient.getMutationCache().remove(mutation);
+  });
 });

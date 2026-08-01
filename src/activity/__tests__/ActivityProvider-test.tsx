@@ -8,17 +8,16 @@ import { supabase } from "@/src/api/supabase";
 import { secureStorage } from "@/src/lib/secure-storage";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useToast } from "@/src/hooks/use-toast";
+import { useCreateDJ } from "@/src/hooks/use-create-dj";
+import { useRegenerateCover } from "@/src/hooks/use-home";
+import { useUpdateDJ } from "@/src/hooks/use-update-dj";
 import { useLocale } from "@/src/i18n/use-locale";
 import { ActivityProvider, useActivity } from "../ActivityProvider";
 import type { ActivityItem } from "../types";
 import { useGenerationActivity } from "../use-generation-activity";
-import { useSessionActivities } from "../use-session-activities";
 
 jest.mock("../use-generation-activity", () => ({
   useGenerationActivity: jest.fn(),
-}));
-jest.mock("../use-session-activities", () => ({
-  useSessionActivities: jest.fn(),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: jest.fn() }));
 jest.mock("@/src/hooks/use-toast", () => ({ useToast: jest.fn() }));
@@ -34,7 +33,10 @@ jest.mock("@/src/audio/use-player", () => ({
 }));
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) =>
-    selector({ currentTrack: mockCurrentTrackId ? { id: mockCurrentTrackId } : null }),
+    selector({
+      currentTrack: mockCurrentTrackId ? { id: mockCurrentTrackId } : null,
+      setCoverForTrack: jest.fn(),
+    }),
 }));
 jest.mock("expo-router", () => ({ router: { push: jest.fn() } }));
 
@@ -49,7 +51,6 @@ let mockActivities: ActivityItem[] | undefined = [];
 let mockQueryError: Error | null = null;
 let mockFetchStatus: "idle" | "fetching" | "paused" = "idle";
 let mockIsLoading = false;
-let mockMutationActivities: ActivityItem[] = [];
 let mockCurrentTrackId: string | null = null;
 const mockStored = new Map<string, string>();
 
@@ -104,6 +105,27 @@ async function renderActivity(queryClient = client()) {
   return { ...rendered, queryClient };
 }
 
+async function renderActivityMutations(queryClient = client()) {
+  const rendered = await renderHook(
+    () => ({
+      activity: useActivity(),
+      create: useCreateDJ(),
+      update: useUpdateDJ(),
+      cover: useRegenerateCover(),
+    }),
+    { wrapper: wrapper(queryClient) },
+  );
+  return { ...rendered, queryClient };
+}
+
+async function cleanupMutationHarness(
+  rendered: Awaited<ReturnType<typeof renderActivityMutations>>,
+) {
+  await rendered.unmount();
+  const cache = rendered.queryClient.getMutationCache();
+  cache.getAll().forEach((mutation) => cache.remove(mutation));
+}
+
 function receiptKey(userId: string) {
   return `activity-receipts.${userId}`;
 }
@@ -118,9 +140,7 @@ beforeEach(() => {
   mockQueryError = null;
   mockFetchStatus = "idle";
   mockIsLoading = false;
-  mockMutationActivities = [];
   mockCurrentTrackId = null;
-
   jest.mocked(useCurrentUser).mockImplementation(
     () => (mockUserId ? ({ id: mockUserId } as never) : null),
   );
@@ -142,9 +162,6 @@ beforeEach(() => {
         fetchStatus: mockFetchStatus,
         refetch: mockRefetch,
       }) as never,
-  );
-  jest.mocked(useSessionActivities).mockImplementation(
-    () => mockMutationActivities,
   );
   jest.mocked(secureStorage.getItem).mockImplementation(async (key) => {
     return mockStored.get(key) ?? null;
@@ -169,53 +186,80 @@ test("throws a clear error outside ActivityProvider", async () => {
 });
 
 test("merges mutation activity and announces each kind-specific terminal result once", async () => {
-  mockMutationActivities = [
-    activity("mutation:create-dj:1", "ready", {
-      source: "mutation",
-      kind: "create-dj",
-      title: "Luna",
-      djId: "dj-luna",
-      trackId: null,
-    }),
-  ];
+  jest.mocked(supabase.functions.invoke).mockResolvedValue({
+    data: { djId: "dj-luna", avatarReady: true },
+    error: null,
+  } as never);
   const queryClient = client();
   const invalidate = jest
     .spyOn(queryClient, "invalidateQueries")
     .mockResolvedValue(undefined);
-  const rendered = await renderActivity(queryClient);
+  const rendered = await renderActivityMutations(queryClient);
+
+  await act(async () => {
+    await rendered.result.current.create.mutateAsync({
+      name: "Luna",
+      genres: ["Ambient"],
+      moods: ["Focus"],
+      energy: 5,
+      isInstrumental: true,
+    });
+  });
 
   await waitFor(() =>
     expect(mockToastInfo).toHaveBeenCalledWith("Luna is ready"),
   );
-  expect(rendered.result.current.items.map(({ id }) => id)).toContain(
-    "mutation:create-dj:1",
+  expect(rendered.result.current.activity.items).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        source: "mutation",
+        kind: "create-dj",
+        status: "ready",
+        djId: "dj-luna",
+      }),
+    ]),
   );
   expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.djs.all });
 
   await rendered.rerender(undefined);
   expect(mockToastInfo).toHaveBeenCalledTimes(1);
+  await cleanupMutationHarness(rendered);
 });
 
 test("uses a warning for portrait partial success and never presents raw mutation errors", async () => {
-  mockMutationActivities = [
-    activity("mutation:update-dj:2", "ready", {
-      source: "mutation",
-      kind: "update-dj",
-      title: "Luna",
+  jest.mocked(supabase.functions.invoke).mockImplementation(async (name) => {
+    if (name === "update-dj") {
+      return {
+        data: { djId: "dj-luna", avatarUrl: null },
+        error: null,
+      } as never;
+    }
+    return {
+      data: null,
+      error: new Error("raw secret provider failure"),
+    } as never;
+  });
+  const rendered = await renderActivityMutations();
+
+  await act(async () => {
+    await rendered.result.current.update.mutateAsync({
       djId: "dj-luna",
-      detail: "portraitUnavailable",
-    }),
-    activity("mutation:cover:3", "failed", {
-      source: "mutation",
-      kind: "cover",
-      title: "Glow",
-      djId: null,
-      trackId: null,
-      error: "raw secret provider failure",
-      failureReason: "operationFailed",
-    }),
-  ];
-  await renderActivity();
+      name: "Luna",
+      genres: ["Ambient"],
+      moods: ["Focus"],
+      energy: 5,
+      isInstrumental: true,
+      regenerateAvatar: true,
+    });
+  });
+  await act(async () => {
+    await expect(
+      rendered.result.current.cover.mutateAsync({
+        trackId: "track-glow",
+        title: "Glow",
+      }),
+    ).rejects.toThrow("raw secret provider failure");
+  });
 
   await waitFor(() => expect(mockToastWarning).toHaveBeenCalled());
   expect(mockToastWarning).toHaveBeenCalledWith(
@@ -227,59 +271,98 @@ test("uses a warning for portrait partial success and never presents raw mutatio
     "The operation couldn't be completed.",
   );
   expect(JSON.stringify(mockToastError.mock.calls)).not.toContain("raw secret");
+  await cleanupMutationHarness(rendered);
 });
 
 test("retains mutation notification and seen state across an A to B to A switch", async () => {
-  const completed = activity("mutation:create-dj:4", "ready", {
-    source: "mutation",
-    kind: "create-dj",
-    djId: "dj-luna",
+  jest.mocked(supabase.functions.invoke).mockResolvedValue({
+    data: { djId: "dj-luna", avatarReady: true },
+    error: null,
+  } as never);
+  const rendered = await renderActivityMutations();
+  await act(async () => {
+    await rendered.result.current.create.mutateAsync({
+      name: "Luna",
+      genres: [],
+      moods: [],
+      energy: 5,
+      isInstrumental: true,
+    });
   });
-  mockMutationActivities = [completed];
-  const rendered = await renderActivity();
   await waitFor(() => expect(mockToastInfo).toHaveBeenCalledTimes(1));
-  await act(async () => rendered.result.current.markSeen(completed));
-  await waitFor(() => expect(rendered.result.current.items).toEqual([]));
+  const completed = rendered.result.current.activity.items.find(
+    ({ kind }) => kind === "create-dj",
+  )!;
+  await act(async () => rendered.result.current.activity.markSeen(completed));
+  await waitFor(() => expect(rendered.result.current.activity.items).toEqual([]));
 
   mockUserId = "user-b";
-  mockMutationActivities = [];
   await rendered.rerender(undefined);
   mockUserId = "user-a";
-  mockMutationActivities = [completed];
   await rendered.rerender(undefined);
 
   expect(mockToastInfo).toHaveBeenCalledTimes(1);
-  expect(rendered.result.current.items).toEqual([]);
+  expect(rendered.result.current.activity.items).toEqual([]);
+  await cleanupMutationHarness(rendered);
 });
 
 test("guards mutation destinations and only returns to the current track player", async () => {
-  const pendingCreate = activity("mutation:create-dj:5", "running", {
-    source: "mutation",
-    kind: "create-dj",
-    djId: null,
-    trackId: null,
-  });
-  const changedCover = activity("mutation:cover:6", "ready", {
-    source: "mutation",
-    kind: "cover",
-    djId: null,
-    trackId: "track-old",
-  });
+  let finishCreate!: (value: unknown) => void;
+  jest.mocked(supabase.functions.invoke).mockImplementation(
+    (name) =>
+      name === "create-dj"
+        ? (new Promise((resolve) => (finishCreate = resolve)) as never)
+        : Promise.resolve({
+            data: { album_art_url: "https://example.com/glow.png" },
+            error: null,
+          }) as never,
+  );
   mockCurrentTrackId = "track-current";
-  mockMutationActivities = [pendingCreate, changedCover];
-  const rendered = await renderActivity();
-  await waitFor(() => expect(rendered.result.current.items).toHaveLength(2));
+  const rendered = await renderActivityMutations();
+  let createPromise!: Promise<unknown>;
+  await act(async () => {
+    createPromise = rendered.result.current.create.mutateAsync({
+      name: "Luna",
+      genres: [],
+      moods: [],
+      energy: 5,
+      isInstrumental: true,
+    });
+    await Promise.resolve();
+    await rendered.result.current.cover.mutateAsync({
+      trackId: "track-old",
+      title: "Glow",
+    });
+  });
+  await waitFor(() =>
+    expect(rendered.result.current.activity.items).toHaveLength(2),
+  );
+  const pendingCreate = rendered.result.current.activity.items.find(
+    ({ kind }) => kind === "create-dj",
+  )!;
+  const changedCover = rendered.result.current.activity.items.find(
+    ({ kind }) => kind === "cover",
+  )!;
 
-  expect(rendered.result.current.canOpenActivity(pendingCreate)).toBe(false);
-  expect(rendered.result.current.canOpenActivity(changedCover)).toBe(false);
-  await act(async () => rendered.result.current.openActivity(changedCover));
+  expect(rendered.result.current.activity.canOpenActivity(pendingCreate)).toBe(false);
+  expect(rendered.result.current.activity.canOpenActivity(changedCover)).toBe(false);
+  await act(async () => rendered.result.current.activity.openActivity(changedCover));
   expect(router.push).not.toHaveBeenCalled();
 
   mockCurrentTrackId = "track-old";
   await rendered.rerender(undefined);
-  expect(rendered.result.current.canOpenActivity(changedCover)).toBe(true);
-  await act(async () => rendered.result.current.openActivity(changedCover));
+  expect(rendered.result.current.activity.canOpenActivity(changedCover)).toBe(true);
+  await act(async () => rendered.result.current.activity.openActivity(changedCover));
   expect(router.push).toHaveBeenCalledWith("/player");
+
+  await act(async () => {
+    finishCreate({
+      data: { djId: "dj-luna", avatarReady: true },
+      error: null,
+    });
+    await createPromise;
+  });
+  await cleanupMutationHarness(rendered);
 });
 
 test("announces a running-to-ready transition once, refreshes dependents, and never loads the player", async () => {

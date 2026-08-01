@@ -102,18 +102,17 @@ export function normalizeMutationActivities({
   const expiredMutationIds: number[] = [];
 
   for (const state of states) {
+    const terminal = isTerminal(state.status);
+    const settledAtMs = settledAtById.get(state.mutationId) ?? nowMs;
+    if (terminal && nowMs - settledAtMs >= TERMINAL_RETENTION_MS) {
+      expiredMutationIds.push(state.mutationId);
+      continue;
+    }
     if (
       !userId ||
       state.keyUserId !== userId ||
       state.submittedUserId !== userId
     ) {
-      continue;
-    }
-
-    const terminal = isTerminal(state.status);
-    const settledAtMs = settledAtById.get(state.mutationId) ?? nowMs;
-    if (terminal && nowMs - settledAtMs >= TERMINAL_RETENTION_MS) {
-      expiredMutationIds.push(state.mutationId);
       continue;
     }
 

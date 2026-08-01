@@ -1,9 +1,11 @@
 import {
+  defaultScheduler,
+  notifyManager,
   QueryClient,
   QueryClientProvider,
   useMutation,
 } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react-native";
+import { act, renderHook } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 
 import { useCurrentUser } from "@/src/hooks/use-auth";
@@ -17,6 +19,7 @@ import {
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: jest.fn() }));
 
 const BASE_MS = Date.parse("2026-07-29T12:00:00.000Z");
+let currentUserId = "user-a";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -67,15 +70,20 @@ beforeEach(() => {
   jest.useRealTimers();
   jest.spyOn(console, "error").mockImplementation(() => undefined);
   jest.spyOn(Date, "now").mockReturnValue(BASE_MS);
-  jest.mocked(useCurrentUser).mockReturnValue({ id: "user-a" } as never);
+  currentUserId = "user-a";
+  jest.mocked(useCurrentUser).mockImplementation(
+    () => ({ id: currentUserId }) as never,
+  );
+  notifyManager.setScheduler((callback) => callback());
 });
 
 afterEach(() => {
+  notifyManager.setScheduler(defaultScheduler);
   jest.restoreAllMocks();
   jest.useRealTimers();
 });
 
-test("keeps observing an in-flight create after its origin unmounts and reports the returned destination", async () => {
+test("ticks running to slow and removes terminal activity at the exact settlement retention boundary", async () => {
   const queryClient = client();
   const request = deferred<{ djId: string; avatarReady: boolean }>();
   const origin = await renderHook(
@@ -91,36 +99,123 @@ test("keeps observing an in-flight create after its origin unmounts and reports 
   const observer = await renderHook(() => useSessionActivities(), {
     wrapper: wrapper(queryClient),
   });
-
-  act(() => origin.result.current.mutate({ name: "Luna" }));
-  await waitFor(() =>
-    expect(observer.result.current).toEqual([
-      expect.objectContaining({
-        source: "mutation",
-        kind: "create-dj",
-        status: "running",
-        title: "Luna",
-        createdAt: "2026-07-29T12:00:00.000Z",
-        updatedAt: "2026-07-29T12:00:00.000Z",
-      }),
-    ]),
+  jest.restoreAllMocks();
+  jest.useFakeTimers().setSystemTime(BASE_MS);
+  jest.spyOn(console, "error").mockImplementation(() => undefined);
+  jest.mocked(useCurrentUser).mockImplementation(
+    () => ({ id: currentUserId }) as never,
   );
+
+  let mutationPromise!: Promise<{ djId: string; avatarReady: boolean }>;
+  await act(async () => {
+    mutationPromise = origin.result.current.mutateAsync({ name: "Luna" });
+    await Promise.resolve();
+  });
+  expect(observer.result.current).toEqual([
+    expect.objectContaining({
+      source: "mutation",
+      kind: "create-dj",
+      status: "running",
+      title: "Luna",
+      createdAt: "2026-07-29T12:00:00.000Z",
+      updatedAt: "2026-07-29T12:00:00.000Z",
+    }),
+  ]);
 
   await origin.unmount();
+  await act(() => {
+    jest.advanceTimersByTime(30_000);
+  });
+  expect(observer.result.current[0]).toEqual(
+    expect.objectContaining({ status: "slow" }),
+  );
+
   await act(async () => {
     request.resolve({ djId: "dj-luna", avatarReady: true });
-    await request.promise;
+    await mutationPromise;
   });
-  await waitFor(() =>
-    expect(observer.result.current[0]).toEqual(
-      expect.objectContaining({ status: "ready", djId: "dj-luna" }),
-    ),
+  const settledAt = Date.now();
+  expect(observer.result.current[0]).toEqual(
+    expect.objectContaining({
+      status: "ready",
+      djId: "dj-luna",
+      updatedAt: new Date(settledAt).toISOString(),
+    }),
   );
-  act(() => {
-    const cache = queryClient.getMutationCache();
-    cache.getAll().forEach((mutation) => cache.remove(mutation));
+
+  await act(() => {
+    jest.advanceTimersByTime(5 * 60_000 - 1);
   });
-  await waitFor(() => expect(observer.result.current).toEqual([]));
+  expect(observer.result.current).toHaveLength(1);
+  expect(queryClient.getMutationCache().getAll()).toHaveLength(1);
+
+  await act(() => {
+    jest.advanceTimersByTime(1);
+  });
+  expect(observer.result.current).toEqual([]);
+  expect(queryClient.getMutationCache().getAll()).toHaveLength(0);
+
+  await act(() => {
+    jest.advanceTimersByTime(1_000);
+  });
+  expect(observer.result.current).toEqual([]);
+  expect(queryClient.getMutationCache().getAll()).toHaveLength(0);
+  await observer.unmount();
+});
+
+test("expires a settled A mutation while B is active and stops its clock after cleanup", async () => {
+  const queryClient = client();
+  const origin = await renderHook(
+    () =>
+      useMutation({
+        mutationKey: activityMutationKeys.createDj("user-a"),
+        gcTime: Infinity,
+        mutationFn: async (_variables: { name: string }) => ({
+          djId: "dj-luna",
+          avatarReady: true,
+        }),
+        onMutate: () => ({ submittedUserId: "user-a" }),
+      }),
+    { wrapper: wrapper(queryClient) },
+  );
+  const observer = await renderHook(() => useSessionActivities(), {
+    wrapper: wrapper(queryClient),
+  });
+  jest.restoreAllMocks();
+  jest.useFakeTimers().setSystemTime(BASE_MS);
+  jest.spyOn(console, "error").mockImplementation(() => undefined);
+  jest.mocked(useCurrentUser).mockImplementation(
+    () => ({ id: currentUserId }) as never,
+  );
+  const setIntervalSpy = jest.spyOn(globalThis, "setInterval");
+  const clearIntervalSpy = jest.spyOn(globalThis, "clearInterval");
+
+  await act(async () => {
+    await origin.result.current.mutateAsync({ name: "Luna" });
+  });
+  expect(observer.result.current[0]?.status).toBe("ready");
+  const clockTimer = setIntervalSpy.mock.calls.find(
+    (call: Parameters<typeof setInterval>) => call[1] === 1_000,
+  );
+  const clockHandle = setIntervalSpy.mock.results[
+    setIntervalSpy.mock.calls.indexOf(clockTimer!)
+  ]?.value;
+  expect(clockHandle).toBeDefined();
+
+  currentUserId = "user-b";
+  await observer.rerender(undefined);
+  expect(observer.result.current).toEqual([]);
+  await act(() => {
+    jest.advanceTimersByTime(5 * 60_000 - 1);
+  });
+  expect(queryClient.getMutationCache().getAll()).toHaveLength(1);
+  await act(() => {
+    jest.advanceTimersByTime(1);
+  });
+  expect(queryClient.getMutationCache().getAll()).toHaveLength(0);
+  expect(clearIntervalSpy).toHaveBeenCalledWith(clockHandle);
+
+  await origin.unmount();
   await observer.unmount();
 });
 
@@ -197,6 +292,23 @@ test("retains terminal activity until the exact five-minute settlement boundary"
   expect(before.items[0].updatedAt).toBe(new Date(settledAt).toISOString());
   expect(boundary).toEqual({ items: [], expiredMutationIds: [7] });
   expect(settled).toEqual(new Map([[7, settledAt]]));
+});
+
+test("reports expired mutations independently of the current presentation user", () => {
+  const settledAt = BASE_MS;
+  const result = normalizeMutationActivities({
+    states: [
+      state({
+        status: "success",
+        data: { djId: "dj-luna", avatarReady: true },
+      }),
+    ],
+    userId: "user-b",
+    nowMs: settledAt + 5 * 60_000,
+    settledAtById: new Map([[7, settledAt]]),
+  });
+
+  expect(result).toEqual({ items: [], expiredMutationIds: [7] });
 });
 
 test("normalizes portrait partial success and unknown errors without exposing them as presentation copy", () => {

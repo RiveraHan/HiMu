@@ -1,9 +1,15 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook } from "@testing-library/react-native";
+import {
+  defaultScheduler,
+  notifyManager,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 
 import { supabase } from "@/src/api/supabase";
 import { activityMutationKeys } from "@/src/activity/mutation-keys";
+import { useSessionActivities } from "@/src/activity/use-session-activities";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useCreateDJ } from "../use-create-dj";
 import { useRegenerateCover } from "../use-home";
@@ -50,9 +56,11 @@ beforeEach(() => {
   jest.mocked(useCurrentUser).mockImplementation(
     () => ({ id: currentUserId }) as never,
   );
+  notifyManager.setScheduler((callback) => callback());
 });
 
 afterEach(() => {
+  notifyManager.setScheduler(defaultScheduler);
   jest.restoreAllMocks();
 });
 
@@ -62,7 +70,9 @@ test("stores create identity, variables, submission context, and returned DJ ID"
     error: null,
   } as never);
   const queryClient = client();
-  jest.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+  jest
+    .spyOn(queryClient, "invalidateQueries")
+    .mockReturnValue(new Promise(() => undefined));
   const { result } = await renderHook(() => useCreateDJ(), {
     wrapper: wrapper(queryClient),
   });
@@ -89,6 +99,7 @@ test("stores create identity, variables, submission context, and returned DJ ID"
     djId: "dj-luna",
     avatarReady: true,
   });
+  expect(mutation.state.status).toBe("success");
 });
 
 test("stores update identity and returned DJ target", async () => {
@@ -97,7 +108,9 @@ test("stores update identity and returned DJ target", async () => {
     error: null,
   } as never);
   const queryClient = client();
-  jest.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+  jest
+    .spyOn(queryClient, "invalidateQueries")
+    .mockReturnValue(new Promise(() => undefined));
   const { result } = await renderHook(() => useUpdateDJ(), {
     wrapper: wrapper(queryClient),
   });
@@ -123,6 +136,7 @@ test("stores update identity and returned DJ target", async () => {
   expect(mutation.state.context).toEqual({ submittedUserId: "user-a" });
   expect(mutation.state.variables).toEqual(variables);
   expect(mutation.state.data).toEqual({ djId: "dj-luna", avatarUrl: null });
+  expect(mutation.state.status).toBe("success");
 });
 
 test("stores cover title and returns the track target without awaiting invalidation", async () => {
@@ -172,25 +186,57 @@ test("keeps an in-flight A mutation keyed and contextualized as A after the hook
   const rendered = await renderHook(() => useCreateDJ(), {
     wrapper: wrapper(queryClient),
   });
+  const observer = await renderHook(() => useSessionActivities(), {
+    wrapper: wrapper(queryClient),
+  });
 
-  act(() => rendered.result.current.mutate({
-    name: "Luna",
-    genres: [],
-    moods: [],
-    energy: 5,
-    isInstrumental: true,
-  }));
-  await act(async () => Promise.resolve());
+  let mutationPromise!: Promise<unknown>;
+  await act(async () => {
+    mutationPromise = rendered.result.current.mutateAsync({
+      name: "Luna",
+      genres: [],
+      moods: [],
+      energy: 5,
+      isInstrumental: true,
+    });
+    await Promise.resolve();
+  });
+  expect(observer.result.current).toEqual([
+    expect.objectContaining({ kind: "create-dj", status: "running" }),
+  ]);
+
   currentUserId = "user-b";
   await rendered.rerender(undefined);
+  await observer.rerender(undefined);
   const mutation = mutationFor(queryClient, activityMutationKeys.createDjRoot);
 
   expect(mutation.options.mutationKey).toEqual(
     activityMutationKeys.createDj("user-a"),
   );
   expect(mutation.state.context).toEqual({ submittedUserId: "user-a" });
+  expect(observer.result.current).toEqual([]);
 
   await act(async () => {
     finish({ data: { djId: "dj-luna", avatarReady: true }, error: null });
+    await mutationPromise;
   });
+  expect(observer.result.current).toEqual([]);
+
+  currentUserId = "user-a";
+  await observer.rerender(undefined);
+  expect(observer.result.current).toEqual([
+    expect.objectContaining({
+      kind: "create-dj",
+      status: "ready",
+      djId: "dj-luna",
+    }),
+  ]);
+
+  act(() => {
+    const cache = queryClient.getMutationCache();
+    cache.getAll().forEach((cachedMutation) => cache.remove(cachedMutation));
+  });
+  await waitFor(() => expect(observer.result.current).toEqual([]));
+  await observer.unmount();
+  await rendered.unmount();
 });
