@@ -10,7 +10,6 @@
 import { streamUrl } from "../_shared/audius.ts";
 import { generateCoverImage } from "../_shared/cover.ts";
 import { json } from "../_shared/http.ts";
-import { countDailyGenerations, DAILY_GENERATION_LIMIT } from "../_shared/quota.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun, replicateText } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
@@ -18,6 +17,9 @@ import { admin } from "../_shared/supabase.ts";
 import { pickAudiusDrop } from "./audius-drop.ts";
 import {
   handleGenerateMixRequest,
+  mapFinalizedGeneratedMix,
+  mapManualJobReservation,
+  mapUpdatedRow,
   runGeneration,
 } from "./generation-orchestration.ts";
 
@@ -108,10 +110,78 @@ async function buildSeasoning(
 
 const generationDependencies = {
   updateJob: async (jobId: string, patch: Record<string, unknown>) => {
-    await admin
+    const { error } = await admin
       .from("generation_jobs")
       .update(patch)
       .eq("id", jobId);
+    if (error) throw error;
+  },
+  markJobGenerating: async (jobId: string, startedAt: string) => {
+    const { data, error } = await admin
+      .from("generation_jobs")
+      .update({ status: "generating", error: null, updated_at: startedAt })
+      .eq("id", jobId)
+      .eq("status", "queued")
+      .select("id")
+      .maybeSingle();
+    return mapUpdatedRow(data, error);
+  },
+  finalizeGeneratedMix: async (input: {
+    jobId: string;
+    trackId: string;
+    title: string;
+    artist: string;
+    audioUrl: string;
+    albumArtUrl: string | null;
+    genre: string | null;
+    moodTags: string[] | null;
+    duration: number;
+    djId: string;
+    caption: string | null;
+    captionAudioUrl: string | null;
+    finishedAt: string;
+  }) => {
+    const { data, error } = await admin
+      .rpc("finalize_generated_mix", {
+        p_job_id: input.jobId,
+        p_track_id: input.trackId,
+        p_title: input.title,
+        p_artist: input.artist,
+        p_audio_url: input.audioUrl,
+        p_album_art_url: input.albumArtUrl,
+        p_genre: input.genre,
+        p_mood_tags: input.moodTags,
+        p_duration: input.duration,
+        p_dj_id: input.djId,
+        p_caption: input.caption,
+        p_caption_audio_url: input.captionAudioUrl,
+        p_finished_at: input.finishedAt,
+      })
+      .single();
+    return mapFinalizedGeneratedMix(
+      data,
+      error,
+      input.jobId,
+      input.trackId,
+    );
+  },
+  failJobIfActive: async (
+    jobId: string,
+    errorMessage: string,
+    failedAt: string,
+  ) => {
+    const { data, error } = await admin
+      .from("generation_jobs")
+      .update({
+        status: "failed",
+        error: errorMessage,
+        updated_at: failedAt,
+      })
+      .eq("id", jobId)
+      .in("status", ["queued", "generating"])
+      .select("id")
+      .maybeSingle();
+    return mapUpdatedRow(data, error);
   },
   findAudiusTrack: async (externalId: string) => {
     const { data } = await admin
@@ -131,15 +201,6 @@ const generationDependencies = {
     if (error || !data) throw error ?? new Error("materialize failed");
     return data;
   },
-  insertGeneratedTrack: async (values: Record<string, unknown>) => {
-    const { data, error } = await admin
-      .from("tracks")
-      .insert(values)
-      .select()
-      .single();
-    if (error || !data) throw error ?? new Error("could not insert track");
-    return data;
-  },
   pickAudiusDrop,
   replicateRun,
   replicateText,
@@ -155,6 +216,7 @@ const generationDependencies = {
     console.error("[generate-mix] generation", event);
   },
   now: () => new Date().toISOString(),
+  randomId: () => crypto.randomUUID(),
 };
 
 serveAuthed(async (req, user) => {
@@ -181,7 +243,7 @@ serveAuthed(async (req, user) => {
       return data;
     },
     requeueDailyJob: async (jobId, updatedAt) => {
-      await admin
+      const { error } = await admin
         .from("generation_jobs")
         .update({
           status: "queued",
@@ -189,6 +251,7 @@ serveAuthed(async (req, user) => {
           updated_at: updatedAt,
         })
         .eq("id", jobId);
+      if (error) throw error;
     },
     createDailyJob: async ({ userId, djId, dropDate }) => {
       const { data, error } = await admin
@@ -203,20 +266,47 @@ serveAuthed(async (req, user) => {
         .single();
       return { job: data, error };
     },
-    countDailyGenerations,
-    dailyGenerationLimit: DAILY_GENERATION_LIMIT,
-    createManualJob: async ({ userId, djId, lyrics }) => {
+    findActiveManualJob: async (userId, djId) => {
       const { data, error } = await admin
         .from("generation_jobs")
-        .insert({
-          user_id: userId,
-          dj_id: djId,
-          prompt: lyrics,
-          status: "queued",
+        .select("id, status, updated_at")
+        .eq("user_id", userId)
+        .eq("dj_id", djId)
+        .is("drop_date", null)
+        .in("status", ["queued", "generating"])
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data
+        ? { id: data.id, status: data.status, updatedAt: data.updated_at }
+        : null;
+    },
+    failStaleManualJob: async (jobId, observedUpdatedAt, failedAt) => {
+      const { data, error } = await admin
+        .from("generation_jobs")
+        .update({
+          status: "failed",
+          error: "generation_stalled",
+          updated_at: failedAt,
         })
-        .select()
-        .single();
-      return { job: data, error };
+        .eq("id", jobId)
+        .eq("updated_at", observedUpdatedAt)
+        .in("status", ["queued", "generating"])
+        .select("id")
+        .maybeSingle();
+      return mapUpdatedRow(data, error);
+    },
+    reserveManualJob: async ({ userId, djId, lyrics }) => {
+      const { data, error } = await admin.rpc(
+        "reserve_manual_generation_job",
+        {
+          p_user_id: userId,
+          p_dj_id: djId,
+          p_prompt: lyrics,
+        },
+      );
+      return mapManualJobReservation(data, error);
     },
     runGeneration: (input) => runGeneration(input, generationDependencies),
     waitUntil: (promise) => EdgeRuntime.waitUntil(promise),

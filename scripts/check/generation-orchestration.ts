@@ -14,11 +14,76 @@ async function main() {
   const {
     downloadProviderMedia,
     handleGenerateMixRequest,
+    mapFinalizedGeneratedMix,
+    mapManualJobReservation,
+    mapUpdatedRow,
     runGeneration,
   } = module;
   assert.equal(typeof downloadProviderMedia, "function");
   assert.equal(typeof handleGenerateMixRequest, "function");
+  assert.equal(typeof mapFinalizedGeneratedMix, "function");
+  assert.equal(typeof mapManualJobReservation, "function");
+  assert.equal(typeof mapUpdatedRow, "function");
   assert.equal(typeof runGeneration, "function");
+
+  const databaseError = new Error("database failed");
+  assert.throws(
+    () => mapManualJobReservation(null, databaseError),
+    /database failed/,
+  );
+  assert.deepEqual(
+    mapManualJobReservation(
+      [{ outcome: "created", job_id: "job-1", daily_limit: 10 }],
+      null,
+    ),
+    { outcome: "created", jobId: "job-1", dailyLimit: 10 },
+  );
+  for (const malformed of [
+    [],
+    [
+      { outcome: "created", job_id: "job-1", daily_limit: 10 },
+      { outcome: "quota", job_id: null, daily_limit: 10 },
+    ],
+    [{ outcome: "unknown", job_id: "job-1", daily_limit: 10 }],
+    [{ outcome: "created", job_id: null, daily_limit: 10 }],
+  ]) {
+    assert.throws(
+      () => mapManualJobReservation(malformed, null),
+      /reservation/i,
+    );
+  }
+  assert.throws(() => mapUpdatedRow(null, databaseError), /database failed/);
+  assert.equal(mapUpdatedRow({ id: "job-1" }, null), true);
+  assert.equal(mapUpdatedRow(null, null), false);
+  assert.throws(
+    () =>
+      mapFinalizedGeneratedMix(
+        null,
+        databaseError,
+        "job-1",
+        "track-1",
+      ),
+    /database failed/,
+  );
+  assert.deepEqual(
+    mapFinalizedGeneratedMix(
+      { job_id: "job-1", track_id: "track-1", track_title: "Title" },
+      null,
+      "job-1",
+      "track-1",
+    ),
+    { id: "track-1", title: "Title" },
+  );
+  assert.throws(
+    () =>
+      mapFinalizedGeneratedMix(
+        { job_id: "other", track_id: "track-1", track_title: "Title" },
+        null,
+        "job-1",
+        "track-1",
+      ),
+    /finalization/i,
+  );
 
   const cfg = {
     dj_id: "dj-1",
@@ -59,13 +124,24 @@ async function main() {
         calls.push({ name: "createDailyJob" });
         return { job: { id: "daily-new", status: "queued" }, error: null };
       },
-      countDailyGenerations: async () => {
-        calls.push({ name: "countDailyGenerations" });
-        return 0;
+      findActiveManualJob: async () => {
+        calls.push({ name: "findActiveManualJob" });
+        return null;
       },
-      createManualJob: async (input: unknown) => {
-        calls.push({ name: "createManualJob", value: input });
-        return { job: { id: "manual-new", status: "queued" }, error: null };
+      failStaleManualJob: async (
+        jobId: string,
+        observedUpdatedAt: string,
+        failedAt: string,
+      ) => {
+        calls.push({
+          name: "failStaleManualJob",
+          value: { jobId, observedUpdatedAt, failedAt },
+        });
+        return true;
+      },
+      reserveManualJob: async (input: unknown) => {
+        calls.push({ name: "reserveManualJob", value: input });
+        return { outcome: "created", jobId: "manual-new", dailyLimit: 10 };
       },
       runGeneration: async (input: unknown) => {
         calls.push({ name: "runGeneration", value: input });
@@ -74,7 +150,7 @@ async function main() {
         calls.push({ name: "waitUntil" });
         void promise;
       },
-      now: () => "2026-07-22T12:00:00.000Z",
+      now: () => "2026-07-29T12:00:00.000Z",
       ...overrides,
     };
     return { calls, deps };
@@ -105,6 +181,178 @@ async function main() {
     assert.deepEqual(response, { status: 200, body: { jobId: "manual-new" } });
     const scheduled = calls.find((call) => call.name === "runGeneration");
     assert.equal((scheduled?.value as { language?: string })?.language, "en");
+    assert.deepEqual(
+      calls
+        .filter(({ name }) =>
+          ["reserveManualJob", "buildSeasoning", "runGeneration"].includes(name)
+        )
+        .map(({ name }) => name),
+      ["reserveManualJob", "buildSeasoning", "runGeneration"],
+    );
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      findActiveManualJob: async () => {
+        calls.push({ name: "findActiveManualJob" });
+        return {
+          id: "manual-active",
+          status: "generating",
+          updatedAt: "2026-07-29T11:59:00.000Z",
+        };
+      },
+      now: () => "2026-07-29T12:00:00.000Z",
+    });
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "manual-active" },
+    });
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+    assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
+  }
+
+  await assert.rejects(
+    () => {
+      const { deps } = requestDeps({
+        findActiveManualJob: async () => {
+          throw new Error("active lookup failed");
+        },
+      });
+      return handleGenerateMixRequest(
+        { djId: "dj-1", language: "en" },
+        "user-1",
+        deps,
+      );
+    },
+    /active lookup failed/,
+  );
+
+  {
+    let lookup = 0;
+    const { calls, deps } = requestDeps({
+      findActiveManualJob: async () => {
+        calls.push({ name: "findActiveManualJob" });
+        lookup += 1;
+        return lookup === 1
+          ? {
+            id: "manual-stale",
+            status: "queued",
+            updatedAt: "2026-07-29T11:44:00.000Z",
+          }
+          : null;
+      },
+      now: () => "2026-07-29T12:00:00.000Z",
+    });
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, { status: 200, body: { jobId: "manual-new" } });
+    assert.deepEqual(
+      calls.find(({ name }) => name === "failStaleManualJob")?.value,
+      {
+        jobId: "manual-stale",
+        observedUpdatedAt: "2026-07-29T11:44:00.000Z",
+        failedAt: "2026-07-29T12:00:00.000Z",
+      },
+    );
+    assert.equal(
+      calls.filter(({ name }) => name === "reserveManualJob").length,
+      1,
+    );
+    assert.equal(calls.filter(({ name }) => name === "runGeneration").length, 1);
+  }
+
+  {
+    let lookup = 0;
+    const { calls, deps } = requestDeps({
+      findActiveManualJob: async () => {
+        calls.push({ name: "findActiveManualJob" });
+        lookup += 1;
+        return lookup === 1
+          ? {
+            id: "manual-stale",
+            status: "queued",
+            updatedAt: "2026-07-29T11:44:00.000Z",
+          }
+          : {
+            id: "manual-refreshed",
+            status: "generating",
+            updatedAt: "2026-07-29T11:59:30.000Z",
+          };
+      },
+      failStaleManualJob: async () => {
+        calls.push({ name: "failStaleManualJob" });
+        return false;
+      },
+    });
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "manual-refreshed" },
+    });
+    assert.equal(
+      calls.filter(({ name }) => name === "findActiveManualJob").length,
+      2,
+    );
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      reserveManualJob: async () => ({
+        outcome: "quota",
+        jobId: null,
+        dailyLimit: 10,
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 429,
+      body: {
+        error: "daily limit of 10 mixes reached",
+        code: "daily_quota_reached",
+      },
+    });
+    assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      reserveManualJob: async () => ({
+        outcome: "existing",
+        jobId: "manual-race-winner",
+        dailyLimit: 10,
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "manual-race-winner" },
+    });
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+    assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
   }
 
   {
@@ -180,6 +428,9 @@ async function main() {
   type ModelEvent = { role: string; language: string };
   function runDeps(overrides: Record<string, unknown> = {}) {
     const updates: Array<Record<string, unknown>> = [];
+    const marks: Array<{ jobId: string; startedAt: string }> = [];
+    const finalizations: Array<Record<string, unknown>> = [];
+    const failures: Array<{ jobId: string; error: string; failedAt: string }> = [];
     const puts: Array<{ key: string; bytes: number[]; contentType: string }> = [];
     const deletes: string[][] = [];
     const modelEvents: ModelEvent[] = [];
@@ -190,15 +441,23 @@ async function main() {
       updateJob: async (_jobId: string, patch: Record<string, unknown>) => {
         updates.push(patch);
       },
+      markJobGenerating: async (jobId: string, startedAt: string) => {
+        marks.push({ jobId, startedAt });
+        return true;
+      },
+      finalizeGeneratedMix: async (input: Record<string, unknown>) => {
+        finalizations.push(input);
+        return { id: String(input.trackId), title: String(input.title) };
+      },
+      failJobIfActive: async (jobId: string, error: string, failedAt: string) => {
+        failures.push({ jobId, error, failedAt });
+        return true;
+      },
       findAudiusTrack: async () => null,
       insertAudiusTrack: async (track: Record<string, unknown>) => {
         insertedAudius.push(track);
         return { id: "audius-track" };
       },
-      insertGeneratedTrack: async (track: Record<string, unknown>) => ({
-        id: "generated-track",
-        ...track,
-      }),
       pickAudiusDrop: async () => null,
       replicateRun: async (endpoint: string, body: any) => {
         replicateInputs.push({ endpoint, body });
@@ -222,6 +481,7 @@ async function main() {
       logModel: (event: ModelEvent) => modelEvents.push(event),
       logError: (...args: unknown[]) => errorEvents.push(args),
       now: () => "2026-07-22T12:00:00.000Z",
+      randomId: () => "generated-track",
       random: () => 0,
       ...overrides,
     };
@@ -229,12 +489,116 @@ async function main() {
       deletes,
       deps,
       errorEvents,
+      failures,
+      finalizations,
       insertedAudius,
+      marks,
       modelEvents,
       puts,
       replicateInputs,
       updates,
     };
+  }
+
+  {
+    const state = runDeps({
+      markJobGenerating: async () => false,
+    });
+    await runGeneration(
+      {
+        jobId: "job-cas-lost",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.deepEqual(state.replicateInputs, []);
+    assert.deepEqual(state.puts, []);
+    assert.deepEqual(state.finalizations, []);
+    assert.deepEqual(state.failures, []);
+    assert.deepEqual(state.deletes, []);
+  }
+
+  {
+    const state = runDeps({
+      finalizeGeneratedMix: async () => {
+        throw new Error("finalize failed");
+      },
+    });
+    await runGeneration(
+      {
+        jobId: "job-finalize-failure",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.equal(state.failures.length, 1);
+    assert.deepEqual(state.deletes, [[
+      "tracks/generated/job-finalize-failure.mp3",
+      "covers/generated/job-finalize-failure.jpg",
+      "captions/generated/job-finalize-failure.mp3",
+    ]]);
+  }
+
+  for (const failJobIfActive of [
+    async () => false,
+    async () => {
+      throw new Error("failure transition failed");
+    },
+  ]) {
+    const state = runDeps({
+      finalizeGeneratedMix: async () => {
+        throw new Error("finalize failed");
+      },
+      failJobIfActive,
+    });
+    await runGeneration(
+      {
+        jobId: "job-terminal-ambiguous",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.deepEqual(state.deletes, []);
+    assert.ok(
+      state.errorEvents.some(([event]) =>
+        ["terminal_ambiguous", "job_failure_persist"].includes(
+          String((event as { stage?: string })?.stage),
+        )
+      ),
+    );
+  }
+
+  {
+    const state = runDeps({
+      markJobGenerating: async () => {
+        throw new Error("generating transition failed");
+      },
+    });
+    await assert.rejects(
+      () =>
+        runGeneration(
+          {
+            jobId: "job-generating-error",
+            cfg,
+            lyrics: null,
+            seasoning: [],
+            language: "en",
+          },
+          state.deps,
+        ),
+      /generating transition failed/,
+    );
+    assert.deepEqual(state.failures, []);
+    assert.deepEqual(state.deletes, []);
   }
 
   for (const badMusicResponse of [
@@ -254,7 +618,7 @@ async function main() {
       },
       state.deps,
     );
-    assert.equal(state.updates.at(-1)?.status, "failed");
+    assert.equal(state.failures.length, 1);
     assert.deepEqual(state.deletes, [[
       "tracks/generated/job-music-failure.mp3",
       "covers/generated/job-music-failure.jpg",
@@ -282,10 +646,9 @@ async function main() {
       },
       state.deps,
     );
-    const ready = state.updates.at(-1);
-    assert.equal(ready?.status, "ready");
+    const ready = state.finalizations.at(-1);
     assert.equal(ready?.caption, "Turn it up [scream], then [laugh].");
-    assert.equal(ready?.caption_audio_url, null);
+    assert.equal(ready?.captionAudioUrl, null);
     assert.deepEqual(state.deletes, []);
     assert.deepEqual(
       state.errorEvents,
