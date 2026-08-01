@@ -1,6 +1,7 @@
 import { act, render } from "@testing-library/react-native";
-import { View } from "react-native";
+import { StyleSheet as RNStyleSheet, View } from "react-native";
 
+import { Button } from "@/src/components/Button";
 import { ConfirmDialogHost } from "@/src/components/ConfirmDialog";
 import { MiniPlayer } from "@/src/components/MiniPlayer";
 import { PlaylistCard } from "@/src/components/PlaylistCard";
@@ -116,5 +117,29 @@ describe("shared component translations", () => {
 
     expect(screen.getByText("Hazlo")).toBeTruthy();
     expect(screen.getByText("Nunca")).toBeTruthy();
+  });
+
+  it("exposes all Button variants as named controls with disabled and busy state", async () => {
+    const screen = await render(
+      <View>
+        <Button label="Principal" disabled />
+        <Button variant="glass" label="Vidrio" loading loadingLabel="Cargando" />
+        <Button variant="ghost" label="Fantasma" />
+      </View>,
+    );
+
+    expect(screen.getByRole("button", { name: "Principal" })).toHaveProp(
+      "accessibilityState",
+      { disabled: true, busy: false },
+    );
+    expect(screen.getByRole("button", { name: "Cargando" })).toHaveProp(
+      "accessibilityState",
+      { disabled: true, busy: true },
+    );
+    const ghost = screen.getByRole("button", { name: "Fantasma" });
+    expect(ghost).toHaveProp("accessibilityState", { disabled: false, busy: false });
+    expect(RNStyleSheet.flatten(ghost.props.style)).toEqual(
+      expect.objectContaining({ minHeight: 44, minWidth: 44 }),
+    );
   });
 });
