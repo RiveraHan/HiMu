@@ -561,6 +561,78 @@ test("preserves each user's retry flight across account switches", async () => {
   expect(rendered.result.current.retryingIds.has(failed.id)).toBe(false);
 });
 
+test("an older retry cannot clear a newer same-item flight", async () => {
+  const invokeResolvers: ((value: unknown) => void)[] = [];
+  jest.mocked(supabase.functions.invoke).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        invokeResolvers.push(resolve);
+      }) as never,
+  );
+  const failed = activity("generation:ownership-race", "failed");
+  mockActivities = [failed];
+  const rendered = await renderActivity();
+  await waitFor(() => expect(rendered.result.current.items).toHaveLength(1));
+
+  let older!: Promise<void>;
+  await act(async () => {
+    older = rendered.result.current.retryActivity(failed);
+    await Promise.resolve();
+  });
+
+  const originalMapHas = Map.prototype.has;
+  let allowIndependentFlight = true;
+  const mapHas = jest
+    .spyOn(Map.prototype, "has")
+    .mockImplementation(function (this: Map<unknown, unknown>, key: unknown) {
+      if (allowIndependentFlight && key === failed.id) {
+        allowIndependentFlight = false;
+        return false;
+      }
+      return originalMapHas.call(this, key);
+    });
+
+  let newer!: Promise<void>;
+  await act(async () => {
+    newer = rendered.result.current.retryActivity(failed);
+    await Promise.resolve();
+  });
+  mapHas.mockRestore();
+
+  await act(async () => {
+    invokeResolvers[0]({
+      data: { jobId: "ownership-race" },
+      error: null,
+    });
+    await older;
+  });
+  const retryingAfterOlderSettled = rendered.result.current.retryingIds.has(
+    failed.id,
+  );
+
+  let duplicate!: Promise<void>;
+  await act(async () => {
+    duplicate = rendered.result.current.retryActivity(failed);
+    await Promise.resolve();
+  });
+  const invokeCountAfterDuplicate = jest.mocked(supabase.functions.invoke).mock
+    .calls.length;
+
+  await act(async () => {
+    invokeResolvers.slice(1).forEach((resolve) =>
+      resolve({
+        data: { jobId: "ownership-race" },
+        error: null,
+      }),
+    );
+    await Promise.all([newer, duplicate]);
+  });
+
+  expect(retryingAfterOlderSettled).toBe(true);
+  expect(invokeCountAfterDuplicate).toBe(2);
+  expect(rendered.result.current.retryingIds.has(failed.id)).toBe(false);
+});
+
 test("logs bounded raw activity errors but never displays them in a toast", async () => {
   const log = jest.mocked(console.error);
   mockActivities = [activity("generation:failed", "failed")];
