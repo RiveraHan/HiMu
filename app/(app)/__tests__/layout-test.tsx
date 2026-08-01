@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
+import { I18nManager, StyleSheet as RNStyleSheet } from "react-native";
 
 import AppLayout from "@/app/(app)/_layout";
 import i18n from "@/src/i18n";
 
 let mockDiscoverFocused = false;
 let mockWindowWidth = 390;
-let mockIsRTL = false;
+let mockMeasuredTabBarLayout: { width: number; x: number } | null = null;
+const originalIsRTL = Object.getOwnPropertyDescriptor(I18nManager, "isRTL");
 
 jest.mock("expo-router", () => {
   const React = require("react");
@@ -16,20 +18,18 @@ jest.mock("expo-router", () => {
     children: React.ReactNode;
     screenOptions: { tabBarStyle: { end?: "auto" | number; start?: number; width?: number } };
   }) {
-    // BottomTabBar supplies zero logical insets. Mimic Yoga's resolution after
-    // screenOptions override them, then expose the host's physical layout.
-    const tabBarStyle = { start: 0, end: 0, ...screenOptions.tabBarStyle };
-    const width = tabBarStyle.width ?? 0;
-    const start = tabBarStyle.start ?? 0;
-    const x = mockIsRTL ? mockWindowWidth - width - start : start;
-
     return React.createElement(
       View,
       { testID: "tabs", screenOptions },
       React.createElement(View, {
         testID: "rendered-tab-bar",
-        style: tabBarStyle,
-        renderedLayout: { x, width },
+        style: [{ start: 0, end: 0 }, screenOptions.tabBarStyle],
+        onLayout: (event: {
+          nativeEvent: { layout: { width: number; x: number } };
+        }) => {
+          const { width, x } = event.nativeEvent.layout;
+          mockMeasuredTabBarLayout = { width, x };
+        },
       }),
       children,
     );
@@ -90,7 +90,15 @@ describe("App tab layout", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
     mockWindowWidth = 390;
-    mockIsRTL = false;
+    mockMeasuredTabBarLayout = null;
+  });
+
+  afterEach(() => {
+    if (originalIsRTL) {
+      Object.defineProperty(I18nManager, "isRTL", originalIsRTL);
+    } else {
+      delete (I18nManager as { isRTL?: boolean }).isRTL;
+    }
   });
 
   it("keeps the Discover tour target, label, and 44-point icon across focus changes", async () => {
@@ -153,14 +161,26 @@ describe("App tab layout", () => {
     width,
     x,
   ) => {
-    mockIsRTL = isRTL;
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: isRTL,
+    });
     mockWindowWidth = windowWidth;
     const screen = await render(<AppLayout />);
     const tabBar = screen.getByTestId("rendered-tab-bar");
+    const style = RNStyleSheet.flatten(tabBar.props.style);
 
-    expect(tabBar.props.style).toEqual(expect.objectContaining({ width, end: "auto" }));
-    expect(tabBar.props.style.start).toBeCloseTo(x);
-    expect(tabBar.props.renderedLayout.width).toBe(width);
-    expect(tabBar.props.renderedLayout.x).toBeCloseTo(x);
+    expect(style).toEqual(expect.objectContaining({ width, end: "auto" }));
+    expect(style.start).toBeCloseTo(x);
+    expect(I18nManager.isRTL).toBe(isRTL);
+
+    // React's JS test renderer does not run Yoga, so native layout needs an
+    // explicit event. The host remains a real View, as BottomTabBar renders.
+    await act(async () => {
+      fireEvent(tabBar, "layout", {
+        nativeEvent: { layout: { x, y: 0, width, height: 64 } },
+      });
+    });
+    expect(mockMeasuredTabBarLayout).toEqual({ x, width });
   });
 });
