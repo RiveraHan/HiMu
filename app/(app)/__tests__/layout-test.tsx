@@ -6,13 +6,33 @@ import i18n from "@/src/i18n";
 
 let mockDiscoverFocused = false;
 let mockWindowWidth = 390;
+let mockIsRTL = false;
 
 jest.mock("expo-router", () => {
   const React = require("react");
   const { View } = require("react-native");
 
-  function Tabs({ children, screenOptions }: { children: React.ReactNode; screenOptions: object }) {
-    return React.createElement(View, { testID: "tabs", screenOptions }, children);
+  function Tabs({ children, screenOptions }: {
+    children: React.ReactNode;
+    screenOptions: { tabBarStyle: { end?: "auto" | number; start?: number; width?: number } };
+  }) {
+    // BottomTabBar supplies zero logical insets. Mimic Yoga's resolution after
+    // screenOptions override them, then expose the host's physical layout.
+    const tabBarStyle = { start: 0, end: 0, ...screenOptions.tabBarStyle };
+    const width = tabBarStyle.width ?? 0;
+    const start = tabBarStyle.start ?? 0;
+    const x = mockIsRTL ? mockWindowWidth - width - start : start;
+
+    return React.createElement(
+      View,
+      { testID: "tabs", screenOptions },
+      React.createElement(View, {
+        testID: "rendered-tab-bar",
+        style: tabBarStyle,
+        renderedLayout: { x, width },
+      }),
+      children,
+    );
   }
   function TabScreen({
     name,
@@ -69,6 +89,8 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 describe("App tab layout", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
+    mockWindowWidth = 390;
+    mockIsRTL = false;
   });
 
   it("keeps the Discover tour target, label, and 44-point icon across focus changes", async () => {
@@ -117,5 +139,28 @@ describe("App tab layout", () => {
     expect(screen.getByTestId("tabs").props.screenOptions.tabBarStyle).toEqual(
       expect.objectContaining({ width: 720, start: 152, end: "auto" }),
     );
+  });
+
+  it.each([
+    ["LTR phone", false, 390, 343.2, 23.4],
+    ["RTL phone", true, 390, 343.2, 23.4],
+    ["LTR tablet", false, 1024, 720, 152],
+    ["RTL tablet", true, 1024, 720, 152],
+  ])("renders %s with logical insets and a centered physical x position", async (
+    _name,
+    isRTL,
+    windowWidth,
+    width,
+    x,
+  ) => {
+    mockIsRTL = isRTL;
+    mockWindowWidth = windowWidth;
+    const screen = await render(<AppLayout />);
+    const tabBar = screen.getByTestId("rendered-tab-bar");
+
+    expect(tabBar.props.style).toEqual(expect.objectContaining({ width, end: "auto" }));
+    expect(tabBar.props.style.start).toBeCloseTo(x);
+    expect(tabBar.props.renderedLayout.width).toBe(width);
+    expect(tabBar.props.renderedLayout.x).toBeCloseTo(x);
   });
 });
