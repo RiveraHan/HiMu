@@ -1,4 +1,5 @@
 import { common as enCommon } from "./locales/en/common";
+import { activity as enActivity } from "./locales/en/activity";
 import { dj as enDj } from "./locales/en/dj";
 import { discover as enDiscover } from "./locales/en/discover";
 import { home as enHome } from "./locales/en/home";
@@ -7,6 +8,7 @@ import { profile as enProfile } from "./locales/en/profile";
 import { playback as enPlayback } from "./locales/en/playback";
 import { settings as enSettings } from "./locales/en/settings";
 import { common as esCommon } from "./locales/es/common";
+import { activity as esActivity } from "./locales/es/activity";
 import { dj as esDj } from "./locales/es/dj";
 import { discover as esDiscover } from "./locales/es/discover";
 import { home as esHome } from "./locales/es/home";
@@ -16,6 +18,7 @@ import { playback as esPlayback } from "./locales/es/playback";
 import { settings as esSettings } from "./locales/es/settings";
 
 export const en = {
+  activity: enActivity,
   common: enCommon,
   dj: enDj,
   discover: enDiscover,
@@ -26,6 +29,7 @@ export const en = {
   settings: enSettings,
 } as const;
 export const es = {
+  activity: esActivity,
   common: esCommon,
   dj: esDj,
   discover: esDiscover,
