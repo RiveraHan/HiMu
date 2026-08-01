@@ -77,6 +77,28 @@ jest.mock("expo-router", () => {
   const React = require("react");
   const { View } = require("react-native");
 
+  function eligibleRouteNames(node: React.ReactNode): string[] {
+    return React.Children.toArray(node).flatMap((child: React.ReactNode) => {
+      if (!React.isValidElement(child)) return [];
+      const element = child as React.ReactElement<{
+        children?: React.ReactNode;
+        guard?: boolean;
+        name?: string;
+      }>;
+      if (element.type === StackProtected) {
+        return element.props.guard
+          ? eligibleRouteNames(element.props.children)
+          : [];
+      }
+      if (
+        element.type === StackScreen &&
+        typeof element.props.name === "string"
+      ) {
+        return [element.props.name];
+      }
+      return [];
+    });
+  }
   function Stack({ children }: { children: React.ReactNode }) {
     React.useEffect(() => {
       mockNavigatorMounts += 1;
@@ -84,14 +106,20 @@ jest.mock("expo-router", () => {
         mockNavigatorUnmounts += 1;
       };
     }, []);
-    return <View testID="navigator">{children}</View>;
+    const eligibleRoutes = eligibleRouteNames(children);
+    const selectedRoute = eligibleRoutes.includes(mockRequestedRoute)
+      ? mockRequestedRoute
+      : eligibleRoutes.includes("(auth)")
+        ? "(auth)"
+        : null;
+    return (
+      <View testID="navigator">
+        {selectedRoute ? <RouteMount name={selectedRoute} /> : null}
+      </View>
+    );
   }
-  function StackScreen({ name }: { name: string }) {
-    const selected = mockAuthState.session
-      ? name === mockRequestedRoute
-      : name === "(auth)";
-    if (!selected) return null;
-    return <RouteMount name={name} />;
+  function StackScreen(_props: { name: string }) {
+    return null;
   }
   function RouteMount({ name }: { name: string }) {
     React.useEffect(() => {
