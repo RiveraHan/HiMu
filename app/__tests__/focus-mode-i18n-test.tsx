@@ -174,6 +174,21 @@ describe("FocusModeScreen data states", () => {
     expect(screen.getByRole("button", { name: "Start focus session" })).toBeDisabled();
   });
 
+  it.each([
+    ["failed", true, true, "idle", "Focus audio is unavailable"],
+    ["offline", false, false, "paused", "You're offline"],
+  ] as const)("keeps cached empty Focus state during a %s refresh", async (_label, online, isError, fetchStatus, noticeTitle) => {
+    mockOnline = online;
+    mockFocusQuery = { data: [], isPending: false, isError, fetchStatus, refetch: mockFocusRefetch };
+    const screen = await render(<FocusModeScreen />);
+
+    expect(screen.getByText("No focus tracks are available")).toBeTruthy();
+    expect(screen.getByText(noticeTitle)).toBeTruthy();
+    expect(screen.getByTestId("compact-notice")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockFocusRefetch).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps cached focus audio playable and appends compact refresh recovery", async () => {
     mockFocusQuery = { data: [focusTrack], isPending: false, isError: true, fetchStatus: "idle", refetch: mockFocusRefetch };
     const screen = await render(<FocusModeScreen />);

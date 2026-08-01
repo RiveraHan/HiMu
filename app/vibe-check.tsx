@@ -87,12 +87,27 @@ export default function VibeCheckScreen() {
           onAction={() => void vibeQuery.refetch()}
         />
       ) : noListening ? (
-        <StateNotice
-          kind="empty"
-          title={t("playback.vibe.empty")}
-          actionLabel={t("profile.favorites.discoverAction")}
-          onAction={() => router.replace("/(app)/discover")}
-        />
+        <>
+          <StateNotice
+            kind="empty"
+            title={t("playback.vibe.empty")}
+            actionLabel={t("profile.favorites.discoverAction")}
+            onAction={() => router.replace("/(app)/discover")}
+          />
+          {vibeQuery.isError || !online ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={
+                online
+                  ? t("playback.vibe.unavailable")
+                  : t("common.errors.offline")
+              }
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void vibeQuery.refetch()}
+            />
+          ) : null}
+        </>
       ) : (
         <>
           {/* Hero - Resonance Flow */}
@@ -260,7 +275,7 @@ export default function VibeCheckScreen() {
               ))}
             </GlassCard>
           )}
-          {djs.length > 0 && (djsQuery.isError || !online) ? (
+          {djsQuery.isError || !online ? (
             <StateNotice
               compact
               kind={online ? "error" : "offline"}

@@ -180,12 +180,27 @@ export default function FocusModeScreen() {
               onAction={() => void focusQuery.refetch()}
             />
           ) : focusEmpty ? (
-            <StateNotice
-              kind="empty"
-              title={t("playback.focus.empty")}
-              actionLabel={t("profile.favorites.discoverAction")}
-              onAction={() => router.replace("/(app)/discover")}
-            />
+            <View style={styles.focusContent}>
+              <StateNotice
+                kind="empty"
+                title={t("playback.focus.empty")}
+                actionLabel={t("profile.favorites.discoverAction")}
+                onAction={() => router.replace("/(app)/discover")}
+              />
+              {focusQuery.isError || !online ? (
+                <StateNotice
+                  compact
+                  kind={online ? "error" : "offline"}
+                  title={
+                    online
+                      ? t("playback.focus.unavailable")
+                      : t("common.errors.offline")
+                  }
+                  actionLabel={t("common.actions.retry")}
+                  onAction={() => void focusQuery.refetch()}
+                />
+              ) : null}
+            </View>
           ) : (
             <View style={styles.focusContent}>
               <FocusOrb active={running} />

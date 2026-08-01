@@ -4,6 +4,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import TrainDJScreen from "@/app/train-dj/[id]";
 import { ActivityProvider, useActivity } from "@/src/activity/ActivityProvider";
 import { supabase } from "@/src/api/supabase";
+import { TrainDjSkeleton } from "@/src/components/dj/TrainDjSkeleton";
 import i18n from "@/src/i18n";
 
 const mockUpdate = jest.fn();
@@ -125,15 +126,12 @@ jest.mock("@/src/i18n/use-locale", () => ({
 jest.mock("@/src/components", () => {
   const React = require("react");
   const { Pressable, Text, View } = require("react-native");
+  const { TrainDjSkeleton } = jest.requireActual("@/src/components/dj/TrainDjSkeleton");
   return {
     Avatar: () => React.createElement(View),
     DjTraitsForm: () => React.createElement(View),
     EqualizerBars: () => React.createElement(View),
-    TrainDjSkeleton: () => React.createElement(View, { testID: "train-dj-skeleton" },
-      React.createElement(View, { testID: "portrait-skeleton" }),
-      React.createElement(View, { testID: "trait-row-skeleton" }),
-      React.createElement(View, { testID: "submit-skeleton" }),
-    ),
+    TrainDjSkeleton,
     Text: ({ children }: { children: React.ReactNode }) => React.createElement(Text, null, children),
     PrefSection: ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) =>
       React.createElement(View, null,
@@ -231,9 +229,18 @@ test("keeps the Back header and form-shaped skeleton in the normal shell while l
   expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
   expect(screen.getByText("Train your DJ")).toBeTruthy();
   expect(screen.getByTestId("train-dj-skeleton")).toBeTruthy();
-  expect(screen.getByTestId("portrait-skeleton")).toBeTruthy();
-  expect(screen.getByTestId("trait-row-skeleton")).toBeTruthy();
-  expect(screen.getByTestId("submit-skeleton")).toBeTruthy();
+  expect(screen.getByTestId("portrait-skeleton", { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.getAllByTestId("trait-row-skeleton")).toHaveLength(3);
+  expect(screen.getByTestId("submit-skeleton", { includeHiddenElements: true })).toBeTruthy();
+});
+
+test("renders the real Train skeleton with copy, portrait, trait, and submit structure", async () => {
+  const screen = await render(<TrainDjSkeleton />);
+
+  expect(screen.getAllByTestId("header-copy-skeleton", { includeHiddenElements: true })).toHaveLength(2);
+  expect(screen.getByTestId("portrait-skeleton", { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.getAllByTestId("trait-row-skeleton")).toHaveLength(3);
+  expect(screen.getByTestId("submit-skeleton", { includeHiddenElements: true })).toBeTruthy();
 });
 
 test.each([

@@ -210,6 +210,22 @@ describe("VibeCheckScreen", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith("/(app)/discover");
   });
 
+  it.each([
+    ["failed", true, true, "idle", "Listening insights are unavailable", 0],
+    ["offline", false, false, "paused", "You're offline", 0],
+  ] as const)("keeps cached zero-listening empty state during a %s refresh", async (_label, online, isError, fetchStatus, noticeTitle, retryIndex) => {
+    mockOnline = online;
+    mockVibeQuery = settledQuery(zeroVibe, mockVibeRefetch, { isError, fetchStatus });
+    mockDjsQuery = settledQuery(djs, mockDjsRefetch);
+    const screen = await render(<VibeCheckScreen />);
+
+    expect(screen.getByText("Start listening to build your Vibe Check")).toBeTruthy();
+    expect(screen.getAllByText(noticeTitle).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("compact-notice").length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getAllByRole("button", { name: "Retry" })[retryIndex]);
+    expect(mockVibeRefetch).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps cached insight visible and appends a compact refresh failure", async () => {
     mockVibeQuery = settledQuery(listeningVibe, mockVibeRefetch, { isError: true });
     const screen = await render(<VibeCheckScreen />);
@@ -249,6 +265,22 @@ describe("VibeCheckScreen", () => {
 
     expect(screen.getByText("DJ One")).toBeTruthy();
     expect(screen.getByText("DJ insights are unavailable")).toBeTruthy();
+  });
+
+  it.each([
+    ["failed", true, true, "idle", "DJ insights are unavailable", 0],
+    ["offline", false, false, "paused", "You're offline", 1],
+  ] as const)("keeps cached empty DJ ranking during a %s refresh", async (_label, online, isError, fetchStatus, noticeTitle, retryIndex) => {
+    mockOnline = online;
+    mockVibeQuery = settledQuery(listeningVibe, mockVibeRefetch);
+    mockDjsQuery = settledQuery([], mockDjsRefetch, { isError, fetchStatus });
+    const screen = await render(<VibeCheckScreen />);
+
+    expect(screen.getByText("No DJs to rank yet")).toBeTruthy();
+    expect(screen.getAllByText(noticeTitle).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("compact-notice").length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getAllByRole("button", { name: "Retry" })[retryIndex]);
+    expect(mockDjsRefetch).toHaveBeenCalledTimes(1);
   });
 
   it("renders exact Spanish empty and failure copy", async () => {
