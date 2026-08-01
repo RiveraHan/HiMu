@@ -110,6 +110,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const outgoingSettledRef = useRef(false); // one event max per loaded track
   const lockScreenActiveRef = useRef(false); // media session started once
   const statusSequenceRef = useRef(0);
+  const ownerUserIdRef = useRef(session?.user.id ?? null);
+  const ownerGenerationRef = useRef(0);
   const playbackConfirmationRef = useRef(new PlaybackConfirmation(8_000));
 
   useEffect(() => () => playbackConfirmationRef.current.dispose(), []);
@@ -122,29 +124,53 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Stop playback and clear the player when the user logs out
+  // Stop playback and clear all per-user state on logout or direct A -> B
+  // replacement. PlayerProvider intentionally remains mounted across auth
+  // changes so it can observe and tear down the outgoing account itself.
   useEffect(() => {
-    if (session) return;
+    const nextUserId = session?.user.id ?? null;
+    const previousUserId = ownerUserIdRef.current;
+    const ownerChanged = previousUserId !== nextUserId;
+    ownerUserIdRef.current = nextUserId;
+    if (ownerChanged) ownerGenerationRef.current += 1;
 
-    // Discard pending stats: without a session the RPC can't run, and they
-    // must not be credited to the next user who signs in
+    const replacingAccount =
+      previousUserId !== null &&
+      nextUserId !== null &&
+      previousUserId !== nextUserId;
+    if (session && !replacingAccount) return;
+
+    // Discard all playback/stat state owned by the outgoing account so it can
+    // neither render nor be credited after the identity transition.
     listenSecondsRef.current = 0;
     trackSecondsRef.current = 0;
     trackPlayedRef.current = 0;
     lastGenreRef.current = null;
+    prevTimeRef.current = 0;
+    wasPlayingRef.current = false;
+    outgoingSettledRef.current = false;
+    statusSequenceRef.current = 0;
+    playbackConfirmationRef.current.dispose();
 
-    if (store.getState().currentTrack) {
-      player.pause();
-      store.getState().reset();
-    }
+    player.pause();
+    player.replace(null);
+    store.getState().reset();
 
-    // Tear down the media session/foreground service so a logged-out app
-    // isn't left holding a lock-screen notification.
+    // Tear down the media session/foreground service for the outgoing owner.
     player.clearLockScreenControls();
     lockScreenActiveRef.current = false;
   }, [session, player, store]);
 
   const flush = useCallback(async (opts?: { final: boolean }) => {
+    const ownerUserId = ownerUserIdRef.current;
+    const ownerGeneration = ownerGenerationRef.current;
+    if (
+      ownerUserId === null ||
+      useAuthStore.getState().session?.user.id !== ownerUserId
+    ) {
+      return;
+    }
+
     let minutes = Math.floor(listenSecondsRef.current / 60);
 
     // Round up to the nearest minute if final and over 30s have passed
@@ -166,8 +192,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       p_top_genre: lastGenreRef.current ?? undefined,
     });
 
-    if (error) {
-      // Retry: add minutes and tracks back to listen seconds and track played
+    if (
+      error &&
+      ownerGenerationRef.current === ownerGeneration &&
+      ownerUserIdRef.current === ownerUserId &&
+      useAuthStore.getState().session?.user.id === ownerUserId
+    ) {
+      // Retry only while the same account still owns these counters.
       listenSecondsRef.current += minutes * 60;
       trackPlayedRef.current += tracks;
     }
@@ -321,7 +352,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     // Accumulate playback time based on position changes.
     // Skips and track changes cause jumps (negative or > 2 s) that are ignored:
     // only the natural progression of playback (ticks of ~0.5 s) is counted.
-    if (status.playing) {
+    if (status.playing && store.getState().currentTrack) {
       const delta = status.currentTime - prevTimeRef.current;
       if (delta > 0 && delta < 2) {
         listenSecondsRef.current += delta;

@@ -9,6 +9,8 @@ let mockNavigatorUnmounts = 0;
 let mockRenderOrder: string[] = [];
 let mockTourPhase = "idle";
 const mockClosePanel = jest.fn();
+let mockRequestedRoute = "(app)";
+let mockMountedRoutes: string[] = [];
 
 function authState(userId: string | null, isLoading: boolean, token = "token") {
   return {
@@ -85,7 +87,17 @@ jest.mock("expo-router", () => {
     return <View testID="navigator">{children}</View>;
   }
   function StackScreen({ name }: { name: string }) {
-    return <View testID={`screen-${name}`} />;
+    const selected = mockAuthState.session
+      ? name === mockRequestedRoute
+      : name === "(auth)";
+    if (!selected) return null;
+    return <RouteMount name={name} />;
+  }
+  function RouteMount({ name }: { name: string }) {
+    React.useEffect(() => {
+      mockMountedRoutes.push(name);
+    }, [name]);
+    return <View testID={`route-${name}`} />;
   }
   function StackProtected({
     children,
@@ -123,6 +135,8 @@ describe("root layout ownership and route protection", () => {
     mockRenderOrder = [];
     mockTourPhase = "idle";
     mockClosePanel.mockClear();
+    mockRequestedRoute = "(app)";
+    mockMountedRoutes = [];
   });
 
   it("keeps auth/player outside query, locale inside it, and global activity surfaces inside AppTour", async () => {
@@ -154,26 +168,32 @@ describe("root layout ownership and route protection", () => {
 
   it("closes the activity panel when onboarding becomes active", async () => {
     mockAuthState = authState("user-a", false);
-    mockTourPhase = "welcome";
+    const screen = await render(<RootLayout />);
+    expect(mockClosePanel).not.toHaveBeenCalled();
 
-    await render(<RootLayout />);
+    mockTourPhase = "welcome";
+    await screen.rerender(<RootLayout />);
 
     expect(mockClosePanel).toHaveBeenCalledTimes(1);
   });
 
-  it.each(PRIVATE_ROUTES)("blocks the private route declaration %s when signed out", async (route) => {
+  it.each(PRIVATE_ROUTES)("selects auth without mounting the requested private route %s when signed out", async (route) => {
+    mockRequestedRoute = route;
     const screen = await render(<RootLayout />);
 
-    expect(screen.getByTestId("screen-(auth)")).toBeTruthy();
-    expect(screen.queryByTestId(`screen-${route}`)).toBeNull();
+    expect(screen.getByTestId("route-(auth)")).toBeTruthy();
+    expect(screen.queryByTestId(`route-${route}`)).toBeNull();
+    expect(mockMountedRoutes).toEqual(["(auth)"]);
   });
 
-  it.each(PRIVATE_ROUTES)("makes the private route declaration %s available with a session", async (route) => {
+  it.each(PRIVATE_ROUTES)("mounts the requested private route %s with a session", async (route) => {
+    mockRequestedRoute = route;
     mockAuthState = authState("user-a", false);
     const screen = await render(<RootLayout />);
 
-    expect(screen.queryByTestId("screen-(auth)")).toBeNull();
-    expect(screen.getByTestId(`screen-${route}`)).toBeTruthy();
+    expect(screen.queryByTestId("route-(auth)")).toBeNull();
+    expect(screen.getByTestId(`route-${route}`)).toBeTruthy();
+    expect(mockMountedRoutes).toEqual([route]);
   });
 
   it("remounts navigation for a direct user change but not a same-user token refresh", async () => {
