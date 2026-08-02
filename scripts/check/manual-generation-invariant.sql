@@ -52,6 +52,13 @@ values
     false
   ),
   (
+    '00000000-0000-4000-d000-0000000000a3',
+    'Invariant DJ Unreserved',
+    'generation-invariant-dj-unreserved',
+    '00000000-0000-4000-a000-0000000000a1',
+    false
+  ),
+  (
     '00000000-0000-4000-d000-0000000000b1',
     'Invariant DJ C',
     'generation-invariant-dj-c',
@@ -211,6 +218,13 @@ begin
   ) then
     raise exception 'anon can reserve manual generation';
   end if;
+  if not has_function_privilege(
+    'service_role',
+    'public.reserve_manual_generation_job(uuid,uuid,text)',
+    'execute'
+  ) then
+    raise exception 'service_role cannot reserve manual generation';
+  end if;
   if has_function_privilege(
     'authenticated',
     'public.finalize_generated_mix(uuid,uuid,text,text,text,text,text,text[],integer,uuid,text,text,timestamptz,timestamptz)',
@@ -252,6 +266,36 @@ begin
     or reservation.queued_at <> '2026-07-29T12:00:00Z'::timestamptz
   then
     raise exception 'manual reservation did not return its exact queued token';
+  end if;
+end
+$$;
+
+do $$
+declare
+  reservation record;
+  persisted_status text;
+  persisted_queued_at timestamptz;
+begin
+  select *
+  into reservation
+  from public.reserve_manual_generation_job(
+    '00000000-0000-4000-a000-0000000000a1',
+    '00000000-0000-4000-d000-0000000000a3',
+    null
+  );
+
+  select status, updated_at
+  into persisted_status, persisted_queued_at
+  from public.generation_jobs
+  where id = reservation.job_id;
+
+  if reservation.outcome is distinct from 'created'
+    or reservation.job_id is null
+    or reservation.queued_at is null
+    or persisted_status is distinct from 'queued'
+    or reservation.queued_at is distinct from persisted_queued_at
+  then
+    raise exception 'created reservation did not return its persisted queued token';
   end if;
 end
 $$;
