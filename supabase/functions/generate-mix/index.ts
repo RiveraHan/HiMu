@@ -26,12 +26,12 @@ import {
 // Cover generation falls back to the DJ avatar so a model failure never
 // removes the generated track's artwork.
 async function generateCover(
-  jobId: string,
+  objectKey: string,
   dj: any,
   instrumental: boolean,
 ): Promise<string | null> {
   try {
-    return await generateCoverImage(`covers/generated/${jobId}.jpg`, {
+    return await generateCoverImage(objectKey, {
       genre: dj.genre_specialties?.[0] ?? "",
       moods: dj.mood_tags ?? [],
       instrumental,
@@ -109,12 +109,20 @@ async function buildSeasoning(
 }
 
 const generationDependencies = {
-  updateJob: async (jobId: string, patch: Record<string, unknown>) => {
-    const { error } = await admin
+  updateJob: async (
+    jobId: string,
+    attemptStartedAt: string,
+    patch: Record<string, unknown>,
+  ) => {
+    const { data, error } = await admin
       .from("generation_jobs")
       .update(patch)
-      .eq("id", jobId);
-    if (error) throw error;
+      .eq("id", jobId)
+      .eq("status", "generating")
+      .eq("updated_at", attemptStartedAt)
+      .select("id")
+      .maybeSingle();
+    return mapUpdatedRow(data, error);
   },
   markJobGenerating: async (jobId: string, startedAt: string) => {
     const { data, error } = await admin
@@ -139,6 +147,7 @@ const generationDependencies = {
     djId: string;
     caption: string | null;
     captionAudioUrl: string | null;
+    attemptStartedAt: string;
     finishedAt: string;
   }) => {
     const { data, error } = await admin
@@ -155,6 +164,7 @@ const generationDependencies = {
         p_dj_id: input.djId,
         p_caption: input.caption,
         p_caption_audio_url: input.captionAudioUrl,
+        p_started_at: input.attemptStartedAt,
         p_finished_at: input.finishedAt,
       })
       .single();
@@ -169,16 +179,22 @@ const generationDependencies = {
     jobId: string,
     errorMessage: string,
     failedAt: string,
+    attemptStartedAt?: string | null,
   ) => {
-    const { data, error } = await admin
+    const update = admin
       .from("generation_jobs")
       .update({
         status: "failed",
         error: errorMessage,
         updated_at: failedAt,
       })
-      .eq("id", jobId)
-      .in("status", ["queued", "generating"])
+      .eq("id", jobId);
+    const activeUpdate = attemptStartedAt
+      ? update
+        .eq("status", "generating")
+        .eq("updated_at", attemptStartedAt)
+      : update.in("status", ["queued", "generating"]);
+    const { data, error } = await activeUpdate
       .select("id")
       .maybeSingle();
     return mapUpdatedRow(data, error);
@@ -234,24 +250,36 @@ serveAuthed(async (req, user) => {
     },
     buildSeasoning,
     findDailyJob: async (userId, dropDate) => {
-      const { data } = await admin
+      const { data, error } = await admin
         .from("generation_jobs")
-        .select("id, status")
+        .select("id, status, updated_at")
         .eq("user_id", userId)
         .eq("drop_date", dropDate)
         .maybeSingle();
-      return data;
+      if (error) throw error;
+      return data
+        ? { id: data.id, status: data.status, updatedAt: data.updated_at }
+        : null;
     },
-    requeueDailyJob: async (jobId, updatedAt) => {
-      const { error } = await admin
+    requeueDailyJob: async (
+      jobId,
+      observedStatus,
+      observedUpdatedAt,
+      requeuedAt,
+    ) => {
+      const { data, error } = await admin
         .from("generation_jobs")
         .update({
           status: "queued",
           error: null,
-          updated_at: updatedAt,
+          updated_at: requeuedAt,
         })
-        .eq("id", jobId);
-      if (error) throw error;
+        .eq("id", jobId)
+        .eq("status", observedStatus)
+        .eq("updated_at", observedUpdatedAt)
+        .select("id")
+        .maybeSingle();
+      return mapUpdatedRow(data, error);
     },
     createDailyJob: async ({ userId, djId, dropDate }) => {
       const { data, error } = await admin

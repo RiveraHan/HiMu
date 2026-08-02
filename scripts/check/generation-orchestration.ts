@@ -117,8 +117,17 @@ async function main() {
         calls.push({ name: "findDailyJob" });
         return null;
       },
-      requeueDailyJob: async (jobId: string) => {
-        calls.push({ name: "requeueDailyJob", value: jobId });
+      requeueDailyJob: async (
+        jobId: string,
+        observedStatus: string,
+        observedUpdatedAt: string,
+        requeuedAt: string,
+      ) => {
+        calls.push({
+          name: "requeueDailyJob",
+          value: { jobId, observedStatus, observedUpdatedAt, requeuedAt },
+        });
+        return true;
       },
       createDailyJob: async () => {
         calls.push({ name: "createDailyJob" });
@@ -359,7 +368,11 @@ async function main() {
     const { calls, deps } = requestDeps({
       findDailyJob: async () => {
         calls.push({ name: "findDailyJob" });
-        return { id: "daily-ready", status: "ready" };
+        return {
+          id: "daily-ready",
+          status: "ready",
+          updatedAt: "2026-07-22T11:00:00.000Z",
+        };
       },
     });
     const response = await handleGenerateMixRequest(
@@ -384,7 +397,114 @@ async function main() {
     const { calls, deps } = requestDeps({
       findDailyJob: async () => {
         calls.push({ name: "findDailyJob" });
-        return { id: "daily-failed", status: "failed" };
+        return {
+          id: "daily-fresh",
+          status: "generating",
+          updatedAt: "2026-07-29T11:45:00.000Z",
+        };
+      },
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        language: "en",
+        dropDate: "2026-07-29",
+        localHour: 12,
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, { status: 200, body: { jobId: "daily-fresh" } });
+    assert.equal(calls.some(({ name }) => name === "requeueDailyJob"), false);
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      findDailyJob: async () => {
+        calls.push({ name: "findDailyJob" });
+        return {
+          id: "daily-stale",
+          status: "queued",
+          updatedAt: "2026-07-29T11:44:59.000Z",
+        };
+      },
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        language: "en",
+        dropDate: "2026-07-29",
+        localHour: 12,
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, { status: 200, body: { jobId: "daily-stale" } });
+    assert.deepEqual(
+      calls.find(({ name }) => name === "requeueDailyJob")?.value,
+      {
+        jobId: "daily-stale",
+        observedStatus: "queued",
+        observedUpdatedAt: "2026-07-29T11:44:59.000Z",
+        requeuedAt: "2026-07-29T12:00:00.000Z",
+      },
+    );
+    assert.equal(calls.filter(({ name }) => name === "runGeneration").length, 1);
+    assert.equal(calls.filter(({ name }) => name === "waitUntil").length, 1);
+  }
+
+  {
+    let lookup = 0;
+    const { calls, deps } = requestDeps({
+      findDailyJob: async () => {
+        calls.push({ name: "findDailyJob" });
+        lookup += 1;
+        return lookup === 1
+          ? {
+            id: "daily-stale",
+            status: "generating",
+            updatedAt: "2026-07-29T11:44:00.000Z",
+          }
+          : {
+            id: "daily-race-winner",
+            status: "queued",
+            updatedAt: "2026-07-29T12:00:00.000Z",
+          };
+      },
+      requeueDailyJob: async () => {
+        calls.push({ name: "requeueDailyJob" });
+        return false;
+      },
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        language: "en",
+        dropDate: "2026-07-29",
+        localHour: 12,
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "daily-race-winner" },
+    });
+    assert.equal(calls.filter(({ name }) => name === "findDailyJob").length, 2);
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+    assert.equal(calls.some(({ name }) => name === "waitUntil"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      findDailyJob: async () => {
+        calls.push({ name: "findDailyJob" });
+        return {
+          id: "daily-failed",
+          status: "failed",
+          updatedAt: "2026-07-29T11:00:00.000Z",
+        };
       },
     });
     const response = await handleGenerateMixRequest(
@@ -400,7 +520,53 @@ async function main() {
     assert.deepEqual(response, { status: 200, body: { jobId: "daily-failed" } });
     const scheduled = calls.find((call) => call.name === "runGeneration");
     assert.equal((scheduled?.value as { language?: string })?.language, "es");
-    assert.ok(calls.some((call) => call.name === "requeueDailyJob"));
+    assert.deepEqual(
+      calls.find((call) => call.name === "requeueDailyJob")?.value,
+      {
+        jobId: "daily-failed",
+        observedStatus: "failed",
+        observedUpdatedAt: "2026-07-29T11:00:00.000Z",
+        requeuedAt: "2026-07-29T12:00:00.000Z",
+      },
+    );
+  }
+
+  {
+    let lookup = 0;
+    const { calls, deps } = requestDeps({
+      findDailyJob: async () => {
+        calls.push({ name: "findDailyJob" });
+        lookup += 1;
+        return lookup === 1
+          ? null
+          : {
+            id: "daily-create-race-winner",
+            status: "queued",
+            updatedAt: "2026-07-29T12:00:00.000Z",
+          };
+      },
+      createDailyJob: async () => {
+        calls.push({ name: "createDailyJob" });
+        return { job: null, error: new Error("unique violation") };
+      },
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        language: "en",
+        dropDate: "2026-07-29",
+        localHour: 12,
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "daily-create-race-winner" },
+    });
+    assert.equal(calls.filter(({ name }) => name === "findDailyJob").length, 2);
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+    assert.equal(calls.some(({ name }) => name === "waitUntil"), false);
   }
 
   function mediaResponse(
@@ -427,19 +593,34 @@ async function main() {
 
   type ModelEvent = { role: string; language: string };
   function runDeps(overrides: Record<string, unknown> = {}) {
-    const updates: Array<Record<string, unknown>> = [];
+    const updates: Array<{
+      jobId: string;
+      attemptStartedAt: string;
+      patch: Record<string, unknown>;
+    }> = [];
     const marks: Array<{ jobId: string; startedAt: string }> = [];
     const finalizations: Array<Record<string, unknown>> = [];
-    const failures: Array<{ jobId: string; error: string; failedAt: string }> = [];
+    const failures: Array<{
+      jobId: string;
+      error: string;
+      failedAt: string;
+      attemptStartedAt?: string | null;
+    }> = [];
     const puts: Array<{ key: string; bytes: number[]; contentType: string }> = [];
+    const coverInputs: string[] = [];
     const deletes: string[][] = [];
     const modelEvents: ModelEvent[] = [];
     const errorEvents: unknown[][] = [];
     const replicateInputs: Array<{ endpoint: string; body: any }> = [];
     const insertedAudius: Array<Record<string, unknown>> = [];
     const deps = {
-      updateJob: async (_jobId: string, patch: Record<string, unknown>) => {
-        updates.push(patch);
+      updateJob: async (
+        jobId: string,
+        attemptStartedAt: string,
+        patch: Record<string, unknown>,
+      ) => {
+        updates.push({ jobId, attemptStartedAt, patch });
+        return true;
       },
       markJobGenerating: async (jobId: string, startedAt: string) => {
         marks.push({ jobId, startedAt });
@@ -449,8 +630,13 @@ async function main() {
         finalizations.push(input);
         return { id: String(input.trackId), title: String(input.title) };
       },
-      failJobIfActive: async (jobId: string, error: string, failedAt: string) => {
-        failures.push({ jobId, error, failedAt });
+      failJobIfActive: async (
+        jobId: string,
+        error: string,
+        failedAt: string,
+        attemptStartedAt?: string | null,
+      ) => {
+        failures.push({ jobId, error, failedAt, attemptStartedAt });
         return true;
       },
       findAudiusTrack: async () => null,
@@ -476,7 +662,10 @@ async function main() {
       r2Delete: async (keys: string[]) => {
         deletes.push(keys);
       },
-      generateCover: async () => "https://r2.test/cover.jpg",
+      generateCover: async (objectKey: string) => {
+        coverInputs.push(objectKey);
+        return `https://r2.test/${objectKey}`;
+      },
       streamUrl: (trackId: string) => `https://stream.test/${trackId}`,
       logModel: (event: ModelEvent) => modelEvents.push(event),
       logError: (...args: unknown[]) => errorEvents.push(args),
@@ -486,6 +675,7 @@ async function main() {
       ...overrides,
     };
     return {
+      coverInputs,
       deletes,
       deps,
       errorEvents,
@@ -522,6 +712,98 @@ async function main() {
   }
 
   {
+    const firstStartedAt = "2026-07-22T12:00:00.000Z";
+    const secondStartedAt = "2026-07-22T12:16:00.000Z";
+    const first = runDeps({ now: () => firstStartedAt });
+    const second = runDeps({ now: () => secondStartedAt });
+    const input = {
+      jobId: "job-recovered-attempt",
+      cfg,
+      lyrics: null,
+      seasoning: [],
+      language: "en" as const,
+      drop: { localHour: 12 },
+    };
+
+    await runGeneration(input, first.deps);
+    await runGeneration(input, second.deps);
+
+    assert.equal(first.finalizations[0]?.attemptStartedAt, firstStartedAt);
+    assert.equal(second.finalizations[0]?.attemptStartedAt, secondStartedAt);
+    assert.equal(first.puts.length, second.puts.length);
+    for (let index = 0; index < first.puts.length; index += 1) {
+      assert.notEqual(
+        first.puts[index]?.key,
+        second.puts[index]?.key,
+        "recovered attempts must not share writable media keys",
+      );
+    }
+    assert.notEqual(first.coverInputs[0], second.coverInputs[0]);
+  }
+
+  {
+    const staleStartedAt = "2026-07-22T12:00:00.000Z";
+    const recoveredStartedAt = "2026-07-22T12:16:00.000Z";
+    let activeAttempt = staleStartedAt;
+    let releaseProvider!: () => void;
+    let providerReached!: () => void;
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    const reachedProvider = new Promise<void>((resolve) => {
+      providerReached = resolve;
+    });
+    const failureAttempts: Array<string | null | undefined> = [];
+    const state = runDeps({
+      now: () => staleStartedAt,
+      replicateRun: async () => {
+        providerReached();
+        await providerGate;
+        return "https://media.test/music";
+      },
+      finalizeGeneratedMix: async (input: Record<string, unknown>) => {
+        state.finalizations.push(input);
+        if (input.attemptStartedAt !== activeAttempt) {
+          throw new Error("stale generation attempt");
+        }
+        return { id: String(input.trackId), title: String(input.title) };
+      },
+      failJobIfActive: async (
+        _jobId: string,
+        _error: string,
+        _failedAt: string,
+        attemptStartedAt?: string | null,
+      ) => {
+        failureAttempts.push(attemptStartedAt);
+        return attemptStartedAt === activeAttempt;
+      },
+    });
+
+    const staleRun = runGeneration(
+      {
+        jobId: "job-paused-stale-attempt",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    await reachedProvider;
+    activeAttempt = recoveredStartedAt;
+    releaseProvider();
+    await staleRun;
+
+    assert.equal(state.finalizations[0]?.attemptStartedAt, staleStartedAt);
+    assert.deepEqual(failureAttempts, [staleStartedAt]);
+    assert.deepEqual(
+      state.deletes,
+      [],
+      "a resumed stale attempt must not delete the recovered attempt's media",
+    );
+  }
+
+  {
     const state = runDeps({
       finalizeGeneratedMix: async () => {
         throw new Error("finalize failed");
@@ -538,10 +820,14 @@ async function main() {
       state.deps,
     );
     assert.equal(state.failures.length, 1);
+    assert.equal(
+      state.failures[0]?.attemptStartedAt,
+      "2026-07-22T12:00:00.000Z",
+    );
     assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-finalize-failure.mp3",
-      "covers/generated/job-finalize-failure.jpg",
-      "captions/generated/job-finalize-failure.mp3",
+      "tracks/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+      "covers/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.jpg",
+      "captions/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
     ]]);
   }
 
@@ -583,22 +869,97 @@ async function main() {
         throw new Error("generating transition failed");
       },
     });
-    await assert.rejects(
-      () =>
-        runGeneration(
-          {
-            jobId: "job-generating-error",
-            cfg,
-            lyrics: null,
-            seasoning: [],
-            language: "en",
-          },
-          state.deps,
-        ),
-      /generating transition failed/,
+    await runGeneration(
+      {
+        jobId: "job-generating-error",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
     );
-    assert.deepEqual(state.failures, []);
+    assert.equal(state.failures.length, 1);
+    assert.equal(state.failures[0]?.jobId, "job-generating-error");
+    assert.equal(state.failures[0]?.attemptStartedAt, null);
+    assert.match(state.failures[0]?.error ?? "", /generating transition failed/);
+    assert.deepEqual(state.modelEvents, []);
+    assert.deepEqual(state.replicateInputs, []);
+    assert.deepEqual(state.puts, []);
+    assert.deepEqual(state.finalizations, []);
+    assert.deepEqual(state.deletes, [[
+      "tracks/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
+      "covers/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.jpg",
+      "captions/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
+    ]]);
+  }
+
+  {
+    let status = "queued";
+    const state = runDeps({
+      markJobGenerating: async () => {
+        status = "generating";
+        throw new Error("ambiguous generating response");
+      },
+      failJobIfActive: async (
+        jobId: string,
+        error: string,
+        failedAt: string,
+        attemptStartedAt?: string | null,
+      ) => {
+        state.failures.push({ jobId, error, failedAt, attemptStartedAt });
+        if (jobId !== "job-ambiguous-generating") return false;
+        if (status !== "queued" && status !== "generating") return false;
+        status = "failed";
+        return true;
+      },
+    });
+    await runGeneration(
+      {
+        jobId: "job-ambiguous-generating",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.equal(status, "failed");
+    assert.equal(state.failures.length, 1);
+    assert.equal(state.failures[0]?.jobId, "job-ambiguous-generating");
+    assert.equal(state.failures[0]?.attemptStartedAt, null);
+    assert.deepEqual(state.modelEvents, []);
+    assert.deepEqual(state.replicateInputs, []);
+    assert.deepEqual(state.deletes, [[
+      "tracks/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
+      "covers/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.jpg",
+      "captions/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
+    ]]);
+  }
+
+  {
+    const state = runDeps({
+      markJobGenerating: async () => {
+        throw new Error("generating transition failed");
+      },
+      failJobIfActive: async () => {
+        throw new Error("failure transition failed");
+      },
+    });
+    await runGeneration(
+      {
+        jobId: "job-claim-compensation-failed",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.deepEqual(state.modelEvents, []);
+    assert.deepEqual(state.replicateInputs, []);
     assert.deepEqual(state.deletes, []);
+    assert.deepEqual(state.errorEvents, [[{ stage: "job_failure_persist" }]]);
   }
 
   for (const badMusicResponse of [
@@ -620,9 +981,9 @@ async function main() {
     );
     assert.equal(state.failures.length, 1);
     assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-music-failure.mp3",
-      "covers/generated/job-music-failure.jpg",
-      "captions/generated/job-music-failure.mp3",
+      "tracks/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+      "covers/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.jpg",
+      "captions/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
     ]]);
     assert.equal(state.puts.length, 0);
   }
@@ -663,6 +1024,52 @@ async function main() {
   }
 
   {
+    const updateAttempts: string[] = [];
+    const state = runDeps({
+      pickAudiusDrop: async () => ({
+        pick: {
+          id: "audius-stale",
+          title: "Stale pick",
+          user: { name: "Stale artist" },
+          duration: 180,
+        },
+        caption: "Stale caption",
+      }),
+      updateJob: async (
+        _jobId: string,
+        attemptStartedAt: string,
+      ) => {
+        updateAttempts.push(attemptStartedAt);
+        return false;
+      },
+    });
+    await runGeneration(
+      {
+        jobId: "job-stale-audius-attempt",
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+        drop: { localHour: 21 },
+      },
+      state.deps,
+    );
+    assert.deepEqual(updateAttempts, ["2026-07-22T12:00:00.000Z"]);
+    assert.deepEqual(state.finalizations, []);
+    assert.equal(
+      state.modelEvents.some(({ role }) => role === "music"),
+      false,
+      "a stale Audius attempt must stop instead of falling back to generation",
+    );
+    assert.deepEqual(state.deletes, []);
+    assert.ok(
+      state.errorEvents.some(([event]) =>
+        (event as { stage?: string })?.stage === "terminal_ambiguous"
+      ),
+    );
+  }
+
+  {
     const hostileTitle = "Luz [scream]";
     const hostileArtist = "Mara [laugh]";
     const displayCaption = fallbackAudiusCaption(
@@ -693,11 +1100,13 @@ async function main() {
       state.deps,
     );
     const ready = state.updates.at(-1);
-    assert.equal(ready?.status, "ready");
-    assert.equal(ready?.caption, displayCaption);
+    assert.equal(ready?.jobId, "job-audius-caption");
+    assert.equal(ready?.attemptStartedAt, "2026-07-22T12:00:00.000Z");
+    assert.equal(ready?.patch.status, "ready");
+    assert.equal(ready?.patch.caption, displayCaption);
     assert.equal(
-      ready?.caption_audio_url,
-      "https://r2.test/captions/generated/job-audius-caption.mp3",
+      ready?.patch.caption_audio_url,
+      "https://r2.test/captions/generated/job-audius-caption/2026-07-22T12%3A00%3A00.000Z.mp3",
     );
     const tts = state.replicateInputs.find(
       (input) => input.endpoint === INWORLD_TTS_ENDPOINT,

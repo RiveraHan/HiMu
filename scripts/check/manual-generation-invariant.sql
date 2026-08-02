@@ -208,7 +208,7 @@ begin
   end if;
   if has_function_privilege(
     'authenticated',
-    'public.finalize_generated_mix(uuid,uuid,text,text,text,text,text,text[],integer,uuid,text,text,timestamptz)',
+    'public.finalize_generated_mix(uuid,uuid,text,text,text,text,text,text[],integer,uuid,text,text,timestamptz,timestamptz)',
     'execute'
   ) then
     raise exception 'authenticated can finalize generated mixes';
@@ -244,6 +244,7 @@ begin
       '00000000-0000-4000-d000-0000000000a1',
       null,
       null,
+      '2026-07-29T12:00:00Z',
       now()
     );
     raise exception 'invalid atomic finalization unexpectedly succeeded';
@@ -282,6 +283,33 @@ update public.generation_jobs
 set status = 'generating'
 where id = '00000000-0000-4000-e000-0000000000a1';
 
+do $$
+begin
+  begin
+    perform *
+    from public.finalize_generated_mix(
+      '00000000-0000-4000-e000-0000000000a1',
+      '00000000-0000-4000-f000-0000000000a1',
+      'Stale attempt',
+      'Invariant DJ A',
+      'https://media.example.invalid/stale.mp3',
+      null,
+      'Test',
+      array['test'],
+      120,
+      '00000000-0000-4000-d000-0000000000a1',
+      null,
+      null,
+      '2026-07-29T11:59:59Z',
+      now()
+    );
+    raise exception 'stale generation attempt unexpectedly finalized';
+  exception
+    when sqlstate '55000' then null;
+  end;
+end
+$$;
+
 select *
 from public.finalize_generated_mix(
   '00000000-0000-4000-e000-0000000000a1',
@@ -296,6 +324,7 @@ from public.finalize_generated_mix(
   '00000000-0000-4000-d000-0000000000a1',
   null,
   null,
+  '2026-07-29T12:00:00Z',
   now()
 );
 

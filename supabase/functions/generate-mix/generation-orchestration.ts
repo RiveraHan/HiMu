@@ -11,8 +11,10 @@ import {
 } from "./generation-models.ts";
 
 type JobSummary = { id: string; status: string };
+type DailyJobSummary = JobSummary & { updatedAt: string };
 
-export const MANUAL_JOB_LEASE_MS = 15 * 60 * 1000;
+export const GENERATION_JOB_LEASE_MS = 15 * 60 * 1000;
+export const MANUAL_JOB_LEASE_MS = GENERATION_JOB_LEASE_MS;
 
 export type ManualJobReservation =
   | { outcome: "created"; jobId: string; dailyLimit: number }
@@ -105,8 +107,13 @@ export type RequestDependencies = {
   findDailyJob: (
     userId: string,
     dropDate: unknown,
-  ) => Promise<JobSummary | null>;
-  requeueDailyJob: (jobId: string, updatedAt: string) => Promise<void>;
+  ) => Promise<DailyJobSummary | null>;
+  requeueDailyJob: (
+    jobId: string,
+    observedStatus: string,
+    observedUpdatedAt: string,
+    requeuedAt: string,
+  ) => Promise<boolean>;
   createDailyJob: (input: {
     userId: string;
     djId: unknown;
@@ -201,12 +208,29 @@ export async function handleGenerateMixRequest(
   if (isDrop) {
     const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
     const existing = await deps.findDailyJob(userId, dropDate);
-    if (existing && existing.status !== "failed") {
-      return result(200, { jobId: existing.id });
-    }
-
     if (existing) {
-      await deps.requeueDailyJob(existing.id, deps.now());
+      const active = existing.status === "queued" ||
+        existing.status === "generating";
+      const requeuedAt = deps.now();
+      const ageMs = Date.parse(requeuedAt) - Date.parse(existing.updatedAt);
+      if (!active && existing.status !== "failed") {
+        return result(200, { jobId: existing.id });
+      }
+      if (active && ageMs <= GENERATION_JOB_LEASE_MS) {
+        return result(200, { jobId: existing.id });
+      }
+
+      const requeued = await deps.requeueDailyJob(
+        existing.id,
+        existing.status,
+        existing.updatedAt,
+        requeuedAt,
+      );
+      if (!requeued) {
+        const refreshed = await deps.findDailyJob(userId, dropDate);
+        if (refreshed) return result(200, { jobId: refreshed.id });
+        throw new Error("daily job disappeared during requeue");
+      }
       deps.waitUntil(
         deps.runGeneration({
           jobId: existing.id,
@@ -244,7 +268,7 @@ export async function handleGenerateMixRequest(
   if (active) {
     const now = deps.now();
     const ageMs = Date.parse(now) - Date.parse(active.updatedAt);
-    if (ageMs <= MANUAL_JOB_LEASE_MS) {
+    if (ageMs <= GENERATION_JOB_LEASE_MS) {
       return result(200, { jobId: active.id });
     }
 
@@ -317,8 +341,9 @@ type GenerationErrorStage =
 export type RunDependencies = {
   updateJob: (
     jobId: string,
+    attemptStartedAt: string,
     patch: Record<string, unknown>,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   markJobGenerating: (
     jobId: string,
     startedAt: string,
@@ -336,12 +361,14 @@ export type RunDependencies = {
     djId: string;
     caption: string | null;
     captionAudioUrl: string | null;
+    attemptStartedAt: string;
     finishedAt: string;
   }) => Promise<{ id: string; title: string }>;
   failJobIfActive: (
     jobId: string,
     error: string,
     failedAt: string,
+    attemptStartedAt?: string | null,
   ) => Promise<boolean>;
   findAudiusTrack: (externalId: string) => Promise<{ id: string } | null>;
   insertAudiusTrack: (
@@ -362,7 +389,7 @@ export type RunDependencies = {
   ) => Promise<string>;
   r2Delete: (keys: string[]) => Promise<void>;
   generateCover: (
-    jobId: string,
+    objectKey: string,
     dj: any,
     instrumental: boolean,
   ) => Promise<string | null>;
@@ -405,10 +432,20 @@ function parseCaption(raw: string): string | null {
   return line || null;
 }
 
+function generationAttemptKeys(jobId: string, attemptStartedAt: string) {
+  const attempt = encodeURIComponent(attemptStartedAt);
+  return {
+    track: `tracks/generated/${jobId}/${attempt}.mp3`,
+    cover: `covers/generated/${jobId}/${attempt}.jpg`,
+    caption: `captions/generated/${jobId}/${attempt}.mp3`,
+  };
+}
+
 async function buildCaptionAudio(
   input: RunGenerationInput,
   deps: RunDependencies,
   caption: string,
+  objectKey: string,
 ): Promise<string> {
   const dj = input.cfg.djs;
   const request = buildCaptionTtsInput(
@@ -421,7 +458,7 @@ async function buildCaptionAudio(
   const tempUrl = await deps.replicateRun(request.endpoint, request.body);
   const bytes = await downloadProviderMedia(tempUrl, deps.fetchMedia);
   return await deps.r2Put(
-    `captions/generated/${input.jobId}.mp3`,
+    objectKey,
     bytes,
     "audio/mpeg",
   );
@@ -430,6 +467,8 @@ async function buildCaptionAudio(
 async function tryAudiusDrop(
   input: RunGenerationInput,
   deps: RunDependencies,
+  attemptStartedAt: string,
+  captionObjectKey: string,
 ): Promise<boolean> {
   const dj = input.cfg.djs;
   let picked: { pick: any; caption: string } | null;
@@ -470,18 +509,24 @@ async function tryAudiusDrop(
 
     let captionAudioUrl: string | null = null;
     try {
-      captionAudioUrl = await buildCaptionAudio(input, deps, caption);
+      captionAudioUrl = await buildCaptionAudio(
+        input,
+        deps,
+        caption,
+        captionObjectKey,
+      );
     } catch (_error) {
       report(deps, "caption_audio");
     }
 
-    await deps.updateJob(input.jobId, {
+    const finalized = await deps.updateJob(input.jobId, attemptStartedAt, {
       status: "ready",
       track_id: trackId,
       caption,
       caption_audio_url: captionAudioUrl,
       updated_at: deps.now(),
     });
+    if (!finalized) report(deps, "terminal_ambiguous");
     return true;
   } catch (_error) {
     report(deps, "audius_materialize");
@@ -493,11 +538,26 @@ export async function runGeneration(
   input: RunGenerationInput,
   deps: RunDependencies,
 ): Promise<void> {
-  const started = await deps.markJobGenerating(input.jobId, deps.now());
-  if (!started) return;
-
+  const attemptStartedAt = deps.now();
+  const objectKeys = generationAttemptKeys(input.jobId, attemptStartedAt);
+  let claimed = false;
   try {
-    if (input.drop && await tryAudiusDrop(input, deps)) return;
+    const started = await deps.markJobGenerating(
+      input.jobId,
+      attemptStartedAt,
+    );
+    if (!started) return;
+    claimed = true;
+
+    if (
+      input.drop &&
+      await tryAudiusDrop(
+        input,
+        deps,
+        attemptStartedAt,
+        objectKeys.caption,
+      )
+    ) return;
 
     const musicRequest = buildMusicInput({
       basePrompt: String(input.cfg.base_prompt),
@@ -517,7 +577,7 @@ export async function runGeneration(
       deps.fetchMedia,
     );
     const publicUrl = await deps.r2Put(
-      `tracks/generated/${input.jobId}.mp3`,
+      objectKeys.track,
       musicBytes,
       "audio/mpeg",
     );
@@ -525,7 +585,7 @@ export async function runGeneration(
     const dj = input.cfg.djs;
     observe(deps, "cover", input.language);
     const cover = await deps.generateCover(
-      input.jobId,
+      objectKeys.cover,
       dj,
       input.cfg.is_instrumental ?? true,
     );
@@ -550,7 +610,12 @@ export async function runGeneration(
         caption = parseCaption(raw);
         if (caption) {
           try {
-            captionAudioUrl = await buildCaptionAudio(input, deps, caption);
+            captionAudioUrl = await buildCaptionAudio(
+              input,
+              deps,
+              caption,
+              objectKeys.caption,
+            );
           } catch (_error) {
             report(deps, "caption_audio");
           }
@@ -573,6 +638,7 @@ export async function runGeneration(
       djId: input.cfg.dj_id,
       caption,
       captionAudioUrl,
+      attemptStartedAt,
       finishedAt: deps.now(),
     });
   } catch (error) {
@@ -582,6 +648,7 @@ export async function runGeneration(
         input.jobId,
         String(error).slice(0, 500),
         deps.now(),
+        claimed ? attemptStartedAt : null,
       );
     } catch (_failureError) {
       report(deps, "job_failure_persist");
@@ -594,9 +661,9 @@ export async function runGeneration(
     }
 
     await deps.r2Delete([
-      `tracks/generated/${input.jobId}.mp3`,
-      `covers/generated/${input.jobId}.jpg`,
-      `captions/generated/${input.jobId}.mp3`,
+      objectKeys.track,
+      objectKeys.cover,
+      objectKeys.caption,
     ]);
   }
 }
