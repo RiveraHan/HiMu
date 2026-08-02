@@ -263,7 +263,7 @@ serveAuthed(async (req, user) => {
     findDailyJob: async (userId, dropDate) => {
       const { data, error } = await admin
         .from("generation_jobs")
-        .select("id, status, dj_id, updated_at")
+        .select("id, status, dj_id, updated_at, is_public")
         .eq("user_id", userId)
         .eq("drop_date", dropDate)
         .maybeSingle();
@@ -274,6 +274,7 @@ serveAuthed(async (req, user) => {
           status: data.status,
           djId: data.dj_id,
           updatedAt: data.updated_at,
+          isPublic: data.is_public,
         }
         : null;
     },
@@ -305,8 +306,9 @@ serveAuthed(async (req, user) => {
           dj_id: djId,
           status: "queued",
           drop_date: dropDate,
+          is_public: false,
         })
-        .select()
+        .select("id, status, dj_id, updated_at, is_public")
         .single();
       return {
         job: data
@@ -315,6 +317,7 @@ serveAuthed(async (req, user) => {
             status: data.status,
             djId: data.dj_id,
             updatedAt: data.updated_at,
+            isPublic: data.is_public,
           }
           : null,
         error,
@@ -323,7 +326,7 @@ serveAuthed(async (req, user) => {
     findActiveManualJob: async (userId, djId) => {
       const { data, error } = await admin
         .from("generation_jobs")
-        .select("id, status, updated_at")
+        .select("id, status, updated_at, is_public")
         .eq("user_id", userId)
         .eq("dj_id", djId)
         .is("drop_date", null)
@@ -333,7 +336,12 @@ serveAuthed(async (req, user) => {
         .maybeSingle();
       if (error) throw error;
       return data
-        ? { id: data.id, status: data.status, updatedAt: data.updated_at }
+        ? {
+          id: data.id,
+          status: data.status,
+          updatedAt: data.updated_at,
+          isPublic: data.is_public,
+        }
         : null;
     },
     failStaleManualJob: async (jobId, observedUpdatedAt, failedAt) => {
@@ -351,13 +359,14 @@ serveAuthed(async (req, user) => {
         .maybeSingle();
       return mapUpdatedRow(data, error);
     },
-    reserveManualJob: async ({ userId, djId, lyrics }) => {
+    reserveManualJob: async ({ userId, djId, lyrics, isPublic }) => {
       const { data, error } = await admin.rpc(
         "reserve_manual_generation_job",
         {
           p_user_id: userId,
           p_dj_id: djId,
           p_prompt: lyrics,
+          p_is_public: isPublic,
         },
       );
       return mapManualJobReservation(data, error);

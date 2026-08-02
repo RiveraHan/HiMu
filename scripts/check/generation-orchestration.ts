@@ -38,6 +38,7 @@ async function main() {
         job_id: "job-1",
         daily_limit: 10,
         queued_at: "2026-07-29T12:00:00.000Z",
+        is_public: true,
       }],
       null,
     ),
@@ -46,6 +47,7 @@ async function main() {
       jobId: "job-1",
       dailyLimit: 10,
       queuedAt: "2026-07-29T12:00:00.000Z",
+      isPublic: true,
     },
   );
   for (const malformed of [
@@ -60,7 +62,7 @@ async function main() {
       { outcome: "quota", job_id: null, daily_limit: 10 },
     ],
     [{ outcome: "unknown", job_id: "job-1", daily_limit: 10 }],
-    [{ outcome: "created", job_id: null, daily_limit: 10 }],
+    [{ outcome: "created", job_id: null, daily_limit: 10, is_public: true }],
     [{ outcome: "created", job_id: "job-1", daily_limit: 10 }],
   ]) {
     assert.throws(
@@ -158,6 +160,7 @@ async function main() {
             status: "queued",
             djId: "dj-1",
             updatedAt: "2026-07-29T12:00:00.000Z",
+            isPublic: false,
           },
           error: null,
         };
@@ -184,6 +187,7 @@ async function main() {
           jobId: "manual-new",
           dailyLimit: 10,
           queuedAt: "2026-07-29T12:00:00.000Z",
+          isPublic: true,
         };
       },
       runGeneration: async (input: unknown) => {
@@ -217,11 +221,18 @@ async function main() {
   {
     const { calls, deps } = requestDeps();
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1" },
+      { djId: "dj-1", isPublic: true },
       "user-1",
       deps,
     );
-    assert.deepEqual(response, { status: 200, body: { jobId: "manual-new" } });
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "manual-new", isPublic: true },
+    });
+    assert.deepEqual(
+      calls.find(({ name }) => name === "reserveManualJob")?.value,
+      { userId: "user-1", djId: "dj-1", lyrics: null, isPublic: true },
+    );
     const scheduled = calls.find((call) => call.name === "runGeneration");
     assert.equal((scheduled?.value as { language?: string })?.language, "en");
     assert.deepEqual(
@@ -236,24 +247,71 @@ async function main() {
 
   {
     const { calls, deps } = requestDeps({
+      reserveManualJob: async (input: unknown) => {
+        calls.push({ name: "reserveManualJob", value: input });
+        return {
+          outcome: "created",
+          jobId: "manual-private",
+          dailyLimit: 3,
+          queuedAt: "2026-07-29T12:00:00.000Z",
+          isPublic: false,
+        };
+      },
+    });
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", isPublic: false, language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "manual-private", isPublic: false },
+    });
+    assert.deepEqual(
+      calls.find(({ name }) => name === "reserveManualJob")?.value,
+      { userId: "user-1", djId: "dj-1", lyrics: null, isPublic: false },
+    );
+  }
+
+  for (const isPublic of [undefined, "true", 1, null]) {
+    const { calls, deps } = requestDeps();
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", isPublic, language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 400,
+      body: { error: "isPublic must be boolean", code: "invalid_input" },
+    });
+    assert.deepEqual(
+      calls,
+      [],
+      "manual visibility must be validated before database/provider work",
+    );
+  }
+
+  {
+    const { calls, deps } = requestDeps({
       findActiveManualJob: async () => {
         calls.push({ name: "findActiveManualJob" });
         return {
           id: "manual-active",
           status: "generating",
           updatedAt: "2026-07-29T11:59:00.000Z",
+          isPublic: true,
         };
       },
       now: () => "2026-07-29T12:00:00.000Z",
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", language: "en" },
+      { djId: "dj-1", isPublic: false, language: "en" },
       "user-1",
       deps,
     );
     assert.deepEqual(response, {
       status: 200,
-      body: { jobId: "manual-active" },
+      body: { jobId: "manual-active", isPublic: true },
     });
     assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
     assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
@@ -268,7 +326,7 @@ async function main() {
         },
       });
       return handleGenerateMixRequest(
-        { djId: "dj-1", language: "en" },
+        { djId: "dj-1", isPublic: true, language: "en" },
         "user-1",
         deps,
       );
@@ -287,17 +345,21 @@ async function main() {
             id: "manual-stale",
             status: "queued",
             updatedAt: "2026-07-29T11:44:00.000Z",
+            isPublic: false,
           }
           : null;
       },
       now: () => "2026-07-29T12:00:00.000Z",
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", language: "en" },
+      { djId: "dj-1", isPublic: true, language: "en" },
       "user-1",
       deps,
     );
-    assert.deepEqual(response, { status: 200, body: { jobId: "manual-new" } });
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "manual-new", isPublic: true },
+    });
     assert.deepEqual(
       calls.find(({ name }) => name === "failStaleManualJob")?.value,
       {
@@ -324,11 +386,13 @@ async function main() {
             id: "manual-stale",
             status: "queued",
             updatedAt: "2026-07-29T11:44:00.000Z",
+            isPublic: false,
           }
           : {
             id: "manual-refreshed",
             status: "generating",
             updatedAt: "2026-07-29T11:59:30.000Z",
+            isPublic: true,
           };
       },
       failStaleManualJob: async () => {
@@ -337,13 +401,13 @@ async function main() {
       },
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", language: "en" },
+      { djId: "dj-1", isPublic: false, language: "en" },
       "user-1",
       deps,
     );
     assert.deepEqual(response, {
       status: 200,
-      body: { jobId: "manual-refreshed" },
+      body: { jobId: "manual-refreshed", isPublic: true },
     });
     assert.equal(
       calls.filter(({ name }) => name === "findActiveManualJob").length,
@@ -358,19 +422,20 @@ async function main() {
       reserveManualJob: async () => ({
         outcome: "quota",
         jobId: null,
-        dailyLimit: 10,
+        dailyLimit: 3,
       }),
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", language: "en" },
+      { djId: "dj-1", isPublic: true, language: "en" },
       "user-1",
       deps,
     );
     assert.deepEqual(response, {
       status: 429,
       body: {
-        error: "daily limit of 10 mixes reached",
+        error: "daily limit of 3 mixes reached",
         code: "daily_quota_reached",
+        dailyLimit: 3,
       },
     });
     assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
@@ -383,16 +448,17 @@ async function main() {
         outcome: "existing",
         jobId: "manual-race-winner",
         dailyLimit: 10,
+        isPublic: false,
       }),
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", language: "en" },
+      { djId: "dj-1", isPublic: true, language: "en" },
       "user-1",
       deps,
     );
     assert.deepEqual(response, {
       status: 200,
-      body: { jobId: "manual-race-winner" },
+      body: { jobId: "manual-race-winner", isPublic: false },
     });
     assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
     assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
@@ -407,12 +473,14 @@ async function main() {
           status: "ready",
           djId: "dj-1",
           updatedAt: "2026-07-22T11:00:00.000Z",
+          isPublic: false,
         };
       },
     });
     const response = await handleGenerateMixRequest(
       {
         djId: "dj-1",
+        isPublic: true,
         language: "es",
         dropDate: "2026-07-22",
         localHour: 21,
@@ -420,7 +488,10 @@ async function main() {
       "user-1",
       deps,
     );
-    assert.deepEqual(response, { status: 200, body: { jobId: "daily-ready" } });
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "daily-ready", isPublic: false },
+    });
     assert.equal(
       calls.some((call) => call.name === "runGeneration"),
       false,
@@ -437,6 +508,7 @@ async function main() {
           status: "generating",
           djId: "dj-1",
           updatedAt: "2026-07-29T11:45:00.000Z",
+          isPublic: false,
         };
       },
     });
@@ -450,7 +522,10 @@ async function main() {
       "user-1",
       deps,
     );
-    assert.deepEqual(response, { status: 200, body: { jobId: "daily-fresh" } });
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "daily-fresh", isPublic: false },
+    });
     assert.equal(calls.some(({ name }) => name === "requeueDailyJob"), false);
     assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
   }
@@ -464,6 +539,7 @@ async function main() {
           status: "queued",
           djId: "dj-1",
           updatedAt: "2026-07-29T11:44:59.000Z",
+          isPublic: false,
         };
       },
     });
@@ -477,7 +553,10 @@ async function main() {
       "user-1",
       deps,
     );
-    assert.deepEqual(response, { status: 200, body: { jobId: "daily-stale" } });
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "daily-stale", isPublic: false },
+    });
     assert.deepEqual(
       calls.find(({ name }) => name === "requeueDailyJob")?.value,
       {
@@ -503,12 +582,14 @@ async function main() {
             status: "generating",
             djId: "dj-1",
             updatedAt: "2026-07-29T11:44:00.000Z",
+            isPublic: false,
           }
           : {
             id: "daily-race-winner",
             status: "queued",
             djId: "dj-1",
             updatedAt: "2026-07-29T12:00:00.000Z",
+            isPublic: false,
           };
       },
       requeueDailyJob: async () => {
@@ -528,7 +609,7 @@ async function main() {
     );
     assert.deepEqual(response, {
       status: 200,
-      body: { jobId: "daily-race-winner" },
+      body: { jobId: "daily-race-winner", isPublic: false },
     });
     assert.equal(calls.filter(({ name }) => name === "findDailyJob").length, 2);
     assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
@@ -544,6 +625,7 @@ async function main() {
           status: "generating",
           djId: "dj-persisted",
           updatedAt: "2026-07-29T11:44:00.000Z",
+          isPublic: false,
         };
       },
       getDjConfig: async (djId: string) => {
@@ -567,7 +649,7 @@ async function main() {
     );
     assert.deepEqual(response, {
       status: 200,
-      body: { jobId: "daily-persisted-dj" },
+      body: { jobId: "daily-persisted-dj", isPublic: false },
     });
     assert.deepEqual(
       calls.filter(({ name }) => name === "getDjConfig").map(({ value }) => value),
@@ -592,6 +674,7 @@ async function main() {
           status: "failed",
           djId: "dj-1",
           updatedAt: "2026-07-29T11:00:00.000Z",
+          isPublic: false,
         };
       },
     });
@@ -605,7 +688,10 @@ async function main() {
       "user-1",
       deps,
     );
-    assert.deepEqual(response, { status: 200, body: { jobId: "daily-failed" } });
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "daily-failed", isPublic: false },
+    });
     const scheduled = calls.find((call) => call.name === "runGeneration");
     assert.equal((scheduled?.value as { language?: string })?.language, "es");
     assert.deepEqual(
@@ -632,6 +718,7 @@ async function main() {
             status: "queued",
             djId: "dj-1",
             updatedAt: "2026-07-29T12:00:00.000Z",
+            isPublic: false,
           };
       },
       createDailyJob: async () => {
@@ -651,7 +738,7 @@ async function main() {
     );
     assert.deepEqual(response, {
       status: 200,
-      body: { jobId: "daily-create-race-winner" },
+      body: { jobId: "daily-create-race-winner", isPublic: false },
     });
     assert.equal(calls.filter(({ name }) => name === "findDailyJob").length, 2);
     assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
@@ -1374,6 +1461,8 @@ async function main() {
     assert.ok(tts);
     assert.doesNotMatch(tts.body.input.text, /\[(?:scream|laugh)\]/i);
     assert.equal(state.insertedAudius[0]?.artist, hostileArtist);
+    assert.equal(state.insertedAudius[0]?.owner_id, null);
+    assert.equal(state.insertedAudius[0]?.is_public, true);
   }
 
   for (const language of ["en", "es"] as const) {

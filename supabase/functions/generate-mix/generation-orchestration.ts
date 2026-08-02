@@ -10,7 +10,7 @@ import {
   validateLyrics,
 } from "./generation-models.ts";
 
-type JobSummary = { id: string; status: string };
+type JobSummary = { id: string; status: string; isPublic: boolean };
 type DailyJobSummary = JobSummary & { djId: string; updatedAt: string };
 
 export const GENERATION_JOB_LEASE_MS = 15 * 60 * 1000;
@@ -22,8 +22,14 @@ export type ManualJobReservation =
     jobId: string;
     dailyLimit: number;
     queuedAt: string;
+    isPublic: boolean;
   }
-  | { outcome: "existing"; jobId: string; dailyLimit: number }
+  | {
+    outcome: "existing";
+    jobId: string;
+    dailyLimit: number;
+    isPublic: boolean;
+  }
   | { outcome: "quota"; jobId: null; dailyLimit: number };
 
 export function mapManualJobReservation(
@@ -51,24 +57,28 @@ export function mapManualJobReservation(
     typeof row.job_id === "string" &&
     row.job_id.length > 0 &&
     typeof row.queued_at === "string" &&
-    row.queued_at.length > 0
+    row.queued_at.length > 0 &&
+    typeof row.is_public === "boolean"
   ) {
     return {
       outcome: "created",
       jobId: row.job_id,
       dailyLimit: row.daily_limit,
       queuedAt: row.queued_at,
+      isPublic: row.is_public,
     };
   }
   if (
     row.outcome === "existing" &&
     typeof row.job_id === "string" &&
-    row.job_id.length > 0
+    row.job_id.length > 0 &&
+    typeof row.is_public === "boolean"
   ) {
     return {
       outcome: "existing",
       jobId: row.job_id,
       dailyLimit: row.daily_limit,
+      isPublic: row.is_public,
     };
   }
   throw new Error("invalid manual job reservation result");
@@ -152,6 +162,7 @@ export type RequestDependencies = {
     userId: string;
     djId: unknown;
     lyrics: string | null;
+    isPublic: boolean;
   }) => Promise<ManualJobReservation>;
   runGeneration: (input: RunGenerationInput) => Promise<void>;
   waitUntil: (promise: Promise<void>) => void;
@@ -186,6 +197,7 @@ export async function handleGenerateMixRequest(
     language: rawLanguage,
     localHour,
     dropDate,
+    isPublic: rawIsPublic,
   } = body;
 
   let language: GenerationLanguage;
@@ -204,6 +216,10 @@ export async function handleGenerateMixRequest(
   const isDrop = dropDate != null;
   if (isDrop && !/^\d{4}-\d{2}-\d{2}$/.test(String(dropDate))) {
     return invalid("dropDate must be YYYY-MM-DD");
+  }
+  const isPublic = isDrop ? false : rawIsPublic;
+  if (typeof isPublic !== "boolean") {
+    return invalid("isPublic must be boolean");
   }
 
   const dailyJob = isDrop
@@ -238,10 +254,10 @@ export async function handleGenerateMixRequest(
       const requeuedAt = deps.now();
       const ageMs = Date.parse(requeuedAt) - Date.parse(existing.updatedAt);
       if (!active && existing.status !== "failed") {
-        return result(200, { jobId: existing.id });
+        return result(200, { jobId: existing.id, isPublic: existing.isPublic });
       }
       if (active && ageMs <= GENERATION_JOB_LEASE_MS) {
-        return result(200, { jobId: existing.id });
+        return result(200, { jobId: existing.id, isPublic: existing.isPublic });
       }
 
       const requeued = await deps.requeueDailyJob(
@@ -252,7 +268,9 @@ export async function handleGenerateMixRequest(
       );
       if (!requeued) {
         const refreshed = await deps.findDailyJob(userId, dropDate);
-        if (refreshed) return result(200, { jobId: refreshed.id });
+        if (refreshed) {
+          return result(200, { jobId: refreshed.id, isPublic: refreshed.isPublic });
+        }
         throw new Error("daily job disappeared during requeue");
       }
       deps.waitUntil(
@@ -266,13 +284,13 @@ export async function handleGenerateMixRequest(
           drop: { localHour },
         }),
       );
-      return result(200, { jobId: existing.id });
+      return result(200, { jobId: existing.id, isPublic: existing.isPublic });
     }
 
     const created = await deps.createDailyJob({ userId, djId, dropDate });
     if (!created.job) {
       const raced = await deps.findDailyJob(userId, dropDate);
-      if (raced) return result(200, { jobId: raced.id });
+      if (raced) return result(200, { jobId: raced.id, isPublic: raced.isPublic });
       throw created.error ?? new Error("could not create drop job");
     }
 
@@ -287,7 +305,7 @@ export async function handleGenerateMixRequest(
         drop: { localHour },
       }),
     );
-    return result(200, { jobId: created.job.id });
+    return result(200, { jobId: created.job.id, isPublic: created.job.isPublic });
   }
 
   const active = await deps.findActiveManualJob(userId, djId);
@@ -295,7 +313,7 @@ export async function handleGenerateMixRequest(
     const now = deps.now();
     const ageMs = Date.parse(now) - Date.parse(active.updatedAt);
     if (ageMs <= GENERATION_JOB_LEASE_MS) {
-      return result(200, { jobId: active.id });
+      return result(200, { jobId: active.id, isPublic: active.isPublic });
     }
 
     const released = await deps.failStaleManualJob(
@@ -305,19 +323,30 @@ export async function handleGenerateMixRequest(
     );
     if (!released) {
       const refreshed = await deps.findActiveManualJob(userId, djId);
-      if (refreshed) return result(200, { jobId: refreshed.id });
+      if (refreshed) {
+        return result(200, { jobId: refreshed.id, isPublic: refreshed.isPublic });
+      }
     }
   }
 
-  const reservation = await deps.reserveManualJob({ userId, djId, lyrics });
+  const reservation = await deps.reserveManualJob({
+    userId,
+    djId,
+    lyrics,
+    isPublic,
+  });
   if (reservation.outcome === "quota") {
     return result(429, {
       error: `daily limit of ${reservation.dailyLimit} mixes reached`,
       code: "daily_quota_reached",
+      dailyLimit: reservation.dailyLimit,
     });
   }
   if (reservation.outcome === "existing") {
-    return result(200, { jobId: reservation.jobId });
+    return result(200, {
+      jobId: reservation.jobId,
+      isPublic: reservation.isPublic,
+    });
   }
 
   const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
@@ -331,7 +360,10 @@ export async function handleGenerateMixRequest(
       language,
     }),
   );
-  return result(200, { jobId: reservation.jobId });
+  return result(200, {
+    jobId: reservation.jobId,
+    isPublic: reservation.isPublic,
+  });
 }
 
 type MediaResponse = {
@@ -528,6 +560,8 @@ async function tryAudiusDrop(
         mood_tags: dj.mood_tags,
         duration: pick.duration ?? null,
         is_ai_generated: false,
+        owner_id: null,
+        is_public: true,
         source: "audius",
         external_id: pick.id,
         dj_id: input.cfg.dj_id,
