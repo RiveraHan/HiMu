@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  cleanupQuotaFixtures,
+  formatQuotaCheckFailure,
+  mergeCheckAndCleanupErrors,
+} from "./generation-quota-cleanup.ts";
 
 function localCredentials(): { apiUrl: string; serviceRoleKey: string } {
   const output = execFileSync(
@@ -54,6 +59,7 @@ async function main() {
   const userIds: string[] = [];
   const djIds: string[] = [];
 
+  let checkFailure: unknown | null = null;
   try {
     for (const label of ["a", "b", "c"]) {
       const { data, error } = await client.auth.admin.createUser({
@@ -216,17 +222,30 @@ async function main() {
     assert.equal(aReconnect.is_public, aWinningRequest.isPublic);
 
     console.log("generation quota concurrency checks passed");
-  } finally {
-    if (djIds.length > 0) {
-      await client.from("djs").delete().in("id", djIds);
-    }
-    await Promise.allSettled(
-      userIds.map((userId) => client.auth.admin.deleteUser(userId)),
-    );
+  } catch (error) {
+    checkFailure = error;
+  }
+
+  const cleanupFailures = await cleanupQuotaFixtures(
+    {
+      async deleteRows(table, column, ids) {
+        const { error } = await client.from(table).delete().in(column, ids);
+        return error;
+      },
+      async deleteAuthUser(userId) {
+        const { error } = await client.auth.admin.deleteUser(userId);
+        return error;
+      },
+    },
+    { djIds, userIds },
+  );
+  const failure = mergeCheckAndCleanupErrors(checkFailure, cleanupFailures);
+  if (failure !== null) {
+    throw failure;
   }
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(formatQuotaCheckFailure(error));
   process.exitCode = 1;
 });
