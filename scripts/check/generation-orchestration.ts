@@ -50,6 +50,37 @@ async function main() {
       isPublic: true,
     },
   );
+  assert.deepEqual(
+    mapManualJobReservation(
+      [{
+        outcome: "existing",
+        job_id: "job-existing",
+        daily_limit: 10,
+        queued_at: null,
+        is_public: false,
+      }],
+      null,
+    ),
+    {
+      outcome: "existing",
+      jobId: "job-existing",
+      dailyLimit: 10,
+      isPublic: false,
+    },
+  );
+  assert.deepEqual(
+    mapManualJobReservation(
+      [{
+        outcome: "quota",
+        job_id: null,
+        daily_limit: 3,
+        queued_at: null,
+        is_public: null,
+      }],
+      null,
+    ),
+    { outcome: "quota", jobId: null, dailyLimit: 3 },
+  );
   for (const malformed of [
     [],
     [
@@ -64,6 +95,48 @@ async function main() {
     [{ outcome: "unknown", job_id: "job-1", daily_limit: 10 }],
     [{ outcome: "created", job_id: null, daily_limit: 10, is_public: true }],
     [{ outcome: "created", job_id: "job-1", daily_limit: 10 }],
+    [{
+      outcome: "created",
+      job_id: "job-1",
+      daily_limit: 10,
+      queued_at: "2026-07-29T12:00:00.000Z",
+      is_public: "true",
+    }],
+    [{
+      outcome: "existing",
+      job_id: "job-existing",
+      daily_limit: 10,
+      queued_at: null,
+      is_public: 1,
+    }],
+    [{
+      outcome: "quota",
+      job_id: "unexpected",
+      daily_limit: 3,
+      queued_at: null,
+      is_public: null,
+    }],
+    [{
+      outcome: "quota",
+      job_id: null,
+      daily_limit: 10,
+      queued_at: null,
+      is_public: null,
+    }],
+    [{
+      outcome: "quota",
+      job_id: null,
+      daily_limit: 3,
+      queued_at: "unexpected",
+      is_public: null,
+    }],
+    [{
+      outcome: "quota",
+      job_id: null,
+      daily_limit: 3,
+      queued_at: null,
+      is_public: false,
+    }],
   ]) {
     assert.throws(
       () => mapManualJobReservation(malformed, null),

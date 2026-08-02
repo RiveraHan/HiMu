@@ -15,6 +15,7 @@ type DailyJobSummary = JobSummary & { djId: string; updatedAt: string };
 
 export const GENERATION_JOB_LEASE_MS = 15 * 60 * 1000;
 export const MANUAL_JOB_LEASE_MS = GENERATION_JOB_LEASE_MS;
+const MANUAL_DAILY_LIMIT = 3;
 
 export type ManualJobReservation =
   | {
@@ -45,7 +46,13 @@ export function mapManualJobReservation(
   if (typeof row.daily_limit !== "number") {
     throw new Error("invalid manual job reservation result");
   }
-  if (row.outcome === "quota") {
+  if (
+    row.outcome === "quota" &&
+    row.job_id === null &&
+    row.daily_limit === MANUAL_DAILY_LIMIT &&
+    row.queued_at === null &&
+    row.is_public === null
+  ) {
     return {
       outcome: "quota",
       jobId: null,
