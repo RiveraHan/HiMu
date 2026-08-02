@@ -507,6 +507,13 @@ export function ActivityProvider({ children }: PropsWithChildren) {
       ) {
         return;
       }
+      if (
+        activity.visibility !== "private" &&
+        activity.visibility !== "public"
+      ) {
+        toast.error(t("activity.operationFailed"));
+        return;
+      }
 
       const retryToken = Symbol(activity.id);
       userRetryFlights.set(activity.id, retryToken);
@@ -517,19 +524,25 @@ export function ActivityProvider({ children }: PropsWithChildren) {
         assertCurrentMutationUser(userId);
         const { data, error } = await invokeWithAuthScope<{
           jobId: string;
+          isPublic: boolean;
         }>(supabase.functions, scope, "generate-mix", {
           body: {
             djId,
             language: resolvedLanguage,
             localHour: new Date().getHours(),
+            isPublic: activity.visibility === "public",
             ...(activity.retryLyrics
               ? { lyrics: activity.retryLyrics }
               : {}),
           },
         });
         if (error) throw error;
-        if (typeof data?.jobId !== "string" || data.jobId.trim().length === 0) {
-          throw new Error("generate-mix did not return a jobId");
+        if (
+          typeof data?.jobId !== "string" ||
+          data.jobId.trim().length === 0 ||
+          typeof data.isPublic !== "boolean"
+        ) {
+          throw new Error("generate-mix returned an invalid response");
         }
         if (
           generationRef.current !== generation ||
@@ -547,6 +560,7 @@ export function ActivityProvider({ children }: PropsWithChildren) {
               djId,
               title: activity.title,
               retryLyrics: activity.retryLyrics,
+              visibility: data.isPublic ? "public" : "private",
               nowMs: Date.now(),
               replaceActivityId: activity.id,
             }),

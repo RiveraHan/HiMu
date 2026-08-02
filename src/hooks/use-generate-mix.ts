@@ -11,6 +11,7 @@ type GenerateMixInput = {
   djId: string;
   title: string;
   lyrics?: string;
+  isPublic: boolean;
 };
 
 export function useGenerateMix() {
@@ -21,33 +22,40 @@ export function useGenerateMix() {
 
   const start = useMutation({
     mutationKey: authMutationKey("generate-mix", userId),
-    mutationFn: async ({ djId, lyrics }: GenerateMixInput) => {
+    mutationFn: async ({ djId, lyrics, isPublic }: GenerateMixInput) => {
       const scope = captureAuthScope(userId);
       const { data, error } = await invokeWithAuthScope<{
         jobId: string;
+        isPublic: boolean;
       }>(supabase.functions, scope, "generate-mix", {
         body: {
           djId,
           language: resolvedLanguage,
           localHour: new Date().getHours(),
+          isPublic,
           ...(lyrics ? { lyrics } : {}),
         },
       });
       if (error) throw error;
-      if (typeof data?.jobId !== "string" || data.jobId.trim().length === 0) {
-        throw new Error("generate-mix did not return a jobId");
+      if (
+        typeof data?.jobId !== "string" ||
+        data.jobId.trim().length === 0 ||
+        typeof data.isPublic !== "boolean"
+      ) {
+        throw new Error("generate-mix returned an invalid response");
       }
-      return data.jobId;
+      return data;
     },
-    onSuccess: (jobId, variables) => {
+    onSuccess: (data, variables) => {
       if (!isCurrentMutationUser(userId)) return;
       const queryKey = queryKeys.generationJobs.activity(userId);
       queryClient.setQueryData<ActivityItem[]>(queryKey, (current) =>
         upsertQueuedGenerationActivity(current, {
-          jobId,
+          jobId: data.jobId,
           djId: variables.djId,
           title: variables.title,
           retryLyrics: variables.lyrics ?? null,
+          visibility: data.isPublic ? "public" : "private",
           nowMs: Date.now(),
         }),
       );

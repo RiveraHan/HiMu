@@ -22,6 +22,7 @@ const base: GenerationJobRow = {
   updated_at: CREATED_AT,
   drop_date: null,
   track_id: null,
+  is_public: false,
   djs: { id: "dj-1", name: "Nova" },
   tracks: null,
 };
@@ -40,6 +41,7 @@ const activity: ActivityItem = {
   failureReason: null,
   recoveryAvailable: false,
   retryLyrics: null,
+  visibility: "private",
   detail: null,
   seen: false,
 };
@@ -151,6 +153,18 @@ describe("normalizeGenerationJob", () => {
     expect(result?.title).not.toContain(rawError);
   });
 
+  it("normalizes persisted private and public visibility", () => {
+    expect(normalizeGenerationJob(base, Date.parse(CREATED_AT))).toMatchObject({
+      visibility: "private",
+    });
+    expect(
+      normalizeGenerationJob(
+        { ...base, is_public: true },
+        Date.parse(CREATED_AT),
+      ),
+    ).toMatchObject({ visibility: "public" });
+  });
+
   it("falls back deterministically when database timestamps are invalid", () => {
     expect(
       normalizeGenerationJob(
@@ -191,6 +205,7 @@ describe("upsertQueuedGenerationActivity", () => {
     title: "Nova",
     retryLyrics: "midnight pulse",
     nowMs: Date.parse("2026-07-29T12:05:00.000Z"),
+    visibility: "public" as const,
   };
 
   it("adds a server-confirmed queued job to an undefined cache", () => {
@@ -199,6 +214,7 @@ describe("upsertQueuedGenerationActivity", () => {
         ...activity,
         id: "generation:job-1",
         retryLyrics: "midnight pulse",
+        visibility: "public",
         createdAt: "2026-07-29T12:05:00.000Z",
         updatedAt: "2026-07-29T12:05:00.000Z",
       },

@@ -59,7 +59,7 @@ function state(
     status: "pending",
     isPaused: false,
     submittedAt: BASE_MS,
-    variables: { name: "Luna" },
+    variables: { name: "Luna", isPublic: false },
     data: undefined,
     error: null,
     ...overrides,
@@ -91,7 +91,8 @@ test("ticks running to slow and removes terminal activity at the exact settlemen
       useMutation({
         mutationKey: activityMutationKeys.createDj("user-a"),
         gcTime: Infinity,
-        mutationFn: (_variables: { name: string }) => request.promise,
+        mutationFn: (_variables: { name: string; isPublic: boolean }) =>
+          request.promise,
         onMutate: () => ({ submittedUserId: "user-a" }),
       }),
     { wrapper: wrapper(queryClient) },
@@ -108,7 +109,10 @@ test("ticks running to slow and removes terminal activity at the exact settlemen
 
   let mutationPromise!: Promise<{ djId: string; avatarReady: boolean }>;
   await act(async () => {
-    mutationPromise = origin.result.current.mutateAsync({ name: "Luna" });
+    mutationPromise = origin.result.current.mutateAsync({
+      name: "Luna",
+      isPublic: true,
+    });
     await Promise.resolve();
   });
   expect(observer.result.current).toEqual([
@@ -119,6 +123,7 @@ test("ticks running to slow and removes terminal activity at the exact settlemen
       title: "Luna",
       createdAt: "2026-07-29T12:00:00.000Z",
       updatedAt: "2026-07-29T12:00:00.000Z",
+      visibility: "public",
     }),
   ]);
 
@@ -139,6 +144,7 @@ test("ticks running to slow and removes terminal activity at the exact settlemen
     expect.objectContaining({
       status: "ready",
       djId: "dj-luna",
+      visibility: "public",
       updatedAt: new Date(settledAt).toISOString(),
     }),
   );
@@ -252,7 +258,7 @@ test("filters both identity boundaries and uses mutation IDs to distinguish same
   const normalized = normalizeMutationActivities({
     states: [
       state({ mutationId: 1 }),
-      state({ mutationId: 2, variables: { name: "Nova" } }),
+      state({ mutationId: 2, variables: { name: "Nova", isPublic: true } }),
       state({ mutationId: 3, keyUserId: "user-b" }),
       state({ mutationId: 4, submittedUserId: "user-b" }),
     ],
@@ -266,6 +272,10 @@ test("filters both identity boundaries and uses mutation IDs to distinguish same
     "mutation:create-dj:2",
   ]);
   expect(normalized.items.map(({ title }) => title)).toEqual(["Luna", "Nova"]);
+  expect(normalized.items.map(({ visibility }) => visibility)).toEqual([
+    "private",
+    "public",
+  ]);
 });
 
 test("retains terminal activity until the exact five-minute settlement boundary", () => {

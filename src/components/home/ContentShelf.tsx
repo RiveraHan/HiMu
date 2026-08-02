@@ -4,6 +4,8 @@ import type { PlayerTrack } from "@/src/stores/player-store";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { Text } from "../Text";
 import { TrackCard } from "../TrackCard";
+import { useCurrentUser } from "@/src/hooks/use-auth";
+import { useTranslation } from "react-i18next";
 
 const TILE_WIDTH = 140;
 
@@ -23,6 +25,8 @@ export function ContentShelf({
   getTrackAccessibilityLabel,
 }: Props) {
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
+  const userId = useCurrentUser()?.id;
+  const { t } = useTranslation();
 
   return (
     <View style={styles.section}>
@@ -50,6 +54,8 @@ export function ContentShelf({
               cover={track.album_art_url}
               isPlaying={currentId === track.id}
               accessibilityLabel={getTrackAccessibilityLabel?.(track)}
+              isPrivate={track.owner_id === userId && track.is_public === false}
+              privateLabel={t("dj.visibility.privateLabel")}
               onPress={() => onPressTrack(track, index)}
             />
           </View>

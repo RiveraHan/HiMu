@@ -10,6 +10,7 @@ import { PlaylistCard } from "@/src/components/PlaylistCard";
 import { ScreenHeader } from "@/src/components/ScreenHeader";
 import { ToastHost } from "@/src/components/Toast";
 import { TrackCard } from "@/src/components/TrackCard";
+import { DjHero } from "@/src/components/dj/DjHero";
 import { Chip } from "@/src/components/preferences/Chip";
 import { SettingRow } from "@/src/components/profile/SettingsRow";
 import { SettingsInfoRow } from "@/src/components/settings/SettingsInfoRow";
@@ -164,6 +165,33 @@ describe("shared component translations", () => {
     expect(screen.getByText("Nueva")).toBeTruthy();
     const row = screen.getByA11yHint("Mezcla recién generada");
     expect(row).toHaveProp("accessibilityState", { selected: true });
+  });
+
+  it("renders explicit owner-private badges without deriving one resource from another", async () => {
+    const screen = await render(
+      <View>
+        <DJAvatar
+          fallback="N"
+          name="Nova"
+          isPrivate
+          privateLabel="Privado"
+          onPress={jest.fn()}
+        />
+        <TrackCard
+          title="Mezcla"
+          artist="Nova"
+          isPrivate
+          privateLabel="Privado"
+        />
+        <TrackCard title="Pública" artist="Nova" />
+        <DjHero name="Nova" isPrivate privateLabel="Privado" />
+      </View>,
+    );
+
+    expect(screen.getAllByText("Privado")).toHaveLength(3);
+    expect(screen.getAllByLabelText("Nova, Privado")).toHaveLength(2);
+    expect(screen.getByLabelText("Mezcla, Nova, Privado")).toBeTruthy();
+    expect(screen.getByLabelText("Pública, Nova")).toBeTruthy();
   });
 
   it("localizes default confirmation actions and preserves overrides", async () => {

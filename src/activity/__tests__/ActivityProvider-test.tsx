@@ -100,6 +100,7 @@ function activity(
     failureReason: status === "failed" ? "generationFailed" : null,
     recoveryAvailable: false,
     retryLyrics: "neon rain",
+    visibility: "private",
     detail: null,
     seen: false,
     ...overrides,
@@ -197,7 +198,7 @@ beforeEach(() => {
     mockStored.set(key, value);
   });
   jest.mocked(supabase.functions.invoke).mockResolvedValue({
-    data: { jobId: "job-2" },
+    data: { jobId: "job-2", isPublic: false },
     error: null,
   } as never);
 });
@@ -651,6 +652,7 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
       language: "en",
       localHour: 17,
       lyrics: "neon rain",
+      isPublic: false,
     },
     headers: { Authorization: "Bearer fixture-user-a" },
   });
@@ -660,6 +662,7 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
       status: "queued",
       djId: "dj-1",
       retryLyrics: "neon rain",
+      visibility: "private",
     }),
   ]);
   expect(invalidate).toHaveBeenCalledWith({
@@ -671,8 +674,25 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
   expect(result.current.activeCount).toBe(1);
 });
 
+test.each([undefined, null] as const)(
+  "does not retry a server mix without authoritative visibility (%s)",
+  async (visibility) => {
+    const failed = activity("generation:legacy", "failed", { visibility });
+    mockActivities = [failed];
+    const { result } = await renderActivity();
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    await act(async () => result.current.retryActivity(failed));
+
+    expect(supabase.functions.invoke).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith(
+      "The operation couldn't be completed.",
+    );
+  },
+);
+
 test("keeps an in-flight retry scoped to user A after rendering user B", async () => {
-  const invoke = deferred<{ data: { jobId: string }; error: null }>();
+  const invoke = deferred<{ data: { jobId: string; isPublic: boolean }; error: null }>();
   jest.mocked(supabase.functions.invoke).mockReturnValue(invoke.promise as never);
   const failed = activity("generation:scope-race", "failed");
   mockActivities = [failed];
@@ -699,7 +719,7 @@ test("keeps an in-flight retry scoped to user A after rendering user B", async (
   await waitFor(() => expect(rendered.result.current.items).toEqual([]));
 
   await act(async () => {
-    invoke.resolve({ data: { jobId: "must-not-reach-b" }, error: null });
+    invoke.resolve({ data: { jobId: "must-not-reach-b", isPublic: false }, error: null });
     await retry;
   });
 
@@ -719,7 +739,7 @@ test("same-ID retry refreshes cache without creating a seen receipt", async () =
   });
   mockActivities = [slow];
   jest.mocked(supabase.functions.invoke).mockResolvedValue({
-    data: { jobId: "same-job" },
+    data: { jobId: "same-job", isPublic: false },
     error: null,
   } as never);
   const queryClient = client();
@@ -788,7 +808,7 @@ test("guards unsupported retries and duplicate taps until the accepted request s
   );
 
   await act(async () => {
-    resolveInvoke({ data: { jobId: "replacement" }, error: null });
+    resolveInvoke({ data: { jobId: "replacement", isPublic: false }, error: null });
     await first;
   });
   expect(result.current.retryingIds.has(failed.id)).toBe(false);
@@ -838,7 +858,7 @@ test("preserves each user's retry flight across account switches", async () => {
 
   await act(async () => {
     invokeResolvers.forEach((resolve) =>
-      resolve({ data: { jobId: "account-race" }, error: null }),
+      resolve({ data: { jobId: "account-race", isPublic: false }, error: null }),
     );
     await Promise.all([first, second]);
   });
@@ -887,7 +907,7 @@ test("an older retry cannot clear a newer same-item flight", async () => {
 
   await act(async () => {
     invokeResolvers[0]({
-      data: { jobId: "ownership-race" },
+      data: { jobId: "ownership-race", isPublic: false },
       error: null,
     });
     await older;
@@ -907,7 +927,7 @@ test("an older retry cannot clear a newer same-item flight", async () => {
   await act(async () => {
     invokeResolvers.slice(1).forEach((resolve) =>
       resolve({
-        data: { jobId: "ownership-race" },
+        data: { jobId: "ownership-race", isPublic: false },
         error: null,
       }),
     );

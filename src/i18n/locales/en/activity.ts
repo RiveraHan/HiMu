@@ -39,4 +39,6 @@ export const activity = {
   empty: "No recent activity",
   unavailable: "Activity is unavailable",
   offline: "Activity will update when you're back online",
+  visibilityPrivate: "Private",
+  visibilityPublic: "Public",
 } as const;

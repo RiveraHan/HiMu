@@ -22,6 +22,7 @@ const generationJob: GenerationJobRow = {
   updated_at: "2026-07-29T12:00:10.000Z",
   drop_date: null,
   track_id: null,
+  is_public: false,
   djs: { id: "dj-1", name: "Nova" },
   tracks: null,
 };

@@ -1,7 +1,8 @@
 import { Pressable, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { Avatar } from "./Avatar";
 import { Text } from "./Text";
+import { Lock } from "lucide-react-native";
 
 const LABEL_WIDTH = { md: 80, lg: 104 } as const;
 
@@ -14,6 +15,8 @@ type Props = {
   size?: keyof typeof LABEL_WIDTH;
   onPress?: () => void;
   testID?: string;
+  isPrivate?: boolean;
+  privateLabel?: string;
 };
 
 export function DJAvatar({
@@ -25,7 +28,17 @@ export function DJAvatar({
   size = "md",
   onPress,
   testID,
+  isPrivate = false,
+  privateLabel,
 }: Props) {
+  const { theme } = useUnistyles();
+  const accessibilityLabel = [
+    name,
+    isLive ? "live" : null,
+    isPrivate ? privateLabel : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
   const content = (
     <>
       <View>
@@ -51,11 +64,28 @@ export function DJAvatar({
           {subtitle}
         </Text>
       )}
+      {isPrivate && privateLabel ? (
+        <View style={styles.privateBadge}>
+          <Lock size={12} color={theme.colors.onSurfaceVariant} />
+          <Text variant="labelCaps" color="onSurfaceVariant">
+            {privateLabel}
+          </Text>
+        </View>
+      ) : null}
     </>
   );
 
   if (!onPress) {
-    return <View testID={testID} style={styles.root}>{content}</View>;
+    return (
+      <View
+        accessible={isPrivate}
+        accessibilityLabel={accessibilityLabel}
+        testID={testID}
+        style={styles.root}
+      >
+        {content}
+      </View>
+    );
   }
 
   return (
@@ -63,7 +93,7 @@ export function DJAvatar({
       onPress={onPress}
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={isLive ? `${name}, live` : name}
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [styles.root, pressed && styles.pressed]}
     >
       {content}
@@ -98,5 +128,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   subtitle: {
     textAlign: "center",
+  },
+  privateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackXs,
   },
 }));

@@ -36,6 +36,9 @@ export const dj = {
     public: "PÚBLICO",
     privateDescription: "Solo tú puedes ver este DJ.",
     publicDescription: "Cualquiera puede descubrir este DJ.",
+    privateTrackDescription: "Solo tú puedes ver esta canción.",
+    publicTrackDescription: "Cualquiera puede descubrir esta canción.",
+    privateLabel: "Privado",
   },
   create: {
     title: "Crear tu DJ",
@@ -105,7 +108,7 @@ export const dj = {
     generationFailedTitle: "Falló la generación",
     generationFailed: "No se pudo generar la mezcla; no se usó tu cuota diaria. Inténtalo de nuevo.",
     startErrorTitle: "No se pudo iniciar la mezcla",
-    quotaError: "Alcanzaste el límite diario de mezclas (10). Inténtalo mañana.",
+    quotaError: "Alcanzaste el límite diario de creaciones ({{limit}}). Inténtalo mañana.",
     notAllowedError: "No puedes generar música con este DJ.",
     genericError: "Algo salió mal. Inténtalo de nuevo.",
     delete: {

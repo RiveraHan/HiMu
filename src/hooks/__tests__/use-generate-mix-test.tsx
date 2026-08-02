@@ -20,6 +20,13 @@ const generateInputRequiresTitle: {
   ? false
   : true = true;
 void generateInputRequiresTitle;
+const generateInputRequiresVisibility: {
+  djId: string;
+  title: string;
+} extends GenerateVariables
+  ? false
+  : true = true;
+void generateInputRequiresVisibility;
 
 jest.mock("@/src/api/supabase", () => ({
   supabase: { functions: { invoke: jest.fn() } },
@@ -93,6 +100,7 @@ function activity(status: ActivityItem["status"]): ActivityItem {
     failureReason: null,
     recoveryAvailable: false,
     retryLyrics: null,
+    visibility: "private",
     detail: null,
     seen: false,
   };
@@ -106,7 +114,7 @@ beforeEach(() => {
     () => ({ id: mockUserId }) as never,
   );
   jest.mocked(supabase.functions.invoke).mockResolvedValue({
-    data: { jobId: "job-1" },
+    data: { jobId: "job-1", isPublic: false },
     error: null,
   } as never);
 });
@@ -130,6 +138,7 @@ test("seeds the confirmed job before activity invalidation settles without sendi
       djId: "dj-one",
       title: "DJ One",
       lyrics: "neon rain",
+      isPublic: true,
     });
   });
 
@@ -139,6 +148,7 @@ test("seeds the confirmed job before activity invalidation settles without sendi
       language: "en",
       localHour: 17,
       lyrics: "neon rain",
+      isPublic: true,
     },
     headers: { Authorization: "Bearer fixture-listener" },
   });
@@ -149,6 +159,7 @@ test("seeds the confirmed job before activity invalidation settles without sendi
       djId: "dj-one",
       title: "DJ One",
       retryLyrics: "neon rain",
+      visibility: "private",
     }),
   ]);
   expect(invalidate).toHaveBeenCalledWith({
@@ -171,7 +182,7 @@ test("does not downgrade a running cache item when the start response races acti
   });
 
   await act(async () => {
-    await result.current.generateAsync({ djId: "dj-one", title: "DJ One" });
+    await result.current.generateAsync({ djId: "dj-one", title: "DJ One", isPublic: false });
   });
 
   expect(queryClient.getQueryData(queryKeys.generationJobs.activity("listener"))).toEqual([
@@ -190,15 +201,15 @@ test("rejects a successful Edge response without a job id", async () => {
 
   await act(async () => {
     await expect(
-      result.current.generateAsync({ djId: "dj-one", title: "DJ One" }),
-    ).rejects.toThrow("generate-mix did not return a jobId");
+      result.current.generateAsync({ djId: "dj-one", title: "DJ One", isPublic: false }),
+    ).rejects.toThrow("generate-mix returned an invalid response");
   });
 
   await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
 });
 
 test("a generate completion after rerendering A as B has no B callback effects", async () => {
-  const invoke = deferred<{ data: { jobId: string }; error: null }>();
+  const invoke = deferred<{ data: { jobId: string; isPublic: boolean }; error: null }>();
   jest.mocked(supabase.functions.invoke).mockReturnValue(invoke.promise as never);
   const queryClient = client();
   const invalidate = jest.spyOn(queryClient, "invalidateQueries");
@@ -206,11 +217,12 @@ test("a generate completion after rerendering A as B has no B callback effects",
     wrapper: wrapper(queryClient),
   });
 
-  let pending!: Promise<string>;
+  let pending!: Promise<{ jobId: string; isPublic: boolean }>;
   await act(async () => {
     pending = hook.result.current.generateAsync({
       djId: "dj-one",
       title: "DJ One",
+      isPublic: false,
     });
     await Promise.resolve();
   });
@@ -222,7 +234,7 @@ test("a generate completion after rerendering A as B has no B callback effects",
   mockUserId = "B";
   await hook.rerender(undefined);
   await act(async () => {
-    invoke.resolve({ data: { jobId: "job-a" }, error: null });
+    invoke.resolve({ data: { jobId: "job-a", isPublic: false }, error: null });
     await pending;
   });
 

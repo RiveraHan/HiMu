@@ -38,6 +38,7 @@ const dj = {
   genre_specialties: ["House"],
   is_premium: false,
   owner_id: null,
+  is_public: true,
   personality_traits: null,
 };
 const ownedDj = { ...dj, owner_id: "listener" };
@@ -49,6 +50,8 @@ const trackFixture = (id: string) => ({
   album_art_url: null,
   duration: 180,
   genre: "House",
+  owner_id: "listener",
+  is_public: false,
 });
 
 let mockDjQuery = initialQuery();
@@ -58,8 +61,10 @@ const mockRegisterContextTarget = jest.fn();
 let mockDjId = "dj-one";
 let mockHighlightTrackId: string | undefined;
 let mockOnline = true;
-let mockActiveMix: { id: string; status: string; djId: string } | null = null;
+let mockActiveMix: { id: string; status: string; djId: string; visibility?: "private" | "public" } | null = null;
 const mockPlayerLoad = jest.fn();
+const mockToastError = jest.fn();
+let mockEdgePayload = { code: null as string | null, dailyLimit: null as number | null, limit: null as number | null };
 let mockGenerateMix = {
   generate: jest.fn(),
   generateAsync: jest.fn(),
@@ -169,6 +174,30 @@ jest.mock("@/src/components/dj/DjProfileSkeleton", () => {
       React.createElement(View, { testID: "dj-tracks-skeleton" }),
   };
 });
+jest.mock("@/src/components/content/VisibilityField", () => {
+  const React = require("react");
+  const { Pressable, Text: NativeText, View } = require("react-native");
+  return {
+    VisibilityField: ({
+      value,
+      onChange,
+      disabled,
+    }: {
+      value: "private" | "public";
+      onChange: (value: "private" | "public") => void;
+      disabled?: boolean;
+    }) => React.createElement(
+      View,
+      { testID: "visibility-field", accessibilityState: { disabled } },
+      React.createElement(NativeText, null, value),
+      React.createElement(
+        Pressable,
+        { accessibilityRole: "button", accessibilityLabel: "Public", disabled, onPress: () => onChange("public") },
+        React.createElement(NativeText, null, "Public"),
+      ),
+    ),
+  };
+});
 jest.mock("@/src/onboarding", () => {
   const React = require("react");
   const { View } = require("react-native");
@@ -197,6 +226,9 @@ jest.mock("@/src/api/auth-scope", () => ({
   AuthScopeChangedError: class AuthScopeChangedError extends Error {},
   isCurrentMutationUser: () => true,
 }));
+jest.mock("@/src/api/edge-errors", () => ({
+  getEdgeErrorPayload: jest.fn(async () => mockEdgePayload),
+}));
 jest.mock("@/src/hooks/use-confirm", () => ({
   useConfirm: () => mockConfirm,
 }));
@@ -216,7 +248,7 @@ jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
 }));
 jest.mock("@/src/hooks/use-toast", () => ({
-  useToast: () => ({ error: jest.fn() }),
+  useToast: () => ({ error: mockToastError }),
 }));
 jest.mock("@/src/i18n/use-locale", () => ({
   useLocale: () => ({
@@ -263,6 +295,8 @@ describe("DJProfileScreen", () => {
     mockOnline = true;
     mockActiveMix = null;
     mockPlayerLoad.mockReset();
+    mockToastError.mockReset();
+    mockEdgePayload = { code: null, dailyLimit: null, limit: null };
     mockRegisterContextTarget.mockReset().mockReturnValue(jest.fn());
     mockConfirm.mockReset().mockResolvedValue(false);
     mockGenerateMix = {
@@ -560,6 +594,69 @@ describe("DJProfileScreen", () => {
     expect(screen.getByTestId("generating-track-card")).toBeTruthy();
   });
 
+  it("defaults track generation to private and submits the selected visibility", async () => {
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = settledQuery([]);
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByText("private")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Public" }));
+    await waitFor(() => expect(screen.getByText("public")).toBeTruthy());
+    fireEvent.press(screen.getByRole("button", { name: "Generate a new mix" }));
+
+    expect(mockGenerateMix.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ isPublic: true }),
+      expect.any(Object),
+    );
+  });
+
+  it("disables visibility selection while generation is active", async () => {
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = settledQuery([]);
+    mockActiveMix = { id: "generation:job-1", status: "running", djId: "dj-one" };
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByTestId("visibility-field")).toHaveProp(
+      "accessibilityState",
+      { disabled: true },
+    );
+    expect(screen.getByRole("button", { name: "Public" })).toBeDisabled();
+  });
+
+  it("restores the server activity visibility after returning to the profile", async () => {
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = settledQuery([]);
+    mockActiveMix = {
+      id: "generation:job-1",
+      status: "running",
+      djId: "dj-one",
+      visibility: "public",
+    };
+    const screen = await render(<DJProfileScreen />);
+
+    await waitFor(() => expect(screen.getByText("public")).toBeTruthy());
+  });
+
+  it("interpolates the authoritative daily limit in quota feedback", async () => {
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = settledQuery([]);
+    mockEdgePayload = {
+      code: "daily_quota_reached",
+      dailyLimit: 3,
+      limit: null,
+    };
+    const screen = await render(<DJProfileScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "Generate a new mix" }));
+    const options = mockGenerateMix.generate.mock.calls[0][1];
+
+    await options.onError(new Error("quota"));
+
+    expect(mockToastError).toHaveBeenCalledWith(
+      "Couldn't start the mix",
+      "Daily creation limit reached (3). Try again tomorrow.",
+    );
+  });
+
   it("preserves durable generation feedback across remounts and blocks duplicate starts", async () => {
     mockDjQuery = settledQuery(dj);
     mockTracksQuery = settledQuery([]);
@@ -606,7 +703,7 @@ describe("DJProfileScreen", () => {
     );
 
     expect(mockGenerateMix.generate).toHaveBeenCalledWith(
-      { djId: "dj-one", title: "DJ One", lyrics: undefined },
+      { djId: "dj-one", title: "DJ One", lyrics: undefined, isPublic: false },
       expect.objectContaining({ onError: expect.any(Function) }),
     );
   });

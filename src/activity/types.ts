@@ -1,3 +1,5 @@
+import type { Visibility } from "@/src/types/content-visibility";
+
 export type ActivityKind = "mix" | "create-dj" | "update-dj" | "cover";
 
 export type ActivityFailureReason =
@@ -28,6 +30,7 @@ export type ActivityItem = {
   failureReason: ActivityFailureReason | null;
   recoveryAvailable: boolean;
   retryLyrics: string | null;
+  visibility?: Visibility | null;
   detail: ActivityDetail;
   seen: boolean;
 };
@@ -43,6 +46,7 @@ export type GenerationJobRow = {
   updated_at: string;
   drop_date: string | null;
   track_id: string | null;
+  is_public: boolean;
   djs: { id: string; name: string } | null;
   tracks: {
     id: string;

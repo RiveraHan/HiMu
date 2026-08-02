@@ -25,6 +25,8 @@ export type PlayableTrack = {
   album_art_url: string | null;
   duration: number | null;
   genre: string | null;
+  owner_id?: string | null;
+  is_public?: boolean;
 };
 
 export type ContextualTrack = PlayableTrack & { mood_tags: string[] | null };
@@ -39,6 +41,7 @@ export type RecentTrack = PlayableTrack & {
     avatar_url: string | null;
     genre_specialties: string[] | null;
     owner_id: string | null;
+    is_public: boolean;
   } | null;
 };
 
@@ -52,6 +55,8 @@ export function toPlayerTrack(t: PlayableTrack): PlayerTrack {
     album_art_url: t.album_art_url,
     duration: t.duration,
     genre: t.genre,
+    owner_id: t.owner_id,
+    is_public: t.is_public,
   };
 }
 
@@ -97,11 +102,12 @@ export function useAIMixTracks() {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags",
+          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
         )
         .eq("is_ai_generated", true)
         .not("audio_url", "is", null)
-        .limit(50);
+        .limit(50)
+        .returns<ContextualTrack[]>();
 
       if (error) throw error;
 
@@ -118,11 +124,17 @@ export function useFocusTracks() {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, bpm, mood_tags",
+          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, bpm, mood_tags, owner_id, is_public",
         )
         .overlaps("mood_tags", FOCUS_MOODS)
         .not("audio_url", "is", null)
-        .limit(50);
+        .limit(50)
+        .returns<
+          (ContextualTrack & {
+            energy_level: number | null;
+            bpm: number | null;
+          })[]
+        >();
 
       if (error) throw error;
 
@@ -141,7 +153,7 @@ export function useRecentTracks(limit = 60) {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, dj_id, created_at, dj:djs(id, name, avatar_url, genre_specialties, owner_id)",
+          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public, dj_id, created_at, dj:djs(id, name, avatar_url, genre_specialties, owner_id, is_public)",
         )
         .not("audio_url", "is", null)
         .order("created_at", { ascending: false })
@@ -167,7 +179,7 @@ export function useTimeOfDayShelf() {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags",
+          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
         )
         .overlaps("mood_tags", moods)
         .not("audio_url", "is", null)

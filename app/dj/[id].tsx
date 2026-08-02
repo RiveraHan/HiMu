@@ -1,4 +1,4 @@
-import { getEdgeErrorCode } from "@/src/api/edge-errors";
+import { getEdgeErrorPayload } from "@/src/api/edge-errors";
 import {
   AuthScopeChangedError,
   isCurrentMutationUser,
@@ -22,6 +22,7 @@ import {
   DjProfileSkeleton,
   DjTracksSkeleton,
 } from "@/src/components/dj/DjProfileSkeleton";
+import { VisibilityField } from "@/src/components/content/VisibilityField";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useConfirm } from "@/src/hooks/use-confirm";
 import { useDeleteDJ } from "@/src/hooks/use-delete-dj";
@@ -36,6 +37,11 @@ import { useLocale } from "@/src/i18n/use-locale";
 import { TourTarget, useAppTour } from "@/src/onboarding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
+import {
+  DEFAULT_VISIBILITY,
+  visibilityToIsPublic,
+  type Visibility,
+} from "@/src/types/content-visibility";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   AudioLines,
@@ -94,6 +100,17 @@ export default function DJProfileScreen() {
     activeMix?.status === "queued" ||
     activeMix?.status === "running" ||
     activeMix?.status === "slow";
+  const [trackVisibility, setTrackVisibility] =
+    useState<Visibility>(DEFAULT_VISIBILITY);
+
+  useEffect(() => {
+    if (
+      activeMix?.visibility === "private" ||
+      activeMix?.visibility === "public"
+    ) {
+      setTrackVisibility(activeMix.visibility);
+    }
+  }, [activeMix?.visibility]);
 
   const user = useCurrentUser();
   const isOwner = !!dj?.owner_id && dj.owner_id === user?.id;
@@ -138,6 +155,7 @@ export default function DJProfileScreen() {
         djId: id,
         title: dj.name,
         lyrics: isOwner && isVocal && lyrics ? lyrics : undefined,
+        isPublic: visibilityToIsPublic(trackVisibility),
       },
       {
         onError: async (e) => {
@@ -145,13 +163,13 @@ export default function DJProfileScreen() {
             e instanceof AuthScopeChangedError ||
             !isCurrentMutationUser(submittedUserId)
           ) return;
-          const code = await getEdgeErrorCode(e);
+          const payload = await getEdgeErrorPayload(e);
           if (!isCurrentMutationUser(submittedUserId)) return;
           toast.error(
             t("dj.profile.startErrorTitle"),
-            code === "daily_quota_reached"
-              ? t("dj.profile.quotaError")
-              : code === "dj_not_allowed"
+            payload.code === "daily_quota_reached"
+              ? t("dj.profile.quotaError", { limit: payload.dailyLimit ?? 3 })
+              : payload.code === "dj_not_allowed"
                 ? t("dj.profile.notAllowedError")
                 : t("dj.profile.genericError"),
           );
@@ -329,6 +347,8 @@ export default function DJProfileScreen() {
                       ? t("dj.profile.residentBadge")
                       : undefined
                 }
+                isPrivate={isOwner && dj.is_public === false}
+                privateLabel={t("dj.visibility.privateLabel")}
               />
             </TourTarget>
           ) : (
@@ -343,6 +363,8 @@ export default function DJProfileScreen() {
                     ? t("dj.profile.residentBadge")
                     : undefined
               }
+              isPrivate={isOwner && dj.is_public === false}
+              privateLabel={t("dj.visibility.privateLabel")}
             />
           )}
 
@@ -390,6 +412,13 @@ export default function DJProfileScreen() {
               editable={!isGenerating}
             />
           )}
+
+          <VisibilityField
+            resource="track"
+            value={trackVisibility}
+            onChange={setTrackVisibility}
+            disabled={isGenerating}
+          />
 
           {/* Generate a new mix in this DJ's style */}
           <Pressable
@@ -501,6 +530,10 @@ export default function DJProfileScreen() {
                       }
                       title={track.title}
                       artist={track.artist}
+                      isPrivate={
+                        track.owner_id === user?.id && track.is_public === false
+                      }
+                      privateLabel={t("dj.visibility.privateLabel")}
                       cover={track.album_art_url}
                       variant="row"
                       isPlaying={currentId === track.id}

@@ -3,6 +3,7 @@ import type {
   ActivityStatus,
   GenerationJobRow,
 } from "@/src/activity/types";
+import type { Visibility } from "@/src/types/content-visibility";
 
 const MIX_SLOW_MS = 90_000;
 const MANUAL_JOB_RECOVERY_MS = 15 * 60_000;
@@ -73,6 +74,7 @@ export function normalizeGenerationJob(
           : null,
     recoveryAvailable,
     retryLyrics: row.prompt,
+    visibility: row.is_public ? "public" : "private",
     detail: null,
     seen: false,
   };
@@ -85,6 +87,7 @@ export function upsertQueuedGenerationActivity(
     djId: string;
     title: string;
     retryLyrics: string | null;
+    visibility: Visibility;
     nowMs: number;
     replaceActivityId?: string;
   },
@@ -123,6 +126,7 @@ export function upsertQueuedGenerationActivity(
     failureReason: null,
     recoveryAvailable: false,
     retryLyrics: input.retryLyrics,
+    visibility: input.visibility,
     detail: null,
     seen: false,
   };

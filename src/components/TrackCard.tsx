@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { Check, Music } from "lucide-react-native";
+import { Check, Lock, Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
@@ -18,6 +18,8 @@ type Props = {
   accessibilityHint?: string;
   highlighted?: boolean;
   highlightedLabel?: string;
+  isPrivate?: boolean;
+  privateLabel?: string;
   testID?: string;
 };
 export function TrackCard({
@@ -33,11 +35,19 @@ export function TrackCard({
   accessibilityHint,
   highlighted = false,
   highlightedLabel,
+  isPrivate = false,
+  privateLabel,
   testID,
 }: Props) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const isRow = variant === "row";
+  const spokenLabel = [
+    accessibilityLabel ?? `${title}, ${artist}`,
+    isPrivate ? privateLabel : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const coverNode = cover ? (
     <Image
@@ -58,7 +68,7 @@ export function TrackCard({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={spokenLabel}
       accessibilityHint={accessibilityHint}
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityState={{ selected: highlighted }}
@@ -87,6 +97,14 @@ export function TrackCard({
             {t("common.states.nowPlaying")}
           </Text>
         )}
+        {isPrivate && privateLabel ? (
+          <View style={styles.privateBadge}>
+            <Lock size={14} color={theme.colors.onSurfaceVariant} />
+            <Text variant="labelCaps" color="onSurfaceVariant">
+              {privateLabel}
+            </Text>
+          </View>
+        ) : null}
         {highlighted && highlightedLabel ? (
           <View style={styles.highlightBadge}>
             <Check size={14} color={theme.colors.primary} />
@@ -145,6 +163,12 @@ const styles = StyleSheet.create((theme) => ({
     gap: 2,
   },
   highlightBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: theme.spacing.stackXs,
+  },
+  privateBadge: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",

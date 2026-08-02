@@ -1,6 +1,7 @@
 import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { Lock } from "lucide-react-native";
 
 import type { ActivityItem } from "@/src/activity/types";
 import { Button } from "@/src/components/Button";
@@ -29,11 +30,18 @@ export function ActivityRow({
   retrying = false,
 }: ActivityRowProps) {
   const { t } = useTranslation();
+  const { theme } = useUnistyles();
   const failureCopy = activity.failureReason
     ? t(`activity.${activity.failureReason}`)
     : null;
   const detailCopy =
     activity.detail === "portraitUnavailable" ? t("activity.portraitUnavailable") : null;
+  const visibilityCopy =
+    activity.visibility === "private"
+      ? t("activity.visibilityPrivate")
+      : activity.visibility === "public"
+        ? t("activity.visibilityPublic")
+        : null;
 
   return (
     <View accessible={false} style={styles.row} testID="activity-row">
@@ -41,6 +49,16 @@ export function ActivityRow({
         <Text selectable variant="bodyMd">
           {activityStatusLabel(activity, t)}
         </Text>
+        {visibilityCopy ? (
+          <View style={styles.visibility}>
+            {activity.visibility === "private" ? (
+              <Lock size={14} color={theme.colors.onSurfaceVariant} />
+            ) : null}
+            <Text selectable color="onSurfaceVariant" variant="bodyMd">
+              {visibilityCopy}
+            </Text>
+          </View>
+        ) : null}
         {failureCopy ? (
           <Text selectable color="onSurfaceVariant" variant="bodyMd">
             {failureCopy}
@@ -90,5 +108,10 @@ const styles = StyleSheet.create((theme) => ({
     flexWrap: "wrap",
     alignItems: "center",
     gap: theme.spacing.stackSm,
+  },
+  visibility: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackXs,
   },
 }));

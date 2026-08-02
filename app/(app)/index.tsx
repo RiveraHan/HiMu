@@ -312,6 +312,8 @@ export default function HomeScreen() {
                 ? catalogLabel(dj.genre_specialties[0], resolvedLanguage)
                 : undefined}
               isLive={liveDJIds?.has(dj.id) ?? false}
+              isPrivate={dj.owner_id === user?.id && dj.is_public === false}
+              privateLabel={t("dj.visibility.privateLabel")}
               onPress={() => router.push(`/dj/${dj.id}`)}
             />
           ))}

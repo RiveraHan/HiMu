@@ -134,7 +134,7 @@ function keys(userId: string) {
 
 test("actual RLS query hooks never expose A's fresh cache after rerendering as B", async () => {
   mockInvoke.mockReset().mockResolvedValue({
-    data: { jobId: "job" },
+    data: { jobId: "job", isPublic: false },
     error: null,
   });
   const client = new QueryClient({

@@ -61,7 +61,7 @@ describe("generation language", () => {
     jest.clearAllMocks();
     jest.mocked(useCurrentUser).mockReturnValue({ id: "user-1" } as never);
     jest.mocked(supabase.functions.invoke).mockResolvedValue({
-      data: { jobId: "job-1" },
+      data: { jobId: "job-1", isPublic: false },
       error: null,
     } as never);
   });
@@ -77,6 +77,7 @@ describe("generation language", () => {
         djId: "dj-1",
         title: "DJ One",
         lyrics: "[Verso 1]\nSigo aquí",
+        isPublic: false,
       });
     });
 

@@ -51,6 +51,7 @@ function activity(overrides: Partial<ActivityItem> = {}): ActivityItem {
     failureReason: null,
     recoveryAvailable: false,
     retryLyrics: null,
+    visibility: "private",
     detail: null,
     seen: false,
     ...overrides,
@@ -161,6 +162,17 @@ describe("ActivityPill", () => {
 });
 
 describe("ActivityRow", () => {
+  it("shows the authoritative visibility when available and stays compatible with legacy activity", async () => {
+    const screen = await render(<ActivityRow activity={activity()} />);
+    expect(screen.getByText("Private")).toBeTruthy();
+
+    await screen.rerender(
+      <ActivityRow activity={activity({ visibility: null })} />,
+    );
+    expect(screen.queryByText("Private")).toBeNull();
+    expect(screen.queryByText("Public")).toBeNull();
+  });
+
   it.each([
     ["mix", "running", "Generating with Nova"],
     ["create-dj", "running", "Creating Nova"],
