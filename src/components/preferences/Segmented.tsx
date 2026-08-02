@@ -56,6 +56,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   segment: {
     flex: 1,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: theme.spacing.stackSm,

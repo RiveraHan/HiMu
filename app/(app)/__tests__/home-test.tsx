@@ -59,6 +59,7 @@ let mockCanContinue = false;
 let mockRegistrationCleanup = jest.fn();
 let mockOnline = true;
 const mockRouterPush = jest.fn();
+const mockToastWarning = jest.fn();
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -171,7 +172,7 @@ jest.mock("@/src/hooks/use-taste-profile", () => ({
   }),
 }));
 jest.mock("@/src/hooks/use-toast", () => ({
-  useToast: () => ({ warning: jest.fn() }),
+  useToast: () => ({ warning: mockToastWarning }),
 }));
 jest.mock("@/src/hooks/use-vibe-check", () => ({
   useVibeCheck: () => mockVibeQuery,
@@ -237,6 +238,7 @@ describe("HomeScreen", () => {
     mockDismissActiveTour.mockReset();
     mockScrollTo.mockReset();
     mockRouterPush.mockReset();
+    mockToastWarning.mockReset();
     mockRegistrationCleanup = jest.fn();
     mockRegisterHome.mockReturnValue(mockRegistrationCleanup);
   });
@@ -353,6 +355,25 @@ describe("HomeScreen", () => {
     await fireEvent.press(discover[0]);
     expect(mockRouterPush).toHaveBeenCalledWith("/discover");
     expect(screen.queryByTestId("library-AI Mixes")).toBeNull();
+  });
+
+  it("blocks a second owned DJ and interpolates the one-DJ warning", async () => {
+    mockDjsQuery = settledQuery([{
+      id: "dj-one",
+      owner_id: "user",
+      name: "DJ One",
+      avatar_url: null,
+      genre_specialties: ["House"],
+    }]);
+    const screen = await render(<HomeScreen />);
+
+    await fireEvent.press(screen.getByRole("button", { name: "New DJ" }));
+
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/create-dj");
+    expect(mockToastWarning).toHaveBeenCalledWith(
+      "DJ limit reached",
+      "You already have 1 DJ. Delete it to create another.",
+    );
   });
 
   it("renders cached short and empty refetch failures as retryable errors", async () => {

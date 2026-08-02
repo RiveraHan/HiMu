@@ -12,6 +12,7 @@ export type CreateDJInput = {
   energy: number; // 1-10
   isInstrumental: boolean;
   vibe?: string;
+  isPublic: boolean;
 };
 
 export function useCreateDJ() {

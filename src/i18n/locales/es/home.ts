@@ -24,7 +24,7 @@ export const home = {
   create: "Crear",
   djLimit: {
     title: "Límite de DJs alcanzado",
-    message: "Ya tienes 2 DJs. Elimina uno para crear otro.",
+    message: "Ya tienes {{limit}} DJ. Elimínalo para crear otro.",
   },
   freshFrequencies: "Lo nuevo de tus DJs",
   freshUnavailable: "Las frecuencias nuevas no están disponibles",

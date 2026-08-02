@@ -59,6 +59,8 @@ import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
+const MAX_OWNED_DJS = 1;
+
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
@@ -315,8 +317,10 @@ export default function HomeScreen() {
           ))}
           <Pressable
             onPress={() => {
-              if (ownCount >= 2) {
-                toast.warning(t("home.djLimit.title"), t("home.djLimit.message"));
+              if (ownCount >= MAX_OWNED_DJS) {
+                toast.warning(t("home.djLimit.title"), t("home.djLimit.message", {
+                  limit: MAX_OWNED_DJS,
+                }));
                 return;
               }
               router.push("/create-dj");

@@ -108,9 +108,21 @@ jest.mock("@/src/components/preferences/GroupedChipPicker", () => {
 });
 jest.mock("@/src/components/preferences/Segmented", () => {
   const React = require("react");
-  const { Text } = require("react-native");
-  return { Segmented: ({ options }: { options: { label: string }[] }) =>
-    React.createElement(Text, null, options.map((option) => option.label).join(" / ")) };
+  const { Pressable, Text, View } = require("react-native");
+  return { Segmented: ({ options, value, onChange, disabled }: {
+    options: { label: string; value: string }[];
+    value: string;
+    onChange: (value: string) => void;
+    disabled?: boolean;
+  }) => React.createElement(View, null, options.map((option) =>
+    React.createElement(Pressable, {
+      key: option.value,
+      accessibilityRole: "button",
+      accessibilityLabel: option.label,
+      accessibilityState: { selected: option.value === value, disabled },
+      disabled,
+      onPress: () => onChange(option.value),
+    }, React.createElement(Text, null, option.label)))) };
 });
 jest.mock("@/src/components/preferences/VibeSlider", () => {
   const React = require("react");
@@ -182,7 +194,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-test("renders the Spanish DJ wizard and submits canonical catalog values", async () => {
+test("renders Spanish visibility copy and submits private canonical DJ input by default", async () => {
   mockPending = false;
   await i18n.changeLanguage("es");
   const screen = await render(<CreateDJScreen />);
@@ -190,6 +202,8 @@ test("renders the Spanish DJ wizard and submits canonical catalog values", async
   expect(screen.getByText("Crear tu DJ")).toBeTruthy();
   expect(screen.getByText("Dar vida a mi DJ")).toBeTruthy();
   expect(screen.getByText("Géneros")).toBeTruthy();
+  expect(screen.getByText("Visibilidad")).toBeTruthy();
+  expect(screen.getByText("Solo tú puedes ver este DJ.")).toBeTruthy();
 
   await fireEvent.changeText(screen.getByPlaceholderText("p. ej., Lumen"), "Lumen");
   await fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
@@ -198,7 +212,33 @@ test("renders the Spanish DJ wizard and submits canonical catalog values", async
 
   await waitFor(() =>
     expect(mockCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ genres: ["Ambient"], moods: ["Focus"] }),
+      expect.objectContaining({
+        genres: ["Ambient"],
+        moods: ["Focus"],
+        isPublic: false,
+      }),
+      expect.any(Object),
+    ),
+  );
+});
+
+test("submits public visibility after selection in English", async () => {
+  await i18n.changeLanguage("en");
+  const screen = await render(<CreateDJScreen />);
+
+  expect(screen.getByText("Visibility")).toBeTruthy();
+  expect(screen.getByText("Only you can see this DJ.")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "PUBLIC" }));
+
+  expect(screen.getByText("Anyone can discover this DJ.")).toBeTruthy();
+  await fireEvent.changeText(screen.getByPlaceholderText("e.g. Lumen"), "Lumen");
+  await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
+
+  await waitFor(() =>
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ isPublic: true }),
       expect.any(Object),
     ),
   );
@@ -210,6 +250,8 @@ test("keeps Back available and removes the blocking overlay while creation is pe
 
   expect(screen.getByRole("button", { name: "Back" }).props.accessibilityState.disabled).toBeFalsy();
   expect(screen.queryByTestId("birth-overlay")).toBeNull();
+  expect(screen.getByRole("button", { name: "PRIVATE" }).props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByRole("button", { name: "PUBLIC" }).props.accessibilityState.disabled).toBe(true);
 });
 
 test.each([

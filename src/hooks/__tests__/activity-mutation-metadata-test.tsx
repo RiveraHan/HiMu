@@ -93,6 +93,7 @@ test("stores create identity, variables, submission context, and returned DJ ID"
     moods: ["Focus"],
     energy: 5,
     isInstrumental: true,
+    isPublic: false,
   };
 
   await act(async () => {
@@ -209,6 +210,7 @@ test("keeps an in-flight A mutation keyed and contextualized as A after the hook
       moods: [],
       energy: 5,
       isInstrumental: true,
+      isPublic: false,
     });
     await Promise.resolve();
   });

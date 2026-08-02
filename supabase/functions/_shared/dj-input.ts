@@ -10,6 +10,11 @@ export type DjInput = {
   vibe: string | null;
 };
 
+export function parseIsPublic(value: unknown): boolean {
+  if (typeof value !== "boolean") throw new Error("isPublic must be a boolean");
+  return value;
+}
+
 function pickList(value: unknown, allowed: readonly string[]): string[] | null {
   if (!Array.isArray(value)) return null;
 

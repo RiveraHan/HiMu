@@ -30,6 +30,13 @@ export const dj = {
     vibeSubtitle: "Optional - a hint of personality",
     vibePlaceholder: "e.g. late-night rooftop textures",
   },
+  visibility: {
+    title: "Visibility",
+    private: "PRIVATE",
+    public: "PUBLIC",
+    privateDescription: "Only you can see this DJ.",
+    publicDescription: "Anyone can discover this DJ.",
+  },
   create: {
     title: "Create your DJ",
     subtitle: "Shape a companion that generates music just for you.",
@@ -37,7 +44,7 @@ export const dj = {
     submit: "Bring my DJ to life",
     loading: "Giving life to {{name}}…",
     errorTitle: "Couldn't create your DJ",
-    quotaError: "You already have 2 DJs. Delete one to create another.",
+    quotaError: "You already have 1 DJ. Delete it to create another.",
     invalidError: "Please check the fields and try again.",
     genericError: "Something went wrong. Please try again.",
   },

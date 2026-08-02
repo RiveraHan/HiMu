@@ -63,7 +63,7 @@ export function useDJs() {
       const { data, error } = await supabase
         .from("djs")
         .select(
-          "id, name, slug, avatar_url, genre_specialties, is_premium, owner_id",
+          "id, name, slug, avatar_url, genre_specialties, is_premium, owner_id, is_public",
         );
 
       if (error) throw error;

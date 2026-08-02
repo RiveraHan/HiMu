@@ -5,8 +5,14 @@ import {
   ScreenHeader,
   type DjTraits,
 } from "@/src/components";
+import { VisibilityField } from "@/src/components/content/VisibilityField";
 import { useCreateDJ } from "@/src/hooks/use-create-dj";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import {
+  DEFAULT_VISIBILITY,
+  visibilityToIsPublic,
+  type Visibility,
+} from "@/src/types/content-visibility";
 import { router } from "expo-router";
 import { Sparkles } from "lucide-react-native";
 import { useState } from "react";
@@ -29,6 +35,7 @@ export default function CreateDJScreen() {
     mode: "instrumental",
     vibe: "",
   });
+  const [visibility, setVisibility] = useState<Visibility>(DEFAULT_VISIBILITY);
 
   const { mutate: createDJ, isPending } = useCreateDJ();
 
@@ -44,6 +51,7 @@ export default function CreateDJScreen() {
         energy: traits.energy,
         isInstrumental: traits.mode === "instrumental",
         vibe: traits.vibe.trim() || undefined,
+        isPublic: visibilityToIsPublic(visibility),
       },
       {
         onSuccess: ({ djId }) => router.replace(`/dj/${djId}`),
@@ -67,6 +75,11 @@ export default function CreateDJScreen() {
         />
 
         <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
+        <VisibilityField
+          value={visibility}
+          onChange={setVisibility}
+          disabled={isPending}
+        />
 
         <Button
           label={t("dj.create.submit")}

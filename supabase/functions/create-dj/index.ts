@@ -7,6 +7,7 @@
 import {
   buildAvatarPrompt,
   buildBasePrompt,
+  parseIsPublic,
   validateDjInput,
 } from "../_shared/dj-input.ts";
 import { invalid, json } from "../_shared/http.ts";
@@ -14,8 +15,10 @@ import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
-
-const MAX_DJS = 2;
+import {
+  isDjQuotaError,
+  MAX_OWNED_DJS,
+} from "./create-dj-contract.ts";
 
 function slugify(name: string): string {
   return name
@@ -27,20 +30,34 @@ function slugify(name: string): string {
 }
 
 serveAuthed(async (req, user) => {
-  const v = validateDjInput(await req.json());
+  const body = await req.json();
+  const v = validateDjInput(body);
   if (!v.ok) return invalid(v.error);
+
+  let isPublic: boolean;
+  try {
+    isPublic = parseIsPublic((body as Record<string, unknown>).isPublic);
+  } catch (error) {
+    return invalid(error instanceof Error ? error.message : "invalid input");
+  }
 
   const { name, genres, moods, energy, isInstrumental, vibe } = v.data;
 
   // Quota check
-  const { count } = await admin
+  const { count, error: countError } = await admin
     .from("djs")
     .select("id", { count: "exact", head: true })
     .eq("owner_id", user.id);
 
-  if ((count ?? 0) >= MAX_DJS) {
+  if (countError) throw countError;
+
+  if ((count ?? 0) >= MAX_OWNED_DJS) {
     return json(
-      { error: `you already have ${MAX_DJS} DJs`, code: "dj_quota_reached" },
+      {
+        error: `you already have ${MAX_OWNED_DJS} DJ`,
+        code: "dj_quota_reached",
+        limit: MAX_OWNED_DJS,
+      },
       403,
     );
   }
@@ -58,7 +75,7 @@ serveAuthed(async (req, user) => {
         name,
         slug,
         owner_id: user.id,
-        is_public: false,
+        is_public: isPublic,
         character: vibe,
         genre_specialties: genres,
         mood_tags: moods,
@@ -69,6 +86,16 @@ serveAuthed(async (req, user) => {
 
     if (error) {
       if (error.code === "23505" && attempt === 0) continue; // slug collision
+      if (isDjQuotaError(error)) {
+        return json(
+          {
+            error: `you already have ${MAX_OWNED_DJS} DJ`,
+            code: "dj_quota_reached",
+            limit: MAX_OWNED_DJS,
+          },
+          403,
+        );
+      }
       throw error;
     }
 

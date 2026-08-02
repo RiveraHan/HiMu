@@ -230,6 +230,7 @@ test("merges mutation activity and announces each kind-specific terminal result 
       moods: ["Focus"],
       energy: 5,
       isInstrumental: true,
+      isPublic: false,
     });
   });
 
@@ -314,6 +315,7 @@ test("retains mutation notification and seen state across an A to B to A switch"
       moods: [],
       energy: 5,
       isInstrumental: true,
+      isPublic: false,
     });
   });
   await waitFor(() => expect(mockToastInfo).toHaveBeenCalledTimes(1));
@@ -354,6 +356,7 @@ test("guards mutation destinations and only returns to the current track player"
       moods: [],
       energy: 5,
       isInstrumental: true,
+      isPublic: false,
     });
     await Promise.resolve();
     await rendered.result.current.cover.mutateAsync({
