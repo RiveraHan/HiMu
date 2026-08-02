@@ -1,4 +1,6 @@
 import {
+  disposePreferenceCommitQueues,
+  getOrCreatePreferenceCommitQueue,
   PreferenceCommitQueue,
   type PreferencePatch,
 } from "../preference-commit-queue";
@@ -149,6 +151,50 @@ test("dispose makes an old user's deferred completion invisible", async () => {
 
   expect(writeOptimistic).toHaveBeenCalledTimes(1);
   expect(invalidate).not.toHaveBeenCalled();
+});
+
+test("a same-user remount reuses the writer but refreshes callbacks for queued work", async () => {
+  const firstSave = deferred<void>();
+  const secondSave = deferred<void>();
+  const client = new QueryClient();
+  const originalPersist = jest.fn(() => firstSave.promise);
+  const remountedPersist = jest.fn(() => secondSave.promise);
+  const options = {
+    baseline,
+    writeOptimistic: jest.fn(),
+    cancel: jest.fn(),
+    invalidate: jest.fn(),
+    onFailure: jest.fn(),
+  };
+  const queue = getOrCreatePreferenceCommitQueue(client, "A", {
+    ...options,
+    persist: originalPersist,
+  });
+
+  queue.commit(ensureGenre("Ambient", true));
+  queue.commit((current) => ({ ...current, discoveryDepth: true }));
+  const remountedQueue = getOrCreatePreferenceCommitQueue(client, "A", {
+    ...options,
+    persist: remountedPersist,
+  });
+  expect(remountedQueue).toBe(queue);
+
+  firstSave.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  expect(originalPersist).toHaveBeenCalledTimes(1);
+  expect(remountedPersist).toHaveBeenCalledWith(
+    expect.objectContaining({
+      genres: ["Ambient"],
+      discoveryDepth: true,
+    }),
+  );
+
+  secondSave.resolve();
+  await queue.whenIdle();
+  disposePreferenceCommitQueues(client);
+  client.clear();
 });
 
 test("drains a commit queued while the idle invalidation is still pending", async () => {

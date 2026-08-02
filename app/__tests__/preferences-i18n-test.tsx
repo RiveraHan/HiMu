@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import MusicPreferencesScreen from "@/app/preferences";
 import i18n from "@/src/i18n";
 
@@ -11,6 +11,19 @@ const mockSetQueryData = jest.fn();
 const mockCancelQueries = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockToastError = jest.fn();
+let mockQueryClient: {
+  setQueryData: typeof mockSetQueryData;
+  cancelQueries: typeof mockCancelQueries;
+  invalidateQueries: typeof mockInvalidateQueries;
+};
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 jest.mock("@/src/hooks/use-music-preferences", () => ({
   useMusicPreferences: () => mockPreferencesQuery,
@@ -18,6 +31,11 @@ jest.mock("@/src/hooks/use-music-preferences", () => ({
 }));
 
 beforeEach(() => {
+  mockQueryClient = {
+    setQueryData: mockSetQueryData,
+    cancelQueries: mockCancelQueries,
+    invalidateQueries: mockInvalidateQueries,
+  };
   mockOnline = true;
   mockUpdate.mockReset().mockResolvedValue(undefined);
   mockRefetch.mockReset();
@@ -46,11 +64,7 @@ jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => ({ id: "user-a" }),
 }));
 jest.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({
-    setQueryData: mockSetQueryData,
-    cancelQueries: mockCancelQueries,
-    invalidateQueries: mockInvalidateQueries,
-  }),
+  useQueryClient: () => mockQueryClient,
 }));
 jest.mock("@/src/i18n/use-locale", () => ({
   useLocale: () => ({
@@ -131,8 +145,11 @@ test("renders Spanish preferences while mutations keep canonical values", async 
   expect(screen.getByText("Afinidad de géneros")).toBeTruthy();
   expect(screen.getByText("Relajado y ambiental")).toBeTruthy();
 
-  fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
   expect(mockUpdate).toHaveBeenCalledTimes(1);
+  await waitFor(() =>
+    expect(mockInvalidateQueries).toHaveBeenCalledTimes(1),
+  );
 });
 
 test("renders a retryable preferences query error", async () => {
@@ -148,7 +165,7 @@ test("renders a retryable preferences query error", async () => {
   const screen = await render(<MusicPreferencesScreen />);
 
   expect(screen.getByText("Something went wrong. Please try again.")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
   expect(mockRefetch).toHaveBeenCalledTimes(1);
 });
 
@@ -174,7 +191,7 @@ test("shows translated rollback feedback when a preference save fails", async ()
   mockUpdate.mockRejectedValueOnce(new Error("offline"));
   const screen = await render(<MusicPreferencesScreen />);
 
-  fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
 
   await waitFor(() =>
     expect(mockToastError).toHaveBeenCalledWith(
@@ -193,7 +210,7 @@ test("keeps cached preferences visible with a compact refetch error", async () =
 
   expect(screen.getByText("Genre Affinity")).toBeTruthy();
   expect(screen.getByText("Something went wrong. Please try again.")).toBeTruthy();
-  fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
   expect(mockRefetch).toHaveBeenCalledTimes(1);
 });
 
@@ -209,4 +226,60 @@ test("keeps cached preferences visible while offline", async () => {
 
   expect(screen.getByText("Genre Affinity")).toBeTruthy();
   expect(screen.getByText("You're offline")).toBeTruthy();
+});
+
+test("continues one cumulative preference queue across navigation and revisit", async () => {
+  await i18n.changeLanguage("en");
+  const firstSave = deferred<void>();
+  const secondSave = deferred<void>();
+  mockUpdate
+    .mockImplementationOnce(() => firstSave.promise)
+    .mockImplementationOnce(() => secondSave.promise);
+
+  const visit = await render(<MusicPreferencesScreen />);
+  await fireEvent.press(visit.getByRole("button", { name: "Ambient" }));
+  await fireEvent.press(visit.getByRole("button", { name: "Focus" }));
+  expect(mockUpdate).toHaveBeenCalledTimes(1);
+
+  await visit.rerender(<></>);
+  await visit.rerender(<MusicPreferencesScreen />);
+
+  await act(async () => {
+    firstSave.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+  expect(mockUpdate).toHaveBeenLastCalledWith({
+    genres: ["Ambient"],
+    excludedMoods: ["Focus"],
+    vibeMapping: { organicElectronic: 0.5, melancholicEuphoric: 0.5 },
+    aiFrequency: "optimal",
+    discoveryDepth: false,
+  });
+
+  await act(async () => {
+    secondSave.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await waitFor(() => {
+    expect(mockSetQueryData).toHaveBeenLastCalledWith(
+      ["music-preferences", "user-a"],
+      {
+        genres: ["Ambient"],
+        excludedMoods: ["Focus"],
+        vibeMapping: { organicElectronic: 0.5, melancholicEuphoric: 0.5 },
+        aiFrequency: "optimal",
+        discoveryDepth: false,
+      },
+    );
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["music-preferences", "user-a"],
+    });
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await visit.unmount();
 });

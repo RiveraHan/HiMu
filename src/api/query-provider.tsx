@@ -8,6 +8,7 @@ import {
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { useAuthStore } from "@/src/stores/auth-store";
+import { disposePreferenceCommitQueues } from "@/src/hooks/preference-commit-queue";
 
 function ScopedQueryRuntime({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -39,7 +40,13 @@ function ScopedQueryRuntime({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, []);
 
-  useEffect(() => () => queryClient.clear(), [queryClient]);
+  useEffect(
+    () => () => {
+      disposePreferenceCommitQueues(queryClient);
+      queryClient.clear();
+    },
+    [queryClient],
+  );
 
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

@@ -13,7 +13,10 @@ import {
   useMusicPreferences,
   useUpdateMusicPreferences,
 } from "@/src/hooks/use-music-preferences";
-import { PreferenceCommitQueue } from "@/src/hooks/preference-commit-queue";
+import {
+  getOrCreatePreferenceCommitQueue,
+  PreferenceCommitQueue,
+} from "@/src/hooks/preference-commit-queue";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useToast } from "@/src/hooks/use-toast";
@@ -54,7 +57,7 @@ export default function MusicPreferencesScreen() {
 
   const commitQueue = useMemo(
     () =>
-      new PreferenceCommitQueue({
+      getOrCreatePreferenceCommitQueue(queryClient, userId, {
         baseline: initialBaselineRef.current,
         cancel: () => queryClient.cancelQueries({ queryKey }),
         writeOptimistic: (next) => queryClient.setQueryData(queryKey, next),
@@ -66,10 +69,9 @@ export default function MusicPreferencesScreen() {
             t("common.errors.saveRestoredMessage"),
           ),
       }),
-    [queryClient, queryKey, t, toast, update],
+    [queryClient, queryKey, t, toast, update, userId],
   );
 
-  useEffect(() => () => commitQueue.dispose(), [commitQueue]);
   useEffect(() => {
     if (data) commitQueue.syncBaseline(data);
   }, [commitQueue, data]);

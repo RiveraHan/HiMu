@@ -15,6 +15,8 @@ import {
   authMutationKey,
   isCurrentMutationUser,
 } from "../auth-scope";
+import { getOrCreatePreferenceCommitQueue } from "@/src/hooks/preference-commit-queue";
+import type { MusicPreferences } from "@/src/types/music-preferences";
 
 let mockNetInfoListener: ((state: NetInfoState) => void) | undefined;
 const mockNetInfoUnsubscribe = jest.fn();
@@ -32,6 +34,14 @@ jest.mock("@react-native-community/netinfo", () => ({
 const originalExpoOs = process.env.EXPO_OS;
 const originalOnline = onlineManager.isOnline();
 const originalFocused = focusManager.isFocused();
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 afterEach(() => {
   process.env.EXPO_OS = originalExpoOs;
@@ -223,4 +233,69 @@ test("a started A completion cannot publish cache or visible side effects into B
   expect(onVisibleSuccess).not.toHaveBeenCalled();
   expect(clientB.getQueryData(["account-side-effect", "A"])).toBeUndefined();
   expect(clientB.getQueryData(["account-query", "B"])).toBe("B query");
+});
+
+const preferenceBaseline: MusicPreferences = {
+  genres: [],
+  excludedMoods: [],
+  vibeMapping: { organicElectronic: 0.5, melancholicEuphoric: 0.5 },
+  aiFrequency: "optimal",
+  discoveryDepth: false,
+};
+
+test("disposes A's preference queue before clearing its runtime at the identity boundary", async () => {
+  const firstSave = deferred<void>();
+  const persist = jest.fn(() => firstSave.promise);
+  const onFailure = jest.fn();
+  useAuthStore.setState({ session: session("A", "token-a") });
+  const hook = await renderHook(() => {
+    const userId = useAuthStore(
+      (state) => state.session?.user.id ?? "signed-out",
+    );
+    const queryClient = useQueryClient();
+    const queryKey = ["music-preferences", userId] as const;
+    const queue = getOrCreatePreferenceCommitQueue(queryClient, userId, {
+      baseline: preferenceBaseline,
+      cancel: () => queryClient.cancelQueries({ queryKey }),
+      writeOptimistic: (next) => queryClient.setQueryData(queryKey, next),
+      persist,
+      invalidate: () => queryClient.invalidateQueries({ queryKey }),
+      onFailure,
+    });
+    return { queryClient, queue };
+  }, { wrapper: QueryProvider });
+  const clientA = hook.result.current.queryClient;
+
+  await act(async () => {
+    hook.result.current.queue.commit((current) => ({
+      ...current,
+      genres: ["Ambient"],
+    }));
+    hook.result.current.queue.commit((current) => ({
+      ...current,
+      excludedMoods: ["Focus"],
+    }));
+    await Promise.resolve();
+  });
+  expect(persist).toHaveBeenCalledTimes(1);
+
+  await act(() =>
+    useAuthStore.setState({ session: session("B", "token-b") }),
+  );
+  const clientB = hook.result.current.queryClient;
+  expect(clientB).not.toBe(clientA);
+  expect(clientA.getQueryData(["music-preferences", "A"])).toBeUndefined();
+
+  await act(async () => {
+    firstSave.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(persist).toHaveBeenCalledTimes(1);
+  expect(clientA.getQueryData(["music-preferences", "A"])).toBeUndefined();
+  expect(clientB.getQueryData(["music-preferences", "A"])).toBeUndefined();
+  expect(clientB.getQueryData(["music-preferences", "B"])).toBeUndefined();
+  expect(onFailure).not.toHaveBeenCalled();
+  await hook.unmount();
 });

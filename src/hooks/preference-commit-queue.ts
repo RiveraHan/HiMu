@@ -1,4 +1,5 @@
 import type { MusicPreferences } from "@/src/types/music-preferences";
+import type { QueryClient } from "@tanstack/react-query";
 
 export type PreferencePatch = (
   current: MusicPreferences,
@@ -18,6 +19,41 @@ type PreferenceCommitQueueOptions = {
   onFailure: (error: unknown) => void;
 };
 
+const runtimeQueues = new WeakMap<
+  QueryClient,
+  Map<string | null, PreferenceCommitQueue>
+>();
+
+export function getOrCreatePreferenceCommitQueue(
+  queryClient: QueryClient,
+  userId: string | null,
+  options: PreferenceCommitQueueOptions,
+): PreferenceCommitQueue {
+  let queues = runtimeQueues.get(queryClient);
+  if (!queues) {
+    queues = new Map();
+    runtimeQueues.set(queryClient, queues);
+  }
+
+  const existing = queues.get(userId);
+  if (existing) {
+    existing.refreshOptions(options);
+    return existing;
+  }
+
+  const queue = new PreferenceCommitQueue(options);
+  queues.set(userId, queue);
+  return queue;
+}
+
+export function disposePreferenceCommitQueues(queryClient: QueryClient): void {
+  const queues = runtimeQueues.get(queryClient);
+  if (!queues) return;
+
+  runtimeQueues.delete(queryClient);
+  for (const queue of queues.values()) queue.dispose();
+}
+
 function replay(
   baseline: MusicPreferences,
   pending: readonly PendingPatch[],
@@ -30,7 +66,7 @@ function replay(
 export class PreferenceCommitQueue {
   private confirmedBaseline: MusicPreferences;
   private readonly pending: PendingPatch[] = [];
-  private readonly options: PreferenceCommitQueueOptions;
+  private options: PreferenceCommitQueueOptions;
   private nextId = 0;
   private generation = 0;
   private drainPromise: Promise<void> | null = null;
@@ -38,6 +74,10 @@ export class PreferenceCommitQueue {
   constructor(options: PreferenceCommitQueueOptions) {
     this.options = options;
     this.confirmedBaseline = options.baseline;
+  }
+
+  refreshOptions(options: PreferenceCommitQueueOptions): void {
+    this.options = options;
   }
 
   syncBaseline(next: MusicPreferences): void {
