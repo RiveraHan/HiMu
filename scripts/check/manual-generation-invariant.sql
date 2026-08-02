@@ -199,6 +199,11 @@ reset role;
 
 do $$
 begin
+  if pg_catalog.to_regprocedure(
+    'public.finalize_generated_mix(uuid,uuid,text,text,text,text,text,text[],integer,uuid,text,text,timestamptz)'
+  ) is not null then
+    raise exception 'obsolete finalize_generated_mix overload still exists';
+  end if;
   if has_function_privilege(
     'anon',
     'public.reserve_manual_generation_job(uuid,uuid,text)',
@@ -215,10 +220,38 @@ begin
   end if;
   if not has_function_privilege(
     'service_role',
+    'public.finalize_generated_mix(uuid,uuid,text,text,text,text,text,text[],integer,uuid,text,text,timestamptz,timestamptz)',
+    'execute'
+  ) then
+    raise exception 'service_role cannot finalize generated mixes';
+  end if;
+  if not has_function_privilege(
+    'service_role',
     'public.reserve_cover_generation(uuid,uuid)',
     'execute'
   ) then
     raise exception 'service_role cannot reserve cover generation';
+  end if;
+end
+$$;
+
+do $$
+declare
+  reservation record;
+begin
+  select *
+  into reservation
+  from public.reserve_manual_generation_job(
+    '00000000-0000-4000-a000-0000000000a1',
+    '00000000-0000-4000-d000-0000000000a1',
+    null
+  );
+
+  if reservation.outcome <> 'existing'
+    or reservation.job_id <> '00000000-0000-4000-e000-0000000000a1'
+    or reservation.queued_at <> '2026-07-29T12:00:00Z'::timestamptz
+  then
+    raise exception 'manual reservation did not return its exact queued token';
   end if;
 end
 $$;

@@ -11,13 +11,18 @@ import {
 } from "./generation-models.ts";
 
 type JobSummary = { id: string; status: string };
-type DailyJobSummary = JobSummary & { updatedAt: string };
+type DailyJobSummary = JobSummary & { djId: string; updatedAt: string };
 
 export const GENERATION_JOB_LEASE_MS = 15 * 60 * 1000;
 export const MANUAL_JOB_LEASE_MS = GENERATION_JOB_LEASE_MS;
 
 export type ManualJobReservation =
-  | { outcome: "created"; jobId: string; dailyLimit: number }
+  | {
+    outcome: "created";
+    jobId: string;
+    dailyLimit: number;
+    queuedAt: string;
+  }
   | { outcome: "existing"; jobId: string; dailyLimit: number }
   | { outcome: "quota"; jobId: null; dailyLimit: number };
 
@@ -42,12 +47,26 @@ export function mapManualJobReservation(
     };
   }
   if (
-    (row.outcome === "created" || row.outcome === "existing") &&
+    row.outcome === "created" &&
+    typeof row.job_id === "string" &&
+    row.job_id.length > 0 &&
+    typeof row.queued_at === "string" &&
+    row.queued_at.length > 0
+  ) {
+    return {
+      outcome: "created",
+      jobId: row.job_id,
+      dailyLimit: row.daily_limit,
+      queuedAt: row.queued_at,
+    };
+  }
+  if (
+    row.outcome === "existing" &&
     typeof row.job_id === "string" &&
     row.job_id.length > 0
   ) {
     return {
-      outcome: row.outcome,
+      outcome: "existing",
       jobId: row.job_id,
       dailyLimit: row.daily_limit,
     };
@@ -90,6 +109,7 @@ export function mapFinalizedGeneratedMix(
 
 export type RunGenerationInput = {
   jobId: string;
+  queuedAt: string;
   cfg: any;
   lyrics: string | null;
   seasoning: string[];
@@ -118,7 +138,7 @@ export type RequestDependencies = {
     userId: string;
     djId: unknown;
     dropDate: unknown;
-  }) => Promise<{ job: JobSummary | null; error: unknown }>;
+  }) => Promise<{ job: DailyJobSummary | null; error: unknown }>;
   findActiveManualJob: (
     userId: string,
     djId: unknown,
@@ -186,7 +206,11 @@ export async function handleGenerateMixRequest(
     return invalid("dropDate must be YYYY-MM-DD");
   }
 
-  const cfg = await deps.getDjConfig(djId);
+  const dailyJob = isDrop
+    ? await deps.findDailyJob(userId, dropDate)
+    : null;
+  const effectiveDjId = dailyJob?.djId ?? djId;
+  const cfg = await deps.getDjConfig(effectiveDjId);
   if (!cfg) return result(404, { error: "DJ config not found" });
 
   const owner: string | null = cfg.djs?.owner_id ?? null;
@@ -207,7 +231,7 @@ export async function handleGenerateMixRequest(
 
   if (isDrop) {
     const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
-    const existing = await deps.findDailyJob(userId, dropDate);
+    const existing = dailyJob;
     if (existing) {
       const active = existing.status === "queued" ||
         existing.status === "generating";
@@ -234,6 +258,7 @@ export async function handleGenerateMixRequest(
       deps.waitUntil(
         deps.runGeneration({
           jobId: existing.id,
+          queuedAt: requeuedAt,
           cfg,
           lyrics: null,
           seasoning,
@@ -254,6 +279,7 @@ export async function handleGenerateMixRequest(
     deps.waitUntil(
       deps.runGeneration({
         jobId: created.job.id,
+        queuedAt: created.job.updatedAt,
         cfg,
         lyrics: null,
         seasoning,
@@ -298,6 +324,7 @@ export async function handleGenerateMixRequest(
   deps.waitUntil(
     deps.runGeneration({
       jobId: reservation.jobId,
+      queuedAt: reservation.queuedAt,
       cfg,
       lyrics,
       seasoning,
@@ -346,6 +373,7 @@ export type RunDependencies = {
   ) => Promise<boolean>;
   markJobGenerating: (
     jobId: string,
+    queuedAt: string,
     startedAt: string,
   ) => Promise<boolean>;
   finalizeGeneratedMix: (input: {
@@ -368,7 +396,7 @@ export type RunDependencies = {
     jobId: string,
     error: string,
     failedAt: string,
-    attemptStartedAt?: string | null,
+    fence: { queuedAt?: string; generatingAt: string },
   ) => Promise<boolean>;
   findAudiusTrack: (externalId: string) => Promise<{ id: string } | null>;
   insertAudiusTrack: (
@@ -544,6 +572,7 @@ export async function runGeneration(
   try {
     const started = await deps.markJobGenerating(
       input.jobId,
+      input.queuedAt,
       attemptStartedAt,
     );
     if (!started) return;
@@ -648,7 +677,12 @@ export async function runGeneration(
         input.jobId,
         String(error).slice(0, 500),
         deps.now(),
-        claimed ? attemptStartedAt : null,
+        claimed
+          ? { generatingAt: attemptStartedAt }
+          : {
+            queuedAt: input.queuedAt,
+            generatingAt: attemptStartedAt,
+          },
       );
     } catch (_failureError) {
       report(deps, "job_failure_persist");

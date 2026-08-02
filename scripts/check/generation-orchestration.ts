@@ -33,19 +33,35 @@ async function main() {
   );
   assert.deepEqual(
     mapManualJobReservation(
-      [{ outcome: "created", job_id: "job-1", daily_limit: 10 }],
+      [{
+        outcome: "created",
+        job_id: "job-1",
+        daily_limit: 10,
+        queued_at: "2026-07-29T12:00:00.000Z",
+      }],
       null,
     ),
-    { outcome: "created", jobId: "job-1", dailyLimit: 10 },
+    {
+      outcome: "created",
+      jobId: "job-1",
+      dailyLimit: 10,
+      queuedAt: "2026-07-29T12:00:00.000Z",
+    },
   );
   for (const malformed of [
     [],
     [
-      { outcome: "created", job_id: "job-1", daily_limit: 10 },
+      {
+        outcome: "created",
+        job_id: "job-1",
+        daily_limit: 10,
+        queued_at: "2026-07-29T12:00:00.000Z",
+      },
       { outcome: "quota", job_id: null, daily_limit: 10 },
     ],
     [{ outcome: "unknown", job_id: "job-1", daily_limit: 10 }],
     [{ outcome: "created", job_id: null, daily_limit: 10 }],
+    [{ outcome: "created", job_id: "job-1", daily_limit: 10 }],
   ]) {
     assert.throws(
       () => mapManualJobReservation(malformed, null),
@@ -101,6 +117,11 @@ async function main() {
       owner_id: "user-1",
     },
   };
+  const persistedCfg = {
+    ...cfg,
+    dj_id: "dj-persisted",
+    djs: { ...cfg.djs, name: "Persisted DJ" },
+  };
 
   function requestDeps(overrides: Record<string, unknown> = {}) {
     const calls: Array<{ name: string; value?: unknown }> = [];
@@ -131,7 +152,15 @@ async function main() {
       },
       createDailyJob: async () => {
         calls.push({ name: "createDailyJob" });
-        return { job: { id: "daily-new", status: "queued" }, error: null };
+        return {
+          job: {
+            id: "daily-new",
+            status: "queued",
+            djId: "dj-1",
+            updatedAt: "2026-07-29T12:00:00.000Z",
+          },
+          error: null,
+        };
       },
       findActiveManualJob: async () => {
         calls.push({ name: "findActiveManualJob" });
@@ -150,7 +179,12 @@ async function main() {
       },
       reserveManualJob: async (input: unknown) => {
         calls.push({ name: "reserveManualJob", value: input });
-        return { outcome: "created", jobId: "manual-new", dailyLimit: 10 };
+        return {
+          outcome: "created",
+          jobId: "manual-new",
+          dailyLimit: 10,
+          queuedAt: "2026-07-29T12:00:00.000Z",
+        };
       },
       runGeneration: async (input: unknown) => {
         calls.push({ name: "runGeneration", value: input });
@@ -371,6 +405,7 @@ async function main() {
         return {
           id: "daily-ready",
           status: "ready",
+          djId: "dj-1",
           updatedAt: "2026-07-22T11:00:00.000Z",
         };
       },
@@ -400,6 +435,7 @@ async function main() {
         return {
           id: "daily-fresh",
           status: "generating",
+          djId: "dj-1",
           updatedAt: "2026-07-29T11:45:00.000Z",
         };
       },
@@ -426,6 +462,7 @@ async function main() {
         return {
           id: "daily-stale",
           status: "queued",
+          djId: "dj-1",
           updatedAt: "2026-07-29T11:44:59.000Z",
         };
       },
@@ -464,11 +501,13 @@ async function main() {
           ? {
             id: "daily-stale",
             status: "generating",
+            djId: "dj-1",
             updatedAt: "2026-07-29T11:44:00.000Z",
           }
           : {
             id: "daily-race-winner",
             status: "queued",
+            djId: "dj-1",
             updatedAt: "2026-07-29T12:00:00.000Z",
           };
       },
@@ -501,8 +540,57 @@ async function main() {
       findDailyJob: async () => {
         calls.push({ name: "findDailyJob" });
         return {
+          id: "daily-persisted-dj",
+          status: "generating",
+          djId: "dj-persisted",
+          updatedAt: "2026-07-29T11:44:00.000Z",
+        };
+      },
+      getDjConfig: async (djId: string) => {
+        calls.push({ name: "getDjConfig", value: djId });
+        return djId === "dj-persisted" ? persistedCfg : cfg;
+      },
+      buildSeasoning: async (_userId: string, dj: { name?: string }) => {
+        calls.push({ name: "buildSeasoning", value: dj.name });
+        return ["persisted seasoning"];
+      },
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-request",
+        language: "en",
+        dropDate: "2026-07-29",
+        localHour: 12,
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "daily-persisted-dj" },
+    });
+    assert.deepEqual(
+      calls.filter(({ name }) => name === "getDjConfig").map(({ value }) => value),
+      ["dj-persisted"],
+    );
+    assert.equal(
+      calls.find(({ name }) => name === "buildSeasoning")?.value,
+      "Persisted DJ",
+    );
+    const scheduled = calls.find(({ name }) => name === "runGeneration")
+      ?.value as { cfg?: { dj_id?: string }; queuedAt?: string } | undefined;
+    assert.equal(scheduled?.cfg?.dj_id, "dj-persisted");
+    assert.equal(scheduled?.queuedAt, "2026-07-29T12:00:00.000Z");
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      findDailyJob: async () => {
+        calls.push({ name: "findDailyJob" });
+        return {
           id: "daily-failed",
           status: "failed",
+          djId: "dj-1",
           updatedAt: "2026-07-29T11:00:00.000Z",
         };
       },
@@ -542,6 +630,7 @@ async function main() {
           : {
             id: "daily-create-race-winner",
             status: "queued",
+            djId: "dj-1",
             updatedAt: "2026-07-29T12:00:00.000Z",
           };
       },
@@ -592,19 +681,24 @@ async function main() {
   );
 
   type ModelEvent = { role: string; language: string };
+  const defaultQueuedAt = "2026-07-22T11:59:00.000Z";
   function runDeps(overrides: Record<string, unknown> = {}) {
     const updates: Array<{
       jobId: string;
       attemptStartedAt: string;
       patch: Record<string, unknown>;
     }> = [];
-    const marks: Array<{ jobId: string; startedAt: string }> = [];
+    const marks: Array<{
+      jobId: string;
+      queuedAt: string;
+      startedAt: string;
+    }> = [];
     const finalizations: Array<Record<string, unknown>> = [];
     const failures: Array<{
       jobId: string;
       error: string;
       failedAt: string;
-      attemptStartedAt?: string | null;
+      fence?: { queuedAt?: string; generatingAt: string };
     }> = [];
     const puts: Array<{ key: string; bytes: number[]; contentType: string }> = [];
     const coverInputs: string[] = [];
@@ -622,8 +716,12 @@ async function main() {
         updates.push({ jobId, attemptStartedAt, patch });
         return true;
       },
-      markJobGenerating: async (jobId: string, startedAt: string) => {
-        marks.push({ jobId, startedAt });
+      markJobGenerating: async (
+        jobId: string,
+        queuedAt: string,
+        startedAt: string,
+      ) => {
+        marks.push({ jobId, queuedAt, startedAt });
         return true;
       },
       finalizeGeneratedMix: async (input: Record<string, unknown>) => {
@@ -634,9 +732,9 @@ async function main() {
         jobId: string,
         error: string,
         failedAt: string,
-        attemptStartedAt?: string | null,
+        fence?: { queuedAt?: string; generatingAt: string },
       ) => {
-        failures.push({ jobId, error, failedAt, attemptStartedAt });
+        failures.push({ jobId, error, failedAt, fence });
         return true;
       },
       findAudiusTrack: async () => null,
@@ -691,12 +789,25 @@ async function main() {
   }
 
   {
+    const claims: Array<{
+      jobId: string;
+      queuedAt: string;
+      startedAt: string;
+    }> = [];
     const state = runDeps({
-      markJobGenerating: async () => false,
+      markJobGenerating: async (
+        jobId: string,
+        queuedAt: string,
+        startedAt: string,
+      ) => {
+        claims.push({ jobId, queuedAt, startedAt });
+        return false;
+      },
     });
     await runGeneration(
       {
         jobId: "job-cas-lost",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -704,11 +815,60 @@ async function main() {
       },
       state.deps,
     );
+    assert.deepEqual(claims, [{
+      jobId: "job-cas-lost",
+      queuedAt: defaultQueuedAt,
+      startedAt: "2026-07-22T12:00:00.000Z",
+    }]);
     assert.deepEqual(state.replicateInputs, []);
     assert.deepEqual(state.puts, []);
     assert.deepEqual(state.finalizations, []);
     assert.deepEqual(state.failures, []);
     assert.deepEqual(state.deletes, []);
+  }
+
+  {
+    const state = runDeps({
+      pickAudiusDrop: async () => ({
+        pick: {
+          id: "persisted-dj-audius",
+          title: "Persisted pick",
+          user: { name: "Persisted artist" },
+          duration: 180,
+        },
+        caption: "Persisted caption",
+      }),
+    });
+    await runGeneration(
+      {
+        jobId: "job-persisted-dj-audius",
+        queuedAt: defaultQueuedAt,
+        cfg: persistedCfg,
+        lyrics: null,
+        seasoning: ["persisted seasoning"],
+        language: "en",
+        drop: { localHour: 12 },
+      },
+      state.deps,
+    );
+    assert.equal(state.insertedAudius[0]?.dj_id, "dj-persisted");
+    assert.equal(state.updates[0]?.jobId, "job-persisted-dj-audius");
+  }
+
+  {
+    const state = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-persisted-dj-generated",
+        queuedAt: defaultQueuedAt,
+        cfg: persistedCfg,
+        lyrics: null,
+        seasoning: ["persisted seasoning"],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.equal(state.finalizations[0]?.djId, "dj-persisted");
   }
 
   {
@@ -718,6 +878,7 @@ async function main() {
     const second = runDeps({ now: () => secondStartedAt });
     const input = {
       jobId: "job-recovered-attempt",
+      queuedAt: defaultQueuedAt,
       cfg,
       lyrics: null,
       seasoning: [],
@@ -753,7 +914,10 @@ async function main() {
     const reachedProvider = new Promise<void>((resolve) => {
       providerReached = resolve;
     });
-    const failureAttempts: Array<string | null | undefined> = [];
+    const failureFences: Array<{
+      queuedAt?: string;
+      generatingAt: string;
+    }> = [];
     const state = runDeps({
       now: () => staleStartedAt,
       replicateRun: async () => {
@@ -772,16 +936,17 @@ async function main() {
         _jobId: string,
         _error: string,
         _failedAt: string,
-        attemptStartedAt?: string | null,
+        fence: { queuedAt?: string; generatingAt: string },
       ) => {
-        failureAttempts.push(attemptStartedAt);
-        return attemptStartedAt === activeAttempt;
+        failureFences.push(fence);
+        return fence.generatingAt === activeAttempt;
       },
     });
 
     const staleRun = runGeneration(
       {
         jobId: "job-paused-stale-attempt",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -795,7 +960,7 @@ async function main() {
     await staleRun;
 
     assert.equal(state.finalizations[0]?.attemptStartedAt, staleStartedAt);
-    assert.deepEqual(failureAttempts, [staleStartedAt]);
+    assert.deepEqual(failureFences, [{ generatingAt: staleStartedAt }]);
     assert.deepEqual(
       state.deletes,
       [],
@@ -812,6 +977,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-finalize-failure",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -820,9 +986,9 @@ async function main() {
       state.deps,
     );
     assert.equal(state.failures.length, 1);
-    assert.equal(
-      state.failures[0]?.attemptStartedAt,
-      "2026-07-22T12:00:00.000Z",
+    assert.deepEqual(
+      state.failures[0]?.fence,
+      { generatingAt: "2026-07-22T12:00:00.000Z" },
     );
     assert.deepEqual(state.deletes, [[
       "tracks/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
@@ -846,6 +1012,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-terminal-ambiguous",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -864,14 +1031,84 @@ async function main() {
   }
 
   {
+    const queuedAt = "2026-07-22T11:59:00.000Z";
+    const replacementStartedAt = "2026-07-22T12:16:00.000Z";
+    let status = "queued";
+    let updatedAt = queuedAt;
+    const fences: unknown[] = [];
+    const state = runDeps({
+      markJobGenerating: async () => {
+        status = "generating";
+        updatedAt = replacementStartedAt;
+        throw new Error("claim response arrived after replacement");
+      },
+      failJobIfActive: async (
+        _jobId: string,
+        _error: string,
+        _failedAt: string,
+        fence: {
+          queuedAt?: string;
+          generatingAt: string;
+        },
+      ) => {
+        fences.push(fence);
+        const matchesQueued = status === "queued" &&
+          updatedAt === fence?.queuedAt;
+        const matchesGenerating = status === "generating" &&
+          updatedAt === fence?.generatingAt;
+        if (!matchesQueued && !matchesGenerating) return false;
+        status = "failed";
+        return true;
+      },
+    });
+    await runGeneration(
+      {
+        jobId: "job-claim-replacement-race",
+        queuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.deepEqual(fences, [{
+      queuedAt,
+      generatingAt: "2026-07-22T12:00:00.000Z",
+    }]);
+    assert.equal(status, "generating");
+    assert.equal(updatedAt, replacementStartedAt);
+    assert.deepEqual(state.deletes, []);
+  }
+
+  {
+    let status = "queued";
+    let updatedAt = defaultQueuedAt;
     const state = runDeps({
       markJobGenerating: async () => {
         throw new Error("generating transition failed");
+      },
+      failJobIfActive: async (
+        jobId: string,
+        error: string,
+        failedAt: string,
+        fence: { queuedAt?: string; generatingAt: string },
+      ) => {
+        state.failures.push({ jobId, error, failedAt, fence });
+        const matchesQueued = status === "queued" &&
+          updatedAt === fence.queuedAt;
+        const matchesGenerating = status === "generating" &&
+          updatedAt === fence.generatingAt;
+        if (!matchesQueued && !matchesGenerating) return false;
+        status = "failed";
+        updatedAt = failedAt;
+        return true;
       },
     });
     await runGeneration(
       {
         jobId: "job-generating-error",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -881,7 +1118,11 @@ async function main() {
     );
     assert.equal(state.failures.length, 1);
     assert.equal(state.failures[0]?.jobId, "job-generating-error");
-    assert.equal(state.failures[0]?.attemptStartedAt, null);
+    assert.deepEqual(state.failures[0]?.fence, {
+      queuedAt: defaultQueuedAt,
+      generatingAt: "2026-07-22T12:00:00.000Z",
+    });
+    assert.equal(status, "failed");
     assert.match(state.failures[0]?.error ?? "", /generating transition failed/);
     assert.deepEqual(state.modelEvents, []);
     assert.deepEqual(state.replicateInputs, []);
@@ -896,20 +1137,30 @@ async function main() {
 
   {
     let status = "queued";
+    let updatedAt = defaultQueuedAt;
     const state = runDeps({
-      markJobGenerating: async () => {
+      markJobGenerating: async (
+        _jobId: string,
+        _queuedAt: string,
+        startedAt: string,
+      ) => {
         status = "generating";
+        updatedAt = startedAt;
         throw new Error("ambiguous generating response");
       },
       failJobIfActive: async (
         jobId: string,
         error: string,
         failedAt: string,
-        attemptStartedAt?: string | null,
+        fence: { queuedAt?: string; generatingAt: string },
       ) => {
-        state.failures.push({ jobId, error, failedAt, attemptStartedAt });
+        state.failures.push({ jobId, error, failedAt, fence });
         if (jobId !== "job-ambiguous-generating") return false;
-        if (status !== "queued" && status !== "generating") return false;
+        const matchesQueued = status === "queued" &&
+          updatedAt === fence.queuedAt;
+        const matchesGenerating = status === "generating" &&
+          updatedAt === fence.generatingAt;
+        if (!matchesQueued && !matchesGenerating) return false;
         status = "failed";
         return true;
       },
@@ -917,6 +1168,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-ambiguous-generating",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -927,7 +1179,10 @@ async function main() {
     assert.equal(status, "failed");
     assert.equal(state.failures.length, 1);
     assert.equal(state.failures[0]?.jobId, "job-ambiguous-generating");
-    assert.equal(state.failures[0]?.attemptStartedAt, null);
+    assert.deepEqual(state.failures[0]?.fence, {
+      queuedAt: defaultQueuedAt,
+      generatingAt: "2026-07-22T12:00:00.000Z",
+    });
     assert.deepEqual(state.modelEvents, []);
     assert.deepEqual(state.replicateInputs, []);
     assert.deepEqual(state.deletes, [[
@@ -949,6 +1204,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-claim-compensation-failed",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -972,6 +1228,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-music-failure",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -999,6 +1256,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-generated-caption",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -1046,6 +1304,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-stale-audius-attempt",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -1091,6 +1350,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-audius-caption",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -1126,6 +1386,7 @@ async function main() {
     await runGeneration(
       {
         jobId: `job-missing-${language}`,
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],
@@ -1146,6 +1407,7 @@ async function main() {
     await runGeneration(
       {
         jobId: "job-observability",
+        queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
         seasoning: [],

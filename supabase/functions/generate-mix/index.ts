@@ -124,12 +124,17 @@ const generationDependencies = {
       .maybeSingle();
     return mapUpdatedRow(data, error);
   },
-  markJobGenerating: async (jobId: string, startedAt: string) => {
+  markJobGenerating: async (
+    jobId: string,
+    queuedAt: string,
+    startedAt: string,
+  ) => {
     const { data, error } = await admin
       .from("generation_jobs")
       .update({ status: "generating", error: null, updated_at: startedAt })
       .eq("id", jobId)
       .eq("status", "queued")
+      .eq("updated_at", queuedAt)
       .select("id")
       .maybeSingle();
     return mapUpdatedRow(data, error);
@@ -179,25 +184,31 @@ const generationDependencies = {
     jobId: string,
     errorMessage: string,
     failedAt: string,
-    attemptStartedAt?: string | null,
+    fence: { queuedAt?: string; generatingAt: string },
   ) => {
-    const update = admin
-      .from("generation_jobs")
-      .update({
-        status: "failed",
-        error: errorMessage,
-        updated_at: failedAt,
-      })
-      .eq("id", jobId);
-    const activeUpdate = attemptStartedAt
-      ? update
-        .eq("status", "generating")
-        .eq("updated_at", attemptStartedAt)
-      : update.in("status", ["queued", "generating"]);
-    const { data, error } = await activeUpdate
-      .select("id")
-      .maybeSingle();
-    return mapUpdatedRow(data, error);
+    const expected = fence.queuedAt
+      ? [
+        { status: "queued", updatedAt: fence.queuedAt },
+        { status: "generating", updatedAt: fence.generatingAt },
+      ]
+      : [{ status: "generating", updatedAt: fence.generatingAt }];
+
+    for (const state of expected) {
+      const { data, error } = await admin
+        .from("generation_jobs")
+        .update({
+          status: "failed",
+          error: errorMessage,
+          updated_at: failedAt,
+        })
+        .eq("id", jobId)
+        .eq("status", state.status)
+        .eq("updated_at", state.updatedAt)
+        .select("id")
+        .maybeSingle();
+      if (mapUpdatedRow(data, error)) return true;
+    }
+    return false;
   },
   findAudiusTrack: async (externalId: string) => {
     const { data } = await admin
@@ -252,13 +263,18 @@ serveAuthed(async (req, user) => {
     findDailyJob: async (userId, dropDate) => {
       const { data, error } = await admin
         .from("generation_jobs")
-        .select("id, status, updated_at")
+        .select("id, status, dj_id, updated_at")
         .eq("user_id", userId)
         .eq("drop_date", dropDate)
         .maybeSingle();
       if (error) throw error;
       return data
-        ? { id: data.id, status: data.status, updatedAt: data.updated_at }
+        ? {
+          id: data.id,
+          status: data.status,
+          djId: data.dj_id,
+          updatedAt: data.updated_at,
+        }
         : null;
     },
     requeueDailyJob: async (
@@ -292,7 +308,17 @@ serveAuthed(async (req, user) => {
         })
         .select()
         .single();
-      return { job: data, error };
+      return {
+        job: data
+          ? {
+            id: data.id,
+            status: data.status,
+            djId: data.dj_id,
+            updatedAt: data.updated_at,
+          }
+          : null,
+        error,
+      };
     },
     findActiveManualJob: async (userId, djId) => {
       const { data, error } = await admin
