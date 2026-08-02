@@ -242,6 +242,8 @@ async function main() {
           duration: cfg.is_instrumental === false ? null : v.dur,
           is_ai_generated: true,
           dj_id: dj.id,
+          owner_id: null,
+          is_public: true,
         });
         if (insErr) throw insErr;
         ok++;

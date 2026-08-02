@@ -47,11 +47,15 @@ async function main() {
   const client = createClient(apiUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const raceClient = createClient(apiUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
   const nonce = crypto.randomUUID();
   const userIds: string[] = [];
+  const djIds: string[] = [];
 
   try {
-    for (const label of ["a", "b"]) {
+    for (const label of ["a", "b", "c"]) {
       const { data, error } = await client.auth.admin.createUser({
         email: `quota-${label}-${nonce}@example.invalid`,
         email_confirm: true,
@@ -60,13 +64,37 @@ async function main() {
       if (error || !data.user) throw error ?? new Error("could not create user");
       userIds.push(data.user.id);
     }
-    const [userA, userB] = userIds;
+    const [userA, userB, userC] = userIds;
+
+    const cDjRows = ["first", "second"].map((label) => ({
+      id: crypto.randomUUID(),
+      owner_id: userC,
+      name: `Quota DJ c ${label}`,
+      slug: `quota-c-${label}-${nonce}`,
+      is_public: false,
+    }));
+    djIds.push(...cDjRows.map((row) => row.id));
+    const cRace = await Promise.all([
+      client.from("djs").insert(cDjRows[0]),
+      raceClient.from("djs").insert(cDjRows[1]),
+    ]);
+    assert.equal(cRace.filter(({ error }) => error === null).length, 1);
+    const cLoser = cRace.find(({ error }) => error !== null);
+    assert.equal(cLoser?.error?.code, "P0001");
+    assert.equal(cLoser?.error?.message, "dj_quota_reached");
+
+    const { count: cDjCount, error: cDjCountError } = await client
+      .from("djs")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", userC);
+    if (cDjCountError) throw cDjCountError;
+    assert.equal(cDjCount, 1);
 
     const djRows = [
       { id: crypto.randomUUID(), owner_id: userA, label: "a1" },
-      { id: crypto.randomUUID(), owner_id: userA, label: "a2" },
+      { id: crypto.randomUUID(), owner_id: null, label: "a2" },
       { id: crypto.randomUUID(), owner_id: userB, label: "b1" },
-      { id: crypto.randomUUID(), owner_id: userB, label: "b2" },
+      { id: crypto.randomUUID(), owner_id: null, label: "b2" },
     ].map((row) => ({
       id: row.id,
       owner_id: row.owner_id,
@@ -74,23 +102,26 @@ async function main() {
       slug: `quota-${row.label}-${nonce}`,
       is_public: false,
     }));
+    djIds.push(...djRows.map((row) => row.id));
     const { error: djError } = await client.from("djs").insert(djRows);
     if (djError) throw djError;
 
     const [djA1, djA2, djB1, djB2] = djRows;
     const recent = new Date(Date.now() - 60_000).toISOString();
     const seedJobs = [
-      ...Array.from({ length: 9 }, () => ({
+      ...Array.from({ length: 2 }, () => ({
         user_id: userA,
         dj_id: djA1.id,
         status: "ready",
+        is_public: false,
         created_at: recent,
         updated_at: recent,
       })),
-      ...Array.from({ length: 9 }, () => ({
+      ...Array.from({ length: 2 }, () => ({
         user_id: userB,
         dj_id: djB1.id,
         status: "ready",
+        is_public: false,
         created_at: recent,
         updated_at: recent,
       })),
@@ -106,16 +137,22 @@ async function main() {
       title: "Quota race track",
       artist: "Quota DJ b1",
       dj_id: djB1.id,
+      owner_id: userB,
+      is_public: false,
     });
     if (trackError) throw trackError;
 
-    const aDjs = [djA1.id, djA2.id];
+    const aRequests = [
+      { djId: djA1.id, isPublic: true },
+      { djId: djA2.id, isPublic: false },
+    ];
     const aRace = await Promise.all(
-      aDjs.map((djId) =>
+      aRequests.map(({ djId, isPublic }) =>
         rpcRow(client, "reserve_manual_generation_job", {
           p_user_id: userA,
           p_dj_id: djId,
           p_prompt: null,
+          p_is_public: isPublic,
         })
       ),
     );
@@ -123,19 +160,31 @@ async function main() {
       aRace.map((row) => row.outcome).sort(),
       ["created", "quota"],
     );
-    assert.equal(await usage(client, userA), 10);
+    for (const row of aRace) assert.equal(row.daily_limit, 3);
+    const aQuota = aRace.find((row) => row.outcome === "quota");
+    assert.deepEqual(aQuota, {
+      outcome: "quota",
+      job_id: null,
+      daily_limit: 3,
+      queued_at: null,
+      is_public: null,
+    });
+    assert.equal(await usage(client, userA), 3);
 
     const [bManual, bCover] = await Promise.all([
       rpcRow(client, "reserve_manual_generation_job", {
         p_user_id: userB,
         p_dj_id: djB2.id,
         p_prompt: null,
+        p_is_public: true,
       }),
       rpcRow(client, "reserve_cover_generation", {
         p_user_id: userB,
         p_track_id: trackId,
       }),
     ]);
+    assert.equal(bManual.daily_limit, 3);
+    assert.equal(bCover.daily_limit, 3);
     assert.equal(
       [bManual.outcome, bCover.outcome].filter((outcome) =>
         outcome === "created" || outcome === "reserved"
@@ -147,18 +196,30 @@ async function main() {
         .length,
       1,
     );
-    assert.equal(await usage(client, userB), 10);
+    assert.equal(await usage(client, userB), 3);
 
-    const aWinningDj = aDjs[aRace.findIndex((row) => row.outcome === "created")];
+    const aWinningIndex = aRace.findIndex((row) => row.outcome === "created");
+    const aWinner = aRace[aWinningIndex];
+    const aWinningRequest = aRequests[aWinningIndex];
+    assert.equal(aWinner.is_public, aWinningRequest.isPublic);
+    assert.equal(typeof aWinner.queued_at, "string");
     const aReconnect = await rpcRow(client, "reserve_manual_generation_job", {
       p_user_id: userA,
-      p_dj_id: aWinningDj,
+      p_dj_id: aWinningRequest.djId,
       p_prompt: null,
+      p_is_public: !aWinningRequest.isPublic,
     });
     assert.equal(aReconnect.outcome, "existing");
+    assert.equal(aReconnect.job_id, aWinner.job_id);
+    assert.equal(aReconnect.queued_at, aWinner.queued_at);
+    assert.equal(aReconnect.daily_limit, 3);
+    assert.equal(aReconnect.is_public, aWinningRequest.isPublic);
 
     console.log("generation quota concurrency checks passed");
   } finally {
+    if (djIds.length > 0) {
+      await client.from("djs").delete().in("id", djIds);
+    }
     await Promise.allSettled(
       userIds.map((userId) => client.auth.admin.deleteUser(userId)),
     );
