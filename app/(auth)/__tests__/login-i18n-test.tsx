@@ -58,6 +58,12 @@ describe("Login translations", () => {
     jest.restoreAllMocks();
   });
 
+  it("renders without initializing Supabase when public configuration is absent", async () => {
+    const screen = await render(<LoginScreen />);
+
+    expect(screen.getByText("Bienvenido a HiMu")).toBeTruthy();
+  });
+
   it("renders only the working authentication entry point in Spanish", async () => {
     const screen = await render(<LoginScreen />);
 

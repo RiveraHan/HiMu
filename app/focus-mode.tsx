@@ -93,7 +93,8 @@ export default function FocusModeScreen() {
     !online && focusQuery.fetchStatus === "paused" && focusData === undefined;
   const focusLoading = isInitialQueryLoading(focusQuery);
   const blockingFocusError = focusQuery.isError && focusData === undefined;
-  const focusEmpty = focusData !== undefined && focusData.length === 0;
+  const focusEmpty =
+    timer.status === "idle" && focusData !== undefined && focusQueue.length === 0;
 
   const closeFocus = () => {
     if (router.canGoBack()) router.back();

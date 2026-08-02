@@ -17,11 +17,6 @@ export * from "./Tag";
 export * from "./Text";
 export * from "./TrackCard";
 
-// Activity
-export * from "./activity/ActivityPanel";
-export * from "./activity/ActivityPill";
-export * from "./activity/ActivityRow";
-
 // Skeletons
 export * from "./skeleton/Skeleton";
 export * from "./skeleton/ContentSkeletons";

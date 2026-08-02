@@ -50,6 +50,7 @@ let mockMinutes = 25;
 let mockOnline = true;
 let mockCanGoBack = true;
 let mockReducedMotion = false;
+let mockExcludedMoods = new Set<string>();
 let mockFocusQuery: MockFocusQuery = {
   data: [focusTrack],
   isPending: false,
@@ -101,7 +102,9 @@ jest.mock("@/src/hooks/use-focus-timer", () => ({
 }));
 jest.mock("@/src/hooks/use-home", () => ({ useFocusTracks: () => mockFocusQuery }));
 jest.mock("@/src/hooks/use-online-status", () => ({ useOnlineStatus: () => mockOnline }));
-jest.mock("@/src/hooks/use-taste-profile", () => ({ useTasteProfile: () => ({ excludedMoods: new Set<string>() }) }));
+jest.mock("@/src/hooks/use-taste-profile", () => ({
+  useTasteProfile: () => ({ excludedMoods: mockExcludedMoods }),
+}));
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ toggle: jest.fn(), next: jest.fn(), prev: jest.fn(), load: jest.fn() }),
 }));
@@ -138,6 +141,7 @@ beforeEach(() => {
   mockOnline = true;
   mockCanGoBack = true;
   mockReducedMotion = false;
+  mockExcludedMoods = new Set<string>();
   mockFocusQuery = {
     data: [focusTrack],
     isPending: false,
@@ -171,6 +175,16 @@ describe("FocusModeScreen data states", () => {
 
     expect(screen.getByText("No focus tracks are available")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Discover music" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start focus session" })).toBeDisabled();
+  });
+
+  it("shows empty recovery when taste exclusions remove every Focus track", async () => {
+    mockExcludedMoods = new Set(["Focus"]);
+    const screen = await render(<FocusModeScreen />);
+
+    expect(screen.getByText("No focus tracks are available")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Discover music" })).toBeTruthy();
+    expect(screen.queryByTestId("focus-orb")).toBeNull();
     expect(screen.getByRole("button", { name: "Start focus session" })).toBeDisabled();
   });
 
