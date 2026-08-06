@@ -15,6 +15,12 @@ const track = {
 let mockShuffle = false;
 let mockRepeatMode: "off" | "all" | "one" = "off";
 const mockRegenerate = jest.fn();
+const mockToastError = jest.fn();
+let mockEdgePayload = {
+  code: null as string | null,
+  dailyLimit: null as number | null,
+  limit: null as number | null,
+};
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -52,7 +58,10 @@ jest.mock("@/src/hooks/use-favorites", () => ({
   useToggleFavorite: () => ({ mutate: jest.fn() }),
 }));
 jest.mock("@/src/hooks/use-toast", () => ({
-  useToast: () => ({ error: jest.fn() }),
+  useToast: () => ({ error: mockToastError }),
+}));
+jest.mock("@/src/api/edge-errors", () => ({
+  getEdgeErrorPayload: jest.fn(async () => mockEdgePayload),
 }));
 jest.mock("expo-router", () => ({
   router: { canDismiss: () => true, dismiss: jest.fn(), replace: jest.fn() },
@@ -64,6 +73,8 @@ jest.mock("react-native-safe-area-context", () => ({
 describe("PlayerScreen localization", () => {
   beforeEach(() => {
     mockRegenerate.mockClear();
+    mockToastError.mockClear();
+    mockEdgePayload = { code: null, dailyLimit: null, limit: null };
     mockShuffle = false;
     mockRepeatMode = "off";
   });
@@ -73,10 +84,32 @@ describe("PlayerScreen localization", () => {
     const screen = await render(<PlayerScreen />);
 
     fireEvent.press(screen.getByRole("button", { name: "Regenerate cover" }));
-    expect(mockRegenerate).toHaveBeenCalledWith({
-      trackId: "track-one",
-      title: "Signal Bloom",
-    });
+    expect(mockRegenerate).toHaveBeenCalledWith(
+      {
+        trackId: "track-one",
+        title: "Signal Bloom",
+      },
+      expect.any(Object),
+    );
+  });
+
+  test.each([
+    [3, "Daily creation limit reached (3). Try again tomorrow."],
+    [null, "Daily creation limit reached (3). Try again tomorrow."],
+  ])("shows localized cover quota feedback with server limit %s", async (dailyLimit, message) => {
+    await i18n.changeLanguage("en");
+    mockEdgePayload = {
+      code: "daily_quota_reached",
+      dailyLimit,
+      limit: null,
+    };
+    const screen = await render(<PlayerScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "Regenerate cover" }));
+    const options = mockRegenerate.mock.calls[0][1];
+    await options.onError(new Error("quota"));
+
+    expect(mockToastError).toHaveBeenCalledWith("Cover", message);
   });
 
   test("renders Spanish player actions and transport controls", async () => {

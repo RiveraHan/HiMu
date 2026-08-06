@@ -141,11 +141,15 @@ jest.mock("@/src/components", () => {
       accessibilityHint,
       highlighted,
       highlightedLabel,
+      isPrivate,
+      privateLabel,
       onPress,
     }: {
       accessibilityHint?: string;
       highlighted?: boolean;
       highlightedLabel?: string;
+      isPrivate?: boolean;
+      privateLabel?: string;
       onPress?: () => void;
     }) =>
       React.createElement(
@@ -159,6 +163,9 @@ jest.mock("@/src/components", () => {
         },
         highlighted && highlightedLabel
           ? React.createElement(NativeText, null, highlightedLabel)
+          : null,
+        isPrivate && privateLabel
+          ? React.createElement(NativeText, null, privateLabel)
           : null,
       ),
   };
@@ -536,6 +543,19 @@ describe("DJProfileScreen", () => {
     expect(mockConfirm.mock.calls[0][0].message).toBe(
       "This will delete DJ One and its 2 tracks.",
     );
+  });
+
+  it("shows the private badge only on the owner's private tracks", async () => {
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = settledQuery([
+      trackFixture("private-owned"),
+      { ...trackFixture("public-owned"), is_public: true },
+      { ...trackFixture("private-system"), owner_id: null },
+    ]);
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getAllByText("Private")).toHaveLength(1);
   });
 
   it.each([

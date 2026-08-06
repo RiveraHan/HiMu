@@ -1,7 +1,9 @@
+import { getEdgeErrorPayload } from "@/src/api/edge-errors";
 import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
 import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
+import { useToast } from "@/src/hooks/use-toast";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -44,6 +46,7 @@ export default function PlayerScreen() {
   const { seek, prev, toggle, next } = usePlayer();
   const ownership = useTrackOwnership(track?.id);
   const regenerate = useRegenerateCover();
+  const toast = useToast();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
 
@@ -143,10 +146,25 @@ export default function PlayerScreen() {
                 )
               }
               onPress={() =>
-                regenerate.mutate({
-                  trackId: track.id,
-                  title: track.title,
-                })
+                regenerate.mutate(
+                  {
+                    trackId: track.id,
+                    title: track.title,
+                  },
+                  {
+                    onError: async (error) => {
+                      const payload = await getEdgeErrorPayload(error);
+                      toast.error(
+                        t("playback.player.cover.title"),
+                        payload.code === "daily_quota_reached"
+                          ? t("playback.player.cover.quotaError", {
+                              limit: payload.dailyLimit ?? 3,
+                            })
+                          : t("playback.player.cover.error"),
+                      );
+                    },
+                  },
+                )
               }
               accessibilityLabel={t("playback.player.actions.regenerateCover")}
             />

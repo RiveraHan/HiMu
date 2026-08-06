@@ -10,6 +10,7 @@ export const playback = {
       title: "Cover",
       regenerated: "Cover regenerated.",
       error: "Couldn't regenerate the cover — you may have reached today's limit.",
+      quotaError: "Daily creation limit reached ({{limit}}). Try again tomorrow.",
     },
     actions: {
       close: "Close player",

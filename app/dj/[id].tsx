@@ -139,6 +139,8 @@ export default function DJProfileScreen() {
           album_art_url: t.album_art_url,
           duration: t.duration,
           genre: t.genre,
+          owner_id: t.owner_id,
+          is_public: t.is_public,
         })),
     [tracks],
   );

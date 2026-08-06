@@ -10,6 +10,7 @@ export const playback = {
       title: "Portada",
       regenerated: "Portada regenerada.",
       error: "No se pudo regenerar la portada; puede que hayas alcanzado el límite de hoy.",
+      quotaError: "Alcanzaste el límite diario de creaciones ({{limit}}). Inténtalo mañana.",
     },
     actions: {
       close: "Cerrar reproductor",

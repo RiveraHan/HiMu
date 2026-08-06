@@ -153,7 +153,7 @@ async function main() {
       reserveCover: async () => ({
         outcome: "quota",
         reservationId: null,
-        dailyLimit: 10,
+        dailyLimit: 3,
       }),
     });
     const response = await handleRegenerateCoverRequest(
@@ -164,8 +164,9 @@ async function main() {
     assert.deepEqual(response, {
       status: 429,
       body: {
-        error: "daily limit of 10 generations reached",
+        error: "daily limit of 3 generations reached",
         code: "daily_quota_reached",
+        dailyLimit: 3,
       },
     });
     assert.deepEqual(

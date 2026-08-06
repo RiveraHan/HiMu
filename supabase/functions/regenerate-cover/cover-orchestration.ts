@@ -178,6 +178,7 @@ export async function handleRegenerateCoverRequest(
     return result(429, {
       error: `daily limit of ${reservation.dailyLimit} generations reached`,
       code: "daily_quota_reached",
+      dailyLimit: reservation.dailyLimit,
     });
   }
 
