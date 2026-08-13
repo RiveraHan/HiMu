@@ -21,7 +21,7 @@ The current implementation establishes these boundaries:
 - The DJ profile permits optional user lyrics only for a user-owned vocal DJ. The client accepts 1,000 characters and the Edge Function revalidates ownership, vocal mode, length, and control characters.
 - `generate-mix` currently chooses a generic random title only after audio generation. The title is therefore neither previewed nor submitted by the user.
 - `generation_jobs.prompt` currently holds retry lyrics. It has no structured record of a confirmed title, creative direction, or intention.
-- The finished `tracks` row stores the title but not lyrics or the generation brief.
+- The finished `tracks` row stores the title but not lyrics or the generation brief. This design adds private owner-readable confirmed lyrics and immutable version lineage.
 - Manual generation allows one active job per user and DJ and uses an atomic RPC for quota reservation. New behavior must preserve that concurrency, quota, lease, and recovery logic.
 - Native and web share the generation hooks. The design must not alter the platform-specific authentication and session boundaries.
 
@@ -186,6 +186,14 @@ The music prompt uses the confirmed creative direction and lyrics within existin
 
 The accepted brief is immutable once the job is queued. Recovery retries reuse that same brief. A new creative attempt requires returning to preparation and explicitly confirming a new job after the prior job reaches a terminal state.
 
+### Finished lyrics and track versioning
+
+Confirmed vocal lyrics persist after completion as owner-readable, non-public data associated with the finished track. Instrumental tracks have no lyrics record. Public lyric display and public lyric access are explicitly deferred; current public track queries and responses must not expose the private data.
+
+Add nullable `source_track_id uuid references tracks(id) on delete set null` columns to both `generation_jobs` and `tracks`. Add a separate `track_private_details` table keyed by `track_id`, with `owner_id` and non-null `confirmed_lyrics`; enable RLS and permit selects only when `owner_id = auth.uid()`. Keeping lyrics out of `tracks` prevents existing public track projections from exposing them accidentally. The generation finalization transaction copies accepted vocal lyrics from the immutable job brief into `track_private_details`; instrumental tracks have no private-details row. The first generated track and job have a null `source_track_id`.
+
+Editing lyrics after completion never mutates the finished track, audio object, or accepted brief. The owner starts a new preparation flow seeded from the original track's private lyrics and confirmed brief, edits and reconfirms it, and generates a new track. The new job records the original track ID as its version source; its resulting track stores that ID in `source_track_id`. Each version owns independent audio, cover, title, lyrics, visibility, and immutable brief. Deleting or hiding a later version does not alter earlier versions. This phase exposes direct parent linkage only; version-tree browsing and public version labels are deferred.
+
 ## Validation and safety
 
 - Preserve the existing DJ name length and character rules unless user research justifies a later change. Suggestions must already satisfy them.
@@ -194,6 +202,7 @@ The accepted brief is immutable once the job is queued. Recovery retries reuse t
 - Creative direction: 10-500 characters. Lyric theme: null for instrumental tracks and 2-120 characters for vocal tracks. Both are control-character filtered and treated as untrusted data inside provider prompts.
 - Lyrics: vocal-only; raise the current 1,000-character limit only after verifying provider prompt budgets and database/retry impact. Until then, generated drafts must fit the existing limit. Require recognizable verse and chorus sections without requiring English labels in Spanish output.
 - All model text is untrusted. Frame user/model content separately from fixed provider instructions, retain the current anti-prompt-injection boundary strategy, and never expose service-role or provider credentials.
+- `track_private_details.confirmed_lyrics` is readable only to the owner. Anonymous and non-owner track projections cannot join or select that row even for public tracks.
 - Draft service authorization, rate limits, request-size limits, timeouts, and abuse logging are independent of music quota. Draft retries must not consume the three daily music-generation slots.
 - Bound exclusions to the ten most recent normalized values, with at most 80 characters per value. The client drops older entries.
 - Do not claim uniqueness across the music industry. Apply local quality checks against Himu’s existing DJ names, the user’s recent suggestions/titles, repeated word-pair lists, and prohibited impersonation or artist-copy patterns.
@@ -218,6 +227,7 @@ The accepted brief is immutable once the job is queued. Recovery retries reuse t
 - If auth changes during a request, discard its result using the existing auth-scope protections and do not show another user’s drafts.
 - If DJ traits change on the server during preparation, the final server validation returns a `brief_stale` conflict with the authoritative snapshot. Preserve user text, refresh the summary, and require reconfirmation.
 - If another active job exists, return the existing job through current idempotency behavior. Never overwrite its accepted brief with a newer local draft.
+- If a requested `sourceTrackId` is missing, not owned by the current user, or belongs to another DJ, reject the version request without revealing the source track's private lyrics.
 - Quota, ownership, timeout, provider, and malformed-model errors use stable codes mapped to localized user messages. Provider error bodies remain server-side.
 - Navigation away before confirmation performs no server mutation. Navigation after job acceptance relies on the existing activity/recovery system.
 
@@ -241,6 +251,8 @@ Implementation follows test-driven development for every behavior change.
 - Manual reservation atomically stores the confirmed brief, preserves active-job idempotency, and rejects stale trait snapshots.
 - Manual generation uses the confirmed title, direction, and lyrics; daily-drop behavior remains unchanged.
 - Failure and lease recovery reuse the immutable accepted brief.
+- Finalization copies confirmed vocal lyrics into the owner-private track field and records valid direct-parent version lineage.
+- Non-owner and anonymous reads cannot obtain confirmed lyrics; an owner can load them to seed a new explicitly confirmed version.
 
 ### Hook and screen tests
 
@@ -248,6 +260,7 @@ Implementation follows test-driven development for every behavior change.
 - Trait changes mark suggestions stale without erasing edits.
 - Vocal preparation displays lyrics; instrumental preparation never does.
 - Pasting custom lyrics and editing title/direction survive unrelated regeneration.
+- Opening a completed owned vocal track can seed a new preparation draft; saving it creates a distinct job and track while preserving the original track and audio.
 - The final generation mutation cannot run without a confirmation press.
 - Editing after preview invalidates confirmation.
 - Offline, auth-scope change, stale brief, quota, and field-level draft failures preserve recoverable user input.
@@ -276,7 +289,7 @@ Implementation follows test-driven development for every behavior change.
 - Reworking genre, mood, energy, mode, vibe, or visibility controls.
 - Changing authentication/session architecture.
 - Audio preview snippets, stems, mastering controls, model selection, or multiple generated audio candidates.
-- Editing a finished track’s audio, title, or lyrics after generation.
+- In-place editing of a finished track’s audio, title, lyrics, or accepted brief. Lyric changes create a new linked track version instead.
 - Draft autosave or cross-device synchronization.
 - Monetization, subscription tiers, or paid draft quotas.
 - Daily Drop authoring changes.
@@ -286,18 +299,13 @@ Implementation follows test-driven development for every behavior change.
 
 1. Extract shared server validation and define versioned draft/brief contracts with tests.
 2. Add the creative-draft Edge Function and deterministic output validation.
-3. Add identity concept storage and confirmed-brief job storage/RPC compatibility migration.
+3. Add identity concept storage, confirmed-brief job storage, private finished lyrics, and direct-parent track-version storage/RPC compatibility migrations.
 4. Add client draft hooks and state machines with auth-scope handling.
 5. Integrate the DJ identity step without changing existing trait controls.
 6. Integrate track preparation, granular regeneration, and confirmation.
 7. Make manual generation consume the confirmed brief while retaining daily/legacy compatibility.
 8. Run regression, web export, and Android checks; then validate output quality with a small curated prompt matrix in English and Spanish.
 
-## One user decision before implementation planning
+## Approved lyric retention decision
 
-Should confirmed lyrics remain available after a track finishes?
-
-- **Recommended:** persist the confirmed vocal lyrics in an owner-readable field associated with the finished track, so the creator can revisit what they approved. Public display remains a separate future decision.
-- **Smaller initial scope:** retain lyrics only in the owner-only generation brief for job recovery and do not expose them after completion.
-
-The current schema has no track lyrics field and the current UI discards lyrics after the job completes. This choice affects the migration, retention/privacy language, and future player experience, but it does not change the pre-generation drafting flow described above.
+Confirmed vocal lyrics persist after completion as owner-readable private data. Public lyric display and access remain out of scope. Later lyric edits create a new linked track version with new audio and a new immutable accepted brief; the original track, audio, lyrics, and brief are never overwritten.
