@@ -7,6 +7,7 @@
 import {
   buildAvatarPrompt,
   buildBasePrompt,
+  buildDjIdentityFields,
   parseIsPublic,
   validateDjInput,
 } from "../_shared/dj-input.ts";
@@ -41,7 +42,14 @@ serveAuthed(async (req, user) => {
     return invalid(error instanceof Error ? error.message : "invalid input");
   }
 
-  const { name, genres, moods, energy, isInstrumental, vibe } = v.data;
+  const {
+    name,
+    identityConcept,
+    genres,
+    moods,
+    energy,
+    isInstrumental,
+  } = v.data;
 
   // Quota check
   const { count, error: countError } = await admin
@@ -76,7 +84,7 @@ serveAuthed(async (req, user) => {
         slug,
         owner_id: user.id,
         is_public: isPublic,
-        character: vibe,
+        ...buildDjIdentityFields(v.data),
         genre_specialties: genres,
         mood_tags: moods,
         personality_traits: { energy, vibe, isInstrumental },
@@ -122,7 +130,7 @@ serveAuthed(async (req, user) => {
         "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
         {
           input: {
-            prompt: buildAvatarPrompt(genres, moods),
+            prompt: buildAvatarPrompt(genres, moods, identityConcept),
             aspect_ratio: "1:1",
             output_format: "jpg",
             safety_tolerance: 5,

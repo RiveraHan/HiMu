@@ -22,6 +22,7 @@ const ownedDj = {
   id: "dj-one",
   owner_id: "listener",
   name: "Lumen",
+  identity_concept: "A quiet navigator shaping spacious rooms for uninterrupted thought.",
   avatar_url: null,
   genre_specialties: ["Ambient"],
   mood_tags: ["Focus"],
@@ -310,6 +311,7 @@ test("renders Spanish training and preserves canonical saved values", async () =
     expect.objectContaining({ genres: ["Ambient"], moods: ["Focus"] }),
     expect.any(Object),
   );
+  expect(mockUpdate.mock.calls[0][0]).not.toHaveProperty("identityConcept");
 });
 
 test("keeps Back available while an update is pending", async () => {

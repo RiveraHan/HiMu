@@ -7,6 +7,12 @@ import {
   validateConfirmedBrief,
   validateCreativeDraftRequest,
 } from "../../supabase/functions/_shared/creative-generation.ts";
+import {
+  buildAvatarPrompt,
+  buildBasePrompt,
+  buildDjIdentityFields,
+  validateDjInput,
+} from "../../supabase/functions/_shared/dj-input.ts";
 
 const traits = {
   genres: ["House"],
@@ -45,6 +51,49 @@ const validBrief = {
       "A patient selector tracing city lights through warm analog haze.",
   },
 };
+
+const confirmedDj = validateDjInput({
+  name: "Static Bloom",
+  identityConcept: "A patient selector tracing city lights through warm analog haze.",
+  ...traits,
+});
+assert.equal(confirmedDj.ok, true);
+if (!confirmedDj.ok) throw new Error("expected valid DJ input");
+assert.equal(
+  confirmedDj.data.identityConcept,
+  "A patient selector tracing city lights through warm analog haze.",
+);
+assert.match(buildBasePrompt(confirmedDj.data), /patient selector/i);
+assert.deepEqual(buildDjIdentityFields(confirmedDj.data), {
+  character: "Rain-lit rooftop after midnight",
+  identity_concept:
+    "A patient selector tracing city lights through warm analog haze.",
+});
+assert.match(
+  buildAvatarPrompt(
+    confirmedDj.data.genres,
+    confirmedDj.data.moods,
+    confirmedDj.data.identityConcept,
+  ),
+  /patient selector/i,
+);
+assert.equal(validateDjInput({ name: "Static Bloom", ...traits }).ok, false);
+assert.equal(
+  validateDjInput({
+    name: "Static Bloom",
+    identityConcept: "https://example.com is my concept",
+    ...traits,
+  }).ok,
+  false,
+);
+assert.equal(
+  validateDjInput({
+    name: "Static Bloom",
+    identityConcept: `Patient selector ${"x".repeat(230)}`,
+    ...traits,
+  }).ok,
+  false,
+);
 
 // Request discriminants and exact input boundaries.
 assert.equal(

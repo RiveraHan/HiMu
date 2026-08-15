@@ -6,7 +6,7 @@
 import {
   buildAvatarPrompt,
   buildBasePrompt,
-  validateDjInput,
+  validateDjTraitsInput,
 } from "../_shared/dj-input.ts";
 import { invalid, json } from "../_shared/http.ts";
 import { keyFromPublicUrl, r2Delete, r2Put } from "../_shared/r2.ts";
@@ -30,7 +30,7 @@ serveAuthed(async (req, user) => {
 
   const { data: dj } = await admin
     .from("djs")
-    .select("id, owner_id, avatar_url")
+    .select("id, owner_id, avatar_url, identity_concept")
     .eq("id", djId)
     .maybeSingle();
 
@@ -40,7 +40,7 @@ serveAuthed(async (req, user) => {
     return json({ error: "not your DJ", code: "not_owner" }, 403);
   }
 
-  const v = validateDjInput(body);
+  const v = validateDjTraitsInput(body);
   if (!v.ok) return invalid(v.error);
 
   const { name, genres, moods, energy, isInstrumental, vibe } = v.data;
@@ -83,7 +83,10 @@ serveAuthed(async (req, user) => {
   const { error: cfgErr } = await admin
     .from("dj_generation_configs")
     .update({
-      base_prompt: buildBasePrompt(v.data),
+      base_prompt: buildBasePrompt({
+        ...v.data,
+        identityConcept: dj.identity_concept,
+      }),
       is_instrumental: isInstrumental,
       updated_at: new Date().toISOString(),
     })
@@ -103,7 +106,7 @@ serveAuthed(async (req, user) => {
         "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
         {
           input: {
-            prompt: buildAvatarPrompt(genres, moods),
+            prompt: buildAvatarPrompt(genres, moods, dj.identity_concept),
             aspect_ratio: "1:1",
             output_format: "jpg",
             safety_tolerance: 5,

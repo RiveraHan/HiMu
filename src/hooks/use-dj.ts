@@ -6,6 +6,7 @@ import { useCurrentUser } from "./use-auth";
 type DJDetails = {
   id: string;
   name: string;
+  identity_concept: string | null;
   slug: string;
   avatar_url: string | null;
   character: string | null;
@@ -39,7 +40,7 @@ export function useDJ(id: string) {
       const { data, error } = await supabase
         .from("djs")
         .select(
-          "id, name, slug, avatar_url, character, genre_specialties, mood_tags, is_premium, voice_style, owner_id, is_public, personality_traits",
+          "id, name, slug, avatar_url, character, identity_concept, genre_specialties, mood_tags, is_premium, voice_style, owner_id, is_public, personality_traits",
         )
         .eq("id", id)
         .returns<DJDetails[]>()

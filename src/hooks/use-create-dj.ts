@@ -7,6 +7,8 @@ import { captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/
 
 export type CreateDJInput = {
   name: string;
+  // Becomes required by the creation screen when the identity step lands.
+  identityConcept?: string;
   genres: string[];
   moods: string[];
   energy: number; // 1-10
