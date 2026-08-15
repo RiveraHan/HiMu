@@ -33,6 +33,10 @@ export const queryKeys = {
     activity: (userId: string | null) =>
       ["generation-jobs", "activity", userId] as const,
   },
+  creativeDraft: {
+    mutation: (userId: string, kind: string) =>
+      ["creative-draft", userId, kind] as const,
+  },
   playlists: {
     details: (id: string) => ["playlists", id] as const,
   },
