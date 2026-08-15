@@ -17,7 +17,8 @@
     "gen:covers": "node --env-file=.env --import tsx scripts/generate/covers.ts",
     "gen:music": "node --env-file=.env --import tsx scripts/generate/music.ts",
     "gen:playlists": "node --env-file=.env --import tsx scripts/generate/playlists.ts",
-    "gen:cleanup": "node --env-file=.env --import tsx scripts/generate/cleanup.ts"
+    "gen:cleanup": "node --env-file=.env --import tsx scripts/generate/cleanup.ts",
+    "check:creative-generation": "node --import tsx scripts/check/creative-generation-contracts.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
