@@ -417,7 +417,10 @@ export function parseCreativeDraftOutput(
 
 export function buildCreativeDraftModelInput(
   request: CreativeDraftRequest,
-  context: { existingDjNames?: string[] } = {},
+  context: {
+    existingDjNames?: string[];
+    djContext?: AuthoritativeDjTraits;
+  } = {},
 ): CreativeDraftModelInput {
   const schemaByKind: Record<CreativeDraftKind, string> = {
     "dj-identity": '{"candidates":[{"name":"...","identityConcept":"..."}]}',
@@ -440,6 +443,17 @@ export function buildCreativeDraftModelInput(
       : {
           language: request.language,
           kind: request.kind,
+          dj: context.djContext
+            ? {
+                name: context.djContext.djName,
+                identityConcept: context.djContext.identityConcept,
+                genres: context.djContext.genres,
+                moods: context.djContext.moods,
+                energy: context.djContext.energy,
+                mode: context.djContext.isInstrumental ? "instrumental" : "vocal",
+                vibe: context.djContext.vibe,
+              }
+            : undefined,
           current: request.current,
           exclude: request.exclude,
         };

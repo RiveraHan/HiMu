@@ -19,7 +19,8 @@
     "gen:playlists": "node --env-file=.env --import tsx scripts/generate/playlists.ts",
     "gen:cleanup": "node --env-file=.env --import tsx scripts/generate/cleanup.ts",
     "check:creative-generation": "node --import tsx scripts/check/creative-generation-contracts.ts",
-    "check:creative-generation-migration": "node --import tsx scripts/check/creative-generation-migration.ts"
+    "check:creative-generation-migration": "node --import tsx scripts/check/creative-generation-migration.ts",
+    "check:creative-draft-function": "node --import tsx scripts/check/creative-draft-function.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
