@@ -6,7 +6,7 @@ import type { CreateDJInput } from "./use-create-dj";
 import { useCurrentUser } from "./use-auth";
 import { captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
 
-export type UpdateDJInput = Omit<CreateDJInput, "isPublic"> & {
+export type UpdateDJInput = Omit<CreateDJInput, "isPublic" | "identityConcept"> & {
   djId: string;
   regenerateAvatar?: boolean;
 };

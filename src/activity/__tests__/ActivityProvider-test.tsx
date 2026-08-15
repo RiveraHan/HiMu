@@ -227,6 +227,7 @@ test("merges mutation activity and announces each kind-specific terminal result 
   await act(async () => {
     await rendered.result.current.create.mutateAsync({
       name: "Luna",
+      identityConcept: "A calm navigator shaping spacious rooms for uninterrupted thought.",
       genres: ["Ambient"],
       moods: ["Focus"],
       energy: 5,
@@ -312,6 +313,7 @@ test("retains mutation notification and seen state across an A to B to A switch"
   await act(async () => {
     await rendered.result.current.create.mutateAsync({
       name: "Luna",
+      identityConcept: "A calm navigator shaping spacious rooms for uninterrupted thought.",
       genres: [],
       moods: [],
       energy: 5,
@@ -353,6 +355,7 @@ test("guards mutation destinations and only returns to the current track player"
   await act(async () => {
     createPromise = rendered.result.current.create.mutateAsync({
       name: "Luna",
+      identityConcept: "A calm navigator shaping spacious rooms for uninterrupted thought.",
       genres: [],
       moods: [],
       energy: 5,

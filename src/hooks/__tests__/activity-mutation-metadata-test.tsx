@@ -89,6 +89,7 @@ test("stores create identity, variables, submission context, and returned DJ ID"
   });
   const variables = {
     name: "Luna",
+    identityConcept: "A calm navigator shaping spacious rooms for uninterrupted thought.",
     genres: ["Ambient"],
     moods: ["Focus"],
     energy: 5,
@@ -206,6 +207,7 @@ test("keeps an in-flight A mutation keyed and contextualized as A after the hook
   await act(async () => {
     mutationPromise = rendered.result.current.mutateAsync({
       name: "Luna",
+      identityConcept: "A calm navigator shaping spacious rooms for uninterrupted thought.",
       genres: [],
       moods: [],
       energy: 5,

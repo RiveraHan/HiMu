@@ -19,17 +19,25 @@ export type DjTraits = {
   vibe: string;
 };
 
-export const canSubmitDjTraits = (t: DjTraits) =>
-  t.name.trim().length >= 2 && t.genres.length > 0 && t.moods.length > 0;
+export const canSubmitDjTraits = (t: DjTraits, requireName = true) =>
+  (!requireName || t.name.trim().length >= 2) &&
+  t.genres.length > 0 &&
+  t.moods.length > 0;
 
 type Props = {
   values: DjTraits;
   onChange: (patch: Partial<DjTraits>) => void;
   disabled?: boolean;
+  showName?: boolean;
 };
 
 // The six wizard sections shared by Create DJ and Train your DJ.
-export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
+export function DjTraitsForm({
+  values,
+  onChange,
+  disabled = false,
+  showName = true,
+}: Props) {
   const { t } = useTranslation();
   const { resolvedLanguage } = useLocale();
   const togglePick = (key: "genres" | "moods") => (value: string) => {
@@ -47,20 +55,21 @@ export function DjTraitsForm({ values, onChange, disabled = false }: Props) {
 
   return (
     <>
-      {/* Identity */}
-      <PrefSection
-        title={t("dj.traits.identity")}
-        subtitle={t("dj.traits.identitySubtitle")}
-      >
-        <GlassInput
-          placeholder={t("dj.traits.namePlaceholder")}
-          value={values.name}
-          onChangeText={(name) => onChange({ name })}
-          maxLength={24}
-          autoCapitalize="words"
-          editable={!disabled}
-        />
-      </PrefSection>
+      {showName ? (
+        <PrefSection
+          title={t("dj.traits.identity")}
+          subtitle={t("dj.traits.identitySubtitle")}
+        >
+          <GlassInput
+            placeholder={t("dj.traits.namePlaceholder")}
+            value={values.name}
+            onChangeText={(name) => onChange({ name })}
+            maxLength={24}
+            autoCapitalize="words"
+            editable={!disabled}
+          />
+        </PrefSection>
+      ) : null}
 
       {/* Genres */}
       <PrefSection

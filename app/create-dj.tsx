@@ -1,9 +1,11 @@
 import {
   Button,
   canSubmitDjTraits,
+  DjIdentityDraftStep,
   DjTraitsForm,
   ScreenHeader,
   type DjTraits,
+  type DjIdentityDraftValue,
 } from "@/src/components";
 import { VisibilityField } from "@/src/components/content/VisibilityField";
 import { useCreateDJ } from "@/src/hooks/use-create-dj";
@@ -36,16 +38,24 @@ export default function CreateDJScreen() {
     vibe: "",
   });
   const [visibility, setVisibility] = useState<Visibility>(DEFAULT_VISIBILITY);
+  const [identity, setIdentity] = useState<DjIdentityDraftValue>({
+    name: "",
+    identityConcept: "",
+    provenance: "custom",
+    confirmed: false,
+  });
 
   const { mutate: createDJ, isPending } = useCreateDJ();
 
   const patch = (p: Partial<DjTraits>) => setTraits((t) => ({ ...t, ...p }));
-  const displayName = traits.name.trim() || t("dj.create.defaultName");
+  const displayName = identity.name.trim() || t("dj.create.defaultName");
 
   function onSubmit() {
+    if (!identity.confirmed) return;
     createDJ(
       {
-        name: traits.name.trim(),
+        name: identity.name.trim(),
+        identityConcept: identity.identityConcept.trim(),
         genres: traits.genres,
         moods: traits.moods,
         energy: traits.energy,
@@ -74,7 +84,24 @@ export default function CreateDJScreen() {
           subtitle={t("dj.create.subtitle")}
         />
 
-        <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
+        <DjTraitsForm
+          values={traits}
+          onChange={patch}
+          disabled={isPending}
+          showName={false}
+        />
+        <DjIdentityDraftStep
+          traits={{
+            genres: traits.genres,
+            moods: traits.moods,
+            energy: traits.energy,
+            isInstrumental: traits.mode === "instrumental",
+            vibe: traits.vibe.trim() || null,
+          }}
+          value={identity}
+          onChange={setIdentity}
+          disabled={isPending}
+        />
         <VisibilityField
           value={visibility}
           onChange={setVisibility}
@@ -85,7 +112,7 @@ export default function CreateDJScreen() {
           label={t("dj.create.submit")}
           loadingLabel={t("dj.create.loading", { name: displayName })}
           loading={isPending}
-          disabled={!canSubmitDjTraits(traits)}
+          disabled={!canSubmitDjTraits(traits, false) || !identity.confirmed}
           onPress={onSubmit}
           leftIcon={
             !isPending && (

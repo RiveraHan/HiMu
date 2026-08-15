@@ -136,6 +136,32 @@ jest.mock("@/src/components", () => {
   const traits = jest.requireActual("@/src/components/dj/DjTraitsForm");
   return {
     ...traits,
+    DjIdentityDraftStep: ({ value, onChange, disabled }: {
+      value: { name: string; identityConcept: string; provenance: "custom" | "edited" | "suggested"; confirmed: boolean };
+      onChange: (value: { name: string; identityConcept: string; provenance: "custom" | "edited" | "suggested"; confirmed: boolean }) => void;
+      disabled?: boolean;
+    }) => {
+      const t = require("@/src/i18n").default.t.bind(require("@/src/i18n").default);
+      return React.createElement(View, null,
+        React.createElement(require("react-native").TextInput, {
+          placeholder: t("dj.identity.namePlaceholder"),
+          value: value.name,
+          editable: !disabled,
+          onChangeText: (name: string) => onChange({
+            name,
+            identityConcept: value.identityConcept || "A confirmed original identity shaped by the selected musical traits.",
+            provenance: "edited",
+            confirmed: false,
+          }),
+        }),
+        React.createElement(Pressable, {
+          accessibilityRole: "button",
+          accessibilityLabel: t("dj.identity.confirm"),
+          disabled: disabled || value.name.length < 2,
+          onPress: () => onChange({ ...value, confirmed: true }),
+        }, React.createElement(Text, null, t("dj.identity.confirm"))),
+      );
+    },
     DjBirthOverlay: () => React.createElement(View, { testID: "birth-overlay" }),
     ScreenHeader: ({ title, subtitle, disabled }: { title: string; subtitle: string; disabled?: boolean }) =>
       React.createElement(View, null,
@@ -144,7 +170,7 @@ jest.mock("@/src/components", () => {
         React.createElement(Text, null, subtitle),
       ),
     Button: ({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) =>
-      React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: label, disabled, onPress },
+      React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: label, accessibilityState: { disabled }, disabled, onPress },
         React.createElement(Text, null, label)),
   };
 });
@@ -205,7 +231,8 @@ test("renders Spanish visibility copy and submits private canonical DJ input by 
   expect(screen.getByText("Visibilidad")).toBeTruthy();
   expect(screen.getByText("Solo tú puedes ver este DJ.")).toBeTruthy();
 
-  await fireEvent.changeText(screen.getByPlaceholderText("p. ej., Lumen"), "Lumen");
+  await fireEvent.changeText(screen.getByPlaceholderText("Nombre del DJ"), "Lumen");
+  await fireEvent.press(screen.getByRole("button", { name: "Confirmar esta identidad" }));
   await fireEvent.press(screen.getByRole("button", { name: "Ambiental" }));
   await fireEvent.press(screen.getByRole("button", { name: "Concentración" }));
   await fireEvent.press(screen.getByRole("button", { name: "Dar vida a mi DJ" }));
@@ -215,6 +242,7 @@ test("renders Spanish visibility copy and submits private canonical DJ input by 
       expect.objectContaining({
         genres: ["Ambient"],
         moods: ["Focus"],
+        identityConcept: "A confirmed original identity shaped by the selected musical traits.",
         isPublic: false,
       }),
       expect.any(Object),
@@ -231,7 +259,8 @@ test("submits public visibility after selection in English", async () => {
   await fireEvent.press(screen.getByRole("button", { name: "PUBLIC" }));
 
   expect(screen.getByText("Anyone can discover this DJ.")).toBeTruthy();
-  await fireEvent.changeText(screen.getByPlaceholderText("e.g. Lumen"), "Lumen");
+  await fireEvent.changeText(screen.getByPlaceholderText("DJ name"), "Lumen");
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm this identity" }));
   await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
   await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
   await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
@@ -242,6 +271,21 @@ test("submits public visibility after selection in English", async () => {
       expect.any(Object),
     ),
   );
+});
+
+test("does not create a DJ until the user explicitly confirms the identity", async () => {
+  await i18n.changeLanguage("en");
+  const screen = await render(<CreateDJScreen />);
+
+  await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
+  await fireEvent.changeText(screen.getByPlaceholderText("DJ name"), "Lumen");
+
+  expect(screen.getByRole("button", { name: "Bring my DJ to life" }).props.accessibilityState.disabled).toBe(true);
+  expect(mockCreate).not.toHaveBeenCalled();
+
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm this identity" }));
+  expect(screen.getByRole("button", { name: "Bring my DJ to life" }).props.accessibilityState.disabled).toBe(false);
 });
 
 test("keeps Back available and removes the blocking overlay while creation is pending", async () => {
@@ -275,9 +319,10 @@ test.each([
   );
 
   await fireEvent.changeText(
-    screen.getByPlaceholderText("e.g. Lumen"),
+    screen.getByPlaceholderText("DJ name"),
     "Lumen",
   );
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm this identity" }));
   await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
   await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
   await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
@@ -350,9 +395,10 @@ test.each([
   );
 
   await fireEvent.changeText(
-    screen.getByPlaceholderText("e.g. Lumen"),
+    screen.getByPlaceholderText("DJ name"),
     "Lumen",
   );
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm this identity" }));
   await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
   await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
   await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
