@@ -19,7 +19,7 @@ export function useGenerationActivity(): UseQueryResult<ActivityItem[]> {
       const { data, error } = await supabase
         .from("generation_jobs")
         .select(
-          "id,user_id,dj_id,status,prompt,error,created_at,updated_at,drop_date,track_id,is_public,djs(id,name),tracks(id,title,artist,audio_url,album_art_url,duration,genre)",
+          "id,user_id,dj_id,status,prompt,error,created_at,updated_at,drop_date,track_id,is_public,djs(id,name),tracks!generation_jobs_track_id_fkey(id,title,artist,audio_url,album_art_url,duration,genre)",
         )
         .eq("user_id", user!.id)
         .is("drop_date", null)

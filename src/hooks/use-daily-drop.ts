@@ -132,7 +132,7 @@ export function useDailyDrop(): DailyDrop {
       const { data, error } = await supabase
         .from("generation_jobs")
         .select(
-          "status, error, dj_id, track_id, caption, caption_audio_url, tracks(*), djs(id,name,avatar_url,genre_specialties)",
+          "status, error, dj_id, track_id, caption, caption_audio_url, tracks!generation_jobs_track_id_fkey(*), djs(id,name,avatar_url,genre_specialties)",
         )
         .eq("id", jobId)
         .eq("user_id", userId)
