@@ -3,6 +3,7 @@ import { render, within } from "@testing-library/react-native";
 
 import RootLayout from "@/app/_layout";
 
+let mockFontState: [boolean, Error | null] = [true, null];
 let mockAuthState = authState(null, false);
 let mockNavigatorMounts = 0;
 let mockNavigatorUnmounts = 0;
@@ -72,6 +73,9 @@ jest.mock("react-native-gesture-handler", () => ({
 
 jest.mock("expo-status-bar", () => ({ StatusBar: () => null }));
 jest.mock("@/src/theme", () => ({}));
+jest.mock("expo-font", () => ({
+  useFonts: () => mockFontState,
+}));
 
 jest.mock("expo-router", () => {
   const React = require("react");
@@ -158,6 +162,7 @@ const PRIVATE_ROUTES = [
 describe("root layout ownership and route protection", () => {
   beforeEach(() => {
     mockAuthState = authState(null, false);
+    mockFontState = [true, null];
     mockNavigatorMounts = 0;
     mockNavigatorUnmounts = 0;
     mockRenderOrder = [];
@@ -192,6 +197,14 @@ describe("root layout ownership and route protection", () => {
     expect(screen.queryByTestId("navigator")).toBeNull();
     expect(screen.queryByTestId("bottom-chrome")).toBeNull();
     expect(screen.queryByTestId("activity-panel")).toBeNull();
+  });
+
+  it("keeps the navigator behind the font readiness boundary", async () => {
+    mockFontState = [false, null];
+    const screen = await render(<RootLayout />);
+
+    expect(screen.queryByTestId("root-font-loader")).toBeTruthy();
+    expect(screen.queryByTestId("navigator")).toBeNull();
   });
 
   it("closes the activity panel when onboarding becomes active", async () => {

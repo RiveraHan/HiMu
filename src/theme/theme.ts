@@ -1,3 +1,5 @@
+import { HIMU_FONT_FAMILIES } from "./fonts";
+
 export const darkTheme = {
   colors: {
     // Surfaces & backgrounds
@@ -96,27 +98,27 @@ export const darkTheme = {
   },
   typography: {
     display: {
-      fontFamily: "Manrope-Bold",
+      fontFamily: HIMU_FONT_FAMILIES.bold,
       fontSize: 40,
       lineHeight: 44,
       letterSpacing: -0.04 * 40,
     },
     h1: {
-      fontFamily: "Manrope-Bold",
+      fontFamily: HIMU_FONT_FAMILIES.bold,
       fontSize: 32,
       lineHeight: 38.4,
       letterSpacing: -0.03 * 32,
     },
     h2: {
-      fontFamily: "Manrope-SemiBold",
+      fontFamily: HIMU_FONT_FAMILIES.semiBold,
       fontSize: 24,
       lineHeight: 31.2,
       letterSpacing: -0.02 * 24,
     },
-    bodyLg: { fontFamily: "Manrope-Regular", fontSize: 18, lineHeight: 28.8 },
-    bodyMd: { fontFamily: "Manrope-Regular", fontSize: 16, lineHeight: 25.6 },
+    bodyLg: { fontFamily: HIMU_FONT_FAMILIES.regular, fontSize: 18, lineHeight: 28.8 },
+    bodyMd: { fontFamily: HIMU_FONT_FAMILIES.regular, fontSize: 16, lineHeight: 25.6 },
     labelCaps: {
-      fontFamily: "Manrope-SemiBold",
+      fontFamily: HIMU_FONT_FAMILIES.semiBold,
       fontSize: 12,
       lineHeight: 12,
       letterSpacing: 0.1 * 12,

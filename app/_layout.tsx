@@ -13,10 +13,12 @@ import { AppTourProvider, useAppTour } from "@/src/onboarding";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useFonts } from "expo-font";
 import { ActivityIndicator, View } from "react-native";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { HIMU_FONTS } from "@/src/theme/fonts";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   useAuthInit();
@@ -89,30 +91,59 @@ function NavigatorShell() {
   );
 }
 
-export default function RootLayout() {
+function AppProviders() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthInitializer>
-        <PlayerProvider>
-          <QueryProvider>
-            <LocaleProvider>
-              <ActivityProvider>
-                <AppTourProvider>
-                  <NavigatorShell />
-                </AppTourProvider>
-              </ActivityProvider>
-              <ToastHost />
-              <ConfirmDialogHost />
-            </LocaleProvider>
-          </QueryProvider>
-        </PlayerProvider>
-      </AuthInitializer>
+    <AuthInitializer>
+      <PlayerProvider>
+        <QueryProvider>
+          <LocaleProvider>
+            <ActivityProvider>
+              <AppTourProvider>
+                <NavigatorShell />
+              </AppTourProvider>
+            </ActivityProvider>
+            <ToastHost />
+            <ConfirmDialogHost />
+          </LocaleProvider>
+        </QueryProvider>
+      </PlayerProvider>
+    </AuthInitializer>
+  );
+}
+
+export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts(HIMU_FONTS);
+  const { theme } = useUnistyles();
+
+  useEffect(() => {
+    if (fontError && __DEV__) {
+      console.error("[RootLayout] Failed to load HiMu fonts", fontError);
+    }
+  }, [fontError]);
+
+  if (!fontsLoaded && !fontError) {
+    return (
+      <GestureHandlerRootView style={styles.root}>
+        <View style={styles.loader} testID="root-font-loader">
+          <ActivityIndicator color={theme.colors.primary} />
+        </View>
+        <StatusBar style="light" />
+      </GestureHandlerRootView>
+    );
+  }
+
+  return (
+    <GestureHandlerRootView style={styles.root}>
+      <AppProviders />
       <StatusBar style="light" />
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
+  root: {
+    flex: 1,
+  },
   loader: {
     flex: 1,
     alignItems: "center",
