@@ -41,6 +41,30 @@ async function listFiles(directory: string, relativeDirectory = ""): Promise<Exp
   return files;
 }
 
+function manropeAssetFamily(relativePath: string) {
+  if (!FONT_ASSET_EXTENSION.test(relativePath)) return undefined;
+
+  const lowercasePath = relativePath.toLowerCase();
+  return MANROPE_FAMILIES.find((family) => lowercasePath.includes(family.toLowerCase()));
+}
+
+async function scanTextArtifacts(files: ExportFile[]) {
+  const referencedManropeFamilies = new Set<string>();
+  let hasImageFallbackMarker = false;
+
+  for (const file of files) {
+    if (!TEXT_ARTIFACT_EXTENSION.test(file.relativePath)) continue;
+
+    const content = await readFile(file.absolutePath, "utf8");
+    for (const family of MANROPE_FAMILIES) {
+      if (content.includes(family)) referencedManropeFamilies.add(family);
+    }
+    if (content.includes(IMAGE_FALLBACK_MARKER)) hasImageFallbackMarker = true;
+  }
+
+  return { referencedManropeFamilies, hasImageFallbackMarker };
+}
+
 async function main() {
   const [exportDirectory] = process.argv.slice(2);
 
@@ -66,14 +90,10 @@ async function main() {
 
   const files = await listFiles(resolvedDirectory);
   const filePaths = new Set(files.map((file) => file.relativePath));
-  const textFiles = files.filter((file) => TEXT_ARTIFACT_EXTENSION.test(file.relativePath));
-  const textArtifacts = await Promise.all(
-    textFiles.map(async (file) => ({
-      relativePath: file.relativePath,
-      content: await readFile(file.absolutePath, "utf8"),
-    })),
+  const { referencedManropeFamilies, hasImageFallbackMarker } = await scanTextArtifacts(files);
+  const bundledManropeAssets = new Set(
+    files.map((file) => manropeAssetFamily(file.relativePath)).filter(Boolean),
   );
-  const allText = textArtifacts.map((artifact) => artifact.content).join("\n");
   const failures: string[] = [];
 
   for (const route of REQUIRED_ROUTES) {
@@ -84,18 +104,23 @@ async function main() {
     }
   }
 
-  const missingFontReferences = MANROPE_FAMILIES.filter((family) => !allText.includes(family));
+  const missingFontReferences = MANROPE_FAMILIES.filter(
+    (family) => !referencedManropeFamilies.has(family),
+  );
   if (missingFontReferences.length > 0) {
     failures.push(
       `Missing bundled Manrope reference(s): ${missingFontReferences.join(", ")}.`,
     );
   }
 
-  if (!files.some((file) => FONT_ASSET_EXTENSION.test(file.relativePath) && /manrope/i.test(file.relativePath))) {
-    failures.push("No bundled Manrope font asset was found (expected a .ttf, .otf, .woff, or .woff2 file).");
+  const missingFontAssets = MANROPE_FAMILIES.filter((family) => !bundledManropeAssets.has(family));
+  if (missingFontAssets.length > 0) {
+    failures.push(
+      `Missing bundled Manrope asset(s): ${missingFontAssets.join(", ")}. Expected individually named .ttf, .otf, .woff, or .woff2 files; hash suffixes are allowed.`,
+    );
   }
 
-  if (!allText.includes(IMAGE_FALLBACK_MARKER)) {
+  if (!hasImageFallbackMarker) {
     failures.push(
       `Resilient image fallback marker \`${IMAGE_FALLBACK_MARKER}\` is absent from the bundled text artifacts.`,
     );
