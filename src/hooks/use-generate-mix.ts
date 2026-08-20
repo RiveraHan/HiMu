@@ -6,13 +6,32 @@ import { useLocale } from "@/src/i18n/use-locale";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
 import { authMutationKey, captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
+import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
 
 type GenerateMixInput = {
   djId: string;
-  title: string;
-  lyrics?: string;
-  isPublic: boolean;
+  brief: ConfirmedGenerationBriefV1;
+  sourceTrackId?: string | null;
 };
+
+type GenerateMixResponse = {
+  jobId: string;
+  isPublic: boolean;
+  brief: ConfirmedGenerationBriefV1;
+  sourceTrackId: string | null;
+};
+
+function isConfirmedBrief(value: unknown): value is ConfirmedGenerationBriefV1 {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const brief = value as Record<string, unknown>;
+  return brief.version === 1 && typeof brief.title === "string" &&
+    typeof brief.creativeDirection === "string" &&
+    (brief.mode === "instrumental" || brief.mode === "vocal") &&
+    (brief.visibility === "private" || brief.visibility === "public") &&
+    typeof brief.traitSnapshot === "object" && brief.traitSnapshot != null;
+}
 
 export function useGenerateMix() {
   const { resolvedLanguage } = useLocale();
@@ -22,25 +41,29 @@ export function useGenerateMix() {
 
   const start = useMutation({
     mutationKey: authMutationKey("generate-mix", userId),
-    mutationFn: async ({ djId, lyrics, isPublic }: GenerateMixInput) => {
+    mutationFn: async (input: GenerateMixInput) => {
+      const { djId, brief, sourceTrackId = null } = input;
       const scope = captureAuthScope(userId);
-      const { data, error } = await invokeWithAuthScope<{
-        jobId: string;
-        isPublic: boolean;
-      }>(supabase.functions, scope, "generate-mix", {
+      const { data, error } = await invokeWithAuthScope<GenerateMixResponse>(
+        supabase.functions,
+        scope,
+        "generate-mix",
+        {
         body: {
           djId,
+          brief,
+          sourceTrackId,
           language: resolvedLanguage,
           localHour: new Date().getHours(),
-          isPublic,
-          ...(lyrics ? { lyrics } : {}),
         },
       });
       if (error) throw error;
       if (
         typeof data?.jobId !== "string" ||
         data.jobId.trim().length === 0 ||
-        typeof data.isPublic !== "boolean"
+        typeof data.isPublic !== "boolean" ||
+        !isConfirmedBrief(data.brief) ||
+        (data.sourceTrackId !== null && typeof data.sourceTrackId !== "string")
       ) {
         throw new Error("generate-mix returned an invalid response");
       }
@@ -53,8 +76,10 @@ export function useGenerateMix() {
         upsertQueuedGenerationActivity(current, {
           jobId: data.jobId,
           djId: variables.djId,
-          title: variables.title,
-          retryLyrics: variables.lyrics ?? null,
+          title: data.brief.title,
+          retryLyrics: null,
+          retryBrief: data.brief,
+          sourceTrackId: data.sourceTrackId,
           visibility: data.isPublic ? "public" : "private",
           nowMs: Date.now(),
         }),

@@ -525,22 +525,39 @@ export function ActivityProvider({ children }: PropsWithChildren) {
         const { data, error } = await invokeWithAuthScope<{
           jobId: string;
           isPublic: boolean;
+          brief?: ActivityItem["retryBrief"];
+          sourceTrackId?: string | null;
         }>(supabase.functions, scope, "generate-mix", {
-          body: {
-            djId,
-            language: resolvedLanguage,
-            localHour: new Date().getHours(),
-            isPublic: activity.visibility === "public",
-            ...(activity.retryLyrics
-              ? { lyrics: activity.retryLyrics }
-              : {}),
-          },
+          body: activity.retryBrief
+            ? {
+              djId,
+              brief: activity.retryBrief,
+              sourceTrackId: activity.sourceTrackId,
+              language: resolvedLanguage,
+              localHour: new Date().getHours(),
+            }
+            : {
+              djId,
+              legacyJobId: activity.id.startsWith("generation:")
+                ? activity.id.slice("generation:".length)
+                : activity.id,
+              language: resolvedLanguage,
+              localHour: new Date().getHours(),
+              isPublic: activity.visibility === "public",
+              ...(activity.retryLyrics
+                ? { lyrics: activity.retryLyrics }
+                : {}),
+            },
         });
         if (error) throw error;
         if (
           typeof data?.jobId !== "string" ||
           data.jobId.trim().length === 0 ||
-          typeof data.isPublic !== "boolean"
+          typeof data.isPublic !== "boolean" ||
+          (activity.retryBrief &&
+            (!data.brief || data.brief.version !== 1 ||
+              (data.sourceTrackId !== null &&
+                typeof data.sourceTrackId !== "string")))
         ) {
           throw new Error("generate-mix returned an invalid response");
         }
@@ -558,8 +575,12 @@ export function ActivityProvider({ children }: PropsWithChildren) {
             upsertQueuedGenerationActivity(current, {
               jobId: data.jobId,
               djId,
-              title: activity.title,
-              retryLyrics: activity.retryLyrics,
+              title: data.brief?.title ?? activity.title,
+              retryLyrics: data.brief ? null : activity.retryLyrics,
+              retryBrief: data.brief ?? activity.retryBrief,
+              sourceTrackId: data.sourceTrackId !== undefined
+                ? data.sourceTrackId
+                : activity.sourceTrackId,
               visibility: data.isPublic ? "public" : "private",
               nowMs: Date.now(),
               replaceActivityId: activity.id,

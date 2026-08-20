@@ -17,6 +17,8 @@ const generationJob: GenerationJobRow = {
   dj_id: "dj-1",
   status: "generating",
   prompt: "A bright synth mix",
+  generation_brief: null,
+  source_track_id: null,
   error: null,
   created_at: "2026-07-29T12:00:00.000Z",
   updated_at: "2026-07-29T12:00:10.000Z",

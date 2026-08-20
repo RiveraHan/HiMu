@@ -37,8 +37,10 @@ requires(/drop function if exists public\.reserve_manual_generation_job\(uuid, u
 requires(/create function public\.reserve_manual_generation_job\([\s\S]*p_generation_brief jsonb[\s\S]*p_is_public boolean[\s\S]*p_source_track_id uuid/i, "versioned reservation signature");
 requires(/insert into public\.generation_jobs[\s\S]*generation_brief[\s\S]*source_track_id/i, "reservation stores brief and lineage");
 requires(/if found then[\s\S]*return query[\s\S]*'existing'/i, "active jobs return without overwrite");
-assert.doesNotMatch(sql, /update public\.generation_jobs[\s\S]*set[\s\S]*generation_brief/i, "active accepted briefs stay immutable");
+assert.doesNotMatch(sql, /update public\.generation_jobs[\s\S]{0,800}?set[\s\S]{0,800}?generation_brief\s*=/i, "active accepted briefs stay immutable");
 requires(/revoke all on function public\.reserve_manual_generation_job\(uuid, uuid, jsonb, boolean, uuid\)[\s\S]*from public, anon, authenticated/i, "reservation is service-only");
+requires(/create function public\.retry_legacy_manual_generation_job\([\s\S]*p_job_id uuid[\s\S]*generation_brief is null[\s\S]*status = 'failed'/i, "legacy retry only requeues the same failed pre-brief job");
+requires(/revoke all on function public\.retry_legacy_manual_generation_job\(uuid, uuid, uuid\)[\s\S]*from public, anon, authenticated/i, "legacy retry is service-only");
 
 requires(/create (?:or replace )?function public\.finalize_generated_mix/i, "finalization function");
 requires(/gj\.source_track_id/i, "finalization copies source lineage");

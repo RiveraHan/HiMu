@@ -253,7 +253,7 @@ serveAuthed(async (req, user) => {
       const { data } = await admin
         .from("dj_generation_configs")
         .select(
-          "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, character, voice_style, genre_specialties, mood_tags, avatar_url, owner_id)",
+          "dj_id, base_prompt, is_instrumental, default_lyrics, max_duration, djs(name, slug, character, identity_concept, personality_traits, voice_style, genre_specialties, mood_tags, avatar_url, owner_id)",
         )
         .eq("dj_id", djId)
         .single();
@@ -326,7 +326,7 @@ serveAuthed(async (req, user) => {
     findActiveManualJob: async (userId, djId) => {
       const { data, error } = await admin
         .from("generation_jobs")
-        .select("id, status, updated_at, is_public")
+        .select("id, status, updated_at, is_public, generation_brief, source_track_id")
         .eq("user_id", userId)
         .eq("dj_id", djId)
         .is("drop_date", null)
@@ -341,6 +341,8 @@ serveAuthed(async (req, user) => {
           status: data.status,
           updatedAt: data.updated_at,
           isPublic: data.is_public,
+          brief: data.generation_brief,
+          sourceTrackId: data.source_track_id,
         }
         : null;
     },
@@ -359,14 +361,50 @@ serveAuthed(async (req, user) => {
         .maybeSingle();
       return mapUpdatedRow(data, error);
     },
-    reserveManualJob: async ({ userId, djId, lyrics, isPublic }) => {
+    getSourceTrack: async (sourceTrackId) => {
+      const { data, error } = await admin
+        .from("tracks")
+        .select("id,owner_id,dj_id")
+        .eq("id", sourceTrackId)
+        .maybeSingle();
+      if (error) throw error;
+      return data
+        ? { id: data.id, ownerId: data.owner_id, djId: data.dj_id }
+        : null;
+    },
+    requeueLegacyManualJob: async ({ userId, djId, jobId }) => {
+      const { data, error } = await admin
+        .rpc("retry_legacy_manual_generation_job", {
+          p_user_id: userId,
+          p_dj_id: djId,
+          p_job_id: jobId,
+        })
+        .maybeSingle();
+      if (error) throw error;
+      return data
+        ? {
+          jobId: data.job_id,
+          queuedAt: data.queued_at,
+          isPublic: data.is_public,
+          lyrics: data.prompt,
+        }
+        : null;
+    },
+    reserveManualJob: async ({
+      userId,
+      djId,
+      brief,
+      isPublic,
+      sourceTrackId,
+    }) => {
       const { data, error } = await admin.rpc(
         "reserve_manual_generation_job",
         {
           p_user_id: userId,
           p_dj_id: djId,
-          p_prompt: lyrics,
+          p_generation_brief: brief,
           p_is_public: isPublic,
+          p_source_track_id: sourceTrackId,
         },
       );
       return mapManualJobReservation(data, error);

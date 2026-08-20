@@ -6,6 +6,7 @@ import {
 } from "../../supabase/functions/generate-mix/generation-models";
 
 async function main() {
+  const persistedReservationBrief = { version: 1, title: "Persisted brief" };
   const module = await import(
     "../../supabase/functions/generate-mix/generation-orchestration"
   ).catch(() => null);
@@ -39,6 +40,8 @@ async function main() {
         daily_limit: 10,
         queued_at: "2026-07-29T12:00:00.000Z",
         is_public: true,
+        generation_brief: persistedReservationBrief,
+        source_track_id: null,
       }],
       null,
     ),
@@ -48,6 +51,8 @@ async function main() {
       dailyLimit: 10,
       queuedAt: "2026-07-29T12:00:00.000Z",
       isPublic: true,
+      brief: persistedReservationBrief,
+      sourceTrackId: null,
     },
   );
   assert.deepEqual(
@@ -58,6 +63,8 @@ async function main() {
         daily_limit: 10,
         queued_at: null,
         is_public: false,
+        generation_brief: persistedReservationBrief,
+        source_track_id: "source-track",
       }],
       null,
     ),
@@ -66,6 +73,8 @@ async function main() {
       jobId: "job-existing",
       dailyLimit: 10,
       isPublic: false,
+      brief: persistedReservationBrief,
+      sourceTrackId: "source-track",
     },
   );
   assert.deepEqual(
@@ -185,9 +194,11 @@ async function main() {
     djs: {
       name: "Sol",
       character: "warm",
+      identity_concept: "A sunrise selector shaping hopeful nocturnal pop.",
       voice_style: "feminine",
       genre_specialties: ["Pop"],
       mood_tags: ["energetic"],
+      personality_traits: { energy: 7, vibe: "warm", isInstrumental: false },
       avatar_url: "https://images.test/avatar.jpg",
       owner_id: "user-1",
     },
@@ -197,6 +208,35 @@ async function main() {
     dj_id: "dj-persisted",
     djs: { ...cfg.djs, name: "Persisted DJ" },
   };
+  const validBrief = {
+    version: 1 as const,
+    title: "Afterglow Letters",
+    creativeDirection: "Begin intimately, then open into a luminous layered chorus.",
+    mode: "vocal" as const,
+    lyricTheme: "finding courage at sunrise",
+    lyrics: "[Verse]\nI kept a spark beneath the night\n\n[Chorus]\nWe meet the morning in the light",
+    visibility: "private" as const,
+    traitSnapshot: {
+      genres: ["Pop"],
+      moods: ["energetic"],
+      energy: 7,
+      vibe: "warm",
+      identityConcept: "A sunrise selector shaping hopeful nocturnal pop.",
+    },
+  };
+  const manualRequest = (
+    brief = validBrief,
+    overrides: Record<string, unknown> = {},
+  ) => ({ djId: "dj-1", brief, language: "en", ...overrides });
+  const manualResponse = (
+    jobId: string,
+    isPublic: boolean,
+    brief = validBrief,
+    sourceTrackId: string | null = null,
+  ) => ({
+    status: 200,
+    body: { jobId, isPublic, brief, sourceTrackId },
+  });
 
   function requestDeps(overrides: Record<string, unknown> = {}) {
     const calls: Array<{ name: string; value?: unknown }> = [];
@@ -242,6 +282,19 @@ async function main() {
         calls.push({ name: "findActiveManualJob" });
         return null;
       },
+      getSourceTrack: async (sourceTrackId: string) => {
+        calls.push({ name: "getSourceTrack", value: sourceTrackId });
+        return { id: sourceTrackId, ownerId: "user-1", djId: "dj-1" };
+      },
+      requeueLegacyManualJob: async (input: unknown) => {
+        calls.push({ name: "requeueLegacyManualJob", value: input });
+        return {
+          jobId: "22222222-2222-4222-8222-222222222222",
+          queuedAt: "2026-07-29T12:00:00.000Z",
+          isPublic: false,
+          lyrics: "legacy confirmed lyrics",
+        };
+      },
       failStaleManualJob: async (
         jobId: string,
         observedUpdatedAt: string,
@@ -253,14 +306,16 @@ async function main() {
         });
         return true;
       },
-      reserveManualJob: async (input: unknown) => {
+      reserveManualJob: async (input: any) => {
         calls.push({ name: "reserveManualJob", value: input });
         return {
           outcome: "created",
           jobId: "manual-new",
           dailyLimit: 10,
           queuedAt: "2026-07-29T12:00:00.000Z",
-          isPublic: true,
+          isPublic: input.isPublic,
+          brief: input.brief,
+          sourceTrackId: input.sourceTrackId,
         };
       },
       runGeneration: async (input: unknown) => {
@@ -274,6 +329,204 @@ async function main() {
       ...overrides,
     };
     return { calls, deps };
+  }
+
+  {
+    const { calls, deps } = requestDeps();
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", brief: validBrief, sourceTrackId: null, language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: {
+        jobId: "manual-new",
+        isPublic: false,
+        brief: validBrief,
+        sourceTrackId: null,
+      },
+    });
+    assert.deepEqual(
+      calls.find(({ name }) => name === "reserveManualJob")?.value,
+      {
+        userId: "user-1",
+        djId: "dj-1",
+        brief: validBrief,
+        isPublic: false,
+        sourceTrackId: null,
+      },
+      "the server must reserve its validated authoritative brief snapshot",
+    );
+  }
+
+  {
+    const { calls, deps } = requestDeps();
+    const staleBrief = {
+      ...validBrief,
+      traitSnapshot: { ...validBrief.traitSnapshot, energy: 2 },
+    };
+    const response = await handleGenerateMixRequest(
+      { djId: "dj-1", brief: staleBrief, language: "en" },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 409,
+      body: { error: "brief_stale", code: "brief_stale" },
+    });
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+  }
+
+  {
+    const storedBrief = { ...validBrief, title: "Persisted First Light" };
+    const { calls, deps } = requestDeps({
+      findActiveManualJob: async () => ({
+        id: "manual-active",
+        status: "generating",
+        updatedAt: "2026-07-29T11:59:00.000Z",
+        isPublic: true,
+        brief: storedBrief,
+        sourceTrackId: "source-existing",
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        brief: {
+          ...validBrief,
+          traitSnapshot: { ...validBrief.traitSnapshot, energy: 1 },
+        },
+        language: "en",
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: {
+        jobId: "manual-active",
+        isPublic: true,
+        brief: storedBrief,
+        sourceTrackId: "source-existing",
+      },
+    });
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+  }
+
+  {
+    const { deps } = requestDeps({
+      findActiveManualJob: async () => ({
+        id: "legacy-active",
+        status: "generating",
+        updatedAt: "2026-07-29T11:59:00.000Z",
+        isPublic: false,
+        brief: null,
+        sourceTrackId: null,
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      manualRequest(),
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 409,
+      body: { error: "legacy_job_active", code: "legacy_job_active" },
+    });
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      getSourceTrack: async () => ({
+        id: "11111111-1111-4111-8111-111111111111",
+        ownerId: "other-user",
+        djId: "dj-1",
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        brief: validBrief,
+        sourceTrackId: "11111111-1111-4111-8111-111111111111",
+        language: "en",
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 403,
+      body: { error: "source_not_allowed", code: "source_not_allowed" },
+    });
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps();
+    const response = await handleGenerateMixRequest(
+      manualRequest(validBrief, { sourceTrackId: "not-a-uuid" }),
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 400,
+      body: { error: "sourceTrackId must be a UUID", code: "invalid_input" },
+    });
+    assert.equal(calls.some(({ name }) => name === "getSourceTrack"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps();
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        legacyJobId: "22222222-2222-4222-8222-222222222222",
+        lyrics: "client text must not override persisted lyrics",
+        isPublic: true,
+        language: "en",
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 200,
+      body: { jobId: "22222222-2222-4222-8222-222222222222", isPublic: false },
+    });
+    assert.deepEqual(
+      calls.find(({ name }) => name === "requeueLegacyManualJob")?.value,
+      {
+        userId: "user-1",
+        djId: "dj-1",
+        jobId: "22222222-2222-4222-8222-222222222222",
+      },
+    );
+    const scheduled = calls.find(({ name }) => name === "runGeneration")
+      ?.value as { lyrics?: string; brief?: unknown } | undefined;
+    assert.equal(scheduled?.lyrics, "legacy confirmed lyrics");
+    assert.equal(scheduled?.brief, null);
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      getDjConfig: async () => ({
+        ...cfg,
+        djs: { ...cfg.djs, owner_id: null },
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      manualRequest(),
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 403,
+      body: {
+        error: "you can't generate with this DJ",
+        code: "dj_not_allowed",
+      },
+    });
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
   }
 
   {
@@ -293,18 +546,22 @@ async function main() {
 
   {
     const { calls, deps } = requestDeps();
+    const publicBrief = { ...validBrief, visibility: "public" as const };
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic: true },
+      manualRequest(publicBrief),
       "user-1",
       deps,
     );
-    assert.deepEqual(response, {
-      status: 200,
-      body: { jobId: "manual-new", isPublic: true },
-    });
+    assert.deepEqual(response, manualResponse("manual-new", true, publicBrief));
     assert.deepEqual(
       calls.find(({ name }) => name === "reserveManualJob")?.value,
-      { userId: "user-1", djId: "dj-1", lyrics: null, isPublic: true },
+      {
+        userId: "user-1",
+        djId: "dj-1",
+        brief: publicBrief,
+        isPublic: true,
+        sourceTrackId: null,
+      },
     );
     const scheduled = calls.find((call) => call.name === "runGeneration");
     assert.equal((scheduled?.value as { language?: string })?.language, "en");
@@ -328,40 +585,47 @@ async function main() {
           dailyLimit: 3,
           queuedAt: "2026-07-29T12:00:00.000Z",
           isPublic: false,
+          brief: validBrief,
+          sourceTrackId: null,
         };
       },
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic: false, language: "en" },
+      manualRequest(),
       "user-1",
       deps,
     );
-    assert.deepEqual(response, {
-      status: 200,
-      body: { jobId: "manual-private", isPublic: false },
-    });
+    assert.deepEqual(response, manualResponse("manual-private", false));
     assert.deepEqual(
       calls.find(({ name }) => name === "reserveManualJob")?.value,
-      { userId: "user-1", djId: "dj-1", lyrics: null, isPublic: false },
+      {
+        userId: "user-1",
+        djId: "dj-1",
+        brief: validBrief,
+        isPublic: false,
+        sourceTrackId: null,
+      },
     );
   }
 
-  for (const isPublic of [undefined, "true", 1, null]) {
+  for (const malformedBrief of [undefined, null, "brief", { version: 2 }]) {
     const { calls, deps } = requestDeps();
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic, language: "en" },
+      { djId: "dj-1", brief: malformedBrief, language: "en" },
       "user-1",
       deps,
     );
     assert.deepEqual(response, {
       status: 400,
-      body: { error: "isPublic must be boolean", code: "invalid_input" },
+      body: {
+        error: malformedBrief && typeof malformedBrief === "object"
+          ? "version"
+          : "brief_type",
+        code: "invalid_input",
+      },
     });
-    assert.deepEqual(
-      calls,
-      [],
-      "manual visibility must be validated before database/provider work",
-    );
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
   }
 
   {
@@ -373,19 +637,18 @@ async function main() {
           status: "generating",
           updatedAt: "2026-07-29T11:59:00.000Z",
           isPublic: true,
+          brief: validBrief,
+          sourceTrackId: null,
         };
       },
       now: () => "2026-07-29T12:00:00.000Z",
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic: false, language: "en" },
+      manualRequest(),
       "user-1",
       deps,
     );
-    assert.deepEqual(response, {
-      status: 200,
-      body: { jobId: "manual-active", isPublic: true },
-    });
+    assert.deepEqual(response, manualResponse("manual-active", true));
     assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
     assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
     assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
@@ -399,7 +662,7 @@ async function main() {
         },
       });
       return handleGenerateMixRequest(
-        { djId: "dj-1", isPublic: true, language: "en" },
+        manualRequest(),
         "user-1",
         deps,
       );
@@ -425,14 +688,11 @@ async function main() {
       now: () => "2026-07-29T12:00:00.000Z",
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic: true, language: "en" },
+      manualRequest(),
       "user-1",
       deps,
     );
-    assert.deepEqual(response, {
-      status: 200,
-      body: { jobId: "manual-new", isPublic: true },
-    });
+    assert.deepEqual(response, manualResponse("manual-new", false));
     assert.deepEqual(
       calls.find(({ name }) => name === "failStaleManualJob")?.value,
       {
@@ -466,6 +726,8 @@ async function main() {
             status: "generating",
             updatedAt: "2026-07-29T11:59:30.000Z",
             isPublic: true,
+            brief: validBrief,
+            sourceTrackId: null,
           };
       },
       failStaleManualJob: async () => {
@@ -474,14 +736,11 @@ async function main() {
       },
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic: false, language: "en" },
+      manualRequest(),
       "user-1",
       deps,
     );
-    assert.deepEqual(response, {
-      status: 200,
-      body: { jobId: "manual-refreshed", isPublic: true },
-    });
+    assert.deepEqual(response, manualResponse("manual-refreshed", true));
     assert.equal(
       calls.filter(({ name }) => name === "findActiveManualJob").length,
       2,
@@ -499,7 +758,7 @@ async function main() {
       }),
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic: true, language: "en" },
+      manualRequest(),
       "user-1",
       deps,
     );
@@ -522,17 +781,16 @@ async function main() {
         jobId: "manual-race-winner",
         dailyLimit: 10,
         isPublic: false,
+        brief: validBrief,
+        sourceTrackId: null,
       }),
     });
     const response = await handleGenerateMixRequest(
-      { djId: "dj-1", isPublic: true, language: "en" },
+      manualRequest(),
       "user-1",
       deps,
     );
-    assert.deepEqual(response, {
-      status: 200,
-      body: { jobId: "manual-race-winner", isPublic: false },
-    });
+    assert.deepEqual(response, manualResponse("manual-race-winner", false));
     assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
     assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
   }
@@ -1029,6 +1287,31 @@ async function main() {
       state.deps,
     );
     assert.equal(state.finalizations[0]?.djId, "dj-persisted");
+  }
+
+  {
+    const state = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-confirmed-brief",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: validBrief.lyrics,
+        brief: validBrief,
+        seasoning: ["late night atmosphere"],
+        language: "en",
+      },
+      state.deps,
+    );
+    assert.equal(state.finalizations[0]?.title, validBrief.title);
+    const prompt = String(state.replicateInputs[0]?.body?.input?.prompt ?? "");
+    assert.ok(prompt.includes(validBrief.creativeDirection));
+    assert.ok(prompt.includes(validBrief.lyrics));
+    assert.equal(
+      state.modelEvents.some(({ role }) => role === "caption"),
+      false,
+      "manual confirmed briefs must not enter the Daily Drop caption path",
+    );
   }
 
   {

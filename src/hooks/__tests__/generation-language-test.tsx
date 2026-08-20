@@ -57,11 +57,33 @@ function wrapper(language: () => "en" | "es", client: QueryClient) {
 }
 
 describe("generation language", () => {
+  const spanishBrief = {
+    version: 1 as const,
+    title: "Cartas del Alba",
+    creativeDirection: "Empieza íntima y crece hacia un coro amplio y luminoso.",
+    mode: "vocal" as const,
+    lyricTheme: "valor al amanecer",
+    lyrics: "[Verso]\nGuardo la luz\n[Coro]\nVuelvo a comenzar",
+    visibility: "private" as const,
+    traitSnapshot: {
+      genres: ["Pop"],
+      moods: ["Energetic"],
+      energy: 7,
+      vibe: "cálido",
+      identityConcept: "Un selector del amanecer.",
+    },
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(useCurrentUser).mockReturnValue({ id: "user-1" } as never);
     jest.mocked(supabase.functions.invoke).mockResolvedValue({
-      data: { jobId: "job-1", isPublic: false },
+      data: {
+        jobId: "job-1",
+        isPublic: false,
+        brief: spanishBrief,
+        sourceTrackId: null,
+      },
       error: null,
     } as never);
   });
@@ -75,9 +97,8 @@ describe("generation language", () => {
     await act(async () => {
       result.current.generate({
         djId: "dj-1",
-        title: "DJ One",
-        lyrics: "[Verso 1]\nSigo aquí",
-        isPublic: false,
+        brief: spanishBrief,
+        sourceTrackId: null,
       });
     });
 
@@ -86,7 +107,7 @@ describe("generation language", () => {
         body: expect.objectContaining({
           djId: "dj-1",
           language: "es",
-          lyrics: "[Verso 1]\nSigo aquí",
+          brief: spanishBrief,
         }),
         headers: { Authorization: "Bearer fixture-user-1" },
       }),

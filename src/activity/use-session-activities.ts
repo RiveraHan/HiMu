@@ -148,6 +148,8 @@ export function normalizeMutationActivities({
       failureReason: state.status === "error" ? "operationFailed" : null,
       recoveryAvailable: false,
       retryLyrics: null,
+      retryBrief: null,
+      sourceTrackId: null,
       visibility:
         state.kind === "create-dj"
           ? (state.variables as CreateDJInput).isPublic

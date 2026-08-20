@@ -8,8 +8,25 @@ import type {
   ActivityItem,
   GenerationJobRow,
 } from "@/src/activity/types";
+import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
 
 const CREATED_AT = "2026-07-29T12:00:00.000Z";
+const confirmedBrief: ConfirmedGenerationBriefV1 = {
+  version: 1,
+  title: "Afterglow Letters",
+  creativeDirection: "Open gently, then bloom into a wide luminous chorus.",
+  mode: "vocal",
+  lyricTheme: "finding courage at sunrise",
+  lyrics: "[Verse]\nA spark remains\n[Chorus]\nWe rise again",
+  visibility: "private",
+  traitSnapshot: {
+    genres: ["Pop"],
+    moods: ["Energetic"],
+    energy: 7,
+    vibe: "warm",
+    identityConcept: "A hopeful sunrise selector.",
+  },
+};
 
 const base: GenerationJobRow = {
   id: "job-1",
@@ -17,6 +34,8 @@ const base: GenerationJobRow = {
   dj_id: "dj-1",
   status: "generating",
   prompt: null,
+  generation_brief: null,
+  source_track_id: null,
   error: null,
   created_at: CREATED_AT,
   updated_at: CREATED_AT,
@@ -41,6 +60,8 @@ const activity: ActivityItem = {
   failureReason: null,
   recoveryAvailable: false,
   retryLyrics: null,
+  retryBrief: null,
+  sourceTrackId: null,
   visibility: "private",
   detail: null,
   seen: false,
@@ -58,6 +79,38 @@ describe("normalizeGenerationJob", () => {
       title: "Nova",
       djId: "dj-1",
       retryLyrics: null,
+    });
+  });
+
+  it("recovers a persisted confirmed brief and source instead of the legacy prompt", () => {
+    expect(
+      normalizeGenerationJob(
+        {
+          ...base,
+          prompt: "legacy lyrics must not win",
+          generation_brief: confirmedBrief,
+          source_track_id: "source-track",
+        },
+        Date.parse(CREATED_AT),
+      ),
+    ).toMatchObject({
+      title: confirmedBrief.title,
+      retryBrief: confirmedBrief,
+      retryLyrics: null,
+      sourceTrackId: "source-track",
+    });
+  });
+
+  it("keeps legacy lyric-only recovery when no confirmed brief was stored", () => {
+    expect(
+      normalizeGenerationJob(
+        { ...base, prompt: "legacy lyrics" },
+        Date.parse(CREATED_AT),
+      ),
+    ).toMatchObject({
+      retryBrief: null,
+      retryLyrics: "legacy lyrics",
+      sourceTrackId: null,
     });
   });
 
@@ -204,6 +257,8 @@ describe("upsertQueuedGenerationActivity", () => {
     djId: "dj-1",
     title: "Nova",
     retryLyrics: "midnight pulse",
+    retryBrief: confirmedBrief,
+    sourceTrackId: "source-track",
     nowMs: Date.parse("2026-07-29T12:05:00.000Z"),
     visibility: "public" as const,
   };
@@ -214,6 +269,8 @@ describe("upsertQueuedGenerationActivity", () => {
         ...activity,
         id: "generation:job-1",
         retryLyrics: "midnight pulse",
+        retryBrief: confirmedBrief,
+        sourceTrackId: "source-track",
         visibility: "public",
         createdAt: "2026-07-29T12:05:00.000Z",
         updatedAt: "2026-07-29T12:05:00.000Z",

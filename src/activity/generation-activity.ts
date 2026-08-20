@@ -4,6 +4,7 @@ import type {
   GenerationJobRow,
 } from "@/src/activity/types";
 import type { Visibility } from "@/src/types/content-visibility";
+import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
 
 const MIX_SLOW_MS = 90_000;
 const MANUAL_JOB_RECOVERY_MS = 15 * 60_000;
@@ -26,6 +27,20 @@ function validTimestamp(value: string, fallback: string): string {
   return Number.isFinite(Date.parse(value)) ? value : fallback;
 }
 
+function confirmedBrief(value: unknown): ConfirmedGenerationBriefV1 | null {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const brief = value as Record<string, unknown>;
+  return brief.version === 1 && typeof brief.title === "string" &&
+      typeof brief.creativeDirection === "string" &&
+      (brief.mode === "instrumental" || brief.mode === "vocal") &&
+      (brief.visibility === "private" || brief.visibility === "public") &&
+      typeof brief.traitSnapshot === "object" && brief.traitSnapshot != null
+    ? value as ConfirmedGenerationBriefV1
+    : null;
+}
+
 export function normalizeGenerationJob(
   row: GenerationJobRow,
   nowMs: number,
@@ -43,6 +58,7 @@ export function normalizeGenerationJob(
   const active = rawStatus === "queued" || rawStatus === "generating";
   const recoveryAvailable = active && staleMs > MANUAL_JOB_RECOVERY_MS;
   const malformedReady = rawStatus === "ready" && !row.track_id;
+  const retryBrief = confirmedBrief(row.generation_brief);
 
   let status: ActivityStatus;
   if (malformedReady) {
@@ -60,7 +76,7 @@ export function normalizeGenerationJob(
     source: "server",
     kind: "mix",
     status,
-    title: row.djs?.name ?? "HiMu DJ",
+    title: retryBrief?.title ?? row.djs?.name ?? "HiMu DJ",
     djId: row.dj_id,
     trackId: row.track_id,
     createdAt,
@@ -73,7 +89,9 @@ export function normalizeGenerationJob(
           ? "generationFailed"
           : null,
     recoveryAvailable,
-    retryLyrics: row.prompt,
+    retryLyrics: retryBrief ? null : row.prompt,
+    retryBrief,
+    sourceTrackId: row.source_track_id,
     visibility: row.is_public ? "public" : "private",
     detail: null,
     seen: false,
@@ -87,6 +105,8 @@ export function upsertQueuedGenerationActivity(
     djId: string;
     title: string;
     retryLyrics: string | null;
+    retryBrief: ConfirmedGenerationBriefV1 | null;
+    sourceTrackId: string | null;
     visibility: Visibility;
     nowMs: number;
     replaceActivityId?: string;
@@ -126,6 +146,8 @@ export function upsertQueuedGenerationActivity(
     failureReason: null,
     recoveryAvailable: false,
     retryLyrics: input.retryLyrics,
+    retryBrief: input.retryBrief,
+    sourceTrackId: input.sourceTrackId,
     visibility: input.visibility,
     detail: null,
     seen: false,

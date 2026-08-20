@@ -277,6 +277,61 @@ revoke all on function public.reserve_manual_generation_job(uuid, uuid, jsonb, b
 grant execute on function public.reserve_manual_generation_job(uuid, uuid, jsonb, boolean, uuid)
   to service_role;
 
+create function public.retry_legacy_manual_generation_job(
+  p_user_id uuid,
+  p_dj_id uuid,
+  p_job_id uuid
+)
+returns table (
+  job_id uuid,
+  queued_at timestamptz,
+  is_public boolean,
+  prompt text
+)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_now timestamptz := pg_catalog.clock_timestamp();
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    20260729,
+    pg_catalog.hashtext(p_user_id::text)
+  );
+
+  if exists (
+    select 1
+    from public.generation_jobs as active
+    where active.user_id = p_user_id
+      and active.dj_id = p_dj_id
+      and active.drop_date is null
+      and active.status in ('queued', 'generating')
+  ) then
+    return;
+  end if;
+
+  return query
+  update public.generation_jobs as gj
+  set
+    status = 'queued',
+    error = null,
+    updated_at = v_now
+  where gj.id = p_job_id
+    and gj.user_id = p_user_id
+    and gj.dj_id = p_dj_id
+    and gj.drop_date is null
+    and gj.generation_brief is null
+    and gj.status = 'failed'
+  returning gj.id, gj.updated_at, gj.is_public, gj.prompt;
+end;
+$$;
+
+revoke all on function public.retry_legacy_manual_generation_job(uuid, uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.retry_legacy_manual_generation_job(uuid, uuid, uuid)
+  to service_role;
+
 create or replace function public.finalize_generated_mix(
   p_job_id uuid,
   p_track_id uuid,

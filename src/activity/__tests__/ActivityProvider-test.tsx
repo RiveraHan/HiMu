@@ -14,6 +14,7 @@ import { useUpdateDJ } from "@/src/hooks/use-update-dj";
 import { useLocale } from "@/src/i18n/use-locale";
 import { ActivityProvider, useActivity } from "../ActivityProvider";
 import type { ActivityItem } from "../types";
+import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
 import { useGenerationActivity } from "../use-generation-activity";
 
 jest.mock("../use-generation-activity", () => ({
@@ -70,6 +71,22 @@ let mockFetchStatus: "idle" | "fetching" | "paused" = "idle";
 let mockIsLoading = false;
 let mockCurrentTrackId: string | null = null;
 const mockStored = new Map<string, string>();
+const activityBrief: ConfirmedGenerationBriefV1 = {
+  version: 1,
+  title: "Afterglow Letters",
+  creativeDirection: "Open gently, then bloom into a wide luminous chorus.",
+  mode: "vocal",
+  lyricTheme: "finding courage at sunrise",
+  lyrics: "[Verse]\nA spark remains\n[Chorus]\nWe rise again",
+  visibility: "private",
+  traitSnapshot: {
+    genres: ["Pop"],
+    moods: ["Energetic"],
+    energy: 7,
+    vibe: "warm",
+    identityConcept: "A hopeful sunrise selector.",
+  },
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -99,7 +116,9 @@ function activity(
     error: status === "failed" ? "raw provider failure" : null,
     failureReason: status === "failed" ? "generationFailed" : null,
     recoveryAvailable: false,
-    retryLyrics: "neon rain",
+    retryLyrics: null,
+    retryBrief: activityBrief,
+    sourceTrackId: "source-track",
     visibility: "private",
     detail: null,
     seen: false,
@@ -158,6 +177,18 @@ function receiptKey(userId: string) {
   return `activity-receipts.${userId}`;
 }
 
+function successfulGeneration(jobId: string) {
+  return {
+    data: {
+      jobId,
+      isPublic: false,
+      brief: activityBrief,
+      sourceTrackId: null,
+    },
+    error: null,
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, "error").mockImplementation(() => undefined);
@@ -198,8 +229,7 @@ beforeEach(() => {
     mockStored.set(key, value);
   });
   jest.mocked(supabase.functions.invoke).mockResolvedValue({
-    data: { jobId: "job-2", isPublic: false },
-    error: null,
+    ...successfulGeneration("job-2"),
   } as never);
 });
 
@@ -652,10 +682,10 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
   expect(supabase.functions.invoke).toHaveBeenCalledWith("generate-mix", {
     body: {
       djId: "dj-1",
+      brief: activityBrief,
+      sourceTrackId: "source-track",
       language: "en",
       localHour: 17,
-      lyrics: "neon rain",
-      isPublic: false,
     },
     headers: { Authorization: "Bearer fixture-user-a" },
   });
@@ -664,7 +694,9 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
       id: "generation:job-2",
       status: "queued",
       djId: "dj-1",
-      retryLyrics: "neon rain",
+      retryLyrics: null,
+      retryBrief: activityBrief,
+      sourceTrackId: null,
       visibility: "private",
     }),
   ]);
@@ -675,6 +707,45 @@ test("retries a recoverable slow mix, replaces it in cache, and keeps one active
   expect(receipts["generation:old-job"].seenAt).not.toBeNull();
   expect(result.current.retryingIds.has("generation:old-job")).toBe(false);
   expect(result.current.activeCount).toBe(1);
+});
+
+test("retries a failed legacy job by ID with its persisted lyric fallback", async () => {
+  const jobId = "33333333-3333-4333-8333-333333333333";
+  const failed = activity(`generation:${jobId}`, "failed", {
+    retryBrief: null,
+    retryLyrics: "legacy persisted lyrics",
+    sourceTrackId: null,
+  });
+  mockActivities = [failed];
+  jest.mocked(supabase.functions.invoke).mockResolvedValue({
+    data: { jobId, isPublic: false },
+    error: null,
+  } as never);
+  const queryClient = client();
+  queryClient.setQueryData(queryKeys.generationJobs.activity("user-a"), [failed]);
+  jest.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
+  const { result } = await renderActivity(queryClient);
+
+  await act(async () => result.current.retryActivity(failed));
+
+  expect(supabase.functions.invoke).toHaveBeenCalledWith("generate-mix", {
+    body: {
+      djId: "dj-1",
+      legacyJobId: jobId,
+      language: "en",
+      localHour: expect.any(Number),
+      lyrics: "legacy persisted lyrics",
+      isPublic: false,
+    },
+    headers: { Authorization: "Bearer fixture-user-a" },
+  });
+  expect(queryClient.getQueryData<ActivityItem[]>(
+    queryKeys.generationJobs.activity("user-a"),
+  )?.[0]).toMatchObject({
+    id: `generation:${jobId}`,
+    retryBrief: null,
+    retryLyrics: "legacy persisted lyrics",
+  });
 });
 
 test.each([undefined, null] as const)(
@@ -722,7 +793,7 @@ test("keeps an in-flight retry scoped to user A after rendering user B", async (
   await waitFor(() => expect(rendered.result.current.items).toEqual([]));
 
   await act(async () => {
-    invoke.resolve({ data: { jobId: "must-not-reach-b", isPublic: false }, error: null });
+    invoke.resolve(successfulGeneration("must-not-reach-b") as never);
     await retry;
   });
 
@@ -741,10 +812,9 @@ test("same-ID retry refreshes cache without creating a seen receipt", async () =
     recoveryAvailable: true,
   });
   mockActivities = [slow];
-  jest.mocked(supabase.functions.invoke).mockResolvedValue({
-    data: { jobId: "same-job", isPublic: false },
-    error: null,
-  } as never);
+  jest.mocked(supabase.functions.invoke).mockResolvedValue(
+    successfulGeneration("same-job") as never,
+  );
   const queryClient = client();
   queryClient.setQueryData(queryKeys.generationJobs.activity("user-a"), [slow]);
   jest.spyOn(queryClient, "invalidateQueries").mockResolvedValue(undefined);
@@ -811,7 +881,7 @@ test("guards unsupported retries and duplicate taps until the accepted request s
   );
 
   await act(async () => {
-    resolveInvoke({ data: { jobId: "replacement", isPublic: false }, error: null });
+    resolveInvoke(successfulGeneration("replacement"));
     await first;
   });
   expect(result.current.retryingIds.has(failed.id)).toBe(false);
@@ -861,7 +931,7 @@ test("preserves each user's retry flight across account switches", async () => {
 
   await act(async () => {
     invokeResolvers.forEach((resolve) =>
-      resolve({ data: { jobId: "account-race", isPublic: false }, error: null }),
+      resolve(successfulGeneration("account-race")),
     );
     await Promise.all([first, second]);
   });
@@ -910,8 +980,7 @@ test("an older retry cannot clear a newer same-item flight", async () => {
 
   await act(async () => {
     invokeResolvers[0]({
-      data: { jobId: "ownership-race", isPublic: false },
-      error: null,
+      ...successfulGeneration("ownership-race"),
     });
     await older;
   });
@@ -930,8 +999,7 @@ test("an older retry cannot clear a newer same-item flight", async () => {
   await act(async () => {
     invokeResolvers.slice(1).forEach((resolve) =>
       resolve({
-        data: { jobId: "ownership-race", isPublic: false },
-        error: null,
+        ...successfulGeneration("ownership-race"),
       }),
     );
     await Promise.all([newer, duplicate]);

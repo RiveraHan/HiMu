@@ -1,4 +1,5 @@
 import type { Visibility } from "@/src/types/content-visibility";
+import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
 
 export type ActivityKind = "mix" | "create-dj" | "update-dj" | "cover";
 
@@ -30,6 +31,8 @@ export type ActivityItem = {
   failureReason: ActivityFailureReason | null;
   recoveryAvailable: boolean;
   retryLyrics: string | null;
+  retryBrief: ConfirmedGenerationBriefV1 | null;
+  sourceTrackId: string | null;
   visibility?: Visibility | null;
   detail: ActivityDetail;
   seen: boolean;
@@ -41,6 +44,8 @@ export type GenerationJobRow = {
   dj_id: string;
   status: string;
   prompt: string | null;
+  generation_brief: unknown;
+  source_track_id: string | null;
   error: string | null;
   created_at: string;
   updated_at: string;
