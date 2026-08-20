@@ -20,7 +20,7 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 }));
 
 describe("ScreenScrollView", () => {
-  it("keeps caller padding and gap on the constrained canvas", async () => {
+  it("keeps caller padding and gap on the breakpoint-constrained canvas", async () => {
     const screen = await render(
       <ScreenScrollView
         canvasVariant="max"
@@ -47,7 +47,7 @@ describe("ScreenScrollView", () => {
     expect(StyleSheet.flatten(canvas.props.style)).toEqual(
       expect.objectContaining({
         width: "100%",
-        maxWidth: 1280,
+        maxWidth: { xs: undefined, lg: 1280 },
         alignSelf: "center",
         gap: 32,
         paddingHorizontal: 24,

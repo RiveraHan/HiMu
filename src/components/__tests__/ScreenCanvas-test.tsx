@@ -21,34 +21,42 @@ describe("ScreenCanvas", () => {
   });
 
   it.each([
-    ["compact", 390, "readable", undefined],
-    ["medium", 768, "wide", 1120],
-    ["desktop", 1024, "max", 1280],
+    ["readable", 720],
+    ["wide", 1120],
+    ["max", 1280],
   ] as const)(
-    "keeps a 24-point page gutter and %s canvas width",
-    async (_mode, width, variant, maxWidth) => {
-      mockWindowWidth = width;
-      const screen = await render(
-        <ScreenCanvas variant={variant} testID="canvas">
-          <View />
-        </ScreenCanvas>,
-      );
+    "keeps the same static and desktop style structure for the %s canvas",
+    async (variant, maxWidth) => {
+      const canvasStyle = async (width: number) => {
+        mockWindowWidth = width;
+        const screen = await render(
+          <ScreenCanvas variant={variant} testID="canvas">
+            <View />
+          </ScreenCanvas>,
+        );
+        const style = StyleSheet.flatten(screen.getByTestId("canvas").props.style);
+        await screen.unmount();
+        return style;
+      };
 
-      expect(StyleSheet.flatten(screen.getByTestId("canvas").props.style)).toEqual(
+      const staticStyle = await canvasStyle(0);
+      const desktopStyle = await canvasStyle(1440);
+
+      expect(staticStyle).toEqual(desktopStyle);
+      expect(staticStyle).toEqual(
         expect.objectContaining({
           width: "100%",
           paddingHorizontal: 24,
-          maxWidth,
+          maxWidth: { xs: undefined, lg: maxWidth },
         }),
       );
-      expect(StyleSheet.flatten(screen.getByTestId("canvas").props.style)).not.toEqual(
+      expect(staticStyle).not.toEqual(
         expect.objectContaining({ marginHorizontal: expect.anything() }),
       );
     },
   );
 
-  it("keeps caller spacing inside the constrained canvas", async () => {
-    mockWindowWidth = 1024;
+  it("keeps caller spacing inside the breakpoint-constrained canvas", async () => {
     const screen = await render(
       <ScreenCanvas
         variant="max"
@@ -62,7 +70,7 @@ describe("ScreenCanvas", () => {
     expect(StyleSheet.flatten(screen.getByTestId("canvas").props.style)).toEqual(
       expect.objectContaining({
         width: "100%",
-        maxWidth: 1280,
+        maxWidth: { xs: undefined, lg: 1280 },
         gap: 32,
         paddingHorizontal: 40,
       }),

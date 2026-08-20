@@ -1,9 +1,6 @@
-import { useWindowDimensions, View, type ViewProps } from "react-native";
-import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
-import {
-  canvasMaxWidth,
-  resolveLayoutMode,
-} from "@/src/theme/layout";
+import { View, type ViewProps } from "react-native";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { canvasMaxWidth } from "@/src/theme/layout";
 
 export type ScreenCanvasVariant = keyof typeof canvasMaxWidth;
 
@@ -16,28 +13,22 @@ export function ScreenCanvas({
   style,
   ...rest
 }: Props) {
-  const { width } = useWindowDimensions();
-  const { theme } = useUnistyles();
-  const layoutMode = resolveLayoutMode(width);
-  const maxWidth =
-    layoutMode === "compact" ? undefined : canvasMaxWidth[variant];
-
   return (
     <View
       {...rest}
       style={[
-        styles.canvas,
-        { paddingHorizontal: theme.spacing.pageMargin },
+        styles.canvas(canvasMaxWidth[variant]),
         style,
-        { maxWidth },
       ]}
     />
   );
 }
 
-const styles = StyleSheet.create(() => ({
-  canvas: {
+const styles = StyleSheet.create((theme) => ({
+  canvas: (maxWidth: number) => ({
     width: "100%",
     alignSelf: "center",
-  },
+    paddingHorizontal: theme.spacing.pageMargin,
+    maxWidth: { xs: undefined, lg: maxWidth },
+  }),
 }));

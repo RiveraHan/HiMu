@@ -2,6 +2,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Linking, StyleSheet as RNStyleSheet } from "react-native";
 
 import LoginScreen from "@/app/(auth)/login";
+import { authApi } from "@/src/api/auth";
 import i18n from "@/src/i18n";
 import { darkTheme, lightTheme } from "@/src/theme/theme";
 
@@ -18,6 +19,13 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   }),
 }));
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
 
 function relativeLuminance(hex: string) {
   const channels = hex.match(/\w\w/g)?.map((channel) => Number.parseInt(channel, 16) / 255);
@@ -62,6 +70,7 @@ describe("Login translations", () => {
     mockWindowWidth = 390;
     await i18n.changeLanguage("es");
     mockToastError.mockClear();
+    jest.mocked(authApi.signInWithGoogle).mockReset();
     delete process.env.EXPO_PUBLIC_TERMS_URL;
     delete process.env.EXPO_PUBLIC_PRIVACY_URL;
     jest.spyOn(Linking, "openURL").mockResolvedValue(true);
@@ -92,6 +101,7 @@ describe("Login translations", () => {
     expect(screen.queryByRole("link")).toBeNull();
     expect(screen.queryByTestId("legal-separator")).toBeNull();
   });
+
   it("uses one Google action in the desktop sign-in panel without unsupported login methods", async () => {
     mockWindowWidth = 1440;
     process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
@@ -110,6 +120,74 @@ describe("Login translations", () => {
     expect(screen.queryByText(/Invitado|Guest/)).toBeNull();
   });
 
+  it("allows only one Google sign-in request while an attempt is pending", async () => {
+    const signIn = deferred<null>();
+    jest.mocked(authApi.signInWithGoogle).mockReturnValue(signIn.promise);
+    const screen = await render(<LoginScreen />);
+
+    await act(async () => {
+      void screen
+        .getByRole("button", { name: "Continuar con Google" })
+        .props.onClick({});
+      await Promise.resolve();
+    });
+
+    const pendingButton = screen.getByRole("button", {
+      name: "Iniciando sesión...",
+    });
+    expect(pendingButton).toBeDisabled();
+    await fireEvent.press(pendingButton);
+    expect(authApi.signInWithGoogle).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      signIn.resolve(null);
+      await signIn.promise;
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Continuar con Google" }),
+      ).toBeEnabled();
+    });
+  });
+
+  it("shows safe feedback after a rejected sign-in and lets the user retry", async () => {
+    const providerError = new Error("provider details must not reach the user");
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    jest
+      .mocked(authApi.signInWithGoogle)
+      .mockRejectedValueOnce(providerError)
+      .mockResolvedValueOnce(null);
+    const screen = await render(<LoginScreen />);
+
+    await act(async () => {
+      fireEvent.press(
+        screen.getByRole("button", { name: "Continuar con Google" }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "Error al iniciar sesión",
+        "No pudimos iniciar sesión. Inténtalo de nuevo.",
+      );
+    });
+    expect(mockToastError).not.toHaveBeenCalledWith(
+      expect.stringContaining("provider details"),
+    );
+
+    await act(async () => {
+      fireEvent.press(
+        screen.getByRole("button", { name: "Continuar con Google" }),
+      );
+    });
+    await waitFor(() => {
+      expect(authApi.signInWithGoogle).toHaveBeenCalledTimes(2);
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "[LoginScreen] Google sign-in error:",
+      providerError,
+    );
+  });
 
   it("renders valid legal destinations as 44 by 44 links with one separator", async () => {
     process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
