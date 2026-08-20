@@ -41,7 +41,7 @@ for select to authenticated
 using (owner_id = (select auth.uid()));
 
 revoke all on table public.track_private_details from public;
-revoke all on table public.track_private_details from anon;
+revoke all on table public.track_private_details from anon, authenticated;
 grant select on table public.track_private_details to authenticated;
 grant all on table public.track_private_details to service_role;
 
