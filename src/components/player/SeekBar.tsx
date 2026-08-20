@@ -9,7 +9,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
 import { formatTime } from "@/src/utils/format-time";
 import { useTranslation } from "react-i18next";

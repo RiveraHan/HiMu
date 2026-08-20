@@ -1,3 +1,4 @@
+import "@/src/theme";
 import "@/src/i18n";
 import { ActivityProvider, useActivity } from "@/src/activity";
 import { QueryProvider } from "@/src/api/query-provider";
@@ -10,13 +11,12 @@ import { useAuthInit } from "@/src/hooks/use-auth";
 import { LocaleProvider } from "@/src/i18n/LocaleProvider";
 import { AppTourProvider, useAppTour } from "@/src/onboarding";
 import { useAuthStore } from "@/src/stores/auth-store";
-import "@/src/theme";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View } from "react-native";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   useAuthInit();

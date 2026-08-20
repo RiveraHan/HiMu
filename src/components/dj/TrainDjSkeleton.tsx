@@ -1,6 +1,6 @@
 import { Skeleton } from "@/src/components/skeleton/Skeleton";
 import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 export function TrainDjSkeleton() {
   return (

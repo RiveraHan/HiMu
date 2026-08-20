@@ -6,7 +6,7 @@ import { publicHttpsUrl } from "@/src/utils/public-url";
 import { Fragment, useState } from "react";
 import { Linking, Pressable, ScrollView, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 export default function LoginScreen() {
   const { t } = useTranslation();

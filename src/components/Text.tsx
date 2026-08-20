@@ -1,5 +1,5 @@
 import { Text as RNText, type TextProps } from "react-native";
-import { useUnistyles } from "react-native-unistyles";
+import { useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type Variant = "display" | "h1" | "h2" | "bodyLg" | "bodyMd" | "labelCaps";
 

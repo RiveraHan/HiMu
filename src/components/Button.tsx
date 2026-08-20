@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Pressable, StyleProp, ViewStyle } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { GlassCard } from "./GlassCard";
 import { Text } from "./Text";
 

@@ -10,7 +10,7 @@ import type {
   GenerationBriefState,
   RegeneratableBriefField,
 } from "@/src/utils/generation-brief-state";
-import { StyleSheet } from "@/src/theme/unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
   state: GenerationBriefState;

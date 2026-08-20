@@ -1,5 +1,5 @@
 import { ScrollView, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { Text } from "../Text";

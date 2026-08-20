@@ -27,7 +27,7 @@ import {
 import { Alert, Pressable } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 export default function AccountSettingsScreen() {
   const { t } = useTranslation();

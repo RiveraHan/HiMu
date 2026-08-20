@@ -3,7 +3,7 @@ import { bottomChromePadding } from "@/src/components/bottom-chrome-metrics";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUnistyles } from "react-native-unistyles";
+import { useUnistyles } from "@/src/theme/react-native-unistyles";
 
 function useChromePresence() {
   const hasPlayer = usePlayerStore((state) => state.currentTrack != null);

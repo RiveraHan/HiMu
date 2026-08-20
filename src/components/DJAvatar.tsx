@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { Avatar } from "./Avatar";
 import { Text } from "./Text";
 import { Lock } from "lucide-react-native";

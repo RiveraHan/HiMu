@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import { Check, Lock, Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { Text } from "./Text";
 
 type Props = {

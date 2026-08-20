@@ -2,7 +2,7 @@ import { usePhaseRotation } from "@/src/hooks/use-phase-rotation";
 import { useMemo } from "react";
 import { View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { EqualizerBars } from "../EqualizerBars";
 import { GlassCard } from "../GlassCard";
 import { Text } from "../Text";

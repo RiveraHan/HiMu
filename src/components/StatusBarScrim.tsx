@@ -7,7 +7,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 // Masks content that scrolls up behind the translucent OS status bar. Fully
 // transparent at the top of the scroll (clean, edge-to-edge) and fades in as

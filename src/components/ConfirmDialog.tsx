@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { BackHandler, Pressable, View } from "react-native";
 import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { Button } from "./Button";
 import { GlassCard } from "./GlassCard";

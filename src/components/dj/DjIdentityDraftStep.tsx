@@ -12,7 +12,7 @@ import type {
   DjDraftTraits,
   DjIdentityCandidate,
 } from "@/src/types/creative-generation";
-import { StyleSheet } from "@/src/theme/unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 export type DjIdentityDraftValue = {
   name: string;

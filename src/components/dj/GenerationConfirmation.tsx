@@ -5,7 +5,7 @@ import { Button } from "@/src/components/Button";
 import { GlassCard } from "@/src/components/GlassCard";
 import { Text } from "@/src/components/Text";
 import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
-import { StyleSheet } from "@/src/theme/unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
   brief: ConfirmedGenerationBriefV1;

@@ -1,7 +1,7 @@
 import { getListeningIdentity } from "@/src/utils/listening-identity";
 import { ReactNode } from "react";
 import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { GlassCard } from "../GlassCard";
 import { Text } from "../Text";
 import { useTranslation } from "react-i18next";

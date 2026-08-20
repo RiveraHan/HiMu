@@ -17,7 +17,7 @@ import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 // Curated Audius genres (exact API strings), chosen for overlap with HiMu's DJs.

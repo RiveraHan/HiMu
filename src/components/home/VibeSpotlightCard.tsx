@@ -1,6 +1,6 @@
 import { ChevronRight, Waves } from "lucide-react-native";
 import { Pressable, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { Text } from "../Text";

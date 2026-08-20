@@ -10,7 +10,7 @@ import Svg, {
   Path,
   Stop,
 } from "react-native-svg";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 const HEIGHT = 160;

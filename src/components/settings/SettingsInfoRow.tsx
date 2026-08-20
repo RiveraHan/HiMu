@@ -1,6 +1,6 @@
 import { ComponentProps, ReactNode } from "react";
 import { Text } from "@/src/components/Text";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { Pressable, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 

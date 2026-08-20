@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { Text } from "@/src/components/Text";
 import { Toggle } from "./Toggle";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { ReactNode } from "react";
 
 type Props = {

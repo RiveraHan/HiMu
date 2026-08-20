@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "../Text";
 import { ChevronRight } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type Props = {
   icon: ReactNode;

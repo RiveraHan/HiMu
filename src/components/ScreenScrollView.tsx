@@ -9,7 +9,7 @@ import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
 } from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { StatusBarScrim } from "./StatusBarScrim";
 
 type Props = Omit<ScrollViewProps, "onScroll"> & {

@@ -1,7 +1,7 @@
 import { Play } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { Avatar } from "../Avatar";

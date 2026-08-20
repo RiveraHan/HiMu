@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { TextInput, TextInputProps, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { Text } from "./Text";
 
 type Props = TextInputProps & {

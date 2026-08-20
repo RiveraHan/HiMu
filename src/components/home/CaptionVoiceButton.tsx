@@ -3,7 +3,7 @@ import { usePlayerStore } from "@/src/stores/player-store";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Loader, Square, Volume2 } from "lucide-react-native";
 import { Pressable } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 // Plays the DJ's spoken caption in its own audio player, isolated from the

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, type AccessibilityState } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 const SIZES = { sm: 36, md: 44, lg: 52 } as const;
 

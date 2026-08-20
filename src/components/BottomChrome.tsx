@@ -1,7 +1,7 @@
 import { useSegments } from "expo-router";
 import { useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 import { useActivity } from "@/src/activity";
 import { useAppTour } from "@/src/onboarding";
