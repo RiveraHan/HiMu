@@ -16,10 +16,10 @@ export function TrackRowSkeleton() {
   );
 }
 
-export function TrackTileSkeleton() {
+export function TrackTileSkeleton({ artworkTestID }: { artworkTestID?: string }) {
   return (
     <View style={styles.trackTileContent}>
-      <View style={styles.trackArtwork}>
+      <View testID={artworkTestID} style={styles.trackArtwork}>
         <Skeleton height="100%" radius={12} />
       </View>
       <Skeleton width="84%" height={20} radius={4} />
@@ -56,7 +56,7 @@ export function ContentShelfSkeleton() {
             testID={`content-shelf-skeleton-tile-${index}`}
             style={[styles.trackTile, index > 2 && styles.desktopOnly]}
           >
-            <TrackTileSkeleton />
+            <TrackTileSkeleton artworkTestID={`content-shelf-skeleton-artwork-${index}`} />
           </View>
         ))}
       </ScrollView>
@@ -104,7 +104,10 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackSm,
   },
   trackTileContent: { gap: theme.spacing.stackSm },
-  trackArtwork: { height: shelfLayoutBreakpoints.artworkHeight },
+  trackArtwork: {
+    width: "100%",
+    aspectRatio: 1,
+  },
   djAvatar: { width: 80, alignItems: "center", gap: theme.spacing.stackSm },
   section: { gap: theme.spacing.stackMd },
   edgeToEdge: { marginHorizontal: -theme.spacing.pageMargin },

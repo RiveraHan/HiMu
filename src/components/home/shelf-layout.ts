@@ -1,5 +1,3 @@
-import { layoutBreakpoints } from "@/src/theme/breakpoints";
-
 /** Canonical geometry shared by loaded and loading Home shelves. */
 export const shelfLayout = {
   compact: {
@@ -12,7 +10,6 @@ export const shelfLayout = {
     tileGrow: 0,
     tileMinWidth: undefined,
     tileMaxWidth: undefined,
-    artworkHeight: 140,
     extraSkeletonDisplay: "none",
   },
   desktop: {
@@ -25,7 +22,6 @@ export const shelfLayout = {
     tileGrow: 1,
     tileMinWidth: 180,
     tileMaxWidth: 240,
-    artworkHeight: 180,
     extraSkeletonDisplay: "flex",
   },
 } as const;
@@ -59,18 +55,8 @@ export const shelfLayoutBreakpoints = {
     xs: shelfLayout.compact.tileMaxWidth,
     xl: shelfLayout.desktop.tileMaxWidth,
   },
-  artworkHeight: {
-    xs: shelfLayout.compact.artworkHeight,
-    xl: shelfLayout.desktop.artworkHeight,
-  },
   extraSkeletonDisplay: {
     xs: shelfLayout.compact.extraSkeletonDisplay,
     xl: shelfLayout.desktop.extraSkeletonDisplay,
   },
 } as const;
-
-export function resolveShelfLayout(width: number) {
-  return width >= layoutBreakpoints.desktop
-    ? shelfLayout.desktop
-    : shelfLayout.compact;
-}

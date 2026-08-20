@@ -2,10 +2,10 @@ import { act, render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import HomeScreen from "@/app/(app)/index";
 import {
-  resolveShelfLayout,
   shelfLayout,
   shelfLayoutBreakpoints,
 } from "@/src/components/home/shelf-layout";
+import { layoutBreakpoints } from "@/src/theme/breakpoints";
 
 type Query<T> = {
   data: T | undefined;
@@ -33,6 +33,20 @@ const loading = <T,>(): Query<T> => ({
 
 let mockRecentQuery: Query<unknown[]> = settled([]);
 const mockNoOp = jest.fn();
+
+function isResponsiveValue(value: unknown): value is { xs?: unknown; xl?: unknown } {
+  return value != null && typeof value === "object" && ("xs" in value || "xl" in value);
+}
+
+function resolveRenderedResponsiveStyle(style: unknown, width: number) {
+  const flattened = StyleSheet.flatten(style) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(flattened).map(([key, value]) => [
+    key,
+    isResponsiveValue(value)
+      ? value[width >= layoutBreakpoints.desktop ? "xl" : "xs"]
+      : value,
+  ]));
+}
 
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ load: mockNoOp }),
@@ -113,25 +127,36 @@ describe("HomeScreen shelf integration", () => {
 
     const screen = await render(<HomeScreen />);
     const shelf = screen.getByTestId("content-shelf-scroll");
+    const renderedList = StyleSheet.flatten(shelf.props.contentContainerStyle);
+    const renderedTile = StyleSheet.flatten(
+      screen.getByTestId("content-shelf-item-private-0").props.style,
+    );
 
-    expect(StyleSheet.flatten(shelf.props.contentContainerStyle)).toEqual(
+    expect(renderedList).toEqual(
       expect.objectContaining({
         flexWrap: shelfLayoutBreakpoints.flexWrap,
         width: shelfLayoutBreakpoints.contentWidth,
       }),
     );
-    expect(StyleSheet.flatten(screen.getByTestId("content-shelf-item-private-0").props.style))
+    expect(renderedTile)
       .toEqual(expect.objectContaining({
         flexBasis: shelfLayoutBreakpoints.tileBasis,
         minWidth: shelfLayoutBreakpoints.tileMinWidth,
       }));
+    expect(resolveRenderedResponsiveStyle(renderedList, width)).toEqual(
+      expect.objectContaining({
+        flexWrap: expectedLayout.flexWrap,
+        width: expectedLayout.contentWidth,
+      }),
+    );
+    expect(resolveRenderedResponsiveStyle(renderedTile, width)).toEqual(
+      expect.objectContaining({
+        flexBasis: expectedLayout.tileBasis,
+        minWidth: expectedLayout.tileMinWidth,
+        maxWidth: expectedLayout.tileMaxWidth,
+      }),
+    );
     expect(screen.getAllByText("Private")).toHaveLength(3);
-    expect(resolveShelfLayout(width)).toBe(expectedLayout);
-    expect(resolveShelfLayout(width)).toEqual(expect.objectContaining({
-      flexWrap: expectedLayout.flexWrap,
-      tileBasis: expectedLayout.tileBasis,
-      tileMinWidth: expectedLayout.tileMinWidth,
-    }));
   });
 
   it.each([
@@ -142,22 +167,35 @@ describe("HomeScreen shelf integration", () => {
 
     const screen = await render(<HomeScreen />);
     const skeleton = screen.getByTestId("content-shelf-skeleton-scroll");
-
-    expect(StyleSheet.flatten(skeleton.props.contentContainerStyle)).toEqual(
-      expect.objectContaining({ flexWrap: shelfLayoutBreakpoints.flexWrap }),
-    );
-    expect(StyleSheet.flatten(screen.getByTestId(
+    const renderedList = StyleSheet.flatten(skeleton.props.contentContainerStyle);
+    const renderedTile = StyleSheet.flatten(screen.getByTestId(
       "content-shelf-skeleton-tile-5",
       { includeHiddenElements: true },
-    ).props.style))
+    ).props.style);
+
+    expect(renderedList).toEqual(
+      expect.objectContaining({ flexWrap: shelfLayoutBreakpoints.flexWrap }),
+    );
+    expect(renderedTile)
       .toEqual(expect.objectContaining({
         display: shelfLayoutBreakpoints.extraSkeletonDisplay,
         minWidth: shelfLayoutBreakpoints.tileMinWidth,
       }));
-    expect(resolveShelfLayout(width)).toBe(expectedLayout);
-    expect(resolveShelfLayout(width)).toEqual(expect.objectContaining({
-      artworkHeight: expectedLayout.artworkHeight,
-      extraSkeletonDisplay: expectedLayout.extraSkeletonDisplay,
+    expect(resolveRenderedResponsiveStyle(renderedList, width)).toEqual(
+      expect.objectContaining({ flexWrap: expectedLayout.flexWrap }),
+    );
+    expect(resolveRenderedResponsiveStyle(renderedTile, width)).toEqual(
+      expect.objectContaining({
+        display: expectedLayout.extraSkeletonDisplay,
+        flexBasis: expectedLayout.tileBasis,
+        minWidth: expectedLayout.tileMinWidth,
+      }),
+    );
+    expect(StyleSheet.flatten(screen.getByTestId(
+      "content-shelf-skeleton-artwork-0",
+    ).props.style)).toEqual(expect.objectContaining({
+      width: "100%",
+      aspectRatio: 1,
     }));
   });
 
@@ -175,14 +213,15 @@ describe("HomeScreen shelf integration", () => {
 
     const structuralMarkers = async (width: number) => {
       const screen = await render(<HomeScreen />);
-      const markers = [
-        screen.getByTestId("home-desktop-grid").type,
-        screen.getByTestId("content-shelf-scroll").type,
-        screen.getByTestId("content-shelf-item-stable-0").type,
-      ];
-      expect(resolveShelfLayout(width)).toBe(
-        width >= 1024 ? shelfLayout.desktop : shelfLayout.compact,
-      );
+      const markers = {
+        root: screen.getByTestId("home-desktop-grid").type,
+        shelf: screen.getByTestId("content-shelf-scroll").type,
+        firstCard: screen.getByTestId("content-shelf-item-stable-0").type,
+        shelfCount: screen.getAllByTestId("content-shelf-scroll").length,
+        cardCount: screen.getAllByTestId(/^content-shelf-item-stable-/).length,
+      };
+      expect(markers.shelfCount).toBe(1);
+      expect(markers.cardCount).toBe(3);
       await act(async () => screen.unmount());
       return markers;
     };
