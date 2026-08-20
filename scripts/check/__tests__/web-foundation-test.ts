@@ -1,12 +1,9 @@
-import { execFile as execFileCallback } from "node:child_process";
 import { mkdtemp, mkdir, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 
-const execFile = promisify(execFileCallback);
-const projectRoot = path.resolve(__dirname, "..", "..", "..");
-const checkerPath = path.join(projectRoot, "scripts", "check", "web-foundation.ts");
+import { verifyWebFoundation } from "../web-foundation";
+
 const fontDirectoryParts = ["assets", "fonts", "Manrope"];
 const semiboldAsset = "Manrope-SemiBold.80cb1a8ba262608706cb7f2b017835.ttf";
 
@@ -30,10 +27,16 @@ async function createFixture() {
   return exportDirectory;
 }
 
-function runChecker(exportDirectory: string) {
-  return execFile(process.execPath, ["--import", "tsx", checkerPath, exportDirectory], {
-    cwd: projectRoot,
-  });
+async function expectCheckerFailure(exportDirectory: string, diagnostic: string) {
+  try {
+    await verifyWebFoundation(exportDirectory);
+    throw new Error("Expected web foundation verification to fail.");
+  } catch (error: unknown) {
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toContain("Web foundation verification failed");
+    expect(message).toContain(diagnostic);
+  }
 }
 
 async function withFixture(run: (exportDirectory: string) => Promise<void>) {
@@ -57,28 +60,37 @@ describe("web foundation checker", () => {
 
   test("accepts a complete export with Expo-style opaque font hashes", async () => {
     await withFixture(async (exportDirectory) => {
-      await expect(runChecker(exportDirectory)).resolves.toBeDefined();
+      await expect(verifyWebFoundation(exportDirectory)).resolves.toBeUndefined();
     });
   });
 
   test("rejects a prefixed font filename as SemiBold evidence", async () => {
     await withFixture(async (exportDirectory) => {
       await replaceSemiboldAsset(exportDirectory, "not-Manrope-SemiBold.ttf");
-      await expect(runChecker(exportDirectory)).rejects.toBeDefined();
+      await expectCheckerFailure(
+        exportDirectory,
+        "Missing bundled Manrope asset(s): Manrope-SemiBold.",
+      );
     });
   });
 
   test("rejects a Manrope family directory without a matching basename", async () => {
     await withFixture(async (exportDirectory) => {
       await replaceSemiboldAsset(exportDirectory, path.join("Manrope-SemiBold", "font.ttf"));
-      await expect(runChecker(exportDirectory)).rejects.toBeDefined();
+      await expectCheckerFailure(
+        exportDirectory,
+        "Missing bundled Manrope asset(s): Manrope-SemiBold.",
+      );
     });
   });
 
   test("rejects a longer font basename token as SemiBold evidence", async () => {
     await withFixture(async (exportDirectory) => {
       await replaceSemiboldAsset(exportDirectory, "Manrope-SemiBoldExtra.ttf");
-      await expect(runChecker(exportDirectory)).rejects.toBeDefined();
+      await expectCheckerFailure(
+        exportDirectory,
+        "Missing bundled Manrope asset(s): Manrope-SemiBold.",
+      );
     });
   });
 
@@ -88,7 +100,10 @@ describe("web foundation checker", () => {
         path.join(exportDirectory, "index.html"),
         "Manrope-Regular Manrope-SemiBoldExtra Manrope-Bold",
       );
-      await expect(runChecker(exportDirectory)).rejects.toBeDefined();
+      await expectCheckerFailure(
+        exportDirectory,
+        "Missing bundled Manrope reference(s): Manrope-SemiBold.",
+      );
     });
   });
 });

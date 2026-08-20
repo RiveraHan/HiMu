@@ -84,15 +84,7 @@ async function scanTextArtifacts(files: ExportFile[]) {
   return { referencedManropeFamilies, hasImageFallbackMarker };
 }
 
-async function main() {
-  const [exportDirectory] = process.argv.slice(2);
-
-  if (!exportDirectory) {
-    throw new Error(
-      "Missing export directory. Run `npm run check:web-foundation -- /path/to/web-export`.",
-    );
-  }
-
+export async function verifyWebFoundation(exportDirectory: string) {
   const resolvedDirectory = path.resolve(exportDirectory);
   let directoryStats;
   try {
@@ -152,13 +144,27 @@ async function main() {
         .join("\n")}`,
     );
   }
+}
+
+async function main() {
+  const [exportDirectory] = process.argv.slice(2);
+
+  if (!exportDirectory) {
+    throw new Error(
+      "Missing export directory. Run `npm run check:web-foundation -- /path/to/web-export`.",
+    );
+  }
+
+  await verifyWebFoundation(exportDirectory);
 
   console.log(
     `Web foundation verified: ${REQUIRED_ROUTES.length} routes, ${MANROPE_FAMILIES.length} Manrope families, and resilient image fallback marker.`,
   );
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
