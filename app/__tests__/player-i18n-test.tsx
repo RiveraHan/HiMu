@@ -15,6 +15,13 @@ const track = {
 let mockShuffle = false;
 let mockRepeatMode: "off" | "all" | "one" = "off";
 const mockRegenerate = jest.fn();
+const mockRouterPush = jest.fn();
+let mockOwnership = true;
+let mockPrivateDetails: null | { trackId: string; confirmedLyrics: string; djId: string } = {
+  trackId: "track-one",
+  confirmedLyrics: "[Verse]\nPrivate words\n[Chorus]\nOnly mine",
+  djId: "dj-one",
+};
 const mockToastError = jest.fn();
 let mockEdgePayload = {
   code: null as string | null,
@@ -51,7 +58,10 @@ jest.mock("@/src/audio/use-player", () => ({
 }));
 jest.mock("@/src/hooks/use-home", () => ({
   useRegenerateCover: () => ({ mutate: mockRegenerate, isPending: false }),
-  useTrackOwnership: () => ({ data: true }),
+  useTrackOwnership: () => ({ data: mockOwnership }),
+}));
+jest.mock("@/src/hooks/use-track-private-details", () => ({
+  useTrackPrivateDetails: () => ({ data: mockPrivateDetails }),
 }));
 jest.mock("@/src/hooks/use-favorites", () => ({
   useIsFavorited: () => ({ data: false }),
@@ -64,7 +74,12 @@ jest.mock("@/src/api/edge-errors", () => ({
   getEdgeErrorPayload: jest.fn(async () => mockEdgePayload),
 }));
 jest.mock("expo-router", () => ({
-  router: { canDismiss: () => true, dismiss: jest.fn(), replace: jest.fn() },
+  router: {
+    canDismiss: () => true,
+    dismiss: jest.fn(),
+    replace: jest.fn(),
+    push: (...args: unknown[]) => mockRouterPush(...args),
+  },
 }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -77,6 +92,13 @@ describe("PlayerScreen localization", () => {
     mockEdgePayload = { code: null, dailyLimit: null, limit: null };
     mockShuffle = false;
     mockRepeatMode = "off";
+    mockOwnership = true;
+    mockPrivateDetails = {
+      trackId: "track-one",
+      confirmedLyrics: "[Verse]\nPrivate words\n[Chorus]\nOnly mine",
+      djId: "dj-one",
+    };
+    mockRouterPush.mockReset();
   });
 
   test("submits the current track ID and title for cover activity", async () => {
@@ -155,5 +177,26 @@ describe("PlayerScreen localization", () => {
 
     expect(screen.getByRole("button", { name: "Repetir" }).props.accessibilityValue)
       .toEqual({ text: value });
+  });
+
+  test("offers a new immutable version for an owned vocal track without displaying lyrics", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    expect(screen.queryByText(mockPrivateDetails!.confirmedLyrics)).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "Create a new version" }));
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: "/create-track",
+      params: { djId: "dj-one", sourceTrackId: "track-one" },
+    });
+  });
+
+  test("does not expose version creation without owned private lyrics", async () => {
+    mockOwnership = false;
+    mockPrivateDetails = null;
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    expect(screen.queryByRole("button", { name: "Create a new version" })).toBeNull();
   });
 });

@@ -46,6 +46,8 @@ requires(/revoke all on function public\.retry_legacy_manual_generation_job\(uui
 
 requires(/create (?:or replace )?function public\.finalize_generated_mix/i, "finalization function");
 requires(/gj\.source_track_id/i, "finalization copies source lineage");
+requires(/insert into public\.tracks[\s\S]*p_track_id[\s\S]*gj\.source_track_id/i, "finalization inserts a distinct child track linked to its source");
+assert.doesNotMatch(sql, /update public\.tracks/i, "version finalization never mutates the source track");
 requires(/insert into public\.track_private_details/i, "finalization stores owner-private lyrics atomically");
 requires(/gj\.generation_brief\s*->>\s*'lyrics'/i, "finalization copies accepted lyrics");
 requires(/gj\.status\s*=\s*'generating'[\s\S]*gj\.updated_at\s*=\s*p_started_at/i, "attempt fencing remains in finalization");

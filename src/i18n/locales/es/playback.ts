@@ -23,6 +23,7 @@ export const playback = {
       pause: "Pausar",
       next: "Siguiente",
       repeat: "Repetir",
+      createVersion: "Crear una versión nueva",
     },
     repeatModes: {
       off: "Repetición desactivada",

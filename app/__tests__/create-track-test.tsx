@@ -13,6 +13,8 @@ let mockOnline = true;
 let mockActiveMix: null | { status: string } = null;
 let mockInstrumental = false;
 let mockEnergy = 7;
+let mockSourceTrackId: string | undefined;
+let mockSourceDetails: null | { trackId: string; confirmedLyrics: string; djId: string } = null;
 
 const dj = () => ({
   id: "dj-one",
@@ -26,7 +28,7 @@ const dj = () => ({
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), replace: mockReplace },
-  useLocalSearchParams: () => ({ djId: "dj-one" }),
+  useLocalSearchParams: () => ({ djId: "dj-one", sourceTrackId: mockSourceTrackId }),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => ({ id: "listener" }),
@@ -36,6 +38,9 @@ jest.mock("@/src/hooks/use-dj", () => ({
 }));
 jest.mock("@/src/hooks/use-online-status", () => ({
   useOnlineStatus: () => mockOnline,
+}));
+jest.mock("@/src/hooks/use-track-private-details", () => ({
+  useTrackPrivateDetails: () => ({ data: mockSourceDetails, isFetched: true }),
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
@@ -75,6 +80,8 @@ describe("CreateTrackScreen", () => {
     mockActiveMix = null;
     mockInstrumental = false;
     mockEnergy = 7;
+    mockSourceTrackId = undefined;
+    mockSourceDetails = null;
     mockDraft.mockReset().mockResolvedValue({
       version: 1,
       kind: "track-brief",
@@ -395,5 +402,147 @@ describe("CreateTrackScreen", () => {
 
     expect(mockGenerate).toHaveBeenCalledTimes(1);
     await act(async () => resolveGeneration({ jobId: "job-one" }));
+  });
+
+  it("ignores a failed generation after the route source changes", async () => {
+    let rejectGeneration!: (error: unknown) => void;
+    const generation = new Promise((_resolve, reject) => {
+      rejectGeneration = reject;
+    });
+    mockGenerate.mockReturnValueOnce(generation);
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+    await fireEvent.press(screen.getByRole("button", { name: "Review generation" }));
+    const confirm = screen.getByRole("button", { name: "Confirm and generate" });
+    let submission!: Promise<void>;
+    await act(async () => {
+      submission = confirm.props.onClick({ nativeEvent: {} });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+
+    mockSourceTrackId = "track-source-b";
+    mockSourceDetails = {
+      trackId: "track-source-b",
+      confirmedLyrics: "[Verse]\nSource B current\n[Chorus]\nStay on B",
+      djId: "dj-one",
+    };
+    await screen.rerender(<CreateTrackScreen />);
+    await waitFor(() => expect(
+      screen.getByDisplayValue(mockSourceDetails!.confirmedLyrics),
+    ).toBeTruthy());
+    await fireEvent.press(screen.getByRole("button", { name: "Review generation" }));
+
+    await act(async () => {
+      rejectGeneration(new Error("obsolete generation failed"));
+      await submission;
+    });
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(screen.queryByText("Something went wrong. Please try again.")).toBeNull();
+    expect(screen.getByText(/Source B current/)).toBeTruthy();
+  });
+
+  it("seeds a new version from owner-private lyrics and keeps the source ID out of text params", async () => {
+    mockSourceTrackId = "track-source";
+    mockSourceDetails = {
+      trackId: "track-source",
+      confirmedLyrics: "[Verse]\nOriginal private line\n[Chorus]\nPreserve my voice",
+      djId: "dj-one",
+    };
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(
+      screen.getByDisplayValue(mockSourceDetails!.confirmedLyrics),
+    ).toBeTruthy());
+
+    expect(mockDraft).toHaveBeenCalledWith(expect.objectContaining({
+      djId: "dj-one",
+      current: expect.objectContaining({ lyrics: mockSourceDetails.confirmedLyrics }),
+    }));
+    await fireEvent.press(screen.getByRole("button", { name: "Review generation" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Confirm and generate" }));
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({
+      sourceTrackId: "track-source",
+      brief: expect.objectContaining({ lyrics: mockSourceDetails!.confirmedLyrics }),
+    })));
+  });
+
+  it("replaces private seed state when the route source record changes", async () => {
+    mockSourceTrackId = "track-source-a";
+    mockSourceDetails = {
+      trackId: "track-source-a",
+      confirmedLyrics: "[Verse]\nSource A private\n[Chorus]\nKeep A separate",
+      djId: "dj-one",
+    };
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(
+      screen.getByDisplayValue(mockSourceDetails!.confirmedLyrics),
+    ).toBeTruthy());
+
+    const oldLyrics = mockSourceDetails.confirmedLyrics;
+    mockSourceTrackId = "track-source-b";
+    mockSourceDetails = {
+      trackId: "track-source-b",
+      confirmedLyrics: "[Verse]\nSource B private\n[Chorus]\nKeep B separate",
+      djId: "dj-one",
+    };
+    await screen.rerender(<CreateTrackScreen />);
+
+    await waitFor(() => expect(
+      screen.getByDisplayValue(mockSourceDetails!.confirmedLyrics),
+    ).toBeTruthy());
+    expect(screen.queryByDisplayValue(oldLyrics)).toBeNull();
+  });
+
+  it("starts the new source preparation without waiting for the old source request", async () => {
+    let resolveOld!: (value: unknown) => void;
+    mockDraft.mockReset()
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveOld = resolve;
+      }))
+      .mockResolvedValue({
+        version: 1,
+        kind: "track-brief",
+        draft: {
+          title: "Source B Draft",
+          creativeDirection: "Build a fresh version around the newly selected private lyric source.",
+          lyricTheme: "new source",
+          lyrics: "provider text must not replace private seed",
+        },
+      });
+    mockSourceTrackId = "track-source-a";
+    mockSourceDetails = {
+      trackId: "track-source-a",
+      confirmedLyrics: "[Verse]\nSource A pending\n[Chorus]\nNever leak",
+      djId: "dj-one",
+    };
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+
+    const oldLyrics = mockSourceDetails.confirmedLyrics;
+    mockSourceTrackId = "track-source-b";
+    mockSourceDetails = {
+      trackId: "track-source-b",
+      confirmedLyrics: "[Verse]\nSource B current\n[Chorus]\nOnly B",
+      djId: "dj-one",
+    };
+    await screen.rerender(<CreateTrackScreen />);
+    expect(screen.queryByDisplayValue(oldLyrics)).toBeNull();
+    await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(
+      screen.getByDisplayValue(mockSourceDetails!.confirmedLyrics),
+    ).toBeTruthy());
+
+    await act(async () => resolveOld({
+      version: 1,
+      kind: "track-brief",
+      draft: {
+        title: "Obsolete Source A Draft",
+        creativeDirection: "This old request must be ignored after the route source changes.",
+        lyricTheme: "old source",
+        lyrics: oldLyrics,
+      },
+    }));
+    expect(screen.getByDisplayValue(mockSourceDetails.confirmedLyrics)).toBeTruthy();
+    expect(screen.queryByDisplayValue(oldLyrics)).toBeNull();
   });
 });

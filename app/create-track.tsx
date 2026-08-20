@@ -13,6 +13,7 @@ import { useDJ } from "@/src/hooks/use-dj";
 import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useTrackPrivateDetails } from "@/src/hooks/use-track-private-details";
 import { useLocale } from "@/src/i18n/use-locale";
 import type {
   CreativeDraftResponse,
@@ -37,7 +38,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "@/src/theme/unistyles";
 
-function draftFromDJ(dj: NonNullable<ReturnType<typeof useDJ>["data"]>): GenerationBriefDraft {
+function draftFromDJ(
+  dj: NonNullable<ReturnType<typeof useDJ>["data"]>,
+  seedLyrics?: string,
+): GenerationBriefDraft {
   const traits = (dj.personality_traits ?? {}) as {
     energy?: number;
     isInstrumental?: boolean;
@@ -48,7 +52,7 @@ function draftFromDJ(dj: NonNullable<ReturnType<typeof useDJ>["data"]>): Generat
     creativeDirection: "",
     mode: instrumental ? "instrumental" : "vocal",
     lyricTheme: instrumental ? null : "",
-    lyrics: instrumental ? null : "",
+    lyrics: instrumental ? null : seedLyrics ?? "",
     visibility: "private",
     traitSnapshot: {
       genres: [...(dj.genre_specialties ?? [])],
@@ -63,11 +67,14 @@ function draftFromDJ(dj: NonNullable<ReturnType<typeof useDJ>["data"]>): Generat
 function mergeInitialDraft(
   base: GenerationBriefDraft,
   response: CreativeDraftResponse,
+  preserveLyrics: boolean,
 ): GenerationBriefDraft {
   if (response.kind !== "track-brief") throw new Error("invalid_track_brief");
   return base.mode === "instrumental"
     ? { ...base, ...response.draft, lyricTheme: null, lyrics: null }
-    : { ...base, ...response.draft };
+    : preserveLyrics
+      ? { ...base, ...response.draft, lyrics: base.lyrics }
+      : { ...base, ...response.draft };
 }
 
 function sameSnapshot(left: DjTraitSnapshot, right: DjTraitSnapshot): boolean {
@@ -81,7 +88,7 @@ function sameSnapshot(left: DjTraitSnapshot, right: DjTraitSnapshot): boolean {
 
 function preparationKey(draft: GenerationBriefDraft | null): string {
   return draft
-    ? JSON.stringify([draft.mode, draft.traitSnapshot])
+    ? JSON.stringify([draft.mode, draft.traitSnapshot, draft.lyrics])
     : "missing";
 }
 
@@ -100,6 +107,9 @@ export default function CreateTrackScreen() {
   const djQuery = useDJ(djId);
   const dj = djQuery.data;
   const owned = !!dj && !!user?.id && dj.owner_id === user.id;
+  const sourceDetails = useTrackPrivateDetails(sourceTrackId, owned);
+  const sourceInvalid = !!sourceTrackId && sourceDetails.isFetched &&
+    (!sourceDetails.data || sourceDetails.data.djId !== djId);
   const { activeMixForDj } = useActivity();
   const active = activeMixForDj(djId);
   const generationBlocked = active?.status === "queued" ||
@@ -120,17 +130,32 @@ export default function CreateTrackScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const editEpoch = useRef(0);
   const draftRevision = useRef(0);
-  const submitFlight = useRef(false);
+  const prepareFlight = useRef<symbol | null>(null);
+  const regenerationFlight = useRef<symbol | null>(null);
+  const submitFlight = useRef<symbol | null>(null);
   const fieldEpoch = useRef<Record<RegeneratableBriefField, number>>({
     title: 0,
     creativeDirection: 0,
     lyrics: 0,
   });
 
-  const baseDraft = useMemo(() => dj ? draftFromDJ(dj) : null, [dj]);
+  const baseDraft = useMemo(() => {
+    if (!dj || sourceInvalid || (sourceTrackId && !sourceDetails.isFetched)) {
+      return null;
+    }
+    return draftFromDJ(dj, sourceDetails.data?.confirmedLyrics);
+  }, [dj, sourceDetails.data?.confirmedLyrics, sourceDetails.isFetched, sourceInvalid, sourceTrackId]);
   const baseKey = preparationKey(baseDraft);
+  const recordKey = JSON.stringify([
+    djId,
+    sourceTrackId ?? null,
+    sourceDetails.data?.trackId ?? null,
+    sourceDetails.data?.confirmedLyrics ?? null,
+  ]);
   const latestBaseKey = useRef(baseKey);
   latestBaseKey.current = baseKey;
+  const previousRecordKey = useRef(recordKey);
+  const recordChanged = previousRecordKey.current !== recordKey;
   const language = resolvedLanguage.startsWith("es") ? "es" as const : "en" as const;
 
   const installDraft = useCallback((draft: GenerationBriefDraft) => {
@@ -142,7 +167,7 @@ export default function CreateTrackScreen() {
   }, []);
 
   const prepare = useCallback(async () => {
-    if (!baseDraft || !owned || isPreparing) return;
+    if (!baseDraft || !owned || isPreparing || prepareFlight.current) return;
     const requestedAtEpoch = editEpoch.current;
     const requestedBaseKey = preparationKey(baseDraft);
     setInitialError(false);
@@ -150,6 +175,8 @@ export default function CreateTrackScreen() {
       installDraft(baseDraft);
       return;
     }
+    const flight = Symbol(recordKey);
+    prepareFlight.current = flight;
     setIsPreparing(true);
     try {
       const response = await prepareDraft({
@@ -162,7 +189,7 @@ export default function CreateTrackScreen() {
         editEpoch.current === requestedAtEpoch &&
         latestBaseKey.current === requestedBaseKey
       ) {
-        installDraft(mergeInitialDraft(baseDraft, response));
+        installDraft(mergeInitialDraft(baseDraft, response, !!sourceTrackId));
       }
     } catch {
       if (
@@ -177,9 +204,43 @@ export default function CreateTrackScreen() {
         setInitialError(true);
       }
     } finally {
-      setIsPreparing(false);
+      if (prepareFlight.current === flight) {
+        prepareFlight.current = null;
+        setIsPreparing(false);
+      }
     }
-  }, [baseDraft, djId, installDraft, isPreparing, language, online, owned, prepareDraft]);
+  }, [
+    baseDraft,
+    djId,
+    installDraft,
+    isPreparing,
+    language,
+    online,
+    owned,
+    prepareDraft,
+    recordKey,
+    sourceTrackId,
+  ]);
+
+  useEffect(() => {
+    if (previousRecordKey.current === recordKey) return;
+    previousRecordKey.current = recordKey;
+    editEpoch.current += 1;
+    draftRevision.current += 1;
+    fieldEpoch.current.title += 1;
+    fieldEpoch.current.creativeDirection += 1;
+    fieldEpoch.current.lyrics += 1;
+    prepareFlight.current = null;
+    regenerationFlight.current = null;
+    submitFlight.current = null;
+    setState(null);
+    setIsPreparing(false);
+    setPendingField(null);
+    setIsSubmitting(false);
+    setInitialError(false);
+    setErrors({});
+    setSubmitError(false);
+  }, [recordKey]);
 
   useEffect(() => {
     if (state || !baseDraft || !owned) return;
@@ -221,7 +282,9 @@ export default function CreateTrackScreen() {
   };
 
   const onRegenerate = async (field: RegeneratableBriefField) => {
-    if (!state || !online || pendingField) return;
+    if (!state || !online || regenerationFlight.current) return;
+    const flight = Symbol(field);
+    regenerationFlight.current = flight;
     const mutation = field === "title"
       ? titleDraft
       : field === "creativeDirection"
@@ -267,9 +330,18 @@ export default function CreateTrackScreen() {
       ) return;
       setState((current) => current ? applyRegeneratedField(current, field, value) : current);
     } catch {
-      setErrors((current) => ({ ...current, [field]: t("dj.profile.genericError") }));
+      if (
+        regenerationFlight.current === flight &&
+        fieldEpoch.current[field] === requestedAtEpoch &&
+        draftRevision.current === requestedAtRevision
+      ) {
+        setErrors((current) => ({ ...current, [field]: t("dj.profile.genericError") }));
+      }
     } finally {
-      setPendingField(null);
+      if (regenerationFlight.current === flight) {
+        regenerationFlight.current = null;
+        setPendingField(null);
+      }
     }
   };
 
@@ -282,7 +354,8 @@ export default function CreateTrackScreen() {
       !state?.confirmed || !online || generationBlocked || isStarting ||
       submitFlight.current
     ) return;
-    submitFlight.current = true;
+    const flight = Symbol(recordKey);
+    submitFlight.current = flight;
     setIsSubmitting(true);
     setSubmitError(false);
     try {
@@ -291,20 +364,25 @@ export default function CreateTrackScreen() {
         brief: state.confirmed,
         sourceTrackId: sourceTrackId ?? null,
       });
+      if (submitFlight.current !== flight) return;
       router.replace({ pathname: "/dj/[id]", params: { id: djId } });
     } catch {
-      setSubmitError(true);
+      if (submitFlight.current === flight) {
+        setSubmitError(true);
+      }
     } finally {
-      submitFlight.current = false;
-      setIsSubmitting(false);
+      if (submitFlight.current === flight) {
+        submitFlight.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
 
   const content = (() => {
-    if (djQuery.isError || (dj !== undefined && !owned)) {
+    if (djQuery.isError || sourceInvalid || (dj !== undefined && !owned)) {
       return <StateNotice kind="error" title={t("dj.brief.ownershipError")} />;
     }
-    if (!state) {
+    if (recordChanged || !state) {
       return <StateNotice kind="empty" title={t("dj.brief.preparing")} />;
     }
     if (state.confirmed) {

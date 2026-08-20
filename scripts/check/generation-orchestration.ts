@@ -464,6 +464,31 @@ async function main() {
   }
 
   {
+    const { calls, deps } = requestDeps({
+      getSourceTrack: async () => ({
+        id: "11111111-1111-4111-8111-111111111111",
+        ownerId: "user-1",
+        djId: "different-dj",
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        brief: validBrief,
+        sourceTrackId: "11111111-1111-4111-8111-111111111111",
+        language: "en",
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 403,
+      body: { error: "source_not_allowed", code: "source_not_allowed" },
+    });
+    assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+  }
+
+  {
     const { calls, deps } = requestDeps();
     const response = await handleGenerateMixRequest(
       manualRequest(validBrief, { sourceTrackId: "not-a-uuid" }),

@@ -3,13 +3,14 @@ import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
 import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
+import { useTrackPrivateDetails } from "@/src/hooks/use-track-private-details";
 import { useToast } from "@/src/hooks/use-toast";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import {
   ChevronDown,
   Heart,
@@ -45,6 +46,10 @@ export default function PlayerScreen() {
 
   const { seek, prev, toggle, next } = usePlayer();
   const ownership = useTrackOwnership(track?.id);
+  const privateDetails = useTrackPrivateDetails(
+    track?.id,
+    ownership.data === true,
+  );
   const regenerate = useRegenerateCover();
   const toast = useToast();
   const isFavorited = useIsFavorited(track?.id);
@@ -234,6 +239,27 @@ export default function PlayerScreen() {
             <Text variant="bodyLg" color="onSurfaceVariant" numberOfLines={1}>
               {track.artist}
             </Text>
+            {privateDetails.data ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("playback.player.actions.createVersion")}
+                onPress={() => router.push({
+                  pathname: "/create-track",
+                  params: {
+                    djId: privateDetails.data!.djId,
+                    sourceTrackId: privateDetails.data!.trackId,
+                  },
+                } as unknown as Href)}
+                style={({ pressed }) => [
+                  styles.versionAction,
+                  pressed && styles.playPressed,
+                ]}
+              >
+                <Text variant="labelCaps" color="primary">
+                  {t("playback.player.actions.createVersion")}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <View style={styles.seekBlock}>
@@ -454,6 +480,11 @@ const styles = StyleSheet.create((theme) => ({
   title: {
     textAlign: "center",
     width: "100%",
+    paddingHorizontal: theme.spacing.stackMd,
+  },
+  versionAction: {
+    minHeight: 44,
+    justifyContent: "center",
     paddingHorizontal: theme.spacing.stackMd,
   },
 
