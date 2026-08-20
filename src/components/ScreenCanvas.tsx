@@ -3,7 +3,6 @@ import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import {
   canvasMaxWidth,
   resolveLayoutMode,
-  type LayoutMode,
 } from "@/src/theme/layout";
 
 export type ScreenCanvasVariant = keyof typeof canvasMaxWidth;
@@ -19,20 +18,18 @@ export function ScreenCanvas({
 }: Props) {
   const { width } = useWindowDimensions();
   const { theme } = useUnistyles();
-  const layoutMode: LayoutMode = resolveLayoutMode(width);
-  const horizontalMargin =
-    layoutMode === "compact" ? 0 : theme.spacing.pageMargin;
+  const layoutMode = resolveLayoutMode(width);
+  const maxWidth =
+    layoutMode === "compact" ? undefined : canvasMaxWidth[variant];
 
   return (
     <View
       {...rest}
       style={[
         styles.canvas,
+        { paddingHorizontal: theme.spacing.pageMargin },
         style,
-        {
-          marginHorizontal: horizontalMargin,
-          maxWidth: canvasMaxWidth[variant],
-        },
+        { maxWidth },
       ]}
     />
   );

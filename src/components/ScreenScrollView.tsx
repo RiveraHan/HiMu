@@ -51,9 +51,11 @@ export function ScreenScrollView({
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={showsVerticalScrollIndicator}
-        contentContainerStyle={contentContainerStyle}
+        contentContainerStyle={undefined}
       >
-        <ScreenCanvas variant={canvasVariant}>{children}</ScreenCanvas>
+        <ScreenCanvas variant={canvasVariant} style={contentContainerStyle}>
+          {children}
+        </ScreenCanvas>
       </Animated.ScrollView>
       <StatusBarScrim scrollY={scrollY} />
     </View>
