@@ -1,10 +1,11 @@
 import { authApi } from "@/src/api/auth";
-import { Atmosphere, Button, Text } from "@/src/components";
-import { GoogleIcon, Logo } from "@/src/components/icons";
+import { Button, Text } from "@/src/components";
+import { LoginHero } from "@/src/components/auth/LoginHero";
+import { GoogleIcon } from "@/src/components/icons";
 import { useToast } from "@/src/hooks/use-toast";
 import { publicHttpsUrl } from "@/src/utils/public-url";
 import { Fragment, useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Linking, Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
@@ -50,99 +51,50 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.root}>
-      <Atmosphere />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Brand */}
-        <View style={styles.brand}>
-          <View style={styles.logoWrapper}>
-            <Logo size={96} />
-          </View>
-          <Text variant="h1">{t("common.auth.welcome")}</Text>
-          <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.7}>
-            {t("common.auth.subtitle")}
-          </Text>
-        </View>
+    <LoginHero>
+      <View style={styles.methods}>
+        <Button
+          variant="glass"
+          loading={loading}
+          leftIcon={<GoogleIcon size={24} />}
+          label={t("common.auth.google")}
+          loadingLabel={t("common.auth.signingIn")}
+          onPress={handleGoogleSignIn}
+        />
+      </View>
 
-        {/* Methods */}
-        <View style={styles.methods}>
-          <Button
-            variant="glass"
-            loading={loading}
-            leftIcon={<GoogleIcon size={24} />}
-            label={t("common.auth.google")}
-            loadingLabel={t("common.auth.signingIn")}
-            onPress={handleGoogleSignIn}
-          />
-        </View>
-
-        {/* Footer */}
-        {legalLinks.length > 0 ? (
-          <View style={styles.footer}>
-            <View style={styles.legal}>
-              {legalLinks.map((item, index) => (
-                <Fragment key={item.url}>
-                  {index > 0 ? (
-                    <View testID="legal-separator" style={styles.legalDot} />
-                  ) : null}
-                  <Pressable
-                    accessibilityRole="link"
-                    accessibilityLabel={item.label}
-                    onPress={() => void openLegal(item.url)}
-                    style={({ pressed }) => [
-                      styles.legalLinkTarget,
-                      pressed && styles.legalPressed,
-                    ]}
-                  >
-                    <Text style={styles.legalLink}>{item.label}</Text>
-                  </Pressable>
-                </Fragment>
-              ))}
-            </View>
+      {legalLinks.length > 0 ? (
+        <View style={styles.footer}>
+          <View style={styles.legal}>
+            {legalLinks.map((item, index) => (
+              <Fragment key={item.url}>
+                {index > 0 ? (
+                  <View testID="legal-separator" style={styles.legalDot} />
+                ) : null}
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={item.label}
+                  onPress={() => void openLegal(item.url)}
+                  style={({ pressed }) => [
+                    styles.legalLinkTarget,
+                    pressed && styles.legalPressed,
+                  ]}
+                >
+                  <Text style={styles.legalLink}>{item.label}</Text>
+                </Pressable>
+              </Fragment>
+            ))}
           </View>
-        ) : null}
-      </ScrollView>
-    </View>
+        </View>
+      ) : null}
+    </LoginHero>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
-  root: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  scrollView: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  content: {
-    flexGrow: 1,
-    width: "100%",
-    maxWidth: 520,
-    alignSelf: "center",
-    paddingHorizontal: theme.spacing.pageMargin,
-    paddingTop: theme.spacing.stackLg * 2,
-    paddingBottom: theme.spacing.safeAreaBottom + theme.spacing.stackLg,
-    gap: theme.spacing.stackLg,
-  },
-  brand: {
-    alignItems: "center",
-    gap: theme.spacing.stackSm,
-  },
-  logoWrapper: {
-    marginBottom: theme.spacing.stackSm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   methods: {
     gap: theme.spacing.gutter,
   },
-
   footer: {
     marginTop: "auto",
     alignItems: "center",

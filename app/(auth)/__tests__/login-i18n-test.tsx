@@ -6,6 +6,18 @@ import i18n from "@/src/i18n";
 import { darkTheme, lightTheme } from "@/src/theme/theme";
 
 const mockToastError = jest.fn();
+let mockWindowWidth = 390;
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({
+    width: mockWindowWidth,
+    height: 844,
+    scale: 1,
+    fontScale: 1,
+  }),
+}));
+
 
 function relativeLuminance(hex: string) {
   const channels = hex.match(/\w\w/g)?.map((channel) => Number.parseInt(channel, 16) / 255);
@@ -47,6 +59,7 @@ jest.mock("@/src/hooks/use-toast", () => ({
 
 describe("Login translations", () => {
   beforeEach(async () => {
+    mockWindowWidth = 390;
     await i18n.changeLanguage("es");
     mockToastError.mockClear();
     delete process.env.EXPO_PUBLIC_TERMS_URL;
@@ -79,6 +92,24 @@ describe("Login translations", () => {
     expect(screen.queryByRole("link")).toBeNull();
     expect(screen.queryByTestId("legal-separator")).toBeNull();
   });
+  it("uses one Google action in the desktop sign-in panel without unsupported login methods", async () => {
+    mockWindowWidth = 1440;
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+
+    expect(screen.getByTestId("login-hero-desktop")).toBeTruthy();
+    expect(screen.getByText("Haz que cada escucha sea tuya.")).toBeTruthy();
+    expect(
+      screen.getByText("Inicia sesión para guardar lo que escuchas y continuar donde lo dejaste."),
+    ).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Continuar con Google" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Términos" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Privacidad" })).toBeTruthy();
+    expect(screen.queryByText("Iniciar sesión con correo")).toBeNull();
+    expect(screen.queryByText(/Invitado|Guest/)).toBeNull();
+  });
+
 
   it("renders valid legal destinations as 44 by 44 links with one separator", async () => {
     process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";

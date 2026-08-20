@@ -49,6 +49,10 @@ export const common = {
   auth: {
     welcome: "Welcome to HiMu",
     subtitle: "Your music, presented by AI DJs.",
+    desktopTitle: "Make every listen yours.",
+    desktopBenefit: "Discover music shaped around your taste.",
+    desktopSignInTitle: "Keep your music with you",
+    desktopSignInExplanation: "Sign in to save your listening and pick up where you left off.",
     spotify: "Continue with Spotify",
     google: "Continue with Google",
     email: "Sign in with email",
