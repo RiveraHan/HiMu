@@ -20,3 +20,24 @@ export const HIMU_FONT_FAMILIES = {
     default: "Manrope-Bold",
   }) ?? "Manrope-Bold",
 } as const;
+
+export const HIMU_SYSTEM_FONT_FAMILIES = {
+  regular: Platform.select({
+    web: "system-ui, sans-serif",
+    ios: "System",
+    android: "sans-serif",
+    default: "System",
+  }) ?? "System",
+  semiBold: Platform.select({
+    web: "system-ui, sans-serif",
+    ios: "System",
+    android: "sans-serif-medium",
+    default: "System",
+  }) ?? "System",
+  bold: Platform.select({
+    web: "system-ui, sans-serif",
+    ios: "System",
+    android: "sans-serif",
+    default: "System",
+  }) ?? "System",
+} as const;

@@ -4,12 +4,14 @@ import { render, within } from "@testing-library/react-native";
 import RootLayout from "@/app/_layout";
 
 let mockFontState: [boolean, Error | null] = [true, null];
+let mockThemeName = "dark";
 let mockAuthState = authState(null, false);
 let mockNavigatorMounts = 0;
 let mockNavigatorUnmounts = 0;
 let mockRenderOrder: string[] = [];
 let mockTourPhase = "idle";
 const mockClosePanel = jest.fn();
+const mockSetTheme = jest.fn();
 let mockRequestedRoute = "(app)";
 let mockMountedRoutes: string[] = [];
 
@@ -65,14 +67,39 @@ jest.mock("@/src/components/Toast", () => ({ ToastHost: () => null }));
 jest.mock("@/src/components/ConfirmDialog", () => ({ ConfirmDialogHost: () => null }));
 
 jest.mock("react-native-gesture-handler", () => ({
-  GestureHandlerRootView: ({ children }: { children: React.ReactNode }) => {
+  GestureHandlerRootView: ({
+    children,
+    testID,
+  }: {
+    children: React.ReactNode;
+    testID?: string;
+  }) => {
     const { View } = require("react-native");
-    return <View>{children}</View>;
+    return <View testID={testID}>{children}</View>;
   },
 }));
 
 jest.mock("expo-status-bar", () => ({ StatusBar: () => null }));
 jest.mock("@/src/theme", () => ({}));
+jest.mock("@/src/theme/unistyles", () => {
+  const ReactNative = require("react-native");
+  const { darkTheme } = require("@/src/theme/theme");
+
+  return {
+    StyleSheet: {
+      ...ReactNative.StyleSheet,
+      create: (styles: unknown) =>
+        typeof styles === "function" ? styles(darkTheme) : styles,
+    },
+    UnistylesRuntime: {
+      get themeName() {
+        return mockThemeName;
+      },
+      setTheme: (...args: unknown[]) => mockSetTheme(...args),
+    },
+    useUnistyles: () => ({ theme: darkTheme, rt: {} }),
+  };
+});
 jest.mock("expo-font", () => ({
   useFonts: () => mockFontState,
 }));
@@ -163,11 +190,13 @@ describe("root layout ownership and route protection", () => {
   beforeEach(() => {
     mockAuthState = authState(null, false);
     mockFontState = [true, null];
+    mockThemeName = "dark";
     mockNavigatorMounts = 0;
     mockNavigatorUnmounts = 0;
     mockRenderOrder = [];
     mockTourPhase = "idle";
     mockClosePanel.mockClear();
+    mockSetTheme.mockClear();
     mockRequestedRoute = "(app)";
     mockMountedRoutes = [];
   });
@@ -205,6 +234,18 @@ describe("root layout ownership and route protection", () => {
 
     expect(screen.queryByTestId("root-font-loader")).toBeTruthy();
     expect(screen.queryByTestId("navigator")).toBeNull();
+  });
+
+  it("renders the app with the system-sans fallback after a font load error", async () => {
+    mockFontState = [false, new Error("font load failed")];
+    const log = jest.spyOn(console, "error").mockImplementation();
+    const screen = await render(<RootLayout />);
+
+    expect(screen.getByTestId("root-font-fallback")).toBeTruthy();
+    expect(screen.getByTestId("navigator")).toBeTruthy();
+    expect(mockSetTheme).toHaveBeenCalledWith("darkFontFallback");
+
+    log.mockRestore();
   });
 
   it("closes the activity panel when onboarding becomes active", async () => {

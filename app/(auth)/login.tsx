@@ -168,7 +168,7 @@ const styles = StyleSheet.create((theme) => ({
     fontSize: 10,
     lineHeight: 10,
     letterSpacing: 0.1 * 10,
-    fontFamily: "Manrope-SemiBold",
+    fontFamily: theme.typography.labelCaps.fontFamily,
     color: theme.colors.onSurface,
     textTransform: "uppercase",
   },

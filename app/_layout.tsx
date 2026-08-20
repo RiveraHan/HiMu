@@ -15,10 +15,11 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { ActivityIndicator, View } from "react-native";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { HIMU_FONTS } from "@/src/theme/fonts";
+import { UnistylesRuntime } from "@/src/theme/unistyles";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   useAuthInit();
@@ -113,18 +114,36 @@ function AppProviders() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(HIMU_FONTS);
+  const [activatedFallbackError, setActivatedFallbackError] =
+    useState<Error | null>(null);
   const { theme } = useUnistyles();
+  const fontFallbackReady = !fontError || activatedFallbackError === fontError;
 
   useEffect(() => {
-    if (fontError && __DEV__) {
+    if (!fontError) {
+      setActivatedFallbackError(null);
+      return;
+    }
+
+    UnistylesRuntime.setTheme(
+      UnistylesRuntime.themeName === "light"
+        ? "lightFontFallback"
+        : "darkFontFallback",
+    );
+    setActivatedFallbackError(fontError);
+
+    if (__DEV__) {
       console.error("[RootLayout] Failed to load HiMu fonts", fontError);
     }
   }, [fontError]);
 
-  if (!fontsLoaded && !fontError) {
+  if (!fontsLoaded && (!fontError || !fontFallbackReady)) {
     return (
       <GestureHandlerRootView style={styles.root}>
-        <View style={styles.loader} testID="root-font-loader">
+        <View
+          style={styles.loader}
+          testID={fontError ? "root-font-fallback-loader" : "root-font-loader"}
+        >
           <ActivityIndicator color={theme.colors.primary} />
         </View>
         <StatusBar style="light" />
@@ -133,7 +152,10 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <GestureHandlerRootView
+      style={styles.root}
+      testID={fontError ? "root-font-fallback" : undefined}
+    >
       <AppProviders />
       <StatusBar style="light" />
     </GestureHandlerRootView>
