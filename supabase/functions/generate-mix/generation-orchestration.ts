@@ -219,12 +219,18 @@ export type RequestDependencies = {
     userId: string;
     djId: unknown;
     jobId: string;
-  }) => Promise<{
-    jobId: string;
-    queuedAt: string;
-    isPublic: boolean;
-    lyrics: string | null;
-  } | null>;
+  }) => Promise<
+    | {
+        outcome: "created" | "existing";
+        jobId: string;
+        dailyLimit: number;
+        queuedAt: string;
+        isPublic: boolean;
+        lyrics: string | null;
+      }
+    | { outcome: "quota" | "unavailable"; jobId: null; dailyLimit: number }
+    | null
+  >;
   runGeneration: (input: RunGenerationInput) => Promise<void>;
   waitUntil: (promise: Promise<void>) => void;
   now: () => string;
@@ -432,6 +438,25 @@ export async function handleGenerateMixRequest(
       return result(409, {
         error: "legacy_retry_unavailable",
         code: "legacy_retry_unavailable",
+      });
+    }
+    if (legacy.outcome === "quota") {
+      return result(429, {
+        error: "daily generation limit reached",
+        code: "daily_quota_reached",
+        dailyLimit: legacy.dailyLimit,
+      });
+    }
+    if (legacy.outcome === "unavailable") {
+      return result(409, {
+        error: "legacy_retry_unavailable",
+        code: "legacy_retry_unavailable",
+      });
+    }
+    if (legacy.outcome === "existing") {
+      return result(200, {
+        jobId: legacy.jobId,
+        isPublic: legacy.isPublic,
       });
     }
     const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);

@@ -289,7 +289,9 @@ async function main() {
       requeueLegacyManualJob: async (input: unknown) => {
         calls.push({ name: "requeueLegacyManualJob", value: input });
         return {
-          jobId: "22222222-2222-4222-8222-222222222222",
+          outcome: "created" as const,
+          jobId: "44444444-4444-4444-8444-444444444444",
+          dailyLimit: 3,
           queuedAt: "2026-07-29T12:00:00.000Z",
           isPublic: false,
           lyrics: "legacy confirmed lyrics",
@@ -490,7 +492,7 @@ async function main() {
     );
     assert.deepEqual(response, {
       status: 200,
-      body: { jobId: "22222222-2222-4222-8222-222222222222", isPublic: false },
+      body: { jobId: "44444444-4444-4444-8444-444444444444", isPublic: false },
     });
     assert.deepEqual(
       calls.find(({ name }) => name === "requeueLegacyManualJob")?.value,
@@ -505,6 +507,34 @@ async function main() {
     assert.equal(scheduled?.lyrics, "legacy confirmed lyrics");
     assert.equal(scheduled?.brief, null);
     assert.equal(calls.some(({ name }) => name === "reserveManualJob"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps({
+      requeueLegacyManualJob: async () => ({
+        outcome: "quota" as const,
+        jobId: null,
+        dailyLimit: 3,
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        legacyJobId: "22222222-2222-4222-8222-222222222222",
+        language: "en",
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 429,
+      body: {
+        error: "daily generation limit reached",
+        code: "daily_quota_reached",
+        dailyLimit: 3,
+      },
+    });
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
   }
 
   {

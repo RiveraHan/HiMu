@@ -381,14 +381,22 @@ serveAuthed(async (req, user) => {
         })
         .maybeSingle();
       if (error) throw error;
-      return data
-        ? {
-          jobId: data.job_id,
-          queuedAt: data.queued_at,
-          isPublic: data.is_public,
-          lyrics: data.prompt,
-        }
-        : null;
+      if (!data) return null;
+      if (data.outcome === "quota" || data.outcome === "unavailable") {
+        return {
+          outcome: data.outcome,
+          jobId: null,
+          dailyLimit: data.daily_limit,
+        };
+      }
+      return {
+        outcome: data.outcome,
+        jobId: data.job_id,
+        dailyLimit: data.daily_limit,
+        queuedAt: data.queued_at,
+        isPublic: data.is_public,
+        lyrics: data.prompt,
+      };
     },
     reserveManualJob: async ({
       userId,

@@ -283,7 +283,9 @@ create function public.retry_legacy_manual_generation_job(
   p_job_id uuid
 )
 returns table (
+  outcome text,
   job_id uuid,
+  daily_limit integer,
   queued_at timestamptz,
   is_public boolean,
   prompt text
@@ -294,11 +296,64 @@ set search_path = ''
 as $$
 declare
   v_now timestamptz := pg_catalog.clock_timestamp();
+  v_prompt text;
+  v_is_public boolean;
+  v_job_id uuid;
+  v_limit constant integer := 3;
 begin
   perform pg_catalog.pg_advisory_xact_lock(
     20260729,
     pg_catalog.hashtext(p_user_id::text)
   );
+
+  update public.cover_regens as cr
+  set status = 'failed', completed_at = null, updated_at = v_now
+  where cr.user_id = p_user_id
+    and cr.status = 'reserved'
+    and cr.updated_at < v_now - interval '15 minutes';
+
+  select gj.prompt, gj.is_public
+  into v_prompt, v_is_public
+  from public.generation_jobs as gj
+  where gj.id = p_job_id
+    and gj.user_id = p_user_id
+    and gj.dj_id = p_dj_id
+    and gj.drop_date is null
+    and gj.generation_brief is null
+    and gj.status = 'failed';
+
+  if not found then
+    return query select
+      'unavailable'::text,
+      null::uuid,
+      v_limit,
+      null::timestamptz,
+      null::boolean,
+      null::text;
+    return;
+  end if;
+
+  select active.id, active.prompt, active.is_public
+  into v_job_id, v_prompt, v_is_public
+  from public.generation_jobs as active
+  where active.user_id = p_user_id
+    and active.dj_id = p_dj_id
+    and active.drop_date is null
+    and active.generation_brief is null
+    and active.status in ('queued', 'generating')
+  order by active.created_at asc
+  limit 1;
+
+  if found then
+    return query select
+      'existing'::text,
+      v_job_id,
+      v_limit,
+      v_now,
+      v_is_public,
+      v_prompt;
+    return;
+  end if;
 
   if exists (
     select 1
@@ -308,22 +363,57 @@ begin
       and active.drop_date is null
       and active.status in ('queued', 'generating')
   ) then
+    return query select
+      'unavailable'::text,
+      null::uuid,
+      v_limit,
+      null::timestamptz,
+      null::boolean,
+      null::text;
     return;
   end if;
 
-  return query
-  update public.generation_jobs as gj
-  set
-    status = 'queued',
-    error = null,
-    updated_at = v_now
-  where gj.id = p_job_id
-    and gj.user_id = p_user_id
-    and gj.dj_id = p_dj_id
-    and gj.drop_date is null
-    and gj.generation_brief is null
-    and gj.status = 'failed'
-  returning gj.id, gj.updated_at, gj.is_public, gj.prompt;
+  if public.generation_quota_usage(p_user_id, v_now) >= v_limit then
+    return query select
+      'quota'::text,
+      null::uuid,
+      v_limit,
+      null::timestamptz,
+      null::boolean,
+      null::text;
+    return;
+  end if;
+
+  insert into public.generation_jobs as fresh (
+    user_id,
+    dj_id,
+    prompt,
+    generation_brief,
+    source_track_id,
+    status,
+    is_public,
+    created_at,
+    updated_at
+  ) values (
+    p_user_id,
+    p_dj_id,
+    v_prompt,
+    null,
+    null,
+    'queued',
+    v_is_public,
+    v_now,
+    v_now
+  )
+  returning fresh.id into v_job_id;
+
+  return query select
+    'created'::text,
+    v_job_id,
+    v_limit,
+    v_now,
+    v_is_public,
+    v_prompt;
 end;
 $$;
 

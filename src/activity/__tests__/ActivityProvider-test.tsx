@@ -718,7 +718,7 @@ test("retries a failed legacy job by ID with its persisted lyric fallback", asyn
   });
   mockActivities = [failed];
   jest.mocked(supabase.functions.invoke).mockResolvedValue({
-    data: { jobId, isPublic: false },
+    data: { jobId: "44444444-4444-4444-8444-444444444444", isPublic: false },
     error: null,
   } as never);
   const queryClient = client();
@@ -742,10 +742,12 @@ test("retries a failed legacy job by ID with its persisted lyric fallback", asyn
   expect(queryClient.getQueryData<ActivityItem[]>(
     queryKeys.generationJobs.activity("user-a"),
   )?.[0]).toMatchObject({
-    id: `generation:${jobId}`,
+    id: "generation:44444444-4444-4444-8444-444444444444",
     retryBrief: null,
     retryLyrics: "legacy persisted lyrics",
   });
+  const receipts = JSON.parse(mockStored.get(receiptKey("user-a")) ?? "{}");
+  expect(receipts[`generation:${jobId}`].seenAt).not.toBeNull();
 });
 
 test.each([undefined, null] as const)(

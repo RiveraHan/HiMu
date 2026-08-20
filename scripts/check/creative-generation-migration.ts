@@ -39,7 +39,9 @@ requires(/insert into public\.generation_jobs[\s\S]*generation_brief[\s\S]*sourc
 requires(/if found then[\s\S]*return query[\s\S]*'existing'/i, "active jobs return without overwrite");
 assert.doesNotMatch(sql, /update public\.generation_jobs[\s\S]{0,800}?set[\s\S]{0,800}?generation_brief\s*=/i, "active accepted briefs stay immutable");
 requires(/revoke all on function public\.reserve_manual_generation_job\(uuid, uuid, jsonb, boolean, uuid\)[\s\S]*from public, anon, authenticated/i, "reservation is service-only");
-requires(/create function public\.retry_legacy_manual_generation_job\([\s\S]*p_job_id uuid[\s\S]*generation_brief is null[\s\S]*status = 'failed'/i, "legacy retry only requeues the same failed pre-brief job");
+requires(/create function public\.retry_legacy_manual_generation_job\([\s\S]*p_job_id uuid[\s\S]*generation_brief is null[\s\S]*status = 'failed'/i, "legacy retry reads only the requested failed pre-brief job");
+requires(/create function public\.retry_legacy_manual_generation_job\([\s\S]*generation_quota_usage\(p_user_id, v_now\)[\s\S]*insert into public\.generation_jobs/i, "legacy retry enforces shared quota and creates a distinct job");
+assert.doesNotMatch(sql, /create function public\.retry_legacy_manual_generation_job\([\s\S]{0,2500}?update public\.generation_jobs[\s\S]{0,500}?where gj\.id = p_job_id/i, "legacy retry never reuses the failed job id");
 requires(/revoke all on function public\.retry_legacy_manual_generation_job\(uuid, uuid, uuid\)[\s\S]*from public, anon, authenticated/i, "legacy retry is service-only");
 
 requires(/create (?:or replace )?function public\.finalize_generated_mix/i, "finalization function");
