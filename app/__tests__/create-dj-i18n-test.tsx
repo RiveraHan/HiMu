@@ -174,6 +174,11 @@ jest.mock("@/src/components", () => {
         React.createElement(Text, null, label)),
   };
 });
+jest.mock("@/src/components/dj/DjIdentityDraftStep", () => ({
+  get DjIdentityDraftStep() {
+    return require("@/src/components").DjIdentityDraftStep;
+  },
+}));
 jest.mock("expo-router", () => ({
   router: { replace: jest.fn(), push: jest.fn() },
 }));

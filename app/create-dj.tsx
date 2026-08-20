@@ -1,13 +1,15 @@
 import {
   Button,
   canSubmitDjTraits,
-  DjIdentityDraftStep,
   DjTraitsForm,
   ScreenHeader,
   type DjTraits,
-  type DjIdentityDraftValue,
 } from "@/src/components";
 import { VisibilityField } from "@/src/components/content/VisibilityField";
+import {
+  DjIdentityDraftStep,
+  type DjIdentityDraftValue,
+} from "@/src/components/dj/DjIdentityDraftStep";
 import { useCreateDJ } from "@/src/hooks/use-create-dj";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import {
