@@ -8,6 +8,8 @@ export * from "./GlassInput";
 export * from "./GlassView";
 export * from "./IconButton";
 export * from "./LibraryCard";
+export * from "./media/Artwork";
+export * from "./media/HimuImage";
 export * from "./PlaylistCard";
 export * from "./ScreenHeader";
 export * from "./ScreenCanvas";

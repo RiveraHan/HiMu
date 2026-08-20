@@ -60,7 +60,7 @@ export function OnAirHero({
       </View>
 
       <View style={styles.main}>
-        <Avatar src={avatarUrl} fallback={djName} size="lg" />
+        <Avatar src={avatarUrl} fallback={djName} size="lg" eager />
         <View style={styles.meta}>
           <Text variant="h2" numberOfLines={1}>
             {djName}

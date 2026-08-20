@@ -1,8 +1,8 @@
-import { Image } from "expo-image";
 import { Check, Lock, Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { HimuImage } from "./media/HimuImage";
 import { Text } from "./Text";
 
 type Props = {
@@ -50,12 +50,23 @@ export function TrackCard({
     .join(", ");
 
   const coverNode = cover ? (
-    <Image
+    <HimuImage
       source={cover}
       placeholder={blurhash ? { blurhash } : undefined}
       transition={200}
       contentFit="cover"
       style={isRow ? styles.coverRow : styles.coverTile}
+      fallback={
+        <View
+          style={[
+            isRow ? styles.coverRow : styles.coverTile,
+            styles.coverFallback,
+          ]}
+        >
+          <Music size={28} color={theme.colors.onSurfaceVariant} />
+        </View>
+      }
+      componentLabel="TrackCard artwork"
     />
   ) : (
     <View

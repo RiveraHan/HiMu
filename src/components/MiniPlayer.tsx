@@ -1,6 +1,5 @@
 import { usePlayer } from "@/src/audio/use-player";
 import { usePlayerStore } from "@/src/stores/player-store";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
 import { Pressable, View } from "react-native";
@@ -8,6 +7,7 @@ import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { MINI_PLAYER_HEIGHT } from "./bottom-chrome-metrics";
 import { IconButton } from "./IconButton";
+import { Artwork } from "./media/Artwork";
 import { Text } from "./Text";
 
 export function MiniPlayer() {
@@ -44,11 +44,14 @@ export function MiniPlayer() {
         ]}
       >
         {track.album_art_url ? (
-          <Image
+          <Artwork
             source={track.album_art_url}
+            size={48}
             style={styles.art}
             contentFit="cover"
             transition={150}
+            fallback={<View style={[styles.art, styles.artFallback]} />}
+            componentLabel="MiniPlayer artwork"
           />
         ) : (
           <View style={[styles.art, styles.artFallback]} />

@@ -1,7 +1,7 @@
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { View } from "react-native";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { HimuImage } from "../media/HimuImage";
 import { Text } from "../Text";
 import { useTranslation } from "react-i18next";
 import { Lock } from "lucide-react-native";
@@ -44,11 +44,14 @@ export function DjHero({
       style={styles.hero}
     >
       {avatarUrl ? (
-        <Image
+        <HimuImage
           source={avatarUrl}
           style={styles.image}
           contentFit="cover"
           transition={200}
+          eager
+          fallback={<View style={[styles.image, styles.fallback]} />}
+          componentLabel="DjHero artwork"
         />
       ) : (
         <View style={[styles.image, styles.fallback]} />
