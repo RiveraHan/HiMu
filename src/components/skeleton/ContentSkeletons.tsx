@@ -17,8 +17,10 @@ export function TrackRowSkeleton() {
 
 export function TrackTileSkeleton() {
   return (
-    <View style={styles.trackTile}>
-      <Skeleton height={140} radius={12} />
+    <View style={styles.trackTileContent}>
+      <View style={styles.trackArtwork}>
+        <Skeleton height="100%" radius={12} />
+      </View>
       <Skeleton width="84%" height={20} radius={4} />
       <Skeleton width="58%" height={16} radius={4} />
     </View>
@@ -43,11 +45,18 @@ export function ContentShelfSkeleton() {
         horizontal
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
-        style={styles.edgeToEdge}
+        testID="content-shelf-skeleton-scroll"
+        style={styles.shelfScroll}
         contentContainerStyle={styles.shelf}
       >
-        {[0, 1, 2].map((index) => (
-          <TrackTileSkeleton key={index} />
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <View
+            key={index}
+            testID={`content-shelf-skeleton-tile-${index}`}
+            style={[styles.trackTile, index > 2 && styles.desktopOnly]}
+          >
+            <TrackTileSkeleton />
+          </View>
         ))}
       </ScrollView>
     </View>
@@ -85,13 +94,31 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing.stackSm,
   },
-  trackTile: { width: 140, gap: theme.spacing.stackSm },
+  trackTile: {
+    width: { xs: 140, xl: undefined },
+    flexBasis: { xs: 140, xl: 180 },
+    flexGrow: { xs: 0, xl: 1 },
+    minWidth: { xs: undefined, xl: 180 },
+    maxWidth: { xs: undefined, xl: 240 },
+    gap: theme.spacing.stackSm,
+  },
+  trackTileContent: { gap: theme.spacing.stackSm },
+  trackArtwork: {
+    height: { xs: 140, xl: 180 },
+  },
   djAvatar: { width: 80, alignItems: "center", gap: theme.spacing.stackSm },
   section: { gap: theme.spacing.stackMd },
   edgeToEdge: { marginHorizontal: -theme.spacing.pageMargin },
+  shelfScroll: { marginHorizontal: { xs: -theme.spacing.pageMargin, xl: 0 } },
   shelf: {
-    paddingHorizontal: theme.spacing.pageMargin,
+    paddingHorizontal: { xs: theme.spacing.pageMargin, xl: 0 },
+    flexDirection: "row",
     gap: theme.spacing.gutter,
+    flexWrap: { xs: "nowrap", xl: "wrap" },
+    width: { xs: undefined, xl: "100%" },
+  },
+  desktopOnly: {
+    display: { xs: "none", xl: "flex" },
   },
   statCard: {
     flex: 1,

@@ -2,6 +2,7 @@ import { render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import { LibraryCard } from "@/src/components/LibraryCard";
 import { HomeHeroSkeleton, HomeLibraryRowSkeleton } from "@/src/components/home/HomeSkeletons";
+import { ContentShelfSkeleton } from "@/src/components/skeleton/ContentSkeletons";
 
 jest.mock("@/src/components", () => ({
   DjAvatarSkeleton:
@@ -12,6 +13,25 @@ jest.mock("@/src/components", () => ({
 }));
 
 describe("Home skeleton geometry", () => {
+  it("keeps the compact and desktop shelf placeholders in one responsive scroll tree", async () => {
+    const placeholder = await render(<ContentShelfSkeleton />);
+
+    expect(placeholder.getByTestId("content-shelf-skeleton-scroll")).toBeTruthy();
+    expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-scroll").props.contentContainerStyle))
+      .toEqual(expect.objectContaining({
+        flexWrap: { xs: "nowrap", xl: "wrap" },
+        width: { xs: undefined, xl: "100%" },
+      }));
+    expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-tile-0").props.style))
+      .toEqual(expect.objectContaining({
+        minWidth: { xs: undefined, xl: 180 },
+      }));
+    expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-tile-5").props.style))
+      .toEqual(expect.objectContaining({
+        display: { xs: "none", xl: "flex" },
+      }));
+  });
+
   it("reserves the desktop Daily Drop hero height before artwork loads", async () => {
     const placeholder = await render(<HomeHeroSkeleton />);
     const root = placeholder.toJSON();

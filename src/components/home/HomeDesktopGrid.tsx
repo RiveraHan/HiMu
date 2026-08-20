@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
-import { type LayoutMode } from "@/src/theme/layout";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
-  layoutMode: LayoutMode;
   children: ReactNode;
 };
 
@@ -21,13 +19,12 @@ type SlotProps = {
  * by HomeScreen.
  */
 export function HomeDesktopGrid({
-  layoutMode,
   children,
 }: Props) {
   return (
     <View
       testID="home-desktop-grid"
-      style={[styles.root, layoutMode === "desktop" && styles.desktopRoot]}
+      style={styles.root}
     >
       {children}
     </View>
@@ -48,11 +45,6 @@ export function HomeDesktopGridSlot({ slot, children }: SlotProps) {
 const styles = StyleSheet.create((theme) => ({
   root: {
     gap: theme.spacing.stackLg,
-  },
-  // This small, non-structural adjustment is deliberately driven by the
-  // hydrated layout mode; the desktop arrangement itself remains CSS-only.
-  desktopRoot: {
-    minWidth: 0,
   },
   hero: {
     minWidth: 0,

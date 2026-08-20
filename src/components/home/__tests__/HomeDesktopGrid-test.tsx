@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 import { render } from "@testing-library/react-native";
 import { StyleSheet, View } from "react-native";
 import { ContentShelf } from "@/src/components/home/ContentShelf";
@@ -8,14 +7,6 @@ jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => ({ id: "listene
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) => selector({ currentTrack: null }),
 }));
-jest.mock("@/src/components/TrackCard", () => ({
-  TrackCard: ({ title }: { title: string }) => {
-    const React = require("react");
-    const { View: NativeView } = require("react-native");
-    return React.createElement(NativeView, { testID: `track-${title}` });
-  },
-}));
-
 const tracks = ["one", "two", "three", "four"].map((id) => ({
   id,
   title: id,
@@ -23,12 +14,14 @@ const tracks = ["one", "two", "three", "four"].map((id) => ({
   album_art_url: null,
   audio_url: `${id}.mp3`,
   duration: 180,
+  owner_id: "listener",
+  is_public: false,
 }));
 
 describe("HomeDesktopGrid", () => {
   it("keeps one DOM reading order while CSS creates the desktop lower two-column composition", async () => {
     const screen = await render(
-      <HomeDesktopGrid layoutMode="desktop">
+      <HomeDesktopGrid>
         <HomeDesktopGridSlot slot="hero"><View testID="hero" /></HomeDesktopGridSlot>
         <HomeDesktopGridSlot slot="djs"><View testID="djs" /></HomeDesktopGridSlot>
         <HomeDesktopGridSlot slot="shelves"><View testID="shelves" /></HomeDesktopGridSlot>
@@ -46,7 +39,7 @@ describe("HomeDesktopGrid", () => {
     expect(screen.getByTestId("supporting")).toBeTruthy();
   });
 
-  it("uses complete 180px-minimum cards for a desktop grid shelf", async () => {
+  it("uses one scroll tree with complete responsive desktop cards and real privacy markers", async () => {
     const screen = await render(
       <ContentShelf
         title="Fresh"
@@ -56,10 +49,16 @@ describe("HomeDesktopGrid", () => {
       />,
     );
 
-    expect(screen.getByTestId("content-shelf-grid")).toBeTruthy();
-    expect(screen.queryByTestId("content-shelf-scroll")).toBeNull();
-    expect(StyleSheet.flatten(screen.getByTestId("content-shelf-grid-item-one").props.style))
-      .toEqual(expect.objectContaining({ minWidth: 180 }));
-    expect(screen.getAllByTestId(/^track-/)).toHaveLength(4);
+    const shelf = screen.getByTestId("content-shelf-scroll");
+    expect(shelf).toBeTruthy();
+    expect(StyleSheet.flatten(shelf.props.contentContainerStyle)).toEqual(
+      expect.objectContaining({
+        flexWrap: { xs: "nowrap", xl: "wrap" },
+        width: { xs: undefined, xl: "100%" },
+      }),
+    );
+    expect(StyleSheet.flatten(screen.getByTestId("content-shelf-item-one").props.style))
+      .toEqual(expect.objectContaining({ minWidth: { xs: undefined, xl: 180 } }));
+    expect(screen.getAllByText("Private")).toHaveLength(4);
   });
 });

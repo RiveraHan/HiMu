@@ -313,8 +313,8 @@ describe("HomeScreen", () => {
 
   it.each([
     [390, "scroll"],
-    [1440, "grid"],
-  ])("keeps one Daily Drop, queue action, and privacy badge at %ipx", async (width, presentation) => {
+    [1440, "scroll"],
+  ])("keeps one Daily Drop, queue action, privacy badge, and shelf tree at %ipx", async (width, presentation) => {
     mockWindowWidth = width;
     mockDrop = {
       status: "ready",

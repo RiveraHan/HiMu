@@ -54,11 +54,10 @@ import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { formatHours } from "@/src/utils/format-stats";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { weightedShuffle } from "@/src/utils/weighted-shuffle";
-import { resolveLayoutMode, type LayoutMode } from "@/src/theme/layout";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -70,10 +69,6 @@ export default function HomeScreen() {
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
-  const { width } = useWindowDimensions();
-  // Start compact so the server and first client render have the same tree.
-  // The mode only selects an existing shelf presentation after hydration.
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("compact");
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
   const toast = useToast();
@@ -91,10 +86,6 @@ export default function HomeScreen() {
     resolve: () => void;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
-
-  useEffect(() => {
-    setLayoutMode(resolveLayoutMode(width));
-  }, [width]);
 
   const { data: hero } = useOnAirHero();
   const recentQuery = useRecentTracks();
@@ -393,6 +384,7 @@ export default function HomeScreen() {
       onScrollRef={(node) => { homeScrollRef.current = node; }}
       onMomentumScrollEnd={settlePendingScroll}
       style={styles.root}
+      canvasVariant="max"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
@@ -436,7 +428,7 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        <HomeDesktopGrid layoutMode={layoutMode}>
+        <HomeDesktopGrid>
         <HomeDesktopGridSlot slot="hero">
         {heroOfflineWithoutData ? (
           <StateNotice
@@ -554,7 +546,6 @@ export default function HomeScreen() {
             <ContentShelf
               title={t("home.freshFrequencies")}
               tracks={freshTracks}
-              presentation={layoutMode === "desktop" ? "grid" : "scroll"}
               onPressTrack={(t, i) => playFromShelf(freshTracks, t, i)}
             />
             {recentQuery.isError ? (
@@ -611,7 +602,6 @@ export default function HomeScreen() {
                 ? t(`home.timeOfDay.${contextual.bucket}.label`)
                 : t("home.forYou")}
               tracks={contextualTracks}
-              presentation={layoutMode === "desktop" ? "grid" : "scroll"}
               onPressTrack={(t, i) => playFromShelf(contextualTracks, t, i)}
             />
             {contextualQuery.isError ? (
