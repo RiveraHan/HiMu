@@ -1,4 +1,3 @@
-import { getEdgeErrorPayload } from "@/src/api/edge-errors";
 import {
   AuthScopeChangedError,
   isCurrentMutationUser,
@@ -8,7 +7,6 @@ import { usePlayer } from "@/src/audio/use-player";
 import {
   DjHero,
   GeneratingTrackCard,
-  GlassInput,
   IconButton,
   ScreenHeader,
   StatCard,
@@ -22,12 +20,10 @@ import {
   DjProfileSkeleton,
   DjTracksSkeleton,
 } from "@/src/components/dj/DjProfileSkeleton";
-import { VisibilityField } from "@/src/components/content/VisibilityField";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useConfirm } from "@/src/hooks/use-confirm";
 import { useDeleteDJ } from "@/src/hooks/use-delete-dj";
 import { useDJ, useDJTracks } from "@/src/hooks/use-dj";
-import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useLiveDJIds } from "@/src/hooks/use-home";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
@@ -37,12 +33,7 @@ import { useLocale } from "@/src/i18n/use-locale";
 import { TourTarget, useAppTour } from "@/src/onboarding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
-import {
-  DEFAULT_VISIBILITY,
-  visibilityToIsPublic,
-  type Visibility,
-} from "@/src/types/content-visibility";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, type Href } from "expo-router";
 import {
   AudioLines,
   Music2,
@@ -50,8 +41,8 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { useEffect, useMemo } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -92,25 +83,12 @@ export default function DJProfileScreen() {
     });
   }, [djReady, id, registerContextTarget]);
 
-  const { generate, isStarting } = useGenerateMix();
   const { activeMixForDj } = useActivity();
   const activeMix = activeMixForDj(id);
   const isGenerating =
-    isStarting ||
     activeMix?.status === "queued" ||
     activeMix?.status === "running" ||
     activeMix?.status === "slow";
-  const [trackVisibility, setTrackVisibility] =
-    useState<Visibility>(DEFAULT_VISIBILITY);
-
-  useEffect(() => {
-    if (
-      activeMix?.visibility === "private" ||
-      activeMix?.visibility === "public"
-    ) {
-      setTrackVisibility(activeMix.visibility);
-    }
-  }, [activeMix?.visibility]);
 
   const user = useCurrentUser();
   const isOwner = !!dj?.owner_id && dj.owner_id === user?.id;
@@ -122,7 +100,6 @@ export default function DJProfileScreen() {
   } | null;
 
   const isVocal = traits?.isInstrumental === false;
-  const [lyricsText, setLyricsText] = useState("");
   const { mutate: deleteDJ, isPending: isDeleting } = useDeleteDJ();
 
   const queue: PlayerTrack[] = useMemo(
@@ -147,36 +124,10 @@ export default function DJProfileScreen() {
   const knownTrackCount =
     tracksQuery.isError && tracks === undefined ? null : queue.length;
 
-  function onGeneratePress() {
-    if (isGenerating || !dj) return;
-    const submittedUserId = user?.id;
-    if (!submittedUserId) return;
-    const lyrics = lyricsText.trim();
-    generate(
-      {
-        djId: id,
-        title: dj.name,
-        lyrics: isOwner && isVocal && lyrics ? lyrics : undefined,
-        isPublic: visibilityToIsPublic(trackVisibility),
-      },
-      {
-        onError: async (e) => {
-          if (
-            e instanceof AuthScopeChangedError ||
-            !isCurrentMutationUser(submittedUserId)
-          ) return;
-          const payload = await getEdgeErrorPayload(e);
-          if (!isCurrentMutationUser(submittedUserId)) return;
-          toast.error(
-            t("dj.profile.startErrorTitle"),
-            payload.code === "daily_quota_reached"
-              ? t("dj.profile.quotaError", { limit: payload.dailyLimit ?? 3 })
-              : payload.code === "dj_not_allowed"
-                ? t("dj.profile.notAllowedError")
-                : t("dj.profile.genericError"),
-          );
-        },
-      },
+  function onPreparePress() {
+    if (isGenerating || !isOwner) return;
+    router.push(
+      { pathname: "/create-track", params: { djId: id } } as unknown as Href,
     );
   }
 
@@ -401,55 +352,26 @@ export default function DJProfileScreen() {
             />
           </View>
 
-          {/* Own lyrics: only for your vocal DJs (server re-validates) */}
-          {isOwner && isVocal && (
-            <GlassInput
-              label={t("dj.profile.lyricsLabel")}
-              hint={t("dj.profile.lyricsHint")}
-              placeholder={t("dj.profile.lyricsPlaceholder")}
-              multiline
-              maxLength={1000}
-              value={lyricsText}
-              onChangeText={setLyricsText}
-              editable={!isGenerating}
-            />
-          )}
-
-          <VisibilityField
-            resource="track"
-            value={trackVisibility}
-            onChange={setTrackVisibility}
-            disabled={isGenerating}
-          />
-
-          {/* Generate a new mix in this DJ's style */}
-          <Pressable
-            onPress={onGeneratePress}
-            disabled={isGenerating}
-            accessibilityRole="button"
-            accessibilityLabel={t("dj.profile.generateAction")}
-            accessibilityState={{ disabled: isGenerating }}
-            style={({ pressed }) => [
-              styles.generateBtn,
-              pressed && !isGenerating && styles.pressed,
-            ]}
-          >
-            {isGenerating ? (
-              <>
-                <ActivityIndicator color={theme.colors.onPrimary} />
-                <Text variant="labelCaps" color="onPrimary">
-                  {t("dj.profile.generating")}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Sparkles size={20} color={theme.colors.onPrimary} />
-                <Text variant="labelCaps" color="onPrimary">
-                  {t("dj.profile.generateButton")}
-                </Text>
-              </>
-            )}
-          </Pressable>
+          {isOwner ? (
+            <Pressable
+              onPress={onPreparePress}
+              disabled={isGenerating}
+              accessibilityRole="button"
+              accessibilityLabel={t("dj.profile.prepareAction")}
+              accessibilityState={{ disabled: isGenerating }}
+              style={({ pressed }) => [
+                styles.generateBtn,
+                pressed && !isGenerating && styles.pressed,
+              ]}
+            >
+              <Sparkles size={20} color={theme.colors.onPrimary} />
+              <Text variant="labelCaps" color="onPrimary">
+                {isGenerating
+                  ? t("dj.profile.generating")
+                  : t("dj.profile.prepareButton")}
+              </Text>
+            </Pressable>
+          ) : null}
 
           {/* Sonic Philosophy */}
 

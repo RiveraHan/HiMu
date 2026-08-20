@@ -80,6 +80,7 @@ function NavigatorShell() {
             options={{ animation: "fade" }}
           />
           <Stack.Screen name="create-dj" />
+          <Stack.Screen name="create-track" />
           <Stack.Screen name="train-dj/[id]" />
         </Stack.Protected>
       </Stack>

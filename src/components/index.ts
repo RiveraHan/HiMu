@@ -59,6 +59,8 @@ export * from "./vibe/VibeCheckSkeletons";
 export * from "./dj/DjBirthOverlay";
 export * from "./dj/DjHero";
 export * from "./dj/DjIdentityDraftStep";
+export * from "./dj/GenerationBriefEditor";
+export * from "./dj/GenerationConfirmation";
 export * from "./dj/DjTraitsForm";
 export * from "./dj/GeneratingTrackCard";
 export * from "./dj/TrainDjSkeleton";

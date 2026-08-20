@@ -2,6 +2,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import DJProfileScreen from "@/app/dj/[id]";
 import i18n from "@/src/i18n";
+import { router } from "expo-router";
 
 type MockQuery = {
   data: unknown;
@@ -580,7 +581,7 @@ describe("DJProfileScreen", () => {
   it("localizes profile stats and generation action in Spanish", async () => {
     await i18n.changeLanguage("es");
     mockDjQuery = settledQuery({
-      ...dj,
+      ...ownedDj,
       genre_specialties: ["House", "Ambient"],
     });
     mockTracksQuery = settledQuery([trackFixture("one"), trackFixture("two")]);
@@ -589,113 +590,45 @@ describe("DJProfileScreen", () => {
 
     expect(screen.getByText("2 CANCIONES")).toBeTruthy();
     expect(screen.getByText("2 GÉNEROS")).toBeTruthy();
-    expect(screen.getByLabelText("Generar una mezcla nueva")).toBeTruthy();
+    expect(screen.getByLabelText("Preparar una canción nueva")).toBeTruthy();
   });
 
-  it("preserves the generation ActivityIndicator feedback", async () => {
-    mockDjQuery = settledQuery(dj);
-    mockTracksQuery = settledQuery([]);
-    mockGenerateMix = {
-      generate: jest.fn(),
-      generateAsync: jest.fn(),
-      isStarting: true,
-      error: null,
-    };
-
-    const screen = await render(<DJProfileScreen />);
-    const generateButton = screen.getByLabelText("Generate a new mix");
-    const indicator = generateButton.children[0];
-
-    expect(typeof indicator).not.toBe("string");
-    if (typeof indicator !== "string") {
-      expect(indicator.type).toBe("ActivityIndicator");
-    }
-    expect(screen.getByText("GENERATING…")).toBeTruthy();
-    expect(screen.getByTestId("generating-track-card")).toBeTruthy();
-  });
-
-  it("defaults track generation to private and submits the selected visibility", async () => {
+  it("opens preparation for an owned DJ without starting generation inline", async () => {
     mockDjQuery = settledQuery(ownedDj);
     mockTracksQuery = settledQuery([]);
     const screen = await render(<DJProfileScreen />);
 
-    expect(screen.getByText("private")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "Public" }));
-    await waitFor(() => expect(screen.getByText("public")).toBeTruthy());
-    fireEvent.press(screen.getByRole("button", { name: "Generate a new mix" }));
-
-    expect(mockGenerateMix.generate).toHaveBeenCalledWith(
-      expect.objectContaining({ isPublic: true }),
-      expect.any(Object),
+    fireEvent.press(
+      screen.getByRole("button", { name: "Prepare a new track" }),
     );
+
+    expect(router.push).toHaveBeenCalledWith({
+      pathname: "/create-track",
+      params: { djId: "dj-one" },
+    });
+    expect(mockGenerateMix.generate).not.toHaveBeenCalled();
   });
 
-  it("disables visibility selection while generation is active", async () => {
+  it("hides track preparation for non-owners", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = settledQuery([]);
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.queryByLabelText("Prepare a new track")).toBeNull();
+  });
+
+  it("blocks preparation while generation is active and retains durable feedback", async () => {
     mockDjQuery = settledQuery(ownedDj);
     mockTracksQuery = settledQuery([]);
     mockActiveMix = { id: "generation:job-1", status: "running", djId: "dj-one" };
     const screen = await render(<DJProfileScreen />);
 
-    expect(screen.getByTestId("visibility-field")).toHaveProp(
-      "accessibilityState",
-      { disabled: true },
-    );
-    expect(screen.getByRole("button", { name: "Public" })).toBeDisabled();
-  });
-
-  it("restores the server activity visibility after returning to the profile", async () => {
-    mockDjQuery = settledQuery(ownedDj);
-    mockTracksQuery = settledQuery([]);
-    mockActiveMix = {
-      id: "generation:job-1",
-      status: "running",
-      djId: "dj-one",
-      visibility: "public",
-    };
-    const screen = await render(<DJProfileScreen />);
-
-    await waitFor(() => expect(screen.getByText("public")).toBeTruthy());
-  });
-
-  it("interpolates the authoritative daily limit in quota feedback", async () => {
-    mockDjQuery = settledQuery(ownedDj);
-    mockTracksQuery = settledQuery([]);
-    mockEdgePayload = {
-      code: "daily_quota_reached",
-      dailyLimit: 3,
-      limit: null,
-    };
-    const screen = await render(<DJProfileScreen />);
-    fireEvent.press(screen.getByRole("button", { name: "Generate a new mix" }));
-    const options = mockGenerateMix.generate.mock.calls[0][1];
-
-    await options.onError(new Error("quota"));
-
-    expect(mockToastError).toHaveBeenCalledWith(
-      "Couldn't start the mix",
-      "Daily creation limit reached (3). Try again tomorrow.",
-    );
-  });
-
-  it("preserves durable generation feedback across remounts and blocks duplicate starts", async () => {
-    mockDjQuery = settledQuery(dj);
-    mockTracksQuery = settledQuery([]);
-    mockActiveMix = {
-      id: "generation:job-1",
-      status: "running",
-      djId: "dj-one",
-    };
-    const first = await render(<DJProfileScreen />);
-
-    expect(first.getByText("GENERATING…")).toBeTruthy();
-    expect(first.getByTestId("generating-track-card")).toBeTruthy();
-    await first.unmount();
-
-    const second = await render(<DJProfileScreen />);
-    expect(second.getByText("GENERATING…")).toBeTruthy();
-    fireEvent.press(
-      second.getByRole("button", { name: "Generate a new mix" }),
-    );
+    expect(screen.getByLabelText("Prepare a new track")).toBeDisabled();
+    expect(screen.getByText("GENERATING…")).toBeTruthy();
+    expect(screen.getByTestId("generating-track-card")).toBeTruthy();
+    const navigationCalls = jest.mocked(router.push).mock.calls.length;
+    fireEvent.press(screen.getByLabelText("Prepare a new track"));
+    expect(router.push).toHaveBeenCalledTimes(navigationCalls);
     expect(mockGenerateMix.generate).not.toHaveBeenCalled();
   });
 
@@ -711,21 +644,6 @@ describe("DJProfileScreen", () => {
     await render(<DJProfileScreen />);
 
     expect(mockPlayerLoad).not.toHaveBeenCalled();
-  });
-
-  it("passes the DJ display title locally when starting a generation", async () => {
-    mockDjQuery = settledQuery(dj);
-    mockTracksQuery = settledQuery([]);
-    const screen = await render(<DJProfileScreen />);
-
-    fireEvent.press(
-      screen.getByRole("button", { name: "Generate a new mix" }),
-    );
-
-    expect(mockGenerateMix.generate).toHaveBeenCalledWith(
-      { djId: "dj-one", title: "DJ One", lyrics: undefined, isPublic: false },
-      expect.objectContaining({ onError: expect.any(Function) }),
-    );
   });
 
   it("marks an explicitly opened result as selected with a visible New badge", async () => {
