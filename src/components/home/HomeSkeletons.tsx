@@ -47,7 +47,11 @@ export function HomeVibeSkeleton() {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  hero: { gap: theme.spacing.stackMd },
+  hero: {
+    gap: theme.spacing.stackMd,
+    minHeight: { xs: undefined, xl: 220 },
+    justifyContent: { xs: "flex-start", xl: "center" },
+  },
   heroBody: {
     flexDirection: "row",
     alignItems: "center",

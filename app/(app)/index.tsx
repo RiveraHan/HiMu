@@ -45,15 +45,20 @@ import {
   useAppTour,
   type HomeTourRegistration,
 } from "@/src/onboarding";
+import {
+  HomeDesktopGrid,
+  HomeDesktopGridSlot,
+} from "@/src/components/home/HomeDesktopGrid";
 import { HOME_TOUR_STEPS } from "@/src/onboarding/constants";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { formatHours } from "@/src/utils/format-stats";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { weightedShuffle } from "@/src/utils/weighted-shuffle";
+import { resolveLayoutMode, type LayoutMode } from "@/src/theme/layout";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -65,6 +70,10 @@ export default function HomeScreen() {
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
+  const { width } = useWindowDimensions();
+  // Start compact so the server and first client render have the same tree.
+  // The mode only selects an existing shelf presentation after hydration.
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("compact");
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
   const toast = useToast();
@@ -82,6 +91,10 @@ export default function HomeScreen() {
     resolve: () => void;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
+
+  useEffect(() => {
+    setLayoutMode(resolveLayoutMode(width));
+  }, [width]);
 
   const { data: hero } = useOnAirHero();
   const recentQuery = useRecentTracks();
@@ -423,6 +436,8 @@ export default function HomeScreen() {
           />
         ) : null}
 
+        <HomeDesktopGrid layoutMode={layoutMode}>
+        <HomeDesktopGridSlot slot="hero">
         {heroOfflineWithoutData ? (
           <StateNotice
             compact
@@ -492,8 +507,10 @@ export default function HomeScreen() {
             onAction={drop.retry}
           />
         ) : null}
+        </HomeDesktopGridSlot>
 
         {/* Your DJs */}
+        <HomeDesktopGridSlot slot="djs">
         {djsOfflineWithoutData ? (
           <StateNotice
             compact
@@ -510,7 +527,9 @@ export default function HomeScreen() {
             {djsSection}
           </TourTarget>
         ) : djsSection}
+        </HomeDesktopGridSlot>
 
+        <HomeDesktopGridSlot slot="shelves">
         {recentOfflineWithoutData ? (
           <StateNotice
             compact
@@ -535,6 +554,7 @@ export default function HomeScreen() {
             <ContentShelf
               title={t("home.freshFrequencies")}
               tracks={freshTracks}
+              presentation={layoutMode === "desktop" ? "grid" : "scroll"}
               onPressTrack={(t, i) => playFromShelf(freshTracks, t, i)}
             />
             {recentQuery.isError ? (
@@ -591,6 +611,7 @@ export default function HomeScreen() {
                 ? t(`home.timeOfDay.${contextual.bucket}.label`)
                 : t("home.forYou")}
               tracks={contextualTracks}
+              presentation={layoutMode === "desktop" ? "grid" : "scroll"}
               onPressTrack={(t, i) => playFromShelf(contextualTracks, t, i)}
             />
             {contextualQuery.isError ? (
@@ -620,8 +641,11 @@ export default function HomeScreen() {
             onAction={openDiscover}
           />
         ) : null}
+        </HomeDesktopGridSlot>
 
         {/* Personalized Library */}
+        <HomeDesktopGridSlot slot="lower">
+        <HomeDesktopGridSlot slot="library">
         <View style={styles.section}>
           <Text variant="h2">{t("home.library.title")}</Text>
 
@@ -745,7 +769,9 @@ export default function HomeScreen() {
             />
           ) : null}
         </View>
+        </HomeDesktopGridSlot>
 
+        <HomeDesktopGridSlot slot="supporting">
         {vibeOfflineWithoutData ? (
           <StateNotice
             compact
@@ -822,6 +848,9 @@ export default function HomeScreen() {
           </View>
           <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />
         </Pressable>
+        </HomeDesktopGridSlot>
+        </HomeDesktopGridSlot>
+        </HomeDesktopGrid>
     </ScreenScrollView>
   );
 }

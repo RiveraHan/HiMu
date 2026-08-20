@@ -13,6 +13,7 @@ type Props = {
   title: string;
   subtitle?: string;
   tracks: PlayerTrack[];
+  presentation?: "scroll" | "grid";
   onPressTrack: (track: PlayerTrack, index: number) => void;
   getTrackAccessibilityLabel?: (track: PlayerTrack) => string;
 };
@@ -21,6 +22,7 @@ export function ContentShelf({
   title,
   subtitle,
   tracks,
+  presentation = "scroll",
   onPressTrack,
   getTrackAccessibilityLabel,
 }: Props) {
@@ -39,28 +41,49 @@ export function ContentShelf({
         )}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.scroll}
-        contentContainerStyle={styles.list}
-      >
-        {tracks.map((track, index) => (
-          <View key={track.id} style={styles.tile}>
-            <TrackCard
-              variant="tile"
-              title={track.title}
-              artist={track.artist}
-              cover={track.album_art_url}
-              isPlaying={currentId === track.id}
-              accessibilityLabel={getTrackAccessibilityLabel?.(track)}
-              isPrivate={track.owner_id === userId && track.is_public === false}
-              privateLabel={t("dj.visibility.privateLabel")}
-              onPress={() => onPressTrack(track, index)}
-            />
-          </View>
-        ))}
-      </ScrollView>
+      {presentation === "grid" ? (
+        <View testID="content-shelf-grid" style={styles.grid}>
+          {tracks.map((track, index) => (
+            <View key={track.id} testID={`content-shelf-grid-item-${track.id}`} style={styles.gridTile}>
+              <TrackCard
+                variant="tile"
+                title={track.title}
+                artist={track.artist}
+                cover={track.album_art_url}
+                isPlaying={currentId === track.id}
+                accessibilityLabel={getTrackAccessibilityLabel?.(track)}
+                isPrivate={track.owner_id === userId && track.is_public === false}
+                privateLabel={t("dj.visibility.privateLabel")}
+                onPress={() => onPressTrack(track, index)}
+              />
+            </View>
+          ))}
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          testID="content-shelf-scroll"
+          style={styles.scroll}
+          contentContainerStyle={styles.list}
+        >
+          {tracks.map((track, index) => (
+            <View key={track.id} style={styles.tile}>
+              <TrackCard
+                variant="tile"
+                title={track.title}
+                artist={track.artist}
+                cover={track.album_art_url}
+                isPlaying={currentId === track.id}
+                accessibilityLabel={getTrackAccessibilityLabel?.(track)}
+                isPrivate={track.owner_id === userId && track.is_public === false}
+                privateLabel={t("dj.visibility.privateLabel")}
+                onPress={() => onPressTrack(track, index)}
+              />
+            </View>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -81,5 +104,16 @@ const styles = StyleSheet.create((theme) => ({
   },
   tile: {
     width: TILE_WIDTH,
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.gutter,
+  },
+  gridTile: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minWidth: 180,
+    maxWidth: { xs: undefined, xl: 240 },
   },
 }));

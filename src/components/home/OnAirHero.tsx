@@ -118,6 +118,8 @@ export function OnAirHero({
 const styles = StyleSheet.create((theme) => ({
   card: {
     gap: theme.spacing.stackMd,
+    minHeight: { xs: undefined, xl: 220 },
+    justifyContent: { xs: "flex-start", xl: "center" },
   },
   eyebrow: {
     flexDirection: "row",

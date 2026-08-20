@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { LibraryCard } from "@/src/components/LibraryCard";
-import { HomeLibraryRowSkeleton } from "@/src/components/home/HomeSkeletons";
+import { HomeHeroSkeleton, HomeLibraryRowSkeleton } from "@/src/components/home/HomeSkeletons";
 
 jest.mock("@/src/components", () => ({
   DjAvatarSkeleton:
@@ -11,6 +12,15 @@ jest.mock("@/src/components", () => ({
 }));
 
 describe("Home skeleton geometry", () => {
+  it("reserves the desktop Daily Drop hero height before artwork loads", async () => {
+    const placeholder = await render(<HomeHeroSkeleton />);
+    const root = placeholder.toJSON();
+
+    expect(StyleSheet.flatten(root?.props.style)).toEqual(expect.objectContaining({
+      minHeight: { xs: undefined, xl: 220 },
+    }));
+  });
+
   it("keeps the Favorites placeholder at the loaded LibraryCard geometry", async () => {
     const loaded = await render(
       <LibraryCard testID="loaded-library-card" label="SAVED" title="Favorites" />,

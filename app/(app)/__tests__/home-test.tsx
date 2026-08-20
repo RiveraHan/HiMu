@@ -58,6 +58,7 @@ const mockScrollTo = jest.fn();
 let mockCanContinue = false;
 let mockRegistrationCleanup = jest.fn();
 let mockOnline = true;
+let mockWindowWidth = 390;
 const mockRouterPush = jest.fn();
 const mockToastWarning = jest.fn();
 
@@ -71,14 +72,30 @@ jest.mock("@/src/components", () => {
   return {
     Avatar: placeholder("avatar"),
     CaptionVoiceButton: placeholder("caption-voice"),
-    ContentShelf: ({ title }: { title: string }) =>
-      React.createElement(View, { testID: `content-shelf-${title}` }),
+    ContentShelf: ({
+      title,
+      presentation = "scroll",
+      tracks,
+    }: {
+      title: string;
+      presentation?: "scroll" | "grid";
+      tracks: { owner_id?: string; is_public?: boolean }[];
+    }) =>
+      React.createElement(
+        View,
+        { testID: `content-shelf-${title}` },
+        React.createElement(View, { testID: `content-shelf-presentation-${presentation}` }),
+        tracks.some((track) => track.owner_id === "user" && track.is_public === false)
+          ? React.createElement(NativeText, null, "Private")
+          : null,
+      ),
     ContentShelfSkeleton: placeholder("content-shelf-skeleton"),
-    DJAvatar: ({ subtitle }: { subtitle?: string }) =>
+    DJAvatar: ({ subtitle, isPrivate }: { subtitle?: string; isPrivate?: boolean }) =>
       React.createElement(
         View,
         { testID: "dj-avatar" },
         React.createElement(NativeText, null, subtitle),
+        isPrivate ? React.createElement(NativeText, null, "Private") : null,
       ),
     HomeDjsSkeleton: placeholder("home-djs-skeleton"),
     HomeHeroSkeleton: placeholder("home-hero-skeleton"),
@@ -86,7 +103,15 @@ jest.mock("@/src/components", () => {
     HomeVibeSkeleton: placeholder("home-vibe-skeleton"),
     LibraryCard: ({ title }: { title: string }) =>
       React.createElement(View, { testID: `library-${title}` }),
-    OnAirHero: placeholder("on-air-hero"),
+    OnAirHero: ({ onPlay }: { onPlay: () => void }) => React.createElement(
+      View,
+      { testID: "on-air-hero" },
+      React.createElement(Pressable, {
+        accessibilityRole: "button",
+        accessibilityLabel: "Queue daily hero",
+        onPress: onPlay,
+      }),
+    ),
     ScreenScrollView: ({ children, onScrollRef, onMomentumScrollEnd }: {
       children: React.ReactNode;
       onScrollRef?: (node: unknown) => void;
@@ -216,6 +241,15 @@ jest.mock("expo-router", () => ({
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({
+    width: mockWindowWidth,
+    height: 900,
+    scale: 1,
+    fontScale: 1,
+  }),
+}));
 
 describe("HomeScreen", () => {
   beforeEach(() => {
@@ -230,6 +264,7 @@ describe("HomeScreen", () => {
     mockHero = undefined;
     mockCanContinue = false;
     mockOnline = true;
+    mockWindowWidth = 390;
     mockLoad.mockReset();
     mockLoad.mockResolvedValue(true);
     mockSetRepeatMode.mockReset();
@@ -268,6 +303,45 @@ describe("HomeScreen", () => {
     expect(screen.getByText("Ambiental")).toBeTruthy();
     expect(screen.getByText("Tu entorno sonoro te espera.")).toBeTruthy();
     expect(canonicalDjs[0].genre_specialties).toEqual(["Ambient"]);
+  });
+
+  it("keeps one responsive desktop composition landmark without duplicating Home content", async () => {
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByTestId("home-desktop-grid")).toBeTruthy();
+  });
+
+  it.each([
+    [390, "scroll"],
+    [1440, "grid"],
+  ])("keeps one Daily Drop, queue action, and privacy badge at %ipx", async (width, presentation) => {
+    mockWindowWidth = width;
+    mockDrop = {
+      status: "ready",
+      track: { id: "drop", title: "Drop", audio_url: "drop.mp3" },
+      dj: { name: "DJ One", avatar_url: null, genre: "House" },
+    };
+    mockDjsQuery = settledQuery([{
+      id: "dj-one", owner_id: "user", is_public: false, name: "DJ One",
+      avatar_url: null, genre_specialties: ["House"],
+    }]);
+    mockRecentQuery = settledQuery([0, 1, 2].map((index) => ({
+      id: `recent-${index}`, title: `Recent ${index}`, artist: "Artist",
+      audio_url: `recent-${index}.mp3`, owner_id: "user", is_public: false,
+    })));
+    mockContextualQuery = settledQuery({ bucket: "morning", tracks: [0, 1, 2].map((index) => ({
+      id: `context-${index}`, title: `Context ${index}`, artist: "Artist",
+      audio_url: `context-${index}.mp3`, owner_id: "user", is_public: false,
+    })) });
+
+    const screen = await render(<HomeScreen />);
+
+    expect(screen.getByTestId("home-desktop-grid")).toBeTruthy();
+    expect(screen.getAllByTestId("home-daily-hero")).toHaveLength(1);
+    expect(screen.getAllByTestId("on-air-hero")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Queue daily hero" })).toHaveLength(1);
+    expect(screen.getAllByText("Private").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByTestId(`content-shelf-presentation-${presentation}`)).toHaveLength(2);
   });
 
   it("resolves initial Home queries with independent progressive skeletons", async () => {
