@@ -22,6 +22,25 @@ const MANROPE_FAMILIES = [
 const IMAGE_FALLBACK_MARKER = "himu-image-fallback";
 const TEXT_ARTIFACT_EXTENSION = /\.(?:html?|js|mjs|css)$/i;
 const FONT_ASSET_EXTENSION = /\.(?:ttf|otf|woff2?)$/i;
+const FONT_HASH_SUFFIX = "(?:[._-][a-f0-9]{6,})*";
+
+function escapeRegularExpression(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function familyReferenceExpression(family: string) {
+  return new RegExp(
+    `(^|[^a-z0-9_-])${escapeRegularExpression(family)}(?=$|[^a-z0-9_-])`,
+    "i",
+  );
+}
+
+function familyAssetExpression(family: string) {
+  return new RegExp(
+    `^${escapeRegularExpression(family)}${FONT_HASH_SUFFIX}\\.(?:ttf|otf|woff2?)$`,
+    "i",
+  );
+}
 
 async function listFiles(directory: string, relativeDirectory = ""): Promise<ExportFile[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -44,8 +63,8 @@ async function listFiles(directory: string, relativeDirectory = ""): Promise<Exp
 function manropeAssetFamily(relativePath: string) {
   if (!FONT_ASSET_EXTENSION.test(relativePath)) return undefined;
 
-  const lowercasePath = relativePath.toLowerCase();
-  return MANROPE_FAMILIES.find((family) => lowercasePath.includes(family.toLowerCase()));
+  const basename = path.posix.basename(relativePath);
+  return MANROPE_FAMILIES.find((family) => familyAssetExpression(family).test(basename));
 }
 
 async function scanTextArtifacts(files: ExportFile[]) {
@@ -57,7 +76,7 @@ async function scanTextArtifacts(files: ExportFile[]) {
 
     const content = await readFile(file.absolutePath, "utf8");
     for (const family of MANROPE_FAMILIES) {
-      if (content.includes(family)) referencedManropeFamilies.add(family);
+      if (familyReferenceExpression(family).test(content)) referencedManropeFamilies.add(family);
     }
     if (content.includes(IMAGE_FALLBACK_MARKER)) hasImageFallbackMarker = true;
   }
