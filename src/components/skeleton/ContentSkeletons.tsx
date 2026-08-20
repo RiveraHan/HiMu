@@ -1,5 +1,6 @@
-import { ScrollView, View } from "react-native";
+import { ScrollView, useWindowDimensions, View } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { resolveLayoutMode } from "@/src/theme/layout";
 import { GlassCard } from "@/src/components/GlassCard";
 import { Skeleton } from "./Skeleton";
 
@@ -15,10 +16,10 @@ export function TrackRowSkeleton() {
   );
 }
 
-export function TrackTileSkeleton() {
+export function TrackTileSkeleton({ isDesktop = false }: { isDesktop?: boolean }) {
   return (
     <View style={styles.trackTileContent}>
-      <View style={styles.trackArtwork}>
+      <View style={styles.trackArtwork(isDesktop)}>
         <Skeleton height="100%" radius={12} />
       </View>
       <Skeleton width="84%" height={20} radius={4} />
@@ -38,6 +39,9 @@ export function DjAvatarSkeleton() {
 }
 
 export function ContentShelfSkeleton() {
+  const { width } = useWindowDimensions();
+  const isDesktop = resolveLayoutMode(width) === "desktop";
+
   return (
     <View style={styles.section}>
       <Skeleton width={190} height={30} radius={6} />
@@ -46,16 +50,16 @@ export function ContentShelfSkeleton() {
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         testID="content-shelf-skeleton-scroll"
-        style={styles.shelfScroll}
-        contentContainerStyle={styles.shelf}
+        style={styles.shelfScroll(isDesktop)}
+        contentContainerStyle={styles.shelf(isDesktop)}
       >
         {[0, 1, 2, 3, 4, 5].map((index) => (
           <View
             key={index}
             testID={`content-shelf-skeleton-tile-${index}`}
-            style={[styles.trackTile, index > 2 && styles.desktopOnly]}
+            style={[styles.trackTile(isDesktop), index > 2 && styles.desktopOnly(isDesktop)]}
           >
-            <TrackTileSkeleton />
+            <TrackTileSkeleton isDesktop={isDesktop} />
           </View>
         ))}
       </ScrollView>
@@ -94,32 +98,30 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing.stackSm,
   },
-  trackTile: {
-    width: { xs: 140, xl: undefined },
-    flexBasis: { xs: 140, xl: 180 },
-    flexGrow: { xs: 0, xl: 1 },
-    minWidth: { xs: undefined, xl: 180 },
-    maxWidth: { xs: undefined, xl: 240 },
+  trackTile: (isDesktop: boolean) => ({
+    width: isDesktop ? undefined : 140,
+    flexBasis: isDesktop ? 180 : 140,
+    flexGrow: isDesktop ? 1 : 0,
+    minWidth: isDesktop ? 180 : undefined,
+    maxWidth: isDesktop ? 240 : undefined,
     gap: theme.spacing.stackSm,
-  },
+  }),
   trackTileContent: { gap: theme.spacing.stackSm },
-  trackArtwork: {
-    height: { xs: 140, xl: 180 },
-  },
+  trackArtwork: (isDesktop: boolean) => ({ height: isDesktop ? 180 : 140 }),
   djAvatar: { width: 80, alignItems: "center", gap: theme.spacing.stackSm },
   section: { gap: theme.spacing.stackMd },
   edgeToEdge: { marginHorizontal: -theme.spacing.pageMargin },
-  shelfScroll: { marginHorizontal: { xs: -theme.spacing.pageMargin, xl: 0 } },
-  shelf: {
-    paddingHorizontal: { xs: theme.spacing.pageMargin, xl: 0 },
+  shelfScroll: (isDesktop: boolean) => ({
+    marginHorizontal: isDesktop ? 0 : -theme.spacing.pageMargin,
+  }),
+  shelf: (isDesktop: boolean) => ({
+    paddingHorizontal: isDesktop ? 0 : theme.spacing.pageMargin,
     flexDirection: "row",
     gap: theme.spacing.gutter,
-    flexWrap: { xs: "nowrap", xl: "wrap" },
-    width: { xs: undefined, xl: "100%" },
-  },
-  desktopOnly: {
-    display: { xs: "none", xl: "flex" },
-  },
+    flexWrap: isDesktop ? "wrap" : "nowrap",
+    width: isDesktop ? "100%" : undefined,
+  }),
+  desktopOnly: (isDesktop: boolean) => ({ display: isDesktop ? "flex" : "none" }),
   statCard: {
     flex: 1,
     alignItems: "center",

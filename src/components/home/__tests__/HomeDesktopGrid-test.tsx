@@ -39,7 +39,7 @@ describe("HomeDesktopGrid", () => {
     expect(screen.getByTestId("supporting")).toBeTruthy();
   });
 
-  it("uses one scroll tree with complete responsive desktop cards and real privacy markers", async () => {
+  it("keeps the compact shelf horizontal while preserving real privacy markers", async () => {
     const screen = await render(
       <ContentShelf
         title="Fresh"
@@ -53,12 +53,12 @@ describe("HomeDesktopGrid", () => {
     expect(shelf).toBeTruthy();
     expect(StyleSheet.flatten(shelf.props.contentContainerStyle)).toEqual(
       expect.objectContaining({
-        flexWrap: { xs: "nowrap", xl: "wrap" },
-        width: { xs: undefined, xl: "100%" },
+        flexWrap: "nowrap",
+        width: undefined,
       }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("content-shelf-item-one").props.style))
-      .toEqual(expect.objectContaining({ minWidth: { xs: undefined, xl: 180 } }));
+      .toEqual(expect.objectContaining({ minWidth: undefined }));
     expect(screen.getAllByText("Private")).toHaveLength(4);
   });
 });

@@ -28,6 +28,7 @@ const loading = <T,>(): Query<T> => ({
 
 let mockRecentQuery: Query<unknown[]> = settled([]);
 const mockNoOp = jest.fn();
+let mockWindowWidth = 390;
 
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ load: mockNoOp }),
@@ -86,13 +87,19 @@ jest.mock("expo-router", () => ({ router: { push: mockNoOp } }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 900, scale: 1, fontScale: 1 }),
+}));
 
 describe("HomeScreen shelf integration", () => {
   beforeEach(() => {
     mockNoOp.mockReset();
+    mockWindowWidth = 390;
   });
 
-  it.each([390, 1440])("keeps the real private shelf in one responsive scroll tree at %ipx", async () => {
+  it.each([390, 1440])("keeps the real private shelf in one responsive scroll tree at %ipx", async (width) => {
+    mockWindowWidth = width;
     mockRecentQuery = settled([0, 1, 2].map((index) => ({
       id: `private-${index}`,
       title: `Private ${index}`,
@@ -109,22 +116,35 @@ describe("HomeScreen shelf integration", () => {
 
     expect(StyleSheet.flatten(shelf.props.contentContainerStyle)).toEqual(
       expect.objectContaining({
-        flexWrap: { xs: "nowrap", xl: "wrap" },
-        width: { xs: undefined, xl: "100%" },
+        flexWrap: width >= 1024 ? "wrap" : "nowrap",
+        width: width >= 1024 ? "100%" : undefined,
       }),
     );
+    expect(StyleSheet.flatten(screen.getByTestId("content-shelf-item-private-0").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: width >= 1024 ? 180 : 140,
+        minWidth: width >= 1024 ? 180 : undefined,
+      }));
     expect(screen.getAllByText("Private")).toHaveLength(3);
   });
 
-  it("reaches the real responsive shelf skeleton during Home's initial recent-query load", async () => {
+  it.each([390, 1440])("reaches the real responsive shelf skeleton at %ipx", async (width) => {
+    mockWindowWidth = width;
     mockRecentQuery = loading();
 
     const screen = await render(<HomeScreen />);
     const skeleton = screen.getByTestId("content-shelf-skeleton-scroll");
 
     expect(StyleSheet.flatten(skeleton.props.contentContainerStyle)).toEqual(
-      expect.objectContaining({ flexWrap: { xs: "nowrap", xl: "wrap" } }),
+      expect.objectContaining({ flexWrap: width >= 1024 ? "wrap" : "nowrap" }),
     );
-    expect(screen.getByTestId("content-shelf-skeleton-tile-5")).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId(
+      "content-shelf-skeleton-tile-5",
+      { includeHiddenElements: true },
+    ).props.style))
+      .toEqual(expect.objectContaining({
+        display: width >= 1024 ? "flex" : "none",
+        minWidth: width >= 1024 ? 180 : undefined,
+      }));
   });
 });

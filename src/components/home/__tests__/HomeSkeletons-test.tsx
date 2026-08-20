@@ -13,22 +13,25 @@ jest.mock("@/src/components", () => ({
 }));
 
 describe("Home skeleton geometry", () => {
-  it("keeps the compact and desktop shelf placeholders in one responsive scroll tree", async () => {
+  it("keeps the compact shelf placeholder horizontal", async () => {
     const placeholder = await render(<ContentShelfSkeleton />);
 
     expect(placeholder.getByTestId("content-shelf-skeleton-scroll")).toBeTruthy();
     expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-scroll").props.contentContainerStyle))
       .toEqual(expect.objectContaining({
-        flexWrap: { xs: "nowrap", xl: "wrap" },
-        width: { xs: undefined, xl: "100%" },
+        flexWrap: "nowrap",
+        width: undefined,
       }));
     expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-tile-0").props.style))
       .toEqual(expect.objectContaining({
-        minWidth: { xs: undefined, xl: 180 },
+        minWidth: undefined,
       }));
-    expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-tile-5").props.style))
+    expect(StyleSheet.flatten(placeholder.getByTestId(
+      "content-shelf-skeleton-tile-5",
+      { includeHiddenElements: true },
+    ).props.style))
       .toEqual(expect.objectContaining({
-        display: { xs: "none", xl: "flex" },
+        display: "none",
       }));
   });
 

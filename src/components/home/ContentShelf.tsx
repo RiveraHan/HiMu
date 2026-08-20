@@ -1,5 +1,6 @@
-import { ScrollView, View } from "react-native";
+import { ScrollView, useWindowDimensions, View } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { resolveLayoutMode } from "@/src/theme/layout";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { Text } from "../Text";
@@ -26,6 +27,8 @@ export function ContentShelf({
   onPressTrack,
   getTrackAccessibilityLabel,
 }: Props) {
+  const { width } = useWindowDimensions();
+  const isDesktop = resolveLayoutMode(width) === "desktop";
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
   const userId = useCurrentUser()?.id;
   const { t } = useTranslation();
@@ -45,11 +48,11 @@ export function ContentShelf({
         horizontal
         showsHorizontalScrollIndicator={false}
         testID="content-shelf-scroll"
-        style={styles.scroll}
-        contentContainerStyle={styles.list}
+        style={styles.scroll(isDesktop)}
+        contentContainerStyle={styles.list(isDesktop)}
       >
         {tracks.map((track, index) => (
-          <View key={track.id} testID={`content-shelf-item-${track.id}`} style={styles.tile}>
+          <View key={track.id} testID={`content-shelf-item-${track.id}`} style={styles.tile(isDesktop)}>
             <TrackCard
               variant="tile"
               title={track.title}
@@ -75,21 +78,21 @@ const styles = StyleSheet.create((theme) => ({
   header: {
     gap: theme.spacing.stackXs,
   },
-  scroll: {
-    marginHorizontal: { xs: -theme.spacing.pageMargin, xl: 0 },
-  },
-  list: {
-    paddingHorizontal: { xs: theme.spacing.pageMargin, xl: 0 },
+  scroll: (isDesktop: boolean) => ({
+    marginHorizontal: isDesktop ? 0 : -theme.spacing.pageMargin,
+  }),
+  list: (isDesktop: boolean) => ({
+    paddingHorizontal: isDesktop ? 0 : theme.spacing.pageMargin,
     flexDirection: "row",
     gap: theme.spacing.gutter,
-    flexWrap: { xs: "nowrap", xl: "wrap" },
-    width: { xs: undefined, xl: "100%" },
-  },
-  tile: {
-    width: { xs: TILE_WIDTH, xl: undefined },
-    flexBasis: { xs: TILE_WIDTH, xl: 180 },
-    flexGrow: { xs: 0, xl: 1 },
-    minWidth: { xs: undefined, xl: 180 },
-    maxWidth: { xs: undefined, xl: 240 },
-  },
+    flexWrap: isDesktop ? "wrap" : "nowrap",
+    width: isDesktop ? "100%" : undefined,
+  }),
+  tile: (isDesktop: boolean) => ({
+    width: isDesktop ? undefined : TILE_WIDTH,
+    flexBasis: isDesktop ? 180 : TILE_WIDTH,
+    flexGrow: isDesktop ? 1 : 0,
+    minWidth: isDesktop ? 180 : undefined,
+    maxWidth: isDesktop ? 240 : undefined,
+  }),
 }));
