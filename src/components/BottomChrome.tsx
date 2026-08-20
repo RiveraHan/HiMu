@@ -7,8 +7,13 @@ import { useActivity } from "@/src/activity";
 import { useAppTour } from "@/src/onboarding";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { ActivityPill } from "./activity/ActivityPill";
-import { TAB_BAR_BOTTOM, TAB_BAR_HEIGHT } from "./bottom-chrome-metrics";
+import {
+  bottomChromeCanvasGeometry,
+  TAB_BAR_BOTTOM,
+  TAB_BAR_HEIGHT,
+} from "./bottom-chrome-metrics";
 import { MiniPlayer } from "./MiniPlayer";
+import { resolveLayoutMode } from "@/src/theme/layout";
 
 export function BottomChrome() {
   const segments = useSegments();
@@ -41,15 +46,22 @@ export function BottomChrome() {
   const hasActivityTrigger = primary !== null || fallbackStatus !== undefined;
   if (!track && !hasActivityTrigger) return null;
 
-  const hasTabBar = segments[0] === "(app)";
+  const isDesktop = resolveLayoutMode(width) === "desktop";
+  const hasTabBar = segments[0] === "(app)" && !isDesktop;
   const bottom = hasTabBar
     ? insets.bottom + TAB_BAR_BOTTOM + TAB_BAR_HEIGHT + theme.spacing.stackSm
     : insets.bottom + theme.spacing.stackSm;
+  const canvas = bottomChromeCanvasGeometry({
+    windowWidth: width,
+    safeStart: insets.left,
+    safeEnd: insets.right,
+    hasDesktopRail: isDesktop,
+  });
 
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.root, { bottom, width }]}
+      style={[styles.root, { bottom, left: canvas.left, width: canvas.width }]}
       testID="bottom-chrome"
     >
       <View style={styles.stack} testID="bottom-chrome-stack">

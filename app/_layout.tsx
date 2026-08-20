@@ -4,6 +4,7 @@ import { ActivityProvider, useActivity } from "@/src/activity";
 import { QueryProvider } from "@/src/api/query-provider";
 import { PlayerProvider } from "@/src/audio/player-provider";
 import { BottomChrome } from "@/src/components/BottomChrome";
+import { ResponsiveAppShell } from "@/src/components/ResponsiveAppShell";
 import { ConfirmDialogHost } from "@/src/components/ConfirmDialog";
 import { ToastHost } from "@/src/components/Toast";
 import { ActivityPanel } from "@/src/components/activity/ActivityPanel";
@@ -46,6 +47,7 @@ function NavigatorShell() {
   const { theme } = useUnistyles();
   const session = useAuthStore((state) => state.session);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const { phase } = useAppTour();
 
   if (isLoading) {
     return (
@@ -57,10 +59,11 @@ function NavigatorShell() {
 
   return (
     <>
-      <Stack
-        key={session?.user.id ?? "signed-out"}
-        screenOptions={{ headerShown: false }}
-      >
+      <ResponsiveAppShell showRail={!!session && phase === "idle"}>
+        <Stack
+          key={session?.user.id ?? "signed-out"}
+          screenOptions={{ headerShown: false }}
+        >
         <Stack.Protected guard={!session}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
@@ -86,7 +89,8 @@ function NavigatorShell() {
           <Stack.Screen name="create-track" />
           <Stack.Screen name="train-dj/[id]" />
         </Stack.Protected>
-      </Stack>
+        </Stack>
+      </ResponsiveAppShell>
       <GlobalActivitySurfaces />
     </>
   );

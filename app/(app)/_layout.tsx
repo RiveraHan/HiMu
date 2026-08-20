@@ -13,6 +13,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { resolveLayoutMode } from "@/src/theme/layout";
 
 export function resolveTabBarGeometry(
   windowWidth: number,
@@ -85,6 +86,7 @@ export default function Applayout() {
   if (!session) return <Redirect href="/(auth)/login" />;
 
   const tabBarGeometry = resolveTabBarGeometry(windowWidth, I18nManager.isRTL);
+  const isDesktop = resolveLayoutMode(windowWidth) === "desktop";
 
   return (
     <Tabs
@@ -92,6 +94,7 @@ export default function Applayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
+          display: isDesktop ? "none" : "flex",
           position: "absolute",
           width: tabBarGeometry.width,
           start: tabBarGeometry.start,

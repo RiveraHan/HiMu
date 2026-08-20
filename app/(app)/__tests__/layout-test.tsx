@@ -141,19 +141,25 @@ describe("App tab layout", () => {
     expect(options.tabBarStyle.start).toBeCloseTo(23.4);
   });
 
-  it("caps and centers the tab bar on tablet widths", async () => {
-    mockWindowWidth = 1024;
+  it("keeps bottom tabs through medium and hides them at the desktop boundary", async () => {
+    mockWindowWidth = 1023;
     const screen = await render(<AppLayout />);
+    expect(screen.getByTestId("tabs").props.screenOptions.tabBarStyle).not.toEqual(
+      expect.objectContaining({ display: "none" }),
+    );
+
+    mockWindowWidth = 1024;
+    await screen.rerender(<AppLayout />);
     expect(screen.getByTestId("tabs").props.screenOptions.tabBarStyle).toEqual(
-      expect.objectContaining({ width: 720, start: 152, end: "auto" }),
+      expect.objectContaining({ display: "none" }),
     );
   });
 
   it.each([
     ["LTR phone", false, 390, 343.2, 23.4],
     ["RTL phone", true, 390, 343.2, 23.4],
-    ["LTR tablet", false, 1024, 720, 152],
-    ["RTL tablet", true, 1024, 720, 152],
+    ["LTR medium", false, 1023, 720, 151.5],
+    ["RTL medium", true, 1023, 720, 151.5],
   ])("renders %s with logical insets and a centered physical x position", async (
     _name,
     isRTL,

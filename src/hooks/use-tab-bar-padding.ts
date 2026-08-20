@@ -4,6 +4,7 @@ import { usePlayerStore } from "@/src/stores/player-store";
 import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUnistyles } from "@/src/theme/react-native-unistyles";
+import { resolveLayoutMode } from "@/src/theme/layout";
 
 function useChromePresence() {
   const hasPlayer = usePlayerStore((state) => state.currentTrack != null);
@@ -24,12 +25,12 @@ function useChromePresence() {
 export function useTabBarPadding() {
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width } = useWindowDimensions();
   const { hasPlayer, hasActivity } = useChromePresence();
 
   return bottomChromePadding({
     safeBottom: insets.bottom,
-    hasTabBar: true,
+    hasTabBar: resolveLayoutMode(width) !== "desktop",
     hasPlayer,
     hasActivity,
     gap: theme.spacing.stackSm,

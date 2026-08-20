@@ -3,7 +3,7 @@ import { View } from "react-native";
 
 import { ActivityPanel } from "@/src/components/activity/ActivityPanel";
 import { BottomChrome } from "@/src/components/BottomChrome";
-import { bottomChromePadding } from "@/src/components/bottom-chrome-metrics";
+import { bottomChromePadding, DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
 import i18n from "@/src/i18n";
 import { useMiniPlayerPadding, useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { usePlayerStore } from "@/src/stores/player-store";
@@ -157,6 +157,28 @@ describe("bottom chrome geometry", () => {
     expect(padding.result.current).toEqual([364, 292]);
     await padding.unmount();
   });
+
+  it("drops the hidden tab-bar reservation on desktop so content matches the dock", async () => {
+    mockWindowWidth = 1024;
+    mockFontScale = 1;
+    mockActivity = createActivityState({ isOffline: true });
+    usePlayerStore.getState().setNowPlaying(
+      {
+        id: "track-1",
+        title: "Night Bloom",
+        artist: "Luna",
+        audio_url: "https://example.com/night-bloom.mp3",
+        album_art_url: null,
+        duration: 180,
+      },
+      [],
+      0,
+    );
+
+    const padding = await renderHook(() => useTabBarPadding());
+    expect(padding.result.current).toBe(180);
+    await padding.unmount();
+  });
 });
 
 describe("BottomChrome", () => {
@@ -211,18 +233,28 @@ describe("BottomChrome", () => {
     expect(screen.queryByTestId("bottom-chrome")).toBeNull();
   });
 
-  it("spans the tablet window and centers a stack capped at 720", async () => {
-    mockWindowWidth = 1024;
+  it("spans the medium canvas and centers a stack capped at 720", async () => {
+    mockWindowWidth = 1023;
     const screen = await render(<BottomChrome />);
 
     expect(screen.getByTestId("bottom-chrome")).toHaveStyle({
-      width: 1024,
+      width: 1023,
       alignItems: "center",
     });
     expect(screen.getByTestId("bottom-chrome-stack")).toHaveStyle({
       width: "88%",
       maxWidth: 720,
       alignSelf: "center",
+    });
+  });
+
+  it("uses only the canvas beside the desktop rail so docked chrome cannot cover route content", async () => {
+    mockWindowWidth = 1024;
+    const screen = await render(<BottomChrome />);
+
+    expect(screen.getByTestId("bottom-chrome")).toHaveStyle({
+      left: DESKTOP_RAIL_WIDTH,
+      width: 1024 - DESKTOP_RAIL_WIDTH,
     });
   });
 
