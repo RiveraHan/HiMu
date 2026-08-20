@@ -2,6 +2,7 @@ import { render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import { LibraryCard } from "@/src/components/LibraryCard";
 import { HomeHeroSkeleton, HomeLibraryRowSkeleton } from "@/src/components/home/HomeSkeletons";
+import { shelfLayoutBreakpoints } from "@/src/components/home/shelf-layout";
 import { ContentShelfSkeleton } from "@/src/components/skeleton/ContentSkeletons";
 
 jest.mock("@/src/components", () => ({
@@ -13,25 +14,25 @@ jest.mock("@/src/components", () => ({
 }));
 
 describe("Home skeleton geometry", () => {
-  it("keeps the compact shelf placeholder horizontal", async () => {
+  it("maps the shelf placeholder to shared breakpoint tokens", async () => {
     const placeholder = await render(<ContentShelfSkeleton />);
 
     expect(placeholder.getByTestId("content-shelf-skeleton-scroll")).toBeTruthy();
     expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-scroll").props.contentContainerStyle))
       .toEqual(expect.objectContaining({
-        flexWrap: "nowrap",
-        width: undefined,
+        flexWrap: shelfLayoutBreakpoints.flexWrap,
+        width: shelfLayoutBreakpoints.contentWidth,
       }));
     expect(StyleSheet.flatten(placeholder.getByTestId("content-shelf-skeleton-tile-0").props.style))
       .toEqual(expect.objectContaining({
-        minWidth: undefined,
+        minWidth: shelfLayoutBreakpoints.tileMinWidth,
       }));
     expect(StyleSheet.flatten(placeholder.getByTestId(
       "content-shelf-skeleton-tile-5",
       { includeHiddenElements: true },
     ).props.style))
       .toEqual(expect.objectContaining({
-        display: "none",
+        display: shelfLayoutBreakpoints.extraSkeletonDisplay,
       }));
   });
 

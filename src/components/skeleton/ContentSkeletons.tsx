@@ -1,6 +1,6 @@
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
-import { resolveLayoutMode } from "@/src/theme/layout";
+import { shelfLayout, shelfLayoutBreakpoints } from "@/src/components/home/shelf-layout";
 import { GlassCard } from "@/src/components/GlassCard";
 import { Skeleton } from "./Skeleton";
 
@@ -16,10 +16,10 @@ export function TrackRowSkeleton() {
   );
 }
 
-export function TrackTileSkeleton({ isDesktop = false }: { isDesktop?: boolean }) {
+export function TrackTileSkeleton() {
   return (
     <View style={styles.trackTileContent}>
-      <View style={styles.trackArtwork(isDesktop)}>
+      <View style={styles.trackArtwork}>
         <Skeleton height="100%" radius={12} />
       </View>
       <Skeleton width="84%" height={20} radius={4} />
@@ -39,9 +39,6 @@ export function DjAvatarSkeleton() {
 }
 
 export function ContentShelfSkeleton() {
-  const { width } = useWindowDimensions();
-  const isDesktop = resolveLayoutMode(width) === "desktop";
-
   return (
     <View style={styles.section}>
       <Skeleton width={190} height={30} radius={6} />
@@ -50,16 +47,16 @@ export function ContentShelfSkeleton() {
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         testID="content-shelf-skeleton-scroll"
-        style={styles.shelfScroll(isDesktop)}
-        contentContainerStyle={styles.shelf(isDesktop)}
+        style={styles.shelfScroll}
+        contentContainerStyle={styles.shelf}
       >
         {[0, 1, 2, 3, 4, 5].map((index) => (
           <View
             key={index}
             testID={`content-shelf-skeleton-tile-${index}`}
-            style={[styles.trackTile(isDesktop), index > 2 && styles.desktopOnly(isDesktop)]}
+            style={[styles.trackTile, index > 2 && styles.desktopOnly]}
           >
-            <TrackTileSkeleton isDesktop={isDesktop} />
+            <TrackTileSkeleton />
           </View>
         ))}
       </ScrollView>
@@ -98,30 +95,36 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing.stackSm,
   },
-  trackTile: (isDesktop: boolean) => ({
-    width: isDesktop ? undefined : 140,
-    flexBasis: isDesktop ? 180 : 140,
-    flexGrow: isDesktop ? 1 : 0,
-    minWidth: isDesktop ? 180 : undefined,
-    maxWidth: isDesktop ? 240 : undefined,
+  trackTile: {
+    width: shelfLayoutBreakpoints.tileWidth,
+    flexBasis: shelfLayoutBreakpoints.tileBasis,
+    flexGrow: shelfLayoutBreakpoints.tileGrow,
+    minWidth: shelfLayoutBreakpoints.tileMinWidth,
+    maxWidth: shelfLayoutBreakpoints.tileMaxWidth,
     gap: theme.spacing.stackSm,
-  }),
+  },
   trackTileContent: { gap: theme.spacing.stackSm },
-  trackArtwork: (isDesktop: boolean) => ({ height: isDesktop ? 180 : 140 }),
+  trackArtwork: { height: shelfLayoutBreakpoints.artworkHeight },
   djAvatar: { width: 80, alignItems: "center", gap: theme.spacing.stackSm },
   section: { gap: theme.spacing.stackMd },
   edgeToEdge: { marginHorizontal: -theme.spacing.pageMargin },
-  shelfScroll: (isDesktop: boolean) => ({
-    marginHorizontal: isDesktop ? 0 : -theme.spacing.pageMargin,
-  }),
-  shelf: (isDesktop: boolean) => ({
-    paddingHorizontal: isDesktop ? 0 : theme.spacing.pageMargin,
+  shelfScroll: {
+    marginHorizontal: {
+      xs: shelfLayout.compact.scrollMargin === "edge" ? -theme.spacing.pageMargin : 0,
+      xl: shelfLayout.desktop.scrollMargin,
+    },
+  },
+  shelf: {
+    paddingHorizontal: {
+      xs: shelfLayout.compact.horizontalInset === "page" ? theme.spacing.pageMargin : 0,
+      xl: shelfLayout.desktop.horizontalInset,
+    },
     flexDirection: "row",
     gap: theme.spacing.gutter,
-    flexWrap: isDesktop ? "wrap" : "nowrap",
-    width: isDesktop ? "100%" : undefined,
-  }),
-  desktopOnly: (isDesktop: boolean) => ({ display: isDesktop ? "flex" : "none" }),
+    flexWrap: shelfLayoutBreakpoints.flexWrap,
+    width: shelfLayoutBreakpoints.contentWidth,
+  },
+  desktopOnly: { display: shelfLayoutBreakpoints.extraSkeletonDisplay },
   statCard: {
     flex: 1,
     alignItems: "center",

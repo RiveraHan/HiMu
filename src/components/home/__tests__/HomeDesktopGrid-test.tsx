@@ -2,6 +2,7 @@ import { render } from "@testing-library/react-native";
 import { StyleSheet, View } from "react-native";
 import { ContentShelf } from "@/src/components/home/ContentShelf";
 import { HomeDesktopGrid, HomeDesktopGridSlot } from "@/src/components/home/HomeDesktopGrid";
+import { shelfLayoutBreakpoints } from "@/src/components/home/shelf-layout";
 
 jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => ({ id: "listener" }) }));
 jest.mock("@/src/stores/player-store", () => ({
@@ -39,7 +40,7 @@ describe("HomeDesktopGrid", () => {
     expect(screen.getByTestId("supporting")).toBeTruthy();
   });
 
-  it("keeps the compact shelf horizontal while preserving real privacy markers", async () => {
+  it("maps the real shelf to shared breakpoint tokens while preserving privacy markers", async () => {
     const screen = await render(
       <ContentShelf
         title="Fresh"
@@ -53,12 +54,12 @@ describe("HomeDesktopGrid", () => {
     expect(shelf).toBeTruthy();
     expect(StyleSheet.flatten(shelf.props.contentContainerStyle)).toEqual(
       expect.objectContaining({
-        flexWrap: "nowrap",
-        width: undefined,
+        flexWrap: shelfLayoutBreakpoints.flexWrap,
+        width: shelfLayoutBreakpoints.contentWidth,
       }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("content-shelf-item-one").props.style))
-      .toEqual(expect.objectContaining({ minWidth: undefined }));
+      .toEqual(expect.objectContaining({ minWidth: shelfLayoutBreakpoints.tileMinWidth }));
     expect(screen.getAllByText("Private")).toHaveLength(4);
   });
 });

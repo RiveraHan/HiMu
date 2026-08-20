@@ -1,14 +1,12 @@
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
-import { resolveLayoutMode } from "@/src/theme/layout";
+import { shelfLayout, shelfLayoutBreakpoints } from "./shelf-layout";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { Text } from "../Text";
 import { TrackCard } from "../TrackCard";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useTranslation } from "react-i18next";
-
-const TILE_WIDTH = 140;
 
 type Props = {
   title: string;
@@ -27,8 +25,6 @@ export function ContentShelf({
   onPressTrack,
   getTrackAccessibilityLabel,
 }: Props) {
-  const { width } = useWindowDimensions();
-  const isDesktop = resolveLayoutMode(width) === "desktop";
   const currentId = usePlayerStore((s) => s.currentTrack?.id);
   const userId = useCurrentUser()?.id;
   const { t } = useTranslation();
@@ -48,11 +44,11 @@ export function ContentShelf({
         horizontal
         showsHorizontalScrollIndicator={false}
         testID="content-shelf-scroll"
-        style={styles.scroll(isDesktop)}
-        contentContainerStyle={styles.list(isDesktop)}
+        style={styles.scroll}
+        contentContainerStyle={styles.list}
       >
         {tracks.map((track, index) => (
-          <View key={track.id} testID={`content-shelf-item-${track.id}`} style={styles.tile(isDesktop)}>
+          <View key={track.id} testID={`content-shelf-item-${track.id}`} style={styles.tile}>
             <TrackCard
               variant="tile"
               title={track.title}
@@ -78,21 +74,27 @@ const styles = StyleSheet.create((theme) => ({
   header: {
     gap: theme.spacing.stackXs,
   },
-  scroll: (isDesktop: boolean) => ({
-    marginHorizontal: isDesktop ? 0 : -theme.spacing.pageMargin,
-  }),
-  list: (isDesktop: boolean) => ({
-    paddingHorizontal: isDesktop ? 0 : theme.spacing.pageMargin,
+  scroll: {
+    marginHorizontal: {
+      xs: shelfLayout.compact.scrollMargin === "edge" ? -theme.spacing.pageMargin : 0,
+      xl: shelfLayout.desktop.scrollMargin,
+    },
+  },
+  list: {
+    paddingHorizontal: {
+      xs: shelfLayout.compact.horizontalInset === "page" ? theme.spacing.pageMargin : 0,
+      xl: shelfLayout.desktop.horizontalInset,
+    },
     flexDirection: "row",
     gap: theme.spacing.gutter,
-    flexWrap: isDesktop ? "wrap" : "nowrap",
-    width: isDesktop ? "100%" : undefined,
-  }),
-  tile: (isDesktop: boolean) => ({
-    width: isDesktop ? undefined : TILE_WIDTH,
-    flexBasis: isDesktop ? 180 : TILE_WIDTH,
-    flexGrow: isDesktop ? 1 : 0,
-    minWidth: isDesktop ? 180 : undefined,
-    maxWidth: isDesktop ? 240 : undefined,
-  }),
+    flexWrap: shelfLayoutBreakpoints.flexWrap,
+    width: shelfLayoutBreakpoints.contentWidth,
+  },
+  tile: {
+    width: shelfLayoutBreakpoints.tileWidth,
+    flexBasis: shelfLayoutBreakpoints.tileBasis,
+    flexGrow: shelfLayoutBreakpoints.tileGrow,
+    minWidth: shelfLayoutBreakpoints.tileMinWidth,
+    maxWidth: shelfLayoutBreakpoints.tileMaxWidth,
+  },
 }));

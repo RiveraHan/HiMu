@@ -1,6 +1,11 @@
-import { render } from "@testing-library/react-native";
+import { act, render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import HomeScreen from "@/app/(app)/index";
+import {
+  resolveShelfLayout,
+  shelfLayout,
+  shelfLayoutBreakpoints,
+} from "@/src/components/home/shelf-layout";
 
 type Query<T> = {
   data: T | undefined;
@@ -28,7 +33,6 @@ const loading = <T,>(): Query<T> => ({
 
 let mockRecentQuery: Query<unknown[]> = settled([]);
 const mockNoOp = jest.fn();
-let mockWindowWidth = 390;
 
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({ load: mockNoOp }),
@@ -87,19 +91,15 @@ jest.mock("expo-router", () => ({ router: { push: mockNoOp } }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
-jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
-  __esModule: true,
-  default: () => ({ width: mockWindowWidth, height: 900, scale: 1, fontScale: 1 }),
-}));
-
 describe("HomeScreen shelf integration", () => {
   beforeEach(() => {
     mockNoOp.mockReset();
-    mockWindowWidth = 390;
   });
 
-  it.each([390, 1440])("keeps the real private shelf in one responsive scroll tree at %ipx", async (width) => {
-    mockWindowWidth = width;
+  it.each([
+    [390, shelfLayout.compact],
+    [1440, shelfLayout.desktop],
+  ])("maps the real private shelf to the canonical %ipx layout", async (width, expectedLayout) => {
     mockRecentQuery = settled([0, 1, 2].map((index) => ({
       id: `private-${index}`,
       title: `Private ${index}`,
@@ -116,35 +116,77 @@ describe("HomeScreen shelf integration", () => {
 
     expect(StyleSheet.flatten(shelf.props.contentContainerStyle)).toEqual(
       expect.objectContaining({
-        flexWrap: width >= 1024 ? "wrap" : "nowrap",
-        width: width >= 1024 ? "100%" : undefined,
+        flexWrap: shelfLayoutBreakpoints.flexWrap,
+        width: shelfLayoutBreakpoints.contentWidth,
       }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("content-shelf-item-private-0").props.style))
       .toEqual(expect.objectContaining({
-        flexBasis: width >= 1024 ? 180 : 140,
-        minWidth: width >= 1024 ? 180 : undefined,
+        flexBasis: shelfLayoutBreakpoints.tileBasis,
+        minWidth: shelfLayoutBreakpoints.tileMinWidth,
       }));
     expect(screen.getAllByText("Private")).toHaveLength(3);
+    expect(resolveShelfLayout(width)).toBe(expectedLayout);
+    expect(resolveShelfLayout(width)).toEqual(expect.objectContaining({
+      flexWrap: expectedLayout.flexWrap,
+      tileBasis: expectedLayout.tileBasis,
+      tileMinWidth: expectedLayout.tileMinWidth,
+    }));
   });
 
-  it.each([390, 1440])("reaches the real responsive shelf skeleton at %ipx", async (width) => {
-    mockWindowWidth = width;
+  it.each([
+    [390, shelfLayout.compact],
+    [1440, shelfLayout.desktop],
+  ])("maps the real shelf skeleton to the canonical %ipx geometry", async (width, expectedLayout) => {
     mockRecentQuery = loading();
 
     const screen = await render(<HomeScreen />);
     const skeleton = screen.getByTestId("content-shelf-skeleton-scroll");
 
     expect(StyleSheet.flatten(skeleton.props.contentContainerStyle)).toEqual(
-      expect.objectContaining({ flexWrap: width >= 1024 ? "wrap" : "nowrap" }),
+      expect.objectContaining({ flexWrap: shelfLayoutBreakpoints.flexWrap }),
     );
     expect(StyleSheet.flatten(screen.getByTestId(
       "content-shelf-skeleton-tile-5",
       { includeHiddenElements: true },
     ).props.style))
       .toEqual(expect.objectContaining({
-        display: width >= 1024 ? "flex" : "none",
-        minWidth: width >= 1024 ? 180 : undefined,
+        display: shelfLayoutBreakpoints.extraSkeletonDisplay,
+        minWidth: shelfLayoutBreakpoints.tileMinWidth,
       }));
+    expect(resolveShelfLayout(width)).toBe(expectedLayout);
+    expect(resolveShelfLayout(width)).toEqual(expect.objectContaining({
+      artworkHeight: expectedLayout.artworkHeight,
+      extraSkeletonDisplay: expectedLayout.extraSkeletonDisplay,
+    }));
+  });
+
+  it("keeps Home's shelf markup identical for static and desktop contracts", async () => {
+    mockRecentQuery = settled([0, 1, 2].map((index) => ({
+      id: `stable-${index}`,
+      title: `Stable ${index}`,
+      artist: "Artist",
+      album_art_url: null,
+      audio_url: `stable-${index}.mp3`,
+      duration: 180,
+      owner_id: "listener",
+      is_public: false,
+    })));
+
+    const structuralMarkers = async (width: number) => {
+      const screen = await render(<HomeScreen />);
+      const markers = [
+        screen.getByTestId("home-desktop-grid").type,
+        screen.getByTestId("content-shelf-scroll").type,
+        screen.getByTestId("content-shelf-item-stable-0").type,
+      ];
+      expect(resolveShelfLayout(width)).toBe(
+        width >= 1024 ? shelfLayout.desktop : shelfLayout.compact,
+      );
+      await act(async () => screen.unmount());
+      return markers;
+    };
+
+    expect(await structuralMarkers(390)).toEqual(await structuralMarkers(1440));
   });
 });
