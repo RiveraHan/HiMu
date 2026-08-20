@@ -3,7 +3,7 @@ import {
   type ReactNode,
   useEffect,
   useRef,
-  useState,
+  useReducer,
 } from "react";
 import {
   type StyleProp,
@@ -13,6 +13,27 @@ import {
 } from "react-native";
 
 type Status = "idle" | "loading" | "loaded" | "error";
+
+type ImageState = {
+  sourceKey: string | object | null | undefined;
+  retryKey: string | number | null;
+  sourceIsPresent: boolean;
+  generation: number;
+  retryCount: number;
+  status: Status;
+  isExplicitRetry: boolean;
+};
+
+type ImageAction =
+  | {
+      type: "sync";
+      sourceKey: ImageState["sourceKey"];
+      retryKey: ImageState["retryKey"];
+      sourceIsPresent: boolean;
+    }
+  | { type: "loadStart"; generation: number }
+  | { type: "display"; generation: number }
+  | { type: "error"; generation: number };
 
 type HimuImageProps = Omit<
   ImageProps,
@@ -40,6 +61,19 @@ function hasSource(source: ImageProps["source"]): boolean {
   return Array.isArray(source) ? source.length > 0 : source != null && source !== "";
 }
 
+const sourceObjectIds = new WeakMap<object, number>();
+let nextSourceObjectId = 0;
+
+function sourceObjectIdentity(source: object): string {
+  let id = sourceObjectIds.get(source);
+  if (id == null) {
+    id = nextSourceObjectId;
+    nextSourceObjectId += 1;
+    sourceObjectIds.set(source, id);
+  }
+  return `object:${id}`;
+}
+
 function sourceIdentity(source: ImageProps["source"]): string | object | null | undefined {
   if (source == null) return source;
   if (typeof source === "string" || typeof source === "number") {
@@ -48,10 +82,89 @@ function sourceIdentity(source: ImageProps["source"]): string | object | null | 
   if (Array.isArray(source)) {
     return source.map((item) => sourceIdentity(item)).join("|");
   }
-  if ("uri" in source) {
-    return `uri:${source.uri ?? ""}|cache:${source.cacheKey ?? ""}`;
+  const imageSource = source as Exclude<
+    NonNullable<ImageProps["source"]>,
+    string | number
+  >;
+  if (
+    "uri" in imageSource ||
+    "headers" in imageSource ||
+    "width" in imageSource ||
+    "height" in imageSource ||
+    "blurhash" in imageSource ||
+    "thumbhash" in imageSource ||
+    "cacheKey" in imageSource ||
+    "webMaxViewportWidth" in imageSource ||
+    "isAnimated" in imageSource
+  ) {
+    const { headers } = imageSource;
+    return JSON.stringify({
+      uri: imageSource.uri,
+      headers: headers
+        ? Object.entries(headers).sort(([left], [right]) => left.localeCompare(right))
+        : undefined,
+      width: imageSource.width,
+      height: imageSource.height,
+      blurhash: imageSource.blurhash,
+      thumbhash: imageSource.thumbhash,
+      cacheKey: imageSource.cacheKey,
+      webMaxViewportWidth: imageSource.webMaxViewportWidth,
+      isAnimated: imageSource.isAnimated,
+    });
   }
-  return source;
+  return sourceObjectIdentity(source);
+}
+
+function reduceImageState(state: ImageState, action: ImageAction): ImageState {
+  switch (action.type) {
+    case "sync": {
+      const sourceChanged = state.sourceKey !== action.sourceKey;
+      const retryChanged = state.retryKey !== action.retryKey;
+
+      if (sourceChanged) {
+        return {
+          sourceKey: action.sourceKey,
+          retryKey: action.retryKey,
+          sourceIsPresent: action.sourceIsPresent,
+          generation: state.generation + 1,
+          retryCount: 0,
+          status: action.sourceIsPresent ? "loading" : "idle",
+          isExplicitRetry: false,
+        };
+      }
+
+      if (retryChanged && action.sourceIsPresent && state.retryCount === 0) {
+        return {
+          ...state,
+          retryKey: action.retryKey,
+          generation: state.generation + 1,
+          retryCount: 1,
+          status: "loading",
+          isExplicitRetry: true,
+        };
+      }
+
+      return {
+        ...state,
+        retryKey: action.retryKey,
+        sourceIsPresent: action.sourceIsPresent,
+        status: action.sourceIsPresent ? state.status : "idle",
+        isExplicitRetry: false,
+      };
+    }
+    case "loadStart":
+      return action.generation === state.generation && state.status !== "loaded"
+        ? { ...state, status: "loading" }
+        : state;
+    case "display":
+      return action.generation === state.generation
+        ? { ...state, status: "loaded" }
+        : state;
+    case "error":
+      return action.generation === state.generation
+        ? { ...state, status: "error" }
+        : state;
+  }
 }
 
 function sourceHost(source: ImageProps["source"]): string | undefined {
@@ -88,42 +201,39 @@ export function HimuImage({
   testID = "himu-image",
   ...imageProps
 }: HimuImageProps) {
-  const initialHasSource = hasSource(source);
-  const [status, setStatus] = useState<Status>(
-    initialHasSource ? "loading" : "idle",
-  );
-  const [requestVersion, setRequestVersion] = useState(0);
   const sourceIsPresent = hasSource(source);
   const sourceKey = sourceIdentity(source);
-  const previousSource = useRef(sourceKey);
-  const previousRetryKey = useRef(retryKey);
-  const retryCount = useRef(0);
+  const [state, dispatch] = useReducer(reduceImageState, {
+    sourceKey,
+    retryKey,
+    sourceIsPresent,
+    generation: 0,
+    retryCount: 0,
+    status: sourceIsPresent ? "loading" : "idle",
+    isExplicitRetry: false,
+  });
+  const lastRetriedGeneration = useRef<number | null>(null);
+
+  if (
+    state.sourceKey !== sourceKey ||
+    state.retryKey !== retryKey ||
+    state.sourceIsPresent !== sourceIsPresent
+  ) {
+    dispatch({ type: "sync", sourceKey, retryKey, sourceIsPresent });
+  }
 
   useEffect(() => {
-    const sourceChanged = previousSource.current !== sourceKey;
-    const retryChanged = previousRetryKey.current !== retryKey;
-
-    if (sourceChanged) {
-      retryCount.current = 0;
+    if (
+      state.isExplicitRetry &&
+      lastRetriedGeneration.current !== state.generation
+    ) {
+      lastRetriedGeneration.current = state.generation;
+      onRetry?.();
     }
+  }, [onRetry, state.generation, state.isExplicitRetry]);
 
-    if (!sourceIsPresent) {
-      setStatus("idle");
-    } else if (sourceChanged || (retryChanged && retryCount.current === 0)) {
-      if (retryChanged && !sourceChanged) {
-        retryCount.current = 1;
-        onRetry?.();
-      }
-      setStatus("loading");
-      setRequestVersion((version) => version + 1);
-    }
-
-    previousSource.current = sourceKey;
-    previousRetryKey.current = retryKey;
-  }, [onRetry, retryKey, sourceIsPresent, sourceKey]);
-
-  const showImage = sourceIsPresent && status !== "error";
-  const showFallback = !showImage || status !== "loaded";
+  const showImage = sourceIsPresent && state.status !== "error";
+  const showFallback = !showImage || state.status !== "loaded";
   const isInformative = Boolean(accessibilityLabel);
 
   return (
@@ -141,21 +251,24 @@ export function HimuImage({
       {showImage ? (
         <Image
           {...imageProps}
-          key={requestVersion}
+          key={state.generation}
           source={source}
-          recyclingKey={String(requestVersion)}
+          recyclingKey={String(state.generation)}
           priority={eager ? "high" : "low"}
-          style={[styles.image, status === "loaded" ? styles.visible : styles.hidden]}
+          style={[
+            styles.image,
+            state.status === "loaded" ? styles.visible : styles.hidden,
+          ]}
           testID="himu-image-native"
           accessible={isInformative}
           accessibilityLabel={accessibilityLabel}
           alt={accessibilityLabel ?? ""}
           onLoadStart={() => {
-            setStatus((current) =>
-              current === "loaded" ? current : "loading",
-            );
+            dispatch({ type: "loadStart", generation: state.generation });
           }}
-          onDisplay={() => setStatus("loaded")}
+          onDisplay={() =>
+            dispatch({ type: "display", generation: state.generation })
+          }
           onError={() => {
             if (__DEV__) {
               console.warn("[HimuImage] failed to display", {
@@ -163,7 +276,7 @@ export function HimuImage({
                 host: sourceHost(source),
               });
             }
-            setStatus("error");
+            dispatch({ type: "error", generation: state.generation });
           }}
         />
       ) : null}

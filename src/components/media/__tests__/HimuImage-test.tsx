@@ -2,7 +2,10 @@ import { fireEvent, render } from "@testing-library/react-native";
 import * as mockReact from "react";
 import { View, View as mockNativeView } from "react-native";
 
+import { Artwork } from "../Artwork";
 import { HimuImage } from "../HimuImage";
+import { OnAirHero } from "../../home/OnAirHero";
+import { TrackCard } from "../../TrackCard";
 
 jest.mock("expo-image", () => ({
   Image: ({ onLoadStart, onDisplay, onError, ...props }: Record<string, unknown>) =>
@@ -85,6 +88,77 @@ describe("HimuImage", () => {
       "source",
       "https://cdn.example.com/fresh.jpg",
     );
+  });
+
+  it("resets before committing a new source and ignores a stale display event", async () => {
+    const screen = await render(
+      <HimuImage source="https://cdn.example.com/first.jpg" fallback={fallback} />,
+    );
+    const staleImage = screen.getByTestId("himu-image-native");
+
+    await fireEvent(staleImage, "display");
+    await screen.rerender(
+      <HimuImage source="https://cdn.example.com/second.jpg" fallback={fallback} />,
+    );
+    await fireEvent(staleImage, "display");
+
+    expect(screen.getByTestId("himu-image-fallback")).toBeTruthy();
+    expect(screen.getByTestId("himu-image-native")).toHaveProp(
+      "source",
+      "https://cdn.example.com/second.jpg",
+    );
+    expect(screen.getByTestId("himu-image-native")).toHaveStyle({ opacity: 0 });
+  });
+
+  it("ignores a stale error event after the source generation changes", async () => {
+    const screen = await render(
+      <HimuImage source="https://cdn.example.com/first.jpg" fallback={fallback} />,
+    );
+    const staleImage = screen.getByTestId("himu-image-native");
+
+    await screen.rerender(
+      <HimuImage source="https://cdn.example.com/second.jpg" fallback={fallback} />,
+    );
+    await fireEvent(staleImage, "error", { error: "first source failed late" });
+
+    expect(screen.getByTestId("himu-image-native")).toHaveProp(
+      "source",
+      "https://cdn.example.com/second.jpg",
+    );
+    expect(screen.getByTestId("himu-image-fallback")).toBeTruthy();
+  });
+
+  it("resets an errored source when only its request headers change", async () => {
+    const screen = await render(
+      <HimuImage
+        source={{
+          uri: "https://cdn.example.com/protected.jpg",
+          headers: { Authorization: "Bearer first" },
+        }}
+        fallback={fallback}
+      />,
+    );
+
+    await fireEvent(screen.getByTestId("himu-image-native"), "error", {
+      error: "expired credentials",
+    });
+    await screen.rerender(
+      <HimuImage
+        source={{
+          uri: "https://cdn.example.com/protected.jpg",
+          headers: { Authorization: "Bearer second" },
+        }}
+        fallback={fallback}
+      />,
+    );
+
+    expect(screen.getByTestId("himu-image-native")).toHaveProp(
+      "source",
+      expect.objectContaining({
+        headers: { Authorization: "Bearer second" },
+      }),
+    );
+    expect(screen.getByTestId("himu-image-native")).toHaveStyle({ opacity: 0 });
   });
 
   it("does not restart a displayed object source with the same URI", async () => {
@@ -171,5 +245,47 @@ describe("HimuImage", () => {
       "accessible",
       false,
     );
+  });
+
+  it("keeps Artwork square when callers provide conflicting dimensions", async () => {
+    const screen = await render(
+      <Artwork
+        source="https://cdn.example.com/cover.jpg"
+        size={64}
+        style={{ width: 16, height: 40, aspectRatio: 3, borderRadius: 8 }}
+      />,
+    );
+
+    expect(screen.getByTestId("himu-image")).toHaveStyle({
+      width: 64,
+      height: 64,
+      aspectRatio: 1,
+      borderRadius: 8,
+    });
+  });
+
+  it("prioritizes hero media while keeping track artwork low priority", async () => {
+    const screen = await render(
+      <View>
+        <OnAirHero
+          djName="Nova"
+          avatarUrl="https://cdn.example.com/nova.jpg"
+          genre="ambient"
+          headline="Live now"
+          trackTitle="First light"
+          isLive
+          onPlay={jest.fn()}
+        />
+        <TrackCard
+          title="First light"
+          artist="Nova"
+          cover="https://cdn.example.com/cover.jpg"
+        />
+      </View>,
+    );
+
+    expect(
+      screen.getAllByTestId("himu-image-native").map((image) => image.props.priority),
+    ).toEqual(expect.arrayContaining(["high", "low"]));
   });
 });
