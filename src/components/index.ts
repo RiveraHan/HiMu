@@ -10,6 +10,7 @@ export * from "./IconButton";
 export * from "./LibraryCard";
 export * from "./PlaylistCard";
 export * from "./ScreenHeader";
+export * from "./ScreenCanvas";
 export * from "./ScreenScrollView";
 export * from "./StateNotice";
 export * from "./StatusBarScrim";

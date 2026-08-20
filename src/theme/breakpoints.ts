@@ -7,3 +7,8 @@ export const breakpoints = {
   lg: 768,
   xl: 1024,
 } as const;
+
+export const layoutBreakpoints = {
+  medium: breakpoints.lg,
+  desktop: breakpoints.xl,
+} as const;

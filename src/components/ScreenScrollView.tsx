@@ -10,12 +10,17 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import {
+  ScreenCanvas,
+  type ScreenCanvasVariant,
+} from "./ScreenCanvas";
 import { StatusBarScrim } from "./StatusBarScrim";
 
 type Props = Omit<ScrollViewProps, "onScroll"> & {
   children: ReactNode;
   /** Style for the outer container — the screen background lives here. */
   style?: StyleProp<ViewStyle>;
+  canvasVariant?: ScreenCanvasVariant;
   onScrollRef?: (node: { scrollTo(options: { y: number; animated: boolean }): void } | null) => void;
 };
 
@@ -29,6 +34,7 @@ export function ScreenScrollView({
   style,
   contentContainerStyle,
   showsVerticalScrollIndicator = false,
+  canvasVariant = "readable",
   onScrollRef,
   ...rest
 }: Props) {
@@ -45,9 +51,9 @@ export function ScreenScrollView({
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={showsVerticalScrollIndicator}
-        contentContainerStyle={[contentContainerStyle, styles.centeredContent]}
+        contentContainerStyle={contentContainerStyle}
       >
-        {children}
+        <ScreenCanvas variant={canvasVariant}>{children}</ScreenCanvas>
       </Animated.ScrollView>
       <StatusBarScrim scrollY={scrollY} />
     </View>
@@ -56,9 +62,4 @@ export function ScreenScrollView({
 
 const styles = StyleSheet.create(() => ({
   root: { flex: 1 },
-  centeredContent: {
-    width: "100%",
-    maxWidth: 720,
-    alignSelf: "center",
-  },
 }));

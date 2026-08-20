@@ -8,9 +8,12 @@ jest.mock("@/src/components/StatusBarScrim", () => ({
 }));
 
 describe("ScreenScrollView", () => {
-  it("centers caller content inside the shared 720-point reading column", async () => {
+  it("delegates the max width to its max canvas", async () => {
     const screen = await render(
-      <ScreenScrollView contentContainerStyle={{ paddingHorizontal: 24 }}>
+      <ScreenScrollView
+        canvasVariant="max"
+        contentContainerStyle={{ paddingHorizontal: 24 }}
+      >
         <View testID="content" />
       </ScreenScrollView>,
     );
@@ -19,10 +22,20 @@ describe("ScreenScrollView", () => {
     )[0];
 
     expect(StyleSheet.flatten(scrollView.props.contentContainerStyle)).toEqual(
+      expect.objectContaining({ paddingHorizontal: 24 }),
+    );
+    expect(StyleSheet.flatten(scrollView.props.contentContainerStyle)).not.toEqual(
+      expect.objectContaining({ maxWidth: expect.anything() }),
+    );
+
+    const canvas = screen.container.queryAll(
+      (instance) => StyleSheet.flatten(instance.props.style)?.maxWidth === 1280,
+    )[0];
+
+    expect(StyleSheet.flatten(canvas.props.style)).toEqual(
       expect.objectContaining({
-        paddingHorizontal: 24,
         width: "100%",
-        maxWidth: 720,
+        maxWidth: 1280,
         alignSelf: "center",
       }),
     );
