@@ -126,9 +126,7 @@ describe("Login translations", () => {
     const screen = await render(<LoginScreen />);
 
     await act(async () => {
-      void screen
-        .getByRole("button", { name: "Continuar con Google" })
-        .props.onClick({});
+      fireEvent.press(screen.getByRole("button", { name: "Continuar con Google" }));
       await Promise.resolve();
     });
 
@@ -136,6 +134,10 @@ describe("Login translations", () => {
       name: "Iniciando sesión...",
     });
     expect(pendingButton).toBeDisabled();
+    expect(pendingButton.props.accessibilityState).toEqual({
+      busy: true,
+      disabled: true,
+    });
     await fireEvent.press(pendingButton);
     expect(authApi.signInWithGoogle).toHaveBeenCalledTimes(1);
 
