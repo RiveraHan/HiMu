@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { Atmosphere } from "@/src/components/Atmosphere";
@@ -7,7 +7,6 @@ import { GlassCard } from "@/src/components/GlassCard";
 import { ScreenCanvas } from "@/src/components/ScreenCanvas";
 import { Text } from "@/src/components/Text";
 import { Logo } from "@/src/components/icons";
-import { resolveLayoutMode } from "@/src/theme/layout";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
@@ -16,22 +15,6 @@ type Props = {
 
 export function LoginHero({ children }: Props) {
   const { t } = useTranslation();
-  const { width } = useWindowDimensions();
-  const isDesktop = resolveLayoutMode(width) === "desktop";
-
-  const brand = (
-    <View style={styles.brand}>
-      <View style={styles.logoWrapper}>
-        <Logo size={96} />
-      </View>
-      <Text accessibilityRole="header" variant="h1">
-        {t("common.auth.welcome")}
-      </Text>
-      <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.7}>
-        {t("common.auth.subtitle")}
-      </Text>
-    </View>
-  );
 
   return (
     <View style={styles.root}>
@@ -43,15 +26,29 @@ export function LoginHero({ children }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenCanvas variant="wide" style={styles.canvas}>
-          {isDesktop ? (
-            <View testID="login-hero-desktop" style={styles.desktop}>
-              <View testID="login-hero-promise" style={styles.promisePanel}>
-                {brand}
-                <View testID="login-benefit-list" accessibilityRole="list" style={styles.benefits}>
-                  <Text variant="h2">{t("common.auth.desktopTitle")}</Text>
+          <View testID="login-hero-desktop" style={styles.hero}>
+            <View testID="login-hero-promise" style={styles.promisePanel}>
+              <View style={styles.brand}>
+                <View style={styles.logoWrapper}>
+                  <Logo size={96} />
+                </View>
+                <Text accessibilityRole="header" variant="h1">
+                  {t("common.auth.welcome")}
+                </Text>
+                <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.7}>
+                  {t("common.auth.subtitle")}
+                </Text>
+              </View>
+              <View style={styles.benefitSection}>
+                <Text variant="h2">{t("common.auth.desktopTitle")}</Text>
+                <View
+                  testID="login-benefit-list"
+                  accessibilityRole="list"
+                  style={styles.benefits}
+                >
                   <Text
                     testID="login-benefit"
-                    accessibilityRole="text"
+                    role="listitem"
                     variant="bodyLg"
                     color="onSurfaceVariant"
                   >
@@ -59,22 +56,17 @@ export function LoginHero({ children }: Props) {
                   </Text>
                 </View>
               </View>
-              <GlassCard testID="login-hero-sign-in" level={2} style={styles.signInPanel}>
-                <View style={styles.signInIntro}>
-                  <Text variant="h2">{t("common.auth.desktopSignInTitle")}</Text>
-                  <Text variant="bodyMd" color="onSurfaceVariant">
-                    {t("common.auth.desktopSignInExplanation")}
-                  </Text>
-                </View>
-                {children}
-              </GlassCard>
             </View>
-          ) : (
-            <View testID="login-hero-compact" style={styles.compact}>
-              {brand}
+            <GlassCard testID="login-hero-sign-in" level={2} style={styles.signInPanel}>
+              <View style={styles.signInIntro}>
+                <Text variant="h2">{t("common.auth.desktopSignInTitle")}</Text>
+                <Text variant="bodyMd" color="onSurfaceVariant">
+                  {t("common.auth.desktopSignInExplanation")}
+                </Text>
+              </View>
               {children}
-            </View>
-          )}
+            </GlassCard>
+          </View>
         </ScreenCanvas>
       </ScrollView>
     </View>
@@ -96,32 +88,33 @@ const styles = StyleSheet.create((theme) => ({
   canvas: {
     flexGrow: 1,
   },
-  compact: {
+  hero: {
     flex: 1,
-    paddingTop: theme.spacing.stackLg * 2,
-    paddingBottom: theme.spacing.safeAreaBottom + theme.spacing.stackLg,
-    gap: theme.spacing.stackLg,
-  },
-  desktop: {
-    flex: 1,
-    flexDirection: "row",
+    flexDirection: { xs: "column", xl: "row" },
     alignItems: "stretch",
-    gap: theme.spacing.stackLg * 2,
-    paddingVertical: theme.spacing.stackLg * 2,
+    gap: { xs: theme.spacing.stackLg, xl: theme.spacing.stackLg * 2 },
+    paddingTop: { xs: theme.spacing.stackLg * 2, xl: theme.spacing.stackLg * 2 },
+    paddingBottom: {
+      xs: theme.spacing.safeAreaBottom + theme.spacing.stackLg,
+      xl: theme.spacing.stackLg * 2,
+    },
   },
   promisePanel: {
-    flex: 5,
-    justifyContent: "center",
+    flex: { xs: 0, xl: 5 },
+    justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
   },
   signInPanel: {
-    flex: 4,
-    justifyContent: "center",
+    flex: { xs: 0, xl: 4 },
+    justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
-    alignSelf: "center",
+    alignSelf: { xs: "stretch", xl: "center" },
     width: "100%",
-    maxWidth: 460,
-    minHeight: 440,
+    maxWidth: { xs: undefined, xl: 460 },
+    minHeight: { xs: undefined, xl: 440 },
+    padding: { xs: 0, xl: theme.spacing.cardPadding },
+    backgroundColor: { xs: "transparent", xl: theme.colors.glassTint },
+    borderWidth: { xs: 0, xl: 1 },
   },
   brand: {
     alignItems: "center",
@@ -132,10 +125,13 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
   },
-  benefits: {
+  benefitSection: {
+    display: { xs: "none", xl: "flex" },
     gap: theme.spacing.stackSm,
   },
+  benefits: {},
   signInIntro: {
+    display: { xs: "none", xl: "flex" },
     gap: theme.spacing.stackSm,
   },
 }));
