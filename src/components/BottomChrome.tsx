@@ -9,6 +9,7 @@ import { usePlayerStore } from "@/src/stores/player-store";
 import { ActivityPill } from "./activity/ActivityPill";
 import {
   bottomChromeCanvasGeometry,
+  isApplicationChromeHidden,
   TAB_BAR_BOTTOM,
   TAB_BAR_HEIGHT,
 } from "./bottom-chrome-metrics";
@@ -30,10 +31,7 @@ export function BottomChrome() {
     queryError,
   } = useActivity();
 
-  const hiddenRoute =
-    segments[0] === "(auth)" ||
-    segments[0] === "player" ||
-    segments[0] === "focus-mode";
+  const hiddenRoute = isApplicationChromeHidden(segments);
   if (hiddenRoute || phase !== "idle") return null;
 
   const fallbackStatus = isOffline
@@ -64,7 +62,10 @@ export function BottomChrome() {
       style={[styles.root, { bottom, left: canvas.left, width: canvas.width }]}
       testID="bottom-chrome"
     >
-      <View style={styles.stack} testID="bottom-chrome-stack">
+      <View
+        style={[styles.stack, isDesktop && styles.desktopStack]}
+        testID="bottom-chrome-stack"
+      >
         {hasActivityTrigger ? (
           <ActivityPill
             activity={primary}
@@ -91,5 +92,9 @@ const styles = StyleSheet.create((theme) => ({
     alignSelf: "center",
     alignItems: "center",
     gap: theme.spacing.stackSm,
+  },
+  desktopStack: {
+    width: "100%",
+    maxWidth: undefined,
   },
 }));

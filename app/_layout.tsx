@@ -4,6 +4,7 @@ import { ActivityProvider, useActivity } from "@/src/activity";
 import { QueryProvider } from "@/src/api/query-provider";
 import { PlayerProvider } from "@/src/audio/player-provider";
 import { BottomChrome } from "@/src/components/BottomChrome";
+import { isApplicationChromeHidden } from "@/src/components/bottom-chrome-metrics";
 import { ResponsiveAppShell } from "@/src/components/ResponsiveAppShell";
 import { ConfirmDialogHost } from "@/src/components/ConfirmDialog";
 import { ToastHost } from "@/src/components/Toast";
@@ -12,7 +13,7 @@ import { useAuthInit } from "@/src/hooks/use-auth";
 import { LocaleProvider } from "@/src/i18n/LocaleProvider";
 import { AppTourProvider, useAppTour } from "@/src/onboarding";
 import { useAuthStore } from "@/src/stores/auth-store";
-import { Stack } from "expo-router";
+import { Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { ActivityIndicator, View } from "react-native";
@@ -48,6 +49,7 @@ function NavigatorShell() {
   const session = useAuthStore((state) => state.session);
   const isLoading = useAuthStore((state) => state.isLoading);
   const { phase } = useAppTour();
+  const segments = useSegments();
 
   if (isLoading) {
     return (
@@ -59,7 +61,13 @@ function NavigatorShell() {
 
   return (
     <>
-      <ResponsiveAppShell showRail={!!session && phase === "idle"}>
+      <ResponsiveAppShell
+        showRail={
+          !!session &&
+          phase === "idle" &&
+          !isApplicationChromeHidden(segments)
+        }
+      >
         <Stack
           key={session?.user.id ?? "signed-out"}
           screenOptions={{ headerShown: false }}

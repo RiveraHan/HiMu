@@ -2,7 +2,15 @@ export const TAB_BAR_BOTTOM = 8;
 export const TAB_BAR_HEIGHT = 64;
 export const MINI_PLAYER_HEIGHT = 64;
 export const ACTIVITY_PILL_HEIGHT = 48;
-export const DESKTOP_RAIL_WIDTH = 256;
+export const DESKTOP_RAIL_WIDTH = 88;
+
+export function isApplicationChromeHidden(segments: readonly string[]) {
+  return (
+    segments[0] === "(auth)" ||
+    segments[0] === "player" ||
+    segments[0] === "focus-mode"
+  );
+}
 
 export function bottomChromeCanvasGeometry({
   windowWidth,

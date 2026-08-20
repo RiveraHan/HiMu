@@ -5,10 +5,11 @@ import { ResponsiveAppShell } from "@/src/components/ResponsiveAppShell";
 import { DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
 
 let mockWindowWidth = 1023;
+let mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
 jest.mock("expo-router", () => ({
+  Link: ({ children }: { children: React.ReactNode }) => children,
   usePathname: () => "/(app)",
-  useRouter: () => ({ navigate: jest.fn() }),
 }));
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
@@ -17,12 +18,13 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  useSafeAreaInsets: () => mockInsets,
 }));
 
 describe("ResponsiveAppShell", () => {
   beforeEach(() => {
     mockWindowWidth = 1023;
+    mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
   });
 
   it("keeps the compact and medium canvas free of a desktop rail", async () => {
@@ -58,6 +60,19 @@ describe("ResponsiveAppShell", () => {
     expect(screen.queryByTestId("desktop-rail")).toBeNull();
     expect(screen.getByTestId("responsive-app-content")).not.toHaveStyle({
       paddingLeft: DESKTOP_RAIL_WIDTH,
+    });
+  });
+
+  it("insets the desktop content and rail after the left safe area", async () => {
+    mockWindowWidth = 1280;
+    mockInsets = { top: 0, right: 0, bottom: 0, left: 20 };
+    const screen = await render(
+      <ResponsiveAppShell><View testID="route-content" /></ResponsiveAppShell>,
+    );
+
+    expect(screen.getByTestId("desktop-rail")).toHaveStyle({ width: 108 });
+    expect(screen.getByTestId("responsive-app-content")).toHaveStyle({
+      paddingLeft: 108,
     });
   });
 });

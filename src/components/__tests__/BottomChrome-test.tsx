@@ -13,6 +13,7 @@ let mockPhase = "idle";
 let mockWindowWidth = 390;
 let mockFontScale = 1;
 let mockActivity = createActivityState();
+let mockInsets = { top: 0, right: 0, bottom: 20, left: 0 };
 
 function createActivityState(
   overrides: Partial<ReturnType<typeof baseActivityState>> = {},
@@ -63,7 +64,7 @@ jest.mock("@/src/onboarding", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 20, left: 0 }),
+  useSafeAreaInsets: () => mockInsets,
 }));
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
@@ -188,6 +189,7 @@ describe("BottomChrome", () => {
     mockPhase = "idle";
     mockWindowWidth = 390;
     mockFontScale = 1;
+    mockInsets = { top: 0, right: 0, bottom: 20, left: 0 };
     mockActivity = createActivityState({ isInitialLoading: true });
     usePlayerStore.getState().reset();
     usePlayerStore.getState().setNowPlaying(
@@ -249,12 +251,16 @@ describe("BottomChrome", () => {
   });
 
   it("uses only the canvas beside the desktop rail so docked chrome cannot cover route content", async () => {
-    mockWindowWidth = 1024;
+    mockWindowWidth = 1280;
+    mockInsets = { top: 0, right: 10, bottom: 20, left: 20 };
     const screen = await render(<BottomChrome />);
 
     expect(screen.getByTestId("bottom-chrome")).toHaveStyle({
-      left: DESKTOP_RAIL_WIDTH,
-      width: 1024 - DESKTOP_RAIL_WIDTH,
+      left: 20 + DESKTOP_RAIL_WIDTH,
+      width: 1280 - 20 - DESKTOP_RAIL_WIDTH - 10,
+    });
+    expect(screen.getByTestId("bottom-chrome-stack")).toHaveStyle({
+      width: "100%",
     });
   });
 

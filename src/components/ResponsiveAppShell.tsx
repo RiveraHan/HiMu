@@ -1,4 +1,5 @@
 import { useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
 import { DesktopRail } from "@/src/components/navigation/DesktopRail";
@@ -13,13 +14,17 @@ export function ResponsiveAppShell({
   showRail?: boolean;
 }) {
   const { width } = useWindowDimensions();
-  const isDesktop = resolveLayoutMode(width) === "desktop" && showRail;
+  const insets = useSafeAreaInsets();
+  const hasDesktopRail = resolveLayoutMode(width) === "desktop" && showRail;
 
   return (
     <View style={styles.root} testID="responsive-app-shell">
-      {isDesktop ? <DesktopRail /> : null}
+      {hasDesktopRail ? <DesktopRail /> : null}
       <View
-        style={[styles.content, isDesktop && { paddingLeft: DESKTOP_RAIL_WIDTH }]}
+        style={[
+          styles.content,
+          hasDesktopRail && { paddingLeft: insets.left + DESKTOP_RAIL_WIDTH },
+        ]}
         testID="responsive-app-content"
       >
         {children}

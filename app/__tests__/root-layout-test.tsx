@@ -14,6 +14,8 @@ const mockClosePanel = jest.fn();
 const mockSetTheme = jest.fn();
 let mockRequestedRoute = "(app)";
 let mockMountedRoutes: string[] = [];
+let mockSegments = ["(app)"];
+let mockWindowWidth = 390;
 
 function authState(userId: string | null, isLoading: boolean, token = "token") {
   return {
@@ -103,6 +105,13 @@ jest.mock("@/src/theme/unistyles", () => {
 jest.mock("expo-font", () => ({
   useFonts: () => mockFontState,
 }));
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 844, scale: 1, fontScale: 1 }),
+}));
 
 jest.mock("expo-router", () => {
   const React = require("react");
@@ -170,7 +179,12 @@ jest.mock("expo-router", () => {
   Stack.Screen = StackScreen;
   Stack.Protected = StackProtected;
 
-  return { Stack };
+  return {
+    Link: ({ children }: { children: React.ReactNode }) => children,
+    Stack,
+    usePathname: () => `/${mockSegments.join("/")}`,
+    useSegments: () => mockSegments,
+  };
 });
 
 const PRIVATE_ROUTES = [
@@ -199,6 +213,8 @@ describe("root layout ownership and route protection", () => {
     mockSetTheme.mockClear();
     mockRequestedRoute = "(app)";
     mockMountedRoutes = [];
+    mockSegments = ["(app)"];
+    mockWindowWidth = 390;
   });
 
   it("keeps auth/player outside query, locale inside it, and global activity surfaces inside AppTour", async () => {
@@ -292,5 +308,36 @@ describe("root layout ownership and route protection", () => {
     await screen.rerender(<RootLayout />);
     expect(mockNavigatorMounts).toBe(2);
     expect(mockNavigatorUnmounts).toBe(1);
+  });
+
+  it.each([
+    ["player", ["player"]],
+    ["focus-mode", ["focus-mode"]],
+  ])("suppresses the actual desktop shell rail for the full-screen %s route", async (route, segments) => {
+    mockAuthState = authState("user-a", false);
+    mockRequestedRoute = route;
+    mockSegments = segments;
+    mockWindowWidth = 1280;
+    const screen = await render(<RootLayout />);
+
+    expect(screen.getByTestId(`route-${route}`)).toBeTruthy();
+    expect(screen.queryByTestId("desktop-rail")).toBeNull();
+    expect(screen.getByTestId("responsive-app-content")).not.toHaveStyle({
+      paddingLeft: 88,
+    });
+  });
+
+  it("keeps the actual desktop shell rail for a non-full-screen protected route", async () => {
+    mockAuthState = authState("user-a", false);
+    mockRequestedRoute = "create-track";
+    mockSegments = ["create-track"];
+    mockWindowWidth = 1280;
+    const screen = await render(<RootLayout />);
+
+    expect(screen.getByTestId("route-create-track")).toBeTruthy();
+    expect(screen.getByTestId("desktop-rail")).toBeTruthy();
+    expect(screen.getByTestId("responsive-app-content")).toHaveStyle({
+      paddingLeft: 88,
+    });
   });
 });
