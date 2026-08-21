@@ -59,6 +59,10 @@ export default function PlayerScreen() {
   const toast = useToast();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
+  const [atmosphere, setAtmosphere] = useState({
+    identity: "",
+    displayed: false,
+  });
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -89,13 +93,12 @@ export default function PlayerScreen() {
     };
 
   const remaining = Math.max(durationSec - positionSec, 0);
+  const artworkIdentity = JSON.stringify([track.id, track.album_art_url]);
 
   return (
-    <ArtworkAtmosphereBoundary key={`${track.id}:${track.album_art_url ?? ""}`}>
-      {({ displayed, onDisplay, onStatusChange }) => (
     <View style={styles.root}>
       {/* Background */}
-      {displayed && track.album_art_url ? (
+      {atmosphere.identity === artworkIdentity && atmosphere.displayed && track.album_art_url ? (
         <Image
           testID="player-artwork-atmosphere"
           source={track.album_art_url}
@@ -187,14 +190,22 @@ export default function PlayerScreen() {
           <PlayerDesktopLayoutSlot slot="artwork">
             <View style={styles.artWrap}>
               <View style={styles.artFrame}>
-                <PlayerArtwork
-                  source={track.album_art_url}
-                  accessibilityLabel={t("playback.player.artwork.label", {
-                    title: track.title,
-                  })}
-                  onDisplay={onDisplay}
-                  onStatusChange={onStatusChange}
-                />
+                <ArtworkAtmosphereController
+                  key={artworkIdentity}
+                  identity={artworkIdentity}
+                  onAtmosphereChange={setAtmosphere}
+                >
+                  {({ onDisplay, onStatusChange }) => (
+                    <PlayerArtwork
+                      source={track.album_art_url}
+                      accessibilityLabel={t("playback.player.artwork.label", {
+                        title: track.title,
+                      })}
+                      onDisplay={onDisplay}
+                      onStatusChange={onStatusChange}
+                    />
+                  )}
+                </ArtworkAtmosphereController>
                 {/* Floating save action remains attached to the artwork. */}
                 <View style={styles.favoriteOverlay}>
                   <IconButton
@@ -389,28 +400,42 @@ export default function PlayerScreen() {
         </PlayerDesktopLayout>
       </View>
     </View>
-      )}
-    </ArtworkAtmosphereBoundary>
   );
 }
 
-type ArtworkAtmosphereBoundaryProps = {
+type ArtworkAtmosphereControllerProps = {
+  identity: string;
+  onAtmosphereChange: (atmosphere: { identity: string; displayed: boolean }) => void;
   children: (state: {
-    displayed: boolean;
     onDisplay: () => void;
     onStatusChange: (status: "idle" | "loading" | "loaded" | "error") => void;
   }) => ReactNode;
 };
 
-/** Keyed by the committed track/source identity at the call site. */
-function ArtworkAtmosphereBoundary({ children }: ArtworkAtmosphereBoundaryProps) {
+/** Keyed by a committed, tuple-safe track/source identity at the call site. */
+function ArtworkAtmosphereController({
+  identity,
+  onAtmosphereChange,
+  children,
+}: ArtworkAtmosphereControllerProps) {
   const [displayed, setDisplayed] = useState(false);
 
+  useEffect(() => {
+    onAtmosphereChange({ identity, displayed: false });
+  }, [identity, onAtmosphereChange]);
+
   return children({
-    displayed,
-    onDisplay: () => setDisplayed(true),
+    onDisplay: () => {
+      if (!displayed) {
+        setDisplayed(true);
+        onAtmosphereChange({ identity, displayed: true });
+      }
+    },
     onStatusChange: (status) => {
-      if (status !== "loaded") setDisplayed(false);
+      if (status !== "loaded" && displayed) {
+        setDisplayed(false);
+        onAtmosphereChange({ identity, displayed: false });
+      }
     },
   });
 }

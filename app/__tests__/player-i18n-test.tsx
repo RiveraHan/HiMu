@@ -258,6 +258,30 @@ describe("PlayerScreen localization", () => {
     expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
   });
 
+  test("does not collide distinct track and cover identity pairs", async () => {
+    await i18n.changeLanguage("en");
+    mockTrack = { ...track, id: "a:b", album_art_url: "c" };
+    const screen = await render(<PlayerScreen />);
+    await fireEvent(screen.getByTestId("himu-image-native"), "display");
+    expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
+
+    mockTrack = { ...track, id: "a", album_art_url: "b:c" };
+    await screen.rerender(<PlayerScreen />);
+
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+  });
+
+  test("keeps transport mounted when a cover generation changes", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const pause = screen.getByRole("button", { name: "Pause" });
+
+    mockTrack = { ...track, album_art_url: "https://media.overinn.com/covers/regenerated.webp" };
+    await screen.rerender(<PlayerScreen />);
+
+    expect(screen.getByRole("button", { name: "Pause" })).toBe(pause);
+  });
+
   test.each([false, true])("exposes shuffle checked state %s", async (shuffle) => {
     mockShuffle = shuffle;
     await i18n.changeLanguage("es");
