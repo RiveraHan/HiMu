@@ -1,10 +1,13 @@
 import { act, render } from "@testing-library/react-native";
+import * as ReactNative from "react-native";
 import { StyleSheet } from "react-native";
 import HomeScreen from "@/app/(app)/index";
+import { ContentShelf } from "@/src/components/home/ContentShelf";
 import {
   shelfLayout,
   shelfLayoutBreakpoints,
 } from "@/src/components/home/shelf-layout";
+import { ContentShelfSkeleton } from "@/src/components/skeleton/ContentSkeletons";
 import { layoutBreakpoints } from "@/src/theme/breakpoints";
 
 type Query<T> = {
@@ -199,8 +202,16 @@ describe("HomeScreen shelf integration", () => {
     }));
   });
 
-  it("keeps Home's shelf markup identical for static and desktop contracts", async () => {
-    mockRecentQuery = settled([0, 1, 2].map((index) => ({
+  it("keeps each real shelf to one stable scroll tree without runtime viewport APIs", async () => {
+    const useWindowDimensions = jest.spyOn(ReactNative, "useWindowDimensions")
+      .mockImplementation(() => {
+        throw new Error("runtime viewport branching is not allowed");
+      });
+    const getDimensions = jest.spyOn(ReactNative.Dimensions, "get")
+      .mockImplementation(() => {
+        throw new Error("runtime viewport branching is not allowed");
+      });
+    const tracks = [0, 1, 2].map((index) => ({
       id: `stable-${index}`,
       title: `Stable ${index}`,
       artist: "Artist",
@@ -209,23 +220,26 @@ describe("HomeScreen shelf integration", () => {
       duration: 180,
       owner_id: "listener",
       is_public: false,
-    })));
+    }));
 
-    const structuralMarkers = async (width: number) => {
-      const screen = await render(<HomeScreen />);
-      const markers = {
-        root: screen.getByTestId("home-desktop-grid").type,
-        shelf: screen.getByTestId("content-shelf-scroll").type,
-        firstCard: screen.getByTestId("content-shelf-item-stable-0").type,
-        shelfCount: screen.getAllByTestId("content-shelf-scroll").length,
-        cardCount: screen.getAllByTestId(/^content-shelf-item-stable-/).length,
-      };
-      expect(markers.shelfCount).toBe(1);
-      expect(markers.cardCount).toBe(3);
-      await act(async () => screen.unmount());
-      return markers;
-    };
+    try {
+      const loaded = await render(
+        <ContentShelf title="Stable shelf" tracks={tracks} onPressTrack={mockNoOp} />,
+      );
+      expect(loaded.getAllByTestId("content-shelf-scroll")).toHaveLength(1);
+      expect(loaded.getAllByTestId(/^content-shelf-item-stable-/)).toHaveLength(3);
+      await act(async () => loaded.unmount());
 
-    expect(await structuralMarkers(390)).toEqual(await structuralMarkers(1440));
+      const skeleton = await render(<ContentShelfSkeleton />);
+      expect(skeleton.getAllByTestId("content-shelf-skeleton-scroll")).toHaveLength(1);
+      expect(skeleton.getAllByTestId(/^content-shelf-skeleton-tile-/)).toHaveLength(6);
+      await act(async () => skeleton.unmount());
+
+      expect(useWindowDimensions).not.toHaveBeenCalled();
+      expect(getDimensions).not.toHaveBeenCalled();
+    } finally {
+      useWindowDimensions.mockRestore();
+      getDimensions.mockRestore();
+    }
   });
 });
