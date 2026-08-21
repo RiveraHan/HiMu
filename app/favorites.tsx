@@ -7,6 +7,7 @@ import {
   TrackRowSkeleton,
 } from "@/src/components";
 import { useFavorites } from "@/src/hooks/use-favorites";
+import { TrackGrid } from "@/src/components/content/TrackGrid";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
@@ -46,6 +47,7 @@ export default function FavoritesScreen() {
   return (
     <ScreenScrollView
       style={styles.root}
+      canvasVariant="max"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
@@ -79,10 +81,11 @@ export default function FavoritesScreen() {
         />
       ) : favorites && favorites.length > 0 ? (
         <>
-          <View style={styles.list}>
-            {favorites.map((track, index) => (
+          <TrackGrid
+            tracks={favorites}
+            minCardWidth={185}
+            renderTrack={(track, index) => (
               <TrackCard
-                key={track.id}
                 variant="row"
                 title={track.title}
                 artist={track.artist}
@@ -90,8 +93,8 @@ export default function FavoritesScreen() {
                 isPlaying={currentId === track.id}
                 onPress={() => play(track, index)}
               />
-            ))}
-          </View>
+            )}
+          />
           {favoritesQuery.isError || !online ? (
             <StateNotice
               compact

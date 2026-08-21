@@ -75,6 +75,7 @@ export function AudiusShelf({ title, genre, onPlay }: Props) {
       <ContentShelf
         title={title}
         tracks={tracks}
+        presentation="grid"
         getTrackAccessibilityLabel={(track) =>
           t("discover.playTrack", { title: track.title, artist: track.artist })
         }

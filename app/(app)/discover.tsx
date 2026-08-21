@@ -7,6 +7,7 @@ import {
   TrackRowSkeleton,
 } from "@/src/components";
 import { AudiusShelf } from "@/src/components/discover/AudiusShelf";
+import { TrackGrid } from "@/src/components/content/TrackGrid";
 import { usePlayer } from "@/src/audio/use-player";
 import { useAudiusSearch, useAudiusTrending } from "@/src/hooks/use-audius";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
@@ -101,32 +102,37 @@ export default function DiscoverScreen() {
   return (
     <ScreenScrollView
       style={styles.root}
+      canvasVariant="max"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
       keyboardShouldPersistTaps="handled"
     >
-        <View style={styles.header}>
-          <Text variant="h1">{t("discover.title")}</Text>
-          <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
-            {t("discover.subtitle")}
-          </Text>
-        </View>
+        <View style={styles.searchHeader} testID="discover-search-header">
+          <View style={styles.header}>
+            <Text variant="h1">{t("discover.title")}</Text>
+            <Text variant="bodyLg" color="onSurfaceVariant" opacity={0.6}>
+              {t("discover.subtitle")}
+            </Text>
+          </View>
 
-        <TourTarget
-          id="discover.search"
-          borderRadius={theme.borderRadius.md}
-        >
-          <GlassInput
-            placeholder={t("discover.searchPlaceholder")}
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-        </TourTarget>
+          <View style={styles.searchControl}>
+            <TourTarget
+              id="discover.search"
+              borderRadius={theme.borderRadius.md}
+            >
+              <GlassInput
+                placeholder={t("discover.searchPlaceholder")}
+                value={query}
+                onChangeText={setQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+            </TourTarget>
+          </View>
+        </View>
 
         {searching ? (
           <View style={styles.results}>
@@ -151,21 +157,24 @@ export default function DiscoverScreen() {
                 onAction={() => void searchQuery.refetch()}
               />
             ) : visibleResults ? (
-              visibleResults.map((track, index) => (
-                <TrackCard
-                  key={track.id}
-                  variant="row"
-                  title={track.title}
-                  artist={track.artist}
-                  cover={track.album_art_url}
-                  isPlaying={currentId === track.id}
-                  accessibilityLabel={t("discover.playTrack", {
-                    title: track.title,
-                    artist: track.artist,
-                  })}
-                  onPress={() => playFrom(visibleResults, track, index)}
-                />
-              ))
+              <TrackGrid
+                tracks={visibleResults}
+                minCardWidth={185}
+                renderTrack={(track, index) => (
+                  <TrackCard
+                    variant="row"
+                    title={track.title}
+                    artist={track.artist}
+                    cover={track.album_art_url}
+                    isPlaying={currentId === track.id}
+                    accessibilityLabel={t("discover.playTrack", {
+                      title: track.title,
+                      artist: track.artist,
+                    })}
+                    onPress={() => playFrom(visibleResults, track, index)}
+                  />
+                )}
+              />
             ) : (
               <StateNotice
                 kind="empty"
@@ -219,7 +228,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },
+  searchHeader: {
+    flexDirection: { xs: "column", xl: "row" },
+    alignItems: { xs: "stretch", xl: "flex-end" },
+    justifyContent: "space-between",
+    gap: theme.spacing.stackLg,
+  },
   header: { gap: theme.spacing.stackXs },
+  searchControl: { flex: 1 },
   results: { gap: theme.spacing.stackMd },
   attribution: { textAlign: "center", marginTop: theme.spacing.stackMd },
 }));

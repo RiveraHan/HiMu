@@ -13,6 +13,8 @@ type MockQuery = {
 
 const mockRefetch = jest.fn();
 const mockReplace = jest.fn();
+const mockLoad = jest.fn();
+const mockSetRepeatMode = jest.fn();
 let mockOnline = true;
 
 const initialQuery = (): MockQuery => ({
@@ -58,7 +60,7 @@ jest.mock("@/src/components", () => {
             }, React.createElement(NativeText, null, actionLabel))
           : null,
       ),
-    TrackCard: () => React.createElement(View, { testID: "track-card" }),
+    TrackCard: (props: object) => React.createElement(View, { ...props, testID: "track-card" }),
     TrackRowSkeleton: () =>
       React.createElement(View, { testID: "track-row-skeleton" }),
   };
@@ -68,7 +70,7 @@ jest.mock("@/src/hooks/use-favorites", () => ({
   useFavorites: () => mockFavoritesQuery,
 }));
 jest.mock("@/src/audio/use-player", () => ({
-  usePlayer: () => ({ load: jest.fn() }),
+  usePlayer: () => ({ load: mockLoad }),
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
@@ -81,7 +83,7 @@ jest.mock("expo-router", () => ({
 }));
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) =>
-    selector({ currentTrack: null, setRepeatMode: jest.fn() }),
+    selector({ currentTrack: null, setRepeatMode: mockSetRepeatMode }),
 }));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -94,6 +96,8 @@ describe("FavoritesScreen", () => {
     mockFavoritesQuery.isError = false;
     mockRefetch.mockReset();
     mockReplace.mockReset();
+    mockLoad.mockReset();
+    mockSetRepeatMode.mockReset();
     mockOnline = true;
   });
 
@@ -132,6 +136,27 @@ describe("FavoritesScreen", () => {
 
     expect(screen.getByTestId("track-card")).toBeTruthy();
     expect(screen.queryByTestId("track-row-skeleton")).toBeNull();
+  });
+
+  it("keeps favorite playback queue order inside the responsive grid", async () => {
+    const favorites = [
+      {
+        id: "favorite-one", title: "Favorite One", artist: "Artist", audio_url: "one.mp3",
+        album_art_url: null, duration: 180, genre: "House", favoritedAt: "2026-07-15T00:00:00Z",
+      },
+      {
+        id: "favorite-two", title: "Favorite Two", artist: "Artist", audio_url: "two.mp3",
+        album_art_url: null, duration: 180, genre: "House", favoritedAt: "2026-07-14T00:00:00Z",
+      },
+    ];
+    mockFavoritesQuery = settledQuery(favorites);
+
+    const screen = await render(<FavoritesScreen />);
+
+    expect(screen.getByTestId("track-grid")).toBeTruthy();
+    fireEvent.press(screen.getAllByTestId("track-card")[1]);
+    expect(mockSetRepeatMode).toHaveBeenCalledWith("all");
+    expect(mockLoad).toHaveBeenCalledWith(favorites[1], favorites, 1);
   });
 
   it("shows guidance after an empty Favorites query settles", async () => {

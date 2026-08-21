@@ -8,6 +8,8 @@ const mockUseAudiusTrending = jest.fn();
 const mockRegisterContextTarget = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockSearchRefetch = jest.fn();
+const mockLoad = jest.fn();
+const mockSetRepeatMode = jest.fn();
 let mockOnline = true;
 
 jest.mock("@/src/hooks/use-audius", () => ({
@@ -65,7 +67,7 @@ jest.mock("@/src/onboarding", () => {
   };
 });
 jest.mock("@/src/audio/use-player", () => ({
-  usePlayer: () => ({ load: jest.fn() }),
+  usePlayer: () => ({ load: mockLoad }),
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useTabBarPadding: () => 0,
@@ -75,7 +77,7 @@ jest.mock("@/src/hooks/use-online-status", () => ({
 }));
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) =>
-    selector({ currentTrack: null, setRepeatMode: jest.fn() }),
+    selector({ currentTrack: null, setRepeatMode: mockSetRepeatMode }),
 }));
 jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
@@ -104,6 +106,8 @@ describe("DiscoverScreen", () => {
     mockRegisterContextTarget.mockReset().mockReturnValue(jest.fn());
     mockInvalidateQueries.mockReset();
     mockSearchRefetch.mockReset();
+    mockLoad.mockReset();
+    mockSetRepeatMode.mockReset();
     mockOnline = true;
   });
 
@@ -142,6 +146,13 @@ describe("DiscoverScreen", () => {
 
     expect(target.children).toHaveLength(1);
     expect(screen.getByTestId("search-input").parent).toBe(target);
+  });
+
+  it("keeps one responsive search header for compact and desktop layouts", async () => {
+    const screen = await render(<DiscoverScreen />);
+
+    expect(screen.getByTestId("discover-search-header")).toBeTruthy();
+    expect(screen.getAllByTestId("tour-target-discover.search")).toHaveLength(1);
   });
 
   it("registers readiness from settled content and cleans up when it becomes unavailable", async () => {
@@ -288,6 +299,30 @@ describe("DiscoverScreen", () => {
     expect(card.props.accessibilityLabel).toBe(
       "Reproducir Luz Original de Artista Real",
     );
+  });
+
+  it("keeps search results in source order inside the responsive grid", async () => {
+    await i18n.changeLanguage("en");
+    const results = [
+      { id: "first", title: "First", artist: "Artist", audio_url: "first.mp3" },
+      { id: "second", title: "Second", artist: "Artist", audio_url: "second.mp3" },
+    ];
+    mockUseAudiusSearch.mockImplementation((query: string) =>
+      query.trim().length >= 2
+        ? { data: results, isPending: false, fetchStatus: "idle" }
+        : { data: undefined, isPending: true, fetchStatus: "idle" },
+    );
+
+    const screen = await searchForAmbient();
+
+    expect(screen.getByTestId("track-grid")).toBeTruthy();
+    expect(screen.getAllByTestId("track-card").map((card) => card.props.title)).toEqual([
+      "First",
+      "Second",
+    ]);
+    fireEvent.press(screen.getAllByTestId("track-card")[1]);
+    expect(mockSetRepeatMode).toHaveBeenCalledWith("all");
+    expect(mockLoad).toHaveBeenCalledWith(results[1], results, 1);
   });
 
   it("shows a retryable search error without clearing the query", async () => {

@@ -16,9 +16,9 @@ jest.mock("@/src/components", () => {
   const React = require("react");
   const { Pressable, Text, View } = require("react-native");
   return {
-    ContentShelf: ({ title }: { title: string }) =>
+    ContentShelf: ({ title, presentation }: { title: string; presentation?: string }) =>
       React.createElement(View, { testID: "content-shelf" },
-        React.createElement(Text, null, title),
+        React.createElement(Text, { testID: "content-shelf-title", presentation }, title),
       ),
     ContentShelfSkeleton: () =>
       React.createElement(View, { testID: "content-shelf-skeleton" }),
@@ -100,6 +100,7 @@ test("renders normal shelf content without a notice", async () => {
   );
 
   expect(screen.getByTestId("content-shelf")).toBeTruthy();
+  expect(screen.getByTestId("content-shelf-title").props.presentation).toBe("grid");
   expect(screen.queryByText("Recommendations are unavailable")).toBeNull();
 });
 
