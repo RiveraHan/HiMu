@@ -35,8 +35,15 @@ describe("web core presentation registration", () => {
     registerWebCorePresentation("himu-web-core-presentation/app-shell");
     registerWebCorePresentation("not-a-core-presentation" as never);
 
-    expect(registryHost[WEB_CORE_PRESENTATION_REGISTRY_KEY]).toEqual([
-      "himu-web-core-presentation/app-shell",
-    ]);
+    for (let index = 0; index < 40; index += 1) {
+      registerWebCorePresentation(
+        `himu-web-core-presentation/fixture-${index}` as never,
+      );
+    }
+
+    const markers = registryHost[WEB_CORE_PRESENTATION_REGISTRY_KEY] as string[];
+    expect(markers).toHaveLength(32);
+    expect(markers[0]).toBe("himu-web-core-presentation/fixture-8");
+    expect(markers[31]).toBe("himu-web-core-presentation/fixture-39");
   });
 });

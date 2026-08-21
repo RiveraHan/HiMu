@@ -1,6 +1,7 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript";
 
 type WebCoreRouteChecker = (exportDirectory: string) => Promise<void>;
 
@@ -63,6 +64,41 @@ const strippedTestIdMarkers = [
   "vibe-dashboard",
   "track-grid",
 ];
+
+function emitJavaScript(source: string, fileName: string) {
+  return ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+    fileName,
+  }).outputText;
+}
+
+async function emitPresentationFixture(options?: {
+  helperImportOnly?: boolean;
+  omitMarker?: string;
+}) {
+  const helperPath = path.join(process.cwd(), "src", "components", "web-core-presentation.ts");
+  const helperSource = await readFile(helperPath, "utf8");
+  const callsiteSource = options?.helperImportOnly
+    ? `
+        import { registerWebCorePresentation } from "./web-core-presentation";
+        void registerWebCorePresentation;
+      `
+    : presentationMarkers
+      .filter((marker) => marker !== options?.omitMarker)
+      .map((marker, index) => `
+        import { registerWebCorePresentation as register${index} } from "./web-core-presentation";
+        register${index}("${marker}");
+      `)
+      .join("\n");
+
+  return [
+    emitJavaScript(helperSource, "web-core-presentation.ts"),
+    emitJavaScript(callsiteSource, "presentation-fixture.ts"),
+  ].join("\n");
+}
 
 async function createFixture(options?: {
   omitRoute?: string;
@@ -155,6 +191,25 @@ describe("web core route checker", () => {
     await withFixture(async (exportDirectory) => {
       await expect(verifyWebCoreRoutes(exportDirectory)).resolves.toBeUndefined();
     });
+  });
+
+  test("rejects emitted presentation modules when an actual registration callsite is omitted", async () => {
+    const missingMarker = "himu-web-core-presentation/home-grid";
+    await withFixture(
+      async (exportDirectory) => {
+        await expectCheckerFailure(exportDirectory, missingMarker);
+      },
+      { bundleContent: await emitPresentationFixture({ omitMarker: missingMarker }) },
+    );
+  });
+
+  test("rejects emitted JavaScript that imports only the generic presentation helper", async () => {
+    await withFixture(
+      async (exportDirectory) => {
+        await expectCheckerFailure(exportDirectory, "himu-web-core-presentation/app-shell");
+      },
+      { bundleContent: await emitPresentationFixture({ helperImportOnly: true }) },
+    );
   });
 
   test("names the missing core route so the export regression is actionable", async () => {
