@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { ImageOff, RefreshCw } from "lucide-react-native";
+import { ImageOff, Loader, RefreshCw } from "lucide-react-native";
 
-import { HimuImage } from "@/src/components/media/HimuImage";
+import {
+  HimuImage,
+  type HimuImageStatus,
+} from "@/src/components/media/HimuImage";
 import { Text } from "@/src/components/Text";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -27,15 +30,24 @@ export function PlayerArtwork({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const [retryKey, setRetryKey] = useState(0);
-  const [hasDisplayed, setHasDisplayed] = useState(false);
-
-  useEffect(() => {
-    setHasDisplayed(false);
-  }, [source]);
+  const [imageState, setImageState] = useState<{
+    source: string | null;
+    retryKey: number;
+    status: HimuImageStatus;
+  }>({
+    source,
+    retryKey,
+    status: source ? "loading" : "idle",
+  });
+  const status =
+    imageState.source === source && imageState.retryKey === retryKey
+      ? imageState.status
+      : source
+        ? "loading"
+        : "idle";
 
   const retry = () => {
     setRetryKey((key) => key + 1);
-    onRetry?.();
   };
 
   return (
@@ -48,21 +60,38 @@ export function PlayerArtwork({
         componentLabel="player artwork"
         contentFit="cover"
         transition={0}
-        onLoad={() => {
-          setHasDisplayed(true);
-          onDisplay?.();
+        onRetry={onRetry}
+        onDisplay={onDisplay}
+        onStatusChange={(nextStatus) => {
+          setImageState({ source, retryKey, status: nextStatus });
         }}
         style={styles.frame}
-        fallback={
-          <View testID="player-artwork-fallback" style={styles.fallback}>
-            <ImageOff size={36} color={theme.colors.onSurfaceVariant} />
-            <Text variant="labelCaps" color="onSurfaceVariant">
-              {t("playback.player.artwork.unavailable")}
-            </Text>
-          </View>
-        }
+        fallback={<View />}
       />
-      {source && !hasDisplayed ? (
+      {status === "loading" ? (
+        <View
+          accessible={false}
+          pointerEvents="none"
+          testID="player-artwork-loading"
+          style={styles.fallback}
+        >
+          <Loader size={32} color={theme.colors.onSurfaceVariant} />
+        </View>
+      ) : null}
+      {status === "error" || status === "idle" ? (
+        <View
+          accessible={false}
+          pointerEvents="none"
+          testID="player-artwork-fallback"
+          style={styles.fallback}
+        >
+          <ImageOff size={36} color={theme.colors.onSurfaceVariant} />
+          <Text variant="labelCaps" color="onSurfaceVariant">
+            {t("playback.player.artwork.unavailable")}
+          </Text>
+        </View>
+      ) : null}
+      {source && status === "error" ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("playback.player.artwork.retry")}
@@ -99,6 +128,11 @@ const styles = StyleSheet.create((theme) => ({
       : { elevation: 16 }),
   },
   fallback: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     flex: 1,
     alignItems: "center",
     justifyContent: "center",

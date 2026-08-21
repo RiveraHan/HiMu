@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 
-type Status = "idle" | "loading" | "loaded" | "error";
+export type HimuImageStatus = "idle" | "loading" | "loaded" | "error";
 
 type ImageState = {
   sourceKey: string | object | null | undefined;
@@ -20,7 +20,7 @@ type ImageState = {
   sourceIsPresent: boolean;
   generation: number;
   retryCount: number;
-  status: Status;
+  status: HimuImageStatus;
   isExplicitRetry: boolean;
 };
 
@@ -52,6 +52,12 @@ type HimuImageProps = Omit<
   eager?: boolean;
   retryKey?: string | number | null;
   onRetry?: () => void;
+  /** Called after the current source generation has been displayed. */
+  onDisplay?: () => void;
+  /** Called after the current source generation has failed to display. */
+  onError?: () => void;
+  /** Reports current-generation image state transitions. */
+  onStatusChange?: (status: HimuImageStatus) => void;
   componentLabel?: string;
   style?: StyleProp<ViewStyle>;
   testID?: string;
@@ -196,6 +202,9 @@ export function HimuImage({
   eager = false,
   retryKey = null,
   onRetry,
+  onDisplay,
+  onError,
+  onStatusChange,
   componentLabel = "image",
   style,
   testID = "himu-image",
@@ -213,6 +222,7 @@ export function HimuImage({
     isExplicitRetry: false,
   });
   const lastRetriedGeneration = useRef<number | null>(null);
+  const lastNotifiedState = useRef<string | null>(null);
 
   if (
     state.sourceKey !== sourceKey ||
@@ -231,6 +241,16 @@ export function HimuImage({
       onRetry?.();
     }
   }, [onRetry, state.generation, state.isExplicitRetry]);
+
+  useEffect(() => {
+    const notificationKey = `${state.generation}:${state.status}`;
+    if (lastNotifiedState.current === notificationKey) return;
+
+    lastNotifiedState.current = notificationKey;
+    onStatusChange?.(state.status);
+    if (state.status === "loaded") onDisplay?.();
+    if (state.status === "error") onError?.();
+  }, [onDisplay, onError, onStatusChange, state.generation, state.status]);
 
   const showImage = sourceIsPresent && state.status !== "error";
   const showFallback = !showImage || state.status !== "loaded";

@@ -98,6 +98,7 @@ export default function PlayerScreen() {
       {/* Background */}
       {displayedArtworkSource === track.album_art_url && track.album_art_url ? (
         <Image
+          testID="player-artwork-atmosphere"
           source={track.album_art_url}
           style={styles.bg}
           blurRadius={80}

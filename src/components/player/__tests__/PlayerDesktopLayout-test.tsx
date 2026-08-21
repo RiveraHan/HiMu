@@ -10,15 +10,25 @@ import { PlayerArtwork } from "../PlayerArtwork";
 import { breakpoints } from "@/src/theme/breakpoints";
 
 jest.mock("expo-image", () => ({
-  Image: ({ onDisplay, onError, ...props }: Record<string, unknown>) => {
+  Image: ({ onLoad, onDisplay, onError, ...props }: Record<string, unknown>) => {
     return mockReact.createElement(
       mockNativeView,
-      { ...props, onDisplay, onError } as never,
+      { ...props, onLoad, onDisplay, onError } as never,
     );
   },
 }));
 
 describe("Player desktop stage", () => {
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, "warn").mockImplementation();
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
   it("keeps one source-ordered stage while CSS maps it to two columns at desktop widths", async () => {
     const screen = await render(
       <PlayerDesktopLayout>
@@ -75,10 +85,32 @@ describe("Player desktop stage", () => {
       width: "100%",
     });
     expect(screen.getByTestId("player-artwork-fallback")).toBeTruthy();
-    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry artwork" })).toBeNull();
   });
 
-  it("keeps the fallback after a failed R2 cover and retries without invoking cover regeneration", async () => {
+  it("uses a neutral loading fallback until a current cover display succeeds", async () => {
+    const onDisplay = jest.fn();
+    const screen = await render(
+      <PlayerArtwork
+        source="https://media.overinn.com/covers/signal-bloom.webp"
+        accessibilityLabel="Artwork for Signal Bloom"
+        onDisplay={onDisplay}
+      />,
+    );
+
+    expect(screen.getByTestId("player-artwork-loading")).toBeTruthy();
+    expect(screen.queryByText("Artwork unavailable")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry artwork" })).toBeNull();
+
+    await fireEvent(screen.getByTestId("himu-image-native"), "load");
+    expect(onDisplay).not.toHaveBeenCalled();
+
+    await fireEvent(screen.getByTestId("himu-image-native"), "display");
+    expect(onDisplay).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("player-artwork-loading")).toBeNull();
+  });
+
+  it("shows unavailable and one local retry only after a failed R2 cover", async () => {
     const onRetry = jest.fn();
     const screen = await render(
       <PlayerArtwork
@@ -88,14 +120,18 @@ describe("Player desktop stage", () => {
       />,
     );
 
-    fireEvent(screen.getByTestId("himu-image-native"), "error");
+    await fireEvent(screen.getByTestId("himu-image-native"), "error");
 
     expect(screen.getByTestId("player-artwork-fallback")).toBeTruthy();
-    fireEvent.press(screen.getByRole("button", { name: "Retry artwork" }));
+    expect(screen.queryByTestId("player-artwork-loading")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry artwork" }));
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("himu-image-native")).toHaveProp(
       "source",
       "https://media.overinn.com/covers/signal-bloom.webp",
     );
+    expect(screen.getByTestId("himu-image-native")).toHaveProp("recyclingKey", "1");
+    expect(screen.getByTestId("player-artwork-loading")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry artwork" })).toBeNull();
   });
 });

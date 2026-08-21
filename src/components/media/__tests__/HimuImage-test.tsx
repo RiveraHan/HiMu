@@ -59,6 +59,44 @@ describe("HimuImage", () => {
     expect(screen.getByTestId("himu-image-native")).toHaveStyle({ opacity: 1 });
   });
 
+  it("notifies display and error callbacks only after the current generation changes status", async () => {
+    const onDisplay = jest.fn();
+    const onError = jest.fn();
+    const onStatusChange = jest.fn();
+    const screen = await render(
+      <HimuImage
+        source="https://cdn.example.com/first.jpg"
+        fallback={fallback}
+        onDisplay={onDisplay}
+        onError={onError}
+        onStatusChange={onStatusChange}
+      />,
+    );
+    const staleImage = screen.getByTestId("himu-image-native");
+
+    await screen.rerender(
+      <HimuImage
+        source="https://cdn.example.com/second.jpg"
+        fallback={fallback}
+        onDisplay={onDisplay}
+        onError={onError}
+        onStatusChange={onStatusChange}
+      />,
+    );
+    await fireEvent(staleImage, "display");
+    await fireEvent(staleImage, "error", { error: "old source failed" });
+
+    expect(onDisplay).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(onStatusChange).toHaveBeenLastCalledWith("loading");
+
+    await fireEvent(screen.getByTestId("himu-image-native"), "display");
+
+    expect(onDisplay).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(onStatusChange).toHaveBeenLastCalledWith("loaded");
+  });
+
   it("replaces a failed source with its fallback", async () => {
     const screen = await render(
       <HimuImage source="https://cdn.example.com/cover.jpg" fallback={fallback} />,

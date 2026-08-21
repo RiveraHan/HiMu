@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
+import * as mockReact from "react";
+import { StyleSheet, View as mockNativeView } from "react-native";
 import PlayerScreen from "@/app/player";
 import i18n from "@/src/i18n";
 
@@ -29,6 +30,14 @@ let mockEdgePayload = {
   dailyLimit: null as number | null,
   limit: null as number | null,
 };
+
+jest.mock("expo-image", () => ({
+  Image: ({ onLoad, onDisplay, onError, ...props }: Record<string, unknown>) =>
+    mockReact.createElement(
+      mockNativeView,
+      { ...props, onLoad, onDisplay, onError } as never,
+    ),
+}));
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -87,7 +96,10 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 describe("PlayerScreen localization", () => {
+  let warnSpy: jest.SpyInstance;
+
   beforeEach(() => {
+    warnSpy = jest.spyOn(console, "warn").mockImplementation();
     mockRegenerate.mockClear();
     mockToastError.mockClear();
     mockEdgePayload = { code: null, dailyLimit: null, limit: null };
@@ -100,6 +112,10 @@ describe("PlayerScreen localization", () => {
       djId: "dj-one",
     };
     mockRouterPush.mockReset();
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
   });
 
   test("submits the current track ID and title for cover activity", async () => {
@@ -184,9 +200,22 @@ describe("PlayerScreen localization", () => {
     await i18n.changeLanguage("en");
     const screen = await render(<PlayerScreen />);
 
-    fireEvent.press(screen.getByRole("button", { name: "Retry artwork" }));
+    await fireEvent(screen.getByTestId("himu-image-native"), "error");
+    await fireEvent.press(screen.getByRole("button", { name: "Retry artwork" }));
 
     expect(mockRegenerate).not.toHaveBeenCalled();
+  });
+
+  test("activates the cover atmosphere only after HimuImage displays the current artwork", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const artwork = screen.getByTestId("himu-image-native");
+
+    await fireEvent(artwork, "load");
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+
+    await fireEvent(artwork, "display");
+    expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
   });
 
   test.each([false, true])("exposes shuffle checked state %s", async (shuffle) => {
