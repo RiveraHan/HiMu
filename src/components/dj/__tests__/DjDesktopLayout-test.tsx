@@ -9,6 +9,7 @@ import {
 import { breakpoints } from "@/src/theme/breakpoints";
 import { canvasMaxWidth } from "@/src/theme/layout";
 import { darkTheme } from "@/src/theme/theme";
+import { DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
 import {
   createTrackGridItemStyle,
   resolveTrackGridColumns,
@@ -67,7 +68,8 @@ describe("DjDesktopLayout", () => {
     (viewportWidth) => {
       const itemStyle = createTrackGridItemStyle(DJ_TRACK_MIN_CARD_WIDTH);
       const gutter = darkTheme.spacing.gutter;
-      const usableWidth = Math.min(viewportWidth, canvasMaxWidth.max) -
+      const railAdjustedWidth = viewportWidth - DESKTOP_RAIL_WIDTH; // fixture safe-left is 0
+      const usableWidth = Math.min(railAdjustedWidth, canvasMaxWidth.max) -
         2 * darkTheme.spacing.pageMargin;
       const columns = resolveTrackGridColumns(viewportWidth);
       const basisPercent = (Object.entries(breakpoints) as [
