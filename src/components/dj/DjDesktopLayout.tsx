@@ -14,6 +14,9 @@ type SlotProps = {
   children: ReactNode;
 };
 
+/** The shared grid's wide-desktop six-card minimum on the 1280px DJ canvas. */
+export const DJ_TRACK_MIN_CARD_WIDTH = 185;
+
 /**
  * Responsive DJ presentation only. The slots retain their compact reading and
  * keyboard order while breakpoint styles create a wider hero and track canvas.

@@ -25,6 +25,7 @@ type Props = {
 
 function buildPaths(values: number[], width: number) {
   const n = values.length;
+  if (n === 0) return EMPTY;
   const max = Math.max(...values, 1);
   const innerH = HEIGHT - PAD_T - PAD_B;
   const stepX = n > 1 ? width / (n - 1) : width;
@@ -108,7 +109,11 @@ export function VibeAreaChart({ data }: Props) {
 
         {/* Plot + labels */}
         <View style={styles.plot}>
-          <View style={styles.canvas} onLayout={onLayout}>
+          <View
+            testID="vibe-area-chart-canvas"
+            style={styles.canvas}
+            onLayout={onLayout}
+          >
             {width > 0 && (
               <Svg width={width} height={HEIGHT}>
                 <Defs>

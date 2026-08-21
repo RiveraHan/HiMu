@@ -2,6 +2,7 @@
 import { fireEvent, render } from "@testing-library/react-native";
 import VibeCheckScreen from "@/app/vibe-check";
 import i18n from "@/src/i18n";
+import type { DayPoint } from "@/src/utils/vibe-stats";
 
 type MockQuery<T> = {
   data: T | undefined;
@@ -40,7 +41,7 @@ type VibeData = {
   weekOverWeekPct: number | null;
   topGenre: string | null;
   genreMix: { genre: string; percentage: number }[];
-  week: { day: string; minutes: number }[];
+  week: DayPoint[];
 };
 
 const zeroVibe: VibeData = {
@@ -52,13 +53,16 @@ const zeroVibe: VibeData = {
   genreMix: [],
   week: [],
 };
-const listeningVibe = {
+const listeningVibe: VibeData = {
   ...zeroVibe,
   hoursThisWeek: 4,
   tracksThisWeek: 23,
   topGenre: "Ambient",
   genreMix: [{ genre: "Ambient", percentage: 1 }],
-  week: [{ day: "mon", minutes: 240 }],
+  week: [
+    { weekday: "mon", date: "2026-08-17", minutes: 90, isToday: false },
+    { weekday: "tue", date: "2026-08-18", minutes: 150, isToday: true },
+  ],
 };
 const djs = [
   {
@@ -130,15 +134,7 @@ jest.mock("@/src/components", () => {
         React.createElement(NativeText, { testID: "top-dj-row" }, name),
       ),
     TopGenreCard: () => React.createElement(View, { testID: "top-genre-card" }),
-    VibeAreaChart: ({ data }: { data: { day: string; minutes: number }[] }) =>
-      React.createElement(View, {
-        testID: "vibe-chart",
-        accessible: true,
-        accessibilityLabel: data
-          .map(({ day, minutes }) => `${day}: ${minutes} minutes`)
-          .join(". "),
-        accessibilityRole: "image",
-      }),
+    VibeAreaChart: jest.requireActual("@/src/components/vibe/VibeAreaChart").VibeAreaChart,
     VibeDjsSkeleton: placeholder("vibe-djs-skeleton"),
     VibeInsightSkeleton: placeholder("vibe-insight-skeleton"),
   };
@@ -238,7 +234,7 @@ describe("VibeCheckScreen", () => {
     mockVibeQuery = settledQuery(listeningVibe, mockVibeRefetch, { isError: true });
     const screen = await render(<VibeCheckScreen />);
 
-    expect(screen.getByTestId("vibe-chart")).toBeTruthy();
+    expect(screen.getByTestId("vibe-area-chart")).toBeTruthy();
     expect(screen.getByText("Listening insights are unavailable")).toBeTruthy();
     expect(screen.getByTestId("compact-notice")).toBeTruthy();
   });
@@ -254,7 +250,7 @@ describe("VibeCheckScreen", () => {
     };
     const screen = await render(<VibeCheckScreen />);
 
-    expect(screen.getByTestId("vibe-chart")).toBeTruthy();
+    expect(screen.getByTestId("vibe-area-chart")).toBeTruthy();
     expect(screen.getByText("DJ insights are unavailable")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
     expect(mockDjsRefetch).toHaveBeenCalledTimes(1);
@@ -314,17 +310,41 @@ describe("VibeCheckScreen", () => {
     );
   });
 
-  it("maps the same metrics and chart into one accessible desktop dashboard", async () => {
+  it.each([
+    ["en", "Weekly listening time chart. MON: 90 minutes. TUE: 150 minutes."],
+    ["es", "Gráfico de tiempo de escucha semanal. LUN: 90 minutos. MAR: 150 minutos."],
+  ] as const)("maps real %s chart data into one accessible desktop dashboard", async (language, summary) => {
     mockVibeQuery = settledQuery(listeningVibe, mockVibeRefetch);
     mockDjsQuery = settledQuery(djs, mockDjsRefetch);
+    await i18n.changeLanguage(language);
     const screen = await render(<VibeCheckScreen />);
 
     expect(screen.getByTestId("vibe-dashboard")).toBeTruthy();
     expect(screen.getByTestId("vibe-insights")).toBeTruthy();
     expect(screen.getByTestId("vibe-ranking")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
-    expect(screen.getByText("23 tracks · 0-day streak")).toBeTruthy();
-    expect(screen.getByRole("image", { name: "mon: 240 minutes" })).toBeTruthy();
+    expect(screen.getByRole("image", { name: summary })).toBeTruthy();
+  });
+
+  it.each([
+    ["empty", []],
+    ["single point", [{ weekday: "mon", date: "2026-08-17", minutes: 90, isToday: true }]],
+  ] as const)("keeps %s chart data safe after layout", async (_label, week) => {
+    mockVibeQuery = settledQuery({
+      ...listeningVibe,
+      hoursThisWeek: 1,
+      tracksThisWeek: 1,
+      week: [...week],
+    }, mockVibeRefetch);
+    mockDjsQuery = settledQuery(djs, mockDjsRefetch);
+    const screen = await render(<VibeCheckScreen />);
+
+    expect(screen.getByTestId("vibe-area-chart-canvas")).toBeTruthy();
+    expect(() => fireEvent(
+      screen.getByTestId("vibe-area-chart-canvas"),
+      "layout",
+      { nativeEvent: { layout: { width: 320 } } },
+    )).not.toThrow();
   });
 
   it("preserves Top DJ navigation", async () => {

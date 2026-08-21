@@ -4,8 +4,13 @@ import { StyleSheet, Text, View } from "react-native";
 import {
   DjDesktopLayout,
   DjDesktopLayoutSlot,
+  DJ_TRACK_MIN_CARD_WIDTH,
 } from "../DjDesktopLayout";
 import { breakpoints } from "@/src/theme/breakpoints";
+import {
+  createTrackGridItemStyle,
+  resolveTrackGridColumns,
+} from "@/src/components/content/TrackGrid";
 
 describe("DjDesktopLayout", () => {
   it("keeps one source-ordered hero, actions, details, and tracks tree", async () => {
@@ -54,4 +59,21 @@ describe("DjDesktopLayout", () => {
 
     expect(resolved).toBe(direction);
   });
+
+  it.each([1024, 1440, 1920])(
+    "uses a %ipx canvas contract with no orphaned DJ track cards",
+    (viewportWidth) => {
+      const gutter = 16;
+      const usableWidth = Math.min(viewportWidth, 1280) - 48;
+      const columns = resolveTrackGridColumns(viewportWidth);
+      const basis = columns === 4 ? usableWidth * 0.235 : usableWidth * 0.15;
+      const cardWidth = Math.max(DJ_TRACK_MIN_CARD_WIDTH, basis);
+
+      expect(createTrackGridItemStyle(DJ_TRACK_MIN_CARD_WIDTH)).toEqual(
+        expect.objectContaining({ minWidth: DJ_TRACK_MIN_CARD_WIDTH }),
+      );
+      expect(columns * cardWidth + (columns - 1) * gutter).toBeLessThanOrEqual(usableWidth);
+      expect((columns + 1) * cardWidth + columns * gutter).toBeGreaterThan(usableWidth);
+    },
+  );
 });

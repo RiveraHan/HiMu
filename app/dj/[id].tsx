@@ -32,6 +32,7 @@ import { TrackGrid } from "@/src/components/content/TrackGrid";
 import {
   DjDesktopLayout,
   DjDesktopLayoutSlot,
+  DJ_TRACK_MIN_CARD_WIDTH,
 } from "@/src/components/dj/DjDesktopLayout";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { useLocale } from "@/src/i18n/use-locale";
@@ -457,7 +458,7 @@ export default function DJProfileScreen() {
                   ) : null}
                   <TrackGrid
                     tracks={queue}
-                    minCardWidth={220}
+                    minCardWidth={DJ_TRACK_MIN_CARD_WIDTH}
                     renderTrack={(track, index) => (
                       <TrackCard
                         highlighted={track.id === highlightTrackId}
