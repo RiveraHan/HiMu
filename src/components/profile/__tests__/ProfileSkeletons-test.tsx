@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import type { JsonElement } from "test-renderer";
+import { breakpoints } from "@/src/theme/breakpoints";
 import {
   ProfileDjsSkeleton,
   ProfileIdentitySkeleton,
@@ -34,6 +35,19 @@ function expectNoInteractions(tree: JsonElement | null) {
         ["button", "link", "menuitem"].includes(props.accessibilityRole),
     ),
   ).toHaveLength(0);
+}
+
+function resolveBreakpointStyle<T>(
+  values: Partial<Record<keyof typeof breakpoints, T>> | T | undefined,
+  width: number,
+  fallback: T,
+): T {
+  if (values == null || typeof values !== "object") return values ?? fallback;
+
+  const responsiveValues = values as Partial<Record<keyof typeof breakpoints, T>>;
+  return (Object.entries(breakpoints) as [keyof typeof breakpoints, number][])
+    .filter(([, minimumWidth]) => width >= minimumWidth)
+    .reduce<T>((resolved, [breakpoint]) => responsiveValues[breakpoint] ?? resolved, fallback);
 }
 
 describe("Profile skeleton compositions", () => {
@@ -94,21 +108,28 @@ describe("Profile skeleton compositions", () => {
     expectNoInteractions(tree);
   });
 
-  it("maps rendered profile placeholders for 390, 1280, 1920, and 200% reflow", async () => {
+  it("resolves rendered placeholders to 2, 3, 4, and 2 visible cards at target widths", async () => {
     const screen = await render(<ProfileDjsSkeleton />);
-    const compactCard = StyleSheet.flatten(
-      screen.getByTestId("profile-djs-skeleton-card-0").props.style,
-    );
-    const desktopExtra = StyleSheet.flatten(
-      screen.getByTestId("profile-djs-skeleton-card-2").props.style,
+    const cards = [0, 1, 2, 3].map((index) => StyleSheet.flatten(
+      screen.getByTestId(`profile-djs-skeleton-card-${index}`).props.style,
+    ));
+    const visibleCardCount = (width: number) => cards.filter(
+      (style) => resolveBreakpointStyle(style.display, width, "flex") !== "none",
+    ).length;
+    const cardWidth = (width: number) => resolveBreakpointStyle(
+      cards[0].flexBasis,
+      width,
+      "100%",
     );
 
-    // 390px and a 1280px viewport at 200% both resolve the compact map.
-    expect(compactCard.flexBasis.xs).toBe("45%");
-    expect(desktopExtra.display.xs).toBe("none");
-    // 1280px resolves three cards; 1920px resolves four.
-    expect(compactCard.flexBasis.xl).toBe("31.5%");
-    expect(compactCard.flexBasis.xxl).toBe("23.5%");
-    expect(desktopExtra.display.xl).toBe("flex");
+    expect(visibleCardCount(390)).toBe(2);
+    expect(cardWidth(390)).toBe("45%");
+    expect(visibleCardCount(1280)).toBe(3);
+    expect(cardWidth(1280)).toBe("31.5%");
+    expect(visibleCardCount(1920)).toBe(4);
+    expect(cardWidth(1920)).toBe("23.5%");
+    // 1280px at 200% has a 640px effective CSS viewport.
+    expect(visibleCardCount(640)).toBe(2);
+    expect(cardWidth(640)).toBe("45%");
   });
 });

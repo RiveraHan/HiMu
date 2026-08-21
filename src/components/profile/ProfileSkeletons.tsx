@@ -43,7 +43,11 @@ export function ProfileDjsSkeleton() {
           <GlassCard
             key={index}
             testID={`profile-djs-skeleton-card-${index}`}
-            style={[styles.djCard, index > 1 && styles.desktopOnlyDjCard]}
+            style={[
+              styles.djCard,
+              index === 2 && styles.desktopOnlyDjCard,
+              index === 3 && styles.wideDesktopOnlyDjCard,
+            ]}
           >
             <Skeleton width={64} height={64} radius={9999} />
             <Skeleton width="64%" height={20} radius={4} />
@@ -87,5 +91,8 @@ const styles = StyleSheet.create((theme) => ({
   },
   desktopOnlyDjCard: {
     display: { xs: "none", xl: "flex" },
+  },
+  wideDesktopOnlyDjCard: {
+    display: { xs: "none", xxl: "flex" },
   },
 }));

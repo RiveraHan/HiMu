@@ -70,6 +70,7 @@ const mockFlushListeningStats = jest.fn();
 const mockSignOut = jest.fn();
 let mockOnline = true;
 let mockUser: { id: string } | null = { id: "listener-one" };
+let mockAuthIsLoading = false;
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -172,6 +173,10 @@ jest.mock("@/src/hooks/use-confirm", () => ({
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => mockUser,
 }));
+jest.mock("@/src/stores/auth-store", () => ({
+  useAuthStore: (selector: (state: { isLoading: boolean }) => unknown) =>
+    selector({ isLoading: mockAuthIsLoading }),
+}));
 jest.mock("@/src/hooks/use-home", () => ({
   useDJs: () => mockUseDJs(),
 }));
@@ -222,6 +227,7 @@ describe("ProfileScreen", () => {
     mockSignOut.mockResolvedValue(undefined);
     mockOnline = true;
     mockUser = { id: "listener-one" };
+    mockAuthIsLoading = false;
   });
 
   it("renders the Profile surface in Spanish", async () => {
@@ -494,8 +500,9 @@ describe("ProfileScreen", () => {
     expect(screen.queryByText("Community DJ")).toBeNull();
   });
 
-  it("keeps cached DJs neutral while the signed-in listener is unresolved", async () => {
+  it("keeps cached DJs neutral while auth is initializing without a listener", async () => {
     mockUser = null;
+    mockAuthIsLoading = true;
     mockDjsQuery = settledQuery(djs);
 
     const screen = await render(<ProfileScreen />);
@@ -505,14 +512,29 @@ describe("ProfileScreen", () => {
     expect(screen.queryByRole("button", { name: "Create a DJ" })).toBeNull();
   });
 
+  it("renders no Profile surface once auth settles signed out", async () => {
+    mockUser = null;
+    mockAuthIsLoading = false;
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.queryByTestId("screen-scroll-view")).toBeNull();
+    expect(screen.queryByTestId("profile-djs-skeleton")).toBeNull();
+    expect(screen.queryByText("DJ One")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create a DJ" })).toBeNull();
+  });
+
   it("reveals cached owned DJs only after the signed-in listener resolves", async () => {
     mockUser = null;
+    mockAuthIsLoading = true;
     mockDjsQuery = settledQuery(djs);
 
     const screen = await render(<ProfileScreen />);
     expect(screen.getByTestId("profile-djs-skeleton")).toBeTruthy();
 
     mockUser = { id: "listener-one" };
+    mockAuthIsLoading = false;
     await screen.rerender(<ProfileScreen />);
 
     expect(screen.queryByTestId("profile-djs-skeleton")).toBeNull();

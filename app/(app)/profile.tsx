@@ -43,6 +43,7 @@ import {
   User,
 } from "lucide-react-native";
 import { useConfirm } from "@/src/hooks/use-confirm";
+import { useAuthStore } from "@/src/stores/auth-store";
 import {
   ProfileDesktopLayout,
   ProfileDesktopLayoutSlot,
@@ -56,6 +57,7 @@ import { useTranslation } from "react-i18next";
 
 export default function ProfileScreen() {
   const user = useCurrentUser();
+  const authIsLoading = useAuthStore((state) => state.isLoading);
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const insets = useSafeAreaInsets();
@@ -126,6 +128,10 @@ export default function ProfileScreen() {
     await flushListeningStats(); // save the session's progress
     await authApi.signOut(); // PlayerProvider pauses and resets when the session ends
   };
+
+  // The protected app layout redirects this terminal state. Keeping this
+  // screen empty avoids rendering cached, user-owned data after sign-out.
+  if (!authIsLoading && !user) return null;
 
   return (
     <ScreenScrollView
