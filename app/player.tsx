@@ -30,7 +30,7 @@ import {
   SkipForward,
   Sparkle,
 } from "lucide-react-native";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -59,10 +59,32 @@ export default function PlayerScreen() {
   const toast = useToast();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
-  const [atmosphere, setAtmosphere] = useState({
-    identity: "",
-    displayed: false,
-  });
+  const [artworkController, setArtworkController] = useState<{
+    token: symbol | null;
+    identity: string;
+    displayed: boolean;
+  }>({ token: null, identity: "", displayed: false });
+  const activateArtworkController = useCallback((token: symbol, identity: string) => {
+    setArtworkController({ token, identity, displayed: false });
+  }, []);
+  const updateArtworkAtmosphere = useCallback((update: {
+    token: symbol;
+    identity: string;
+    displayed: boolean;
+  }) => {
+    setArtworkController((current) =>
+      current.token === update.token
+        ? { ...current, identity: update.identity, displayed: update.displayed }
+        : current,
+    );
+  }, []);
+  const deactivateArtworkController = useCallback((token: symbol) => {
+    setArtworkController((current) =>
+      current.token === token
+        ? { token: null, identity: "", displayed: false }
+        : current,
+    );
+  }, []);
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -98,7 +120,7 @@ export default function PlayerScreen() {
   return (
     <View style={styles.root}>
       {/* Background */}
-      {atmosphere.identity === artworkIdentity && atmosphere.displayed && track.album_art_url ? (
+      {artworkController.identity === artworkIdentity && artworkController.displayed && track.album_art_url ? (
         <Image
           testID="player-artwork-atmosphere"
           source={track.album_art_url}
@@ -193,7 +215,9 @@ export default function PlayerScreen() {
                 <ArtworkAtmosphereController
                   key={artworkIdentity}
                   identity={artworkIdentity}
-                  onAtmosphereChange={setAtmosphere}
+                  onActivate={activateArtworkController}
+                  onAtmosphereChange={updateArtworkAtmosphere}
+                  onDeactivate={deactivateArtworkController}
                 >
                   {({ onDisplay, onStatusChange }) => (
                     <PlayerArtwork
@@ -405,7 +429,13 @@ export default function PlayerScreen() {
 
 type ArtworkAtmosphereControllerProps = {
   identity: string;
-  onAtmosphereChange: (atmosphere: { identity: string; displayed: boolean }) => void;
+  onActivate: (token: symbol, identity: string) => void;
+  onAtmosphereChange: (atmosphere: {
+    token: symbol;
+    identity: string;
+    displayed: boolean;
+  }) => void;
+  onDeactivate: (token: symbol) => void;
   children: (state: {
     onDisplay: () => void;
     onStatusChange: (status: "idle" | "loading" | "loaded" | "error") => void;
@@ -415,26 +445,34 @@ type ArtworkAtmosphereControllerProps = {
 /** Keyed by a committed, tuple-safe track/source identity at the call site. */
 function ArtworkAtmosphereController({
   identity,
+  onActivate,
   onAtmosphereChange,
+  onDeactivate,
   children,
 }: ArtworkAtmosphereControllerProps) {
   const [displayed, setDisplayed] = useState(false);
+  const token = useState(() => Symbol("artwork-controller"))[0];
+  const active = useRef(true);
 
   useEffect(() => {
-    onAtmosphereChange({ identity, displayed: false });
-  }, [identity, onAtmosphereChange]);
+    onActivate(token, identity);
+    return () => {
+      active.current = false;
+      onDeactivate(token);
+    };
+  }, [identity, onActivate, onDeactivate, token]);
 
   return children({
     onDisplay: () => {
-      if (!displayed) {
+      if (active.current && !displayed) {
         setDisplayed(true);
-        onAtmosphereChange({ identity, displayed: true });
+        onAtmosphereChange({ token, identity, displayed: true });
       }
     },
     onStatusChange: (status) => {
-      if (status !== "loaded" && displayed) {
+      if (active.current && status !== "loaded" && displayed) {
         setDisplayed(false);
-        onAtmosphereChange({ identity, displayed: false });
+        onAtmosphereChange({ token, identity, displayed: false });
       }
     },
   });
