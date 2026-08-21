@@ -23,7 +23,11 @@ export const DJ_TRACK_MIN_CARD_WIDTH = 185;
  */
 export function DjDesktopLayout({ children }: Props) {
   return (
-    <View testID="dj-desktop-layout" style={styles.root}>
+    <View
+      nativeID="himu-web-core-dj-layout"
+      testID="dj-desktop-layout"
+      style={styles.root}
+    >
       {children}
     </View>
   );

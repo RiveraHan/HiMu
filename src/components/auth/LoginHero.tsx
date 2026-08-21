@@ -26,7 +26,11 @@ export function LoginHero({ children }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenCanvas variant="wide" style={styles.canvas}>
-          <View testID="login-hero-desktop" style={styles.hero}>
+          <View
+            nativeID="himu-web-core-login-hero"
+            testID="login-hero-desktop"
+            style={styles.hero}
+          >
             <View testID="login-hero-promise" style={styles.promisePanel}>
               <View style={styles.brand}>
                 <View style={styles.logoWrapper}>

@@ -158,7 +158,11 @@ export default function FocusModeScreen() {
         </View>
 
         {/* Center */}
-        <View style={styles.center} testID="focus-central-stage">
+        <View
+          nativeID="himu-web-core-focus-stage"
+          style={styles.center}
+          testID="focus-central-stage"
+        >
           {offlineWithoutData ? (
             <StateNotice
               kind="offline"

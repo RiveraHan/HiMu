@@ -102,6 +102,7 @@ export function DesktopRail() {
   return (
     <View
       accessibilityLabel="Main navigation"
+      nativeID="himu-web-core-desktop-rail"
       style={[
         styles.root,
         {

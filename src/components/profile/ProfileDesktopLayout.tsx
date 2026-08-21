@@ -26,7 +26,11 @@ export const profileDjGridItemStyle = {
  */
 export function ProfileDesktopLayout({ children }: Props) {
   return (
-    <View testID="profile-desktop-layout" style={styles.root}>
+    <View
+      nativeID="himu-web-core-profile-layout"
+      testID="profile-desktop-layout"
+      style={styles.root}
+    >
       {children}
     </View>
   );

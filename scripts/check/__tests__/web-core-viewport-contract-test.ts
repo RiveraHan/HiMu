@@ -1,3 +1,18 @@
+jest.mock("react-native-unistyles", () => {
+  const ReactNative = require("react-native");
+  const { darkTheme } = require("@/src/theme/theme");
+
+  return {
+    StyleSheet: {
+      ...ReactNative.StyleSheet,
+      configure: jest.fn(),
+      create: (styles: unknown) =>
+        typeof styles === "function" ? styles(darkTheme) : styles,
+    },
+    useUnistyles: () => ({ theme: darkTheme, rt: {} }),
+  };
+});
+
 import {
   createTrackGridItemStyle,
   resolveTrackGridColumns,
@@ -6,6 +21,7 @@ import { DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
 import { DJ_TRACK_MIN_CARD_WIDTH } from "@/src/components/dj/DjDesktopLayout";
 import { shelfLayoutBreakpoints } from "@/src/components/home/shelf-layout";
 import { profileDjGridItemStyle } from "@/src/components/profile/ProfileDesktopLayout";
+import { resolveResponsiveAppContentInset } from "@/src/components/ResponsiveAppShell";
 import { breakpoints } from "@/src/theme/breakpoints";
 import { canvasMaxWidth, resolveLayoutMode } from "@/src/theme/layout";
 import { darkTheme } from "@/src/theme/theme";
@@ -36,24 +52,32 @@ describe("web core viewport contract", () => {
       expect(resolveBreakpointValue(profileDjGridItemStyle.flexBasis, width, "45%")).toBe(profileCardBasis);
 
       const hasDesktopRail = resolveLayoutMode(width) === "desktop";
-      const canvasWidth = Math.min(
-        width - (hasDesktopRail ? DESKTOP_RAIL_WIDTH : 0),
-        canvasMaxWidth.max,
-      );
-      const usableWidth = canvasWidth - 2 * darkTheme.spacing.pageMargin;
-      const gridItemStyle = createTrackGridItemStyle(DJ_TRACK_MIN_CARD_WIDTH);
-      const basis = resolveBreakpointValue(gridItemStyle.flexBasis, width, "100%");
-      const cardWidth = Math.max(
-        DJ_TRACK_MIN_CARD_WIDTH,
-        usableWidth * Number.parseFloat(basis) / 100,
+      expect(resolveResponsiveAppContentInset(width, 0)).toBe(
+        hasDesktopRail ? DESKTOP_RAIL_WIDTH : 0,
       );
 
-      expect(columns * cardWidth + (columns - 1) * darkTheme.spacing.gutter).toBeLessThanOrEqual(
-        usableWidth,
-      );
-      expect((columns + 1) * cardWidth + columns * darkTheme.spacing.gutter).toBeGreaterThan(
-        usableWidth,
-      );
+      for (const safeLeftInset of [0, 24]) {
+        const contentInset = resolveResponsiveAppContentInset(width, safeLeftInset);
+        expect(contentInset).toBe(
+          hasDesktopRail ? safeLeftInset + DESKTOP_RAIL_WIDTH : 0,
+        );
+
+        const canvasWidth = Math.min(width - contentInset, canvasMaxWidth.max);
+        const usableWidth = canvasWidth - 2 * darkTheme.spacing.pageMargin;
+        const gridItemStyle = createTrackGridItemStyle(DJ_TRACK_MIN_CARD_WIDTH);
+        const basis = resolveBreakpointValue(gridItemStyle.flexBasis, width, "100%");
+        const cardWidth = Math.max(
+          DJ_TRACK_MIN_CARD_WIDTH,
+          usableWidth * Number.parseFloat(basis) / 100,
+        );
+
+        expect(columns * cardWidth + (columns - 1) * darkTheme.spacing.gutter).toBeLessThanOrEqual(
+          usableWidth,
+        );
+        expect((columns + 1) * cardWidth + columns * darkTheme.spacing.gutter).toBeGreaterThan(
+          usableWidth,
+        );
+      }
     },
   );
 });

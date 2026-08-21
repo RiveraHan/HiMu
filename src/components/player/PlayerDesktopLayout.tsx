@@ -20,7 +20,11 @@ type SlotProps = {
  */
 export function PlayerDesktopLayout({ children }: Props) {
   return (
-    <View testID="player-desktop-stage" style={styles.root}>
+    <View
+      nativeID="himu-web-core-player-stage"
+      testID="player-desktop-stage"
+      style={styles.root}
+    >
       {children}
     </View>
   );

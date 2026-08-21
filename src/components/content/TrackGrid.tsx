@@ -44,7 +44,11 @@ export function TrackGrid<T extends TrackWithId>({
   renderTrack,
 }: Props<T>) {
   return (
-    <View style={styles.grid} testID="track-grid">
+    <View
+      nativeID="himu-web-core-track-grid"
+      style={styles.grid}
+      testID="track-grid"
+    >
       {tracks.map((track, index) => (
         <View
           key={track.id}

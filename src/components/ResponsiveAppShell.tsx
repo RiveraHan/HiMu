@@ -6,6 +6,16 @@ import { DesktopRail } from "@/src/components/navigation/DesktopRail";
 import { resolveLayoutMode } from "@/src/theme/layout";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
+export function resolveResponsiveAppContentInset(
+  width: number,
+  safeLeftInset: number,
+  showRail = true,
+) {
+  return showRail && resolveLayoutMode(width) === "desktop"
+    ? safeLeftInset + DESKTOP_RAIL_WIDTH
+    : 0;
+}
+
 export function ResponsiveAppShell({
   children,
   showRail = true,
@@ -15,15 +25,20 @@ export function ResponsiveAppShell({
 }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const hasDesktopRail = resolveLayoutMode(width) === "desktop" && showRail;
+  const contentInset = resolveResponsiveAppContentInset(width, insets.left, showRail);
+  const hasDesktopRail = contentInset > 0;
 
   return (
-    <View style={styles.root} testID="responsive-app-shell">
+    <View
+      nativeID="himu-web-core-app-shell"
+      style={styles.root}
+      testID="responsive-app-shell"
+    >
       {hasDesktopRail ? <DesktopRail /> : null}
       <View
         style={[
           styles.content,
-          hasDesktopRail && { paddingLeft: insets.left + DESKTOP_RAIL_WIDTH },
+          hasDesktopRail && { paddingLeft: contentInset },
         ]}
         testID="responsive-app-content"
       >

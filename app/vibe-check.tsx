@@ -70,7 +70,11 @@ export default function VibeCheckScreen() {
         subtitle={t("playback.vibe.subtitle")}
       />
 
-      <View testID="vibe-dashboard" style={styles.dashboard}>
+      <View
+        nativeID="himu-web-core-vibe-dashboard"
+        testID="vibe-dashboard"
+        style={styles.dashboard}
+      >
         <View testID="vibe-insights" style={styles.insights}>
       {vibeOfflineWithoutData ? (
         <StateNotice

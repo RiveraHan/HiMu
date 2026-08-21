@@ -23,6 +23,7 @@ export function HomeDesktopGrid({
 }: Props) {
   return (
     <View
+      nativeID="himu-web-core-home-grid"
       testID="home-desktop-grid"
       style={styles.root}
     >
