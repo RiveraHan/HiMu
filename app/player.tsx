@@ -30,7 +30,7 @@ import {
   SkipForward,
   Sparkle,
 } from "lucide-react-native";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -59,16 +59,6 @@ export default function PlayerScreen() {
   const toast = useToast();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
-  const artworkSource = track?.album_art_url ?? null;
-  const artworkGeneration = useRef({ source: artworkSource, token: 0 });
-  if (artworkGeneration.current.source !== artworkSource) {
-    artworkGeneration.current = {
-      source: artworkSource,
-      token: artworkGeneration.current.token + 1,
-    };
-  }
-  const currentArtworkToken = artworkGeneration.current.token;
-  const [atmosphereToken, setAtmosphereToken] = useState<number | null>(null);
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -101,9 +91,11 @@ export default function PlayerScreen() {
   const remaining = Math.max(durationSec - positionSec, 0);
 
   return (
+    <ArtworkAtmosphereBoundary key={`${track.id}:${track.album_art_url ?? ""}`}>
+      {({ displayed, onDisplay, onStatusChange }) => (
     <View style={styles.root}>
       {/* Background */}
-      {atmosphereToken === currentArtworkToken && track.album_art_url ? (
+      {displayed && track.album_art_url ? (
         <Image
           testID="player-artwork-atmosphere"
           source={track.album_art_url}
@@ -200,19 +192,8 @@ export default function PlayerScreen() {
                   accessibilityLabel={t("playback.player.artwork.label", {
                     title: track.title,
                   })}
-                  onDisplay={() => {
-                    if (artworkGeneration.current.token === currentArtworkToken) {
-                      setAtmosphereToken(currentArtworkToken);
-                    }
-                  }}
-                  onStatusChange={(status) => {
-                    if (artworkGeneration.current.token !== currentArtworkToken) return;
-                    if (status !== "loaded") {
-                      setAtmosphereToken((activeToken) =>
-                        activeToken === currentArtworkToken ? null : activeToken,
-                      );
-                    }
-                  }}
+                  onDisplay={onDisplay}
+                  onStatusChange={onStatusChange}
                 />
                 {/* Floating save action remains attached to the artwork. */}
                 <View style={styles.favoriteOverlay}>
@@ -408,7 +389,30 @@ export default function PlayerScreen() {
         </PlayerDesktopLayout>
       </View>
     </View>
+      )}
+    </ArtworkAtmosphereBoundary>
   );
+}
+
+type ArtworkAtmosphereBoundaryProps = {
+  children: (state: {
+    displayed: boolean;
+    onDisplay: () => void;
+    onStatusChange: (status: "idle" | "loading" | "loaded" | "error") => void;
+  }) => ReactNode;
+};
+
+/** Keyed by the committed track/source identity at the call site. */
+function ArtworkAtmosphereBoundary({ children }: ArtworkAtmosphereBoundaryProps) {
+  const [displayed, setDisplayed] = useState(false);
+
+  return children({
+    displayed,
+    onDisplay: () => setDisplayed(true),
+    onStatusChange: (status) => {
+      if (status !== "loaded") setDisplayed(false);
+    },
+  });
 }
 
 const styles = StyleSheet.create((theme) => ({
