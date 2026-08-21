@@ -69,7 +69,11 @@ export default function ProfileScreen() {
   const stats = statsQuery.data;
   const djsHeard = djsHeardQuery.data;
   const djs = djsQuery.data;
-  const ownedDjs = djs?.filter((dj) => dj.owner_id === user?.id);
+  const userId = user?.id;
+  const hasResolvedUser = Boolean(userId);
+  const ownedDjs = userId
+    ? djs?.filter((dj) => dj.owner_id === userId)
+    : undefined;
   const profileLoading = isInitialQueryLoading(profileQuery);
   const statsLoading =
     isInitialQueryLoading(statsQuery) ||
@@ -300,7 +304,7 @@ export default function ProfileScreen() {
           actionLabel={t("common.actions.retry")}
           onAction={() => void djsQuery.refetch()}
         />
-      ) : djsLoading ? (
+      ) : djsLoading || !hasResolvedUser ? (
         <ProfileDjsSkeleton />
       ) : blockingDjsError ? (
         <StateNotice

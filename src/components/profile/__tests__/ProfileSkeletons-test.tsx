@@ -48,6 +48,10 @@ describe("Profile skeleton compositions", () => {
       height: 128,
       borderRadius: 9999,
     });
+    expect(StyleSheet.flatten(screen.getByTestId("profile-identity-skeleton").props.style))
+      .toEqual(expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }));
+    expect(StyleSheet.flatten(screen.getByTestId("profile-identity-skeleton-text").props.style))
+      .toEqual(expect.objectContaining({ alignItems: { xs: "center", xl: "flex-start" } }));
     expectNoInteractions(tree);
   });
 
@@ -70,7 +74,7 @@ describe("Profile skeleton compositions", () => {
     expectNoInteractions(tree);
   });
 
-  it("matches the heading and responsive DJ grid geometry", async () => {
+  it("keeps exactly two compact DJ placeholders while retaining desktop extras in one tree", async () => {
     const screen = await render(<ProfileDjsSkeleton />);
     const tree = screen.toJSON();
     const skeletons = findSkeletons(tree);
@@ -83,6 +87,28 @@ describe("Profile skeleton compositions", () => {
     ).toHaveLength(4);
     expect(StyleSheet.flatten(screen.getByTestId("profile-djs-skeleton-grid").props.style))
       .toEqual(expect.objectContaining({ flexWrap: "wrap" }));
+    expect(StyleSheet.flatten(screen.getByTestId("profile-djs-skeleton-card-0").props.style))
+      .toEqual(expect.objectContaining({ flexBasis: { xs: "45%", xl: "31.5%", xxl: "23.5%" } }));
+    expect(StyleSheet.flatten(screen.getByTestId("profile-djs-skeleton-card-2").props.style))
+      .toEqual(expect.objectContaining({ display: { xs: "none", xl: "flex" } }));
     expectNoInteractions(tree);
+  });
+
+  it("maps rendered profile placeholders for 390, 1280, 1920, and 200% reflow", async () => {
+    const screen = await render(<ProfileDjsSkeleton />);
+    const compactCard = StyleSheet.flatten(
+      screen.getByTestId("profile-djs-skeleton-card-0").props.style,
+    );
+    const desktopExtra = StyleSheet.flatten(
+      screen.getByTestId("profile-djs-skeleton-card-2").props.style,
+    );
+
+    // 390px and a 1280px viewport at 200% both resolve the compact map.
+    expect(compactCard.flexBasis.xs).toBe("45%");
+    expect(desktopExtra.display.xs).toBe("none");
+    // 1280px resolves three cards; 1920px resolves four.
+    expect(compactCard.flexBasis.xl).toBe("31.5%");
+    expect(compactCard.flexBasis.xxl).toBe("23.5%");
+    expect(desktopExtra.display.xl).toBe("flex");
   });
 });

@@ -69,6 +69,7 @@ const mockConfirm = jest.fn();
 const mockFlushListeningStats = jest.fn();
 const mockSignOut = jest.fn();
 let mockOnline = true;
+let mockUser: { id: string } | null = { id: "listener-one" };
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -169,7 +170,7 @@ jest.mock("@/src/hooks/use-confirm", () => ({
   useConfirm: () => mockConfirm,
 }));
 jest.mock("@/src/hooks/use-auth", () => ({
-  useCurrentUser: () => ({ id: "listener-one" }),
+  useCurrentUser: () => mockUser,
 }));
 jest.mock("@/src/hooks/use-home", () => ({
   useDJs: () => mockUseDJs(),
@@ -220,6 +221,7 @@ describe("ProfileScreen", () => {
     mockSignOut.mockReset();
     mockSignOut.mockResolvedValue(undefined);
     mockOnline = true;
+    mockUser = { id: "listener-one" };
   });
 
   it("renders the Profile surface in Spanish", async () => {
@@ -490,6 +492,31 @@ describe("ProfileScreen", () => {
 
     expect(screen.getByText("DJ One")).toBeTruthy();
     expect(screen.queryByText("Community DJ")).toBeNull();
+  });
+
+  it("keeps cached DJs neutral while the signed-in listener is unresolved", async () => {
+    mockUser = null;
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByTestId("profile-djs-skeleton")).toBeTruthy();
+    expect(screen.queryByText("DJ One")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create a DJ" })).toBeNull();
+  });
+
+  it("reveals cached owned DJs only after the signed-in listener resolves", async () => {
+    mockUser = null;
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+    expect(screen.getByTestId("profile-djs-skeleton")).toBeTruthy();
+
+    mockUser = { id: "listener-one" };
+    await screen.rerender(<ProfileScreen />);
+
+    expect(screen.queryByTestId("profile-djs-skeleton")).toBeNull();
+    expect(screen.getByText("DJ One")).toBeTruthy();
   });
 
   it("preserves logout confirmation and the confirmed save/sign-out flow", async () => {

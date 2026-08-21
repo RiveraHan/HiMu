@@ -5,7 +5,6 @@ import { Avatar } from "@/src/components/Avatar";
 import {
   ProfileDesktopLayout,
   ProfileDesktopLayoutSlot,
-  profileDjGridItemStyle,
 } from "@/src/components/profile/ProfileDesktopLayout";
 
 jest.mock("expo-image", () => {
@@ -54,13 +53,5 @@ describe("ProfileDesktopLayout", () => {
     expect(screen.getByText("M")).toBeTruthy();
     expect(screen.queryByTestId("himu-image-native")).toBeNull();
     jest.restoreAllMocks();
-  });
-
-  it("uses compact, desktop, and wide-desktop grid widths for 390, 1280, and 1920 reflow", () => {
-    expect(profileDjGridItemStyle.flexBasis).toEqual({
-      xs: "45%",
-      xl: "31.5%",
-      xxl: "23.5%",
-    });
   });
 });
