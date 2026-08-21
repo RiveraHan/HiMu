@@ -30,7 +30,7 @@ import {
   SkipForward,
   Sparkle,
 } from "lucide-react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -59,9 +59,16 @@ export default function PlayerScreen() {
   const toast = useToast();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
-  const [displayedArtworkSource, setDisplayedArtworkSource] = useState<
-    string | null
-  >(null);
+  const artworkSource = track?.album_art_url ?? null;
+  const artworkGeneration = useRef({ source: artworkSource, token: 0 });
+  if (artworkGeneration.current.source !== artworkSource) {
+    artworkGeneration.current = {
+      source: artworkSource,
+      token: artworkGeneration.current.token + 1,
+    };
+  }
+  const currentArtworkToken = artworkGeneration.current.token;
+  const [atmosphereToken, setAtmosphereToken] = useState<number | null>(null);
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -96,7 +103,7 @@ export default function PlayerScreen() {
   return (
     <View style={styles.root}>
       {/* Background */}
-      {displayedArtworkSource === track.album_art_url && track.album_art_url ? (
+      {atmosphereToken === currentArtworkToken && track.album_art_url ? (
         <Image
           testID="player-artwork-atmosphere"
           source={track.album_art_url}
@@ -193,7 +200,19 @@ export default function PlayerScreen() {
                   accessibilityLabel={t("playback.player.artwork.label", {
                     title: track.title,
                   })}
-                  onDisplay={() => setDisplayedArtworkSource(track.album_art_url)}
+                  onDisplay={() => {
+                    if (artworkGeneration.current.token === currentArtworkToken) {
+                      setAtmosphereToken(currentArtworkToken);
+                    }
+                  }}
+                  onStatusChange={(status) => {
+                    if (artworkGeneration.current.token !== currentArtworkToken) return;
+                    if (status !== "loaded") {
+                      setAtmosphereToken((activeToken) =>
+                        activeToken === currentArtworkToken ? null : activeToken,
+                      );
+                    }
+                  }}
                 />
                 {/* Floating save action remains attached to the artwork. */}
                 <View style={styles.favoriteOverlay}>

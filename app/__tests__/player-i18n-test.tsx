@@ -14,6 +14,7 @@ const track = {
   duration: 180,
   genre: "House",
 };
+let mockTrack = track;
 let mockShuffle = false;
 let mockRepeatMode: "off" | "all" | "one" = "off";
 const mockRegenerate = jest.fn();
@@ -53,7 +54,7 @@ jest.mock("@/src/components", () => {
 });
 jest.mock("@/src/stores/player-store", () => ({
   usePlayerStore: (selector: (state: object) => unknown) => selector({
-    currentTrack: track,
+    currentTrack: mockTrack,
     positionSec: 30,
     durationSec: 180,
     isPlaying: true,
@@ -111,6 +112,7 @@ describe("PlayerScreen localization", () => {
       confirmedLyrics: "[Verse]\nPrivate words\n[Chorus]\nOnly mine",
       djId: "dj-one",
     };
+    mockTrack = track;
     mockRouterPush.mockReset();
   });
 
@@ -216,6 +218,44 @@ describe("PlayerScreen localization", () => {
 
     await fireEvent(artwork, "display");
     expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
+  });
+
+  test("keeps the atmosphere absent across A-to-B-to-A until the new A generation displays", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const firstArtwork = screen.getByTestId("himu-image-native");
+
+    await fireEvent(firstArtwork, "display");
+    expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
+
+    mockTrack = { ...track, album_art_url: "https://media.overinn.com/covers/second.webp" };
+    await screen.rerender(<PlayerScreen />);
+    const secondArtwork = screen.getByTestId("himu-image-native");
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+
+    mockTrack = track;
+    await screen.rerender(<PlayerScreen />);
+    const newFirstArtwork = screen.getByTestId("himu-image-native");
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+
+    await fireEvent(firstArtwork, "display");
+    await fireEvent(secondArtwork, "error", { error: "stale" });
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+
+    await fireEvent(newFirstArtwork, "display");
+    expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
+  });
+
+  test("clears a displayed atmosphere when its current artwork generation errors", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const artwork = screen.getByTestId("himu-image-native");
+
+    await fireEvent(artwork, "display");
+    expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
+
+    await fireEvent(artwork, "error", { error: "failed after display" });
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
   });
 
   test.each([false, true])("exposes shuffle checked state %s", async (shuffle) => {

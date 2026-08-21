@@ -15,6 +15,7 @@ type Props = {
   accessibilityLabel: string;
   onRetry?: () => void;
   onDisplay?: () => void;
+  onStatusChange?: (status: HimuImageStatus) => void;
 };
 
 /**
@@ -26,6 +27,7 @@ export function PlayerArtwork({
   accessibilityLabel,
   onRetry,
   onDisplay,
+  onStatusChange,
 }: Props) {
   const { theme } = useUnistyles();
   const { t } = useTranslation();
@@ -64,6 +66,7 @@ export function PlayerArtwork({
         onDisplay={onDisplay}
         onStatusChange={(nextStatus) => {
           setImageState({ source, retryKey, status: nextStatus });
+          onStatusChange?.(nextStatus);
         }}
         style={styles.frame}
         fallback={<View />}
