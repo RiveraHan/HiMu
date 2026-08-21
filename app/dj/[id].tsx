@@ -28,6 +28,11 @@ import { useLiveDJIds } from "@/src/hooks/use-home";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useToast } from "@/src/hooks/use-toast";
+import { TrackGrid } from "@/src/components/content/TrackGrid";
+import {
+  DjDesktopLayout,
+  DjDesktopLayoutSlot,
+} from "@/src/components/dj/DjDesktopLayout";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { useLocale } from "@/src/i18n/use-locale";
 import { TourTarget, useAppTour } from "@/src/onboarding";
@@ -268,16 +273,18 @@ export default function DJProfileScreen() {
             { paddingTop: insets.top + theme.spacing.stackMd },
           ]}
         >
-          {header}
+          <DjDesktopLayout>
+            <DjDesktopLayoutSlot slot="hero">
+              {header}
 
-          {!isOnline ? (
+              {!isOnline ? (
             <StateNotice
               compact
               kind="offline"
               title={t("common.errors.offline")}
               message={t("common.errors.reconnect")}
             />
-          ) : djQuery.isError ? (
+              ) : djQuery.isError ? (
             <StateNotice
               compact
               kind="error"
@@ -285,9 +292,9 @@ export default function DJProfileScreen() {
               actionLabel={t("dj.profile.retry")}
               onAction={() => void djQuery.refetch()}
             />
-          ) : null}
+              ) : null}
 
-          {djReady ? (
+              {djReady ? (
             <TourTarget id="dj.hero" borderRadius={theme.borderRadius["2xl"]}>
               <DjHero
                 name={dj.name}
@@ -304,7 +311,7 @@ export default function DJProfileScreen() {
                 privateLabel={t("dj.visibility.privateLabel")}
               />
             </TourTarget>
-          ) : (
+              ) : (
             <DjHero
               name={dj.name}
               avatarUrl={dj.avatar_url}
@@ -319,10 +326,12 @@ export default function DJProfileScreen() {
               isPrivate={isOwner && dj.is_public === false}
               privateLabel={t("dj.visibility.privateLabel")}
             />
-          )}
+              )}
+            </DjDesktopLayoutSlot>
 
-          {/* Stats remap */}
-          <View style={styles.statsRow}>
+            <DjDesktopLayoutSlot slot="actions">
+              {/* Stats remap */}
+              <View style={styles.statsRow}>
             {tracksLoading ? (
               <StatCardSkeleton />
             ) : (
@@ -350,9 +359,9 @@ export default function DJProfileScreen() {
                 count: dj.genre_specialties?.length ?? 0,
               })}
             />
-          </View>
+              </View>
 
-          {isOwner ? (
+              {isOwner ? (
             <Pressable
               onPress={onPreparePress}
               disabled={isGenerating}
@@ -371,11 +380,13 @@ export default function DJProfileScreen() {
                   : t("dj.profile.prepareButton")}
               </Text>
             </Pressable>
-          ) : null}
+              ) : null}
+            </DjDesktopLayoutSlot>
 
-          {/* Sonic Philosophy */}
+            <DjDesktopLayoutSlot slot="details">
+              {/* Sonic Philosophy */}
 
-          {!!dj.character && (
+              {!!dj.character && (
             <View style={styles.section}>
               <Text
                 variant="labelCaps"
@@ -388,10 +399,10 @@ export default function DJProfileScreen() {
                 {dj.character}
               </Text>
             </View>
-          )}
+              )}
 
-          {/* Curated Genres */}
-          {!!dj.genre_specialties?.length && (
+              {/* Curated Genres */}
+              {!!dj.genre_specialties?.length && (
             <View style={styles.section}>
               <Text
                 variant="labelCaps"
@@ -409,12 +420,14 @@ export default function DJProfileScreen() {
                 ))}
               </View>
             </View>
-          )}
+              )}
+            </DjDesktopLayoutSlot>
 
-          {/* Tracks */}
-          {tracksLoading ? (
+            <DjDesktopLayoutSlot slot="tracks">
+              {/* Tracks */}
+              {tracksLoading ? (
             <DjTracksSkeleton />
-          ) : (
+              ) : (
             <View style={styles.section}>
               <Text
                 variant="labelCaps"
@@ -442,28 +455,31 @@ export default function DJProfileScreen() {
                       onAction={() => void tracksQuery.refetch()}
                     />
                   ) : null}
-                  {queue.map((track, index) => (
-                    <TrackCard
-                      key={track.id}
-                      highlighted={track.id === highlightTrackId}
-                      highlightedLabel={t("dj.profile.newBadge")}
-                      accessibilityHint={
-                        track.id === highlightTrackId
-                          ? t("dj.profile.newlyGeneratedHint")
-                          : undefined
-                      }
-                      title={track.title}
-                      artist={track.artist}
-                      isPrivate={
-                        track.owner_id === user?.id && track.is_public === false
-                      }
-                      privateLabel={t("dj.visibility.privateLabel")}
-                      cover={track.album_art_url}
-                      variant="row"
-                      isPlaying={currentId === track.id}
-                      onPress={() => load(track, queue, index)}
-                    />
-                  ))}
+                  <TrackGrid
+                    tracks={queue}
+                    minCardWidth={220}
+                    renderTrack={(track, index) => (
+                      <TrackCard
+                        highlighted={track.id === highlightTrackId}
+                        highlightedLabel={t("dj.profile.newBadge")}
+                        accessibilityHint={
+                          track.id === highlightTrackId
+                            ? t("dj.profile.newlyGeneratedHint")
+                            : undefined
+                        }
+                        title={track.title}
+                        artist={track.artist}
+                        isPrivate={
+                          track.owner_id === user?.id && track.is_public === false
+                        }
+                        privateLabel={t("dj.visibility.privateLabel")}
+                        cover={track.album_art_url}
+                        variant="row"
+                        isPlaying={currentId === track.id}
+                        onPress={() => load(track, queue, index)}
+                      />
+                    )}
+                  />
                 </View>
               ) : (
                 <Text
@@ -475,7 +491,9 @@ export default function DJProfileScreen() {
                 </Text>
               )}
             </View>
-          )}
+              )}
+            </DjDesktopLayoutSlot>
+          </DjDesktopLayout>
         </View>
       </ScrollView>
     </View>
@@ -486,7 +504,7 @@ const styles = StyleSheet.create((theme) => ({
   root: { flex: 1, backgroundColor: theme.colors.background },
   body: {
     width: "100%",
-    maxWidth: 720,
+    maxWidth: { xs: 720, lg: 1280 },
     alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,

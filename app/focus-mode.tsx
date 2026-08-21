@@ -158,7 +158,7 @@ export default function FocusModeScreen() {
         </View>
 
         {/* Center */}
-        <View style={styles.center}>
+        <View style={styles.center} testID="focus-central-stage">
           {offlineWithoutData ? (
             <StateNotice
               kind="offline"
@@ -336,6 +336,9 @@ const styles = StyleSheet.create((theme) => ({
   root: { flex: 1, backgroundColor: theme.colors.background },
   content: {
     flex: 1,
+    width: "100%",
+    maxWidth: { xs: undefined, xl: 1120 },
+    alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     justifyContent: "space-between",
   },
@@ -361,6 +364,9 @@ const styles = StyleSheet.create((theme) => ({
   timer: { fontVariant: ["tabular-nums"] },
   center: {
     flex: 1,
+    width: "100%",
+    maxWidth: { xs: undefined, xl: 640 },
+    alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
     marginTop: "-5%",

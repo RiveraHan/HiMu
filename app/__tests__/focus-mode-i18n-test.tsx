@@ -249,6 +249,21 @@ describe("FocusModeScreen data states", () => {
     expect(presets.props.exiting).toBeUndefined();
   });
 
+  it("uses one bounded central stage while keeping keyboard-order controls intact", async () => {
+    const screen = await render(<FocusModeScreen />);
+    const stage = screen.getByTestId("focus-central-stage");
+
+    expect(RNStyleSheet.flatten(stage.props.style)).toEqual(
+      expect.objectContaining({
+        width: "100%",
+        maxWidth: { xs: undefined, xl: 640 },
+        alignSelf: "center",
+      }),
+    );
+    expect(screen.getByRole("button", { name: "End focus session" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start focus session" })).toBeTruthy();
+  });
+
   it("replaces Home when a deep link has no back history", async () => {
     mockCanGoBack = false;
     const screen = await render(<FocusModeScreen />);

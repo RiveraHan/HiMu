@@ -130,7 +130,15 @@ jest.mock("@/src/components", () => {
         React.createElement(NativeText, { testID: "top-dj-row" }, name),
       ),
     TopGenreCard: () => React.createElement(View, { testID: "top-genre-card" }),
-    VibeAreaChart: () => React.createElement(View, { testID: "vibe-chart" }),
+    VibeAreaChart: ({ data }: { data: { day: string; minutes: number }[] }) =>
+      React.createElement(View, {
+        testID: "vibe-chart",
+        accessible: true,
+        accessibilityLabel: data
+          .map(({ day, minutes }) => `${day}: ${minutes} minutes`)
+          .join(". "),
+        accessibilityRole: "image",
+      }),
     VibeDjsSkeleton: placeholder("vibe-djs-skeleton"),
     VibeInsightSkeleton: placeholder("vibe-insight-skeleton"),
   };
@@ -304,6 +312,19 @@ describe("VibeCheckScreen", () => {
     expect(scrollView.props.style).toEqual(
       expect.objectContaining({ flex: 1, backgroundColor: "#0D0D12" }),
     );
+  });
+
+  it("maps the same metrics and chart into one accessible desktop dashboard", async () => {
+    mockVibeQuery = settledQuery(listeningVibe, mockVibeRefetch);
+    mockDjsQuery = settledQuery(djs, mockDjsRefetch);
+    const screen = await render(<VibeCheckScreen />);
+
+    expect(screen.getByTestId("vibe-dashboard")).toBeTruthy();
+    expect(screen.getByTestId("vibe-insights")).toBeTruthy();
+    expect(screen.getByTestId("vibe-ranking")).toBeTruthy();
+    expect(screen.getByText("4")).toBeTruthy();
+    expect(screen.getByText("23 tracks · 0-day streak")).toBeTruthy();
+    expect(screen.getByRole("image", { name: "mon: 240 minutes" })).toBeTruthy();
   });
 
   it("preserves Top DJ navigation", async () => {

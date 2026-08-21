@@ -338,6 +338,25 @@ describe("DJProfileScreen", () => {
     }));
   });
 
+  it("keeps owner actions, private tracks, generation, and playback in one desktop layout", async () => {
+    mockDjQuery = settledQuery(ownedDj);
+    mockTracksQuery = settledQuery([trackFixture("private-owned")]);
+    mockActiveMix = { id: "generation:job-1", status: "running", djId: "dj-one" };
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(screen.getByTestId("dj-desktop-layout")).toBeTruthy();
+    expect(screen.getByTestId("dj-desktop-hero")).toBeTruthy();
+    expect(screen.getByTestId("dj-desktop-actions")).toBeTruthy();
+    expect(screen.getByTestId("dj-desktop-tracks")).toBeTruthy();
+    expect(screen.getByTestId("track-grid")).toBeTruthy();
+    expect(screen.getByLabelText("Prepare a new track")).toBeDisabled();
+    expect(screen.getByText("Private")).toBeTruthy();
+    expect(screen.getByTestId("generating-track-card")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("track-card"));
+    expect(mockPlayerLoad).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ["not found", settledQuery(null)],
     ["error with cached content", { ...settledQuery(dj), isError: true }],

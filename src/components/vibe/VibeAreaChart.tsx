@@ -85,6 +85,7 @@ export function VibeAreaChart({ data }: Props) {
 
   return (
     <View
+      testID="vibe-area-chart"
       style={styles.wrap}
       accessible
       accessibilityRole="image"
@@ -183,6 +184,7 @@ export function VibeAreaChart({ data }: Props) {
 const styles = StyleSheet.create((theme) => ({
   wrap: {
     gap: theme.spacing.stackXs,
+    minWidth: 0,
   },
   chartRow: {
     flexDirection: "row",
@@ -196,6 +198,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   plot: {
     flex: 1,
+    minWidth: 0,
   },
   canvas: {
     width: "100%",

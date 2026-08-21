@@ -57,6 +57,7 @@ export default function VibeCheckScreen() {
   return (
     <ScreenScrollView
       style={styles.root}
+      canvasVariant="wide"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
@@ -69,6 +70,8 @@ export default function VibeCheckScreen() {
         subtitle={t("playback.vibe.subtitle")}
       />
 
+      <View testID="vibe-dashboard" style={styles.dashboard}>
+        <View testID="vibe-insights" style={styles.insights}>
       {vibeOfflineWithoutData ? (
         <StateNotice
           kind="offline"
@@ -216,7 +219,9 @@ export default function VibeCheckScreen() {
           ) : null}
         </>
       )}
+        </View>
 
+        <View testID="vibe-ranking" style={styles.ranking}>
       {/* Top Djs Top Agents */}
 
       {djsOfflineWithoutData ? (
@@ -290,6 +295,8 @@ export default function VibeCheckScreen() {
           ) : null}
         </View>
       )}
+        </View>
+      </View>
     </ScreenScrollView>
   );
 }
@@ -302,6 +309,22 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
+  },
+  dashboard: {
+    flexDirection: { xs: "column", xl: "row" },
+    alignItems: "stretch",
+    gap: theme.spacing.stackLg,
+    minWidth: 0,
+  },
+  insights: {
+    flex: { xs: 0, xl: 3 },
+    gap: theme.spacing.stackLg,
+    minWidth: 0,
+  },
+  ranking: {
+    flex: { xs: 0, xl: 2 },
+    gap: theme.spacing.stackLg,
+    minWidth: 0,
   },
   hero: { gap: theme.spacing.stackMd },
   heroTop: {
