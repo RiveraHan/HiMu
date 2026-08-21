@@ -1,8 +1,14 @@
-import { resolveTrackGridColumns } from "@/src/components/content/TrackGrid";
+import {
+  createTrackGridItemStyle,
+  resolveTrackGridColumns,
+} from "@/src/components/content/TrackGrid";
+import { DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
+import { DJ_TRACK_MIN_CARD_WIDTH } from "@/src/components/dj/DjDesktopLayout";
 import { shelfLayoutBreakpoints } from "@/src/components/home/shelf-layout";
 import { profileDjGridItemStyle } from "@/src/components/profile/ProfileDesktopLayout";
 import { breakpoints } from "@/src/theme/breakpoints";
-import { resolveLayoutMode } from "@/src/theme/layout";
+import { canvasMaxWidth, resolveLayoutMode } from "@/src/theme/layout";
+import { darkTheme } from "@/src/theme/theme";
 
 function resolveBreakpointValue<T>(
   values: Partial<Record<keyof typeof breakpoints, T>>,
@@ -28,6 +34,26 @@ describe("web core viewport contract", () => {
       expect(resolveTrackGridColumns(width)).toBe(columns);
       expect(resolveBreakpointValue(shelfLayoutBreakpoints.flexWrap, width, "nowrap")).toBe(shelfWrap);
       expect(resolveBreakpointValue(profileDjGridItemStyle.flexBasis, width, "45%")).toBe(profileCardBasis);
+
+      const hasDesktopRail = resolveLayoutMode(width) === "desktop";
+      const canvasWidth = Math.min(
+        width - (hasDesktopRail ? DESKTOP_RAIL_WIDTH : 0),
+        canvasMaxWidth.max,
+      );
+      const usableWidth = canvasWidth - 2 * darkTheme.spacing.pageMargin;
+      const gridItemStyle = createTrackGridItemStyle(DJ_TRACK_MIN_CARD_WIDTH);
+      const basis = resolveBreakpointValue(gridItemStyle.flexBasis, width, "100%");
+      const cardWidth = Math.max(
+        DJ_TRACK_MIN_CARD_WIDTH,
+        usableWidth * Number.parseFloat(basis) / 100,
+      );
+
+      expect(columns * cardWidth + (columns - 1) * darkTheme.spacing.gutter).toBeLessThanOrEqual(
+        usableWidth,
+      );
+      expect((columns + 1) * cardWidth + columns * darkTheme.spacing.gutter).toBeGreaterThan(
+        usableWidth,
+      );
     },
   );
 });

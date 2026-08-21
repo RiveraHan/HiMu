@@ -1,9 +1,10 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { opendir, open, stat } from "node:fs/promises";
 import path from "node:path";
 
-type ExportFile = {
+type BundleFile = {
   absolutePath: string;
   relativePath: string;
+  size: number;
 };
 
 const CORE_ROUTES = [
@@ -31,44 +32,166 @@ const PRESENTATION_MARKERS = [
   "track-grid",
 ] as const;
 
-const JAVASCRIPT_EXTENSION = /\.(?:js|mjs|cjs)$/i;
+const EXPO_WEB_BUNDLE_DIRECTORY = path.join("_expo", "static", "js", "web");
+const EXPO_WEB_BUNDLE_NAME = /^index-[a-f0-9]{8,}\.(?:js|mjs)$/i;
+const MAX_BUNDLE_DIRECTORY_ENTRIES = 32;
+const MAX_BUNDLE_FILE_COUNT = 32;
+const MAX_BUNDLE_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_TOTAL_BUNDLE_BYTES = 16 * 1024 * 1024;
+const BUNDLE_READ_CHUNK_BYTES = 64 * 1024;
 
 function escapeRegularExpression(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function exactStringLiteralExpression(value: string) {
-  const escaped = escapeRegularExpression(value);
-  return new RegExp(`(["'])${escaped}\\1`);
+const PRESENTATION_MARKER_EXPRESSIONS = PRESENTATION_MARKERS.map(
+  (marker) => [marker, new RegExp(`(["'])${escapeRegularExpression(marker)}\\1`)] as const,
+);
+const MARKER_CARRY_BYTES = Math.max(...PRESENTATION_MARKERS.map((marker) => marker.length + 2));
+
+function jsonPath(value: string) {
+  return JSON.stringify(value);
 }
 
-async function listFiles(directory: string, relativeDirectory = ""): Promise<ExportFile[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files: ExportFile[] = [];
+function shellQuote(value: string) {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
 
-  for (const entry of entries) {
-    const relativePath = path.posix.join(relativeDirectory, entry.name);
-    const absolutePath = path.join(directory, entry.name);
+function exportCommand(exportDirectory: string) {
+  return `npx expo export --platform web --output-dir ${shellQuote(exportDirectory)}`;
+}
 
-    if (entry.isDirectory()) {
-      files.push(...(await listFiles(absolutePath, relativePath)));
-    } else if (entry.isFile()) {
-      files.push({ absolutePath, relativePath });
-    }
+function verificationFailure(exportDirectory: string, failures: readonly string[]) {
+  return new Error(
+    `Web core route verification failed for ${jsonPath(exportDirectory)}:\n${failures
+      .map((failure) => `- ${failure}`)
+      .join("\n")}\nRun \`${exportCommand(exportDirectory)}\` first.`,
+  );
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function errorCode(error: unknown) {
+  return (error as NodeJS.ErrnoException | undefined)?.code;
+}
+
+async function routeArtifactExists(exportDirectory: string, artifact: string) {
+  try {
+    return (await stat(path.join(exportDirectory, artifact))).isFile();
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return false;
+    throw new Error(`Unable to inspect route artifact ${jsonPath(artifact)}: ${errorMessage(error)}.`);
+  }
+}
+
+async function listExpoWebBundles(exportDirectory: string): Promise<BundleFile[]> {
+  const bundleDirectory = path.join(exportDirectory, EXPO_WEB_BUNDLE_DIRECTORY);
+  let directory;
+  try {
+    directory = await opendir(bundleDirectory);
+  } catch (error) {
+    throw new Error(
+      `Unable to inspect Expo production JavaScript directory ${jsonPath(EXPO_WEB_BUNDLE_DIRECTORY)}: ${errorMessage(error)}.`,
+    );
   }
 
-  return files;
+  const bundles: BundleFile[] = [];
+  let directoryEntryCount = 0;
+  let fileCount = 0;
+  let totalBytes = 0;
+
+  // Expo writes web bundles directly in this directory; do not recurse into
+  // arbitrary export content where a source, test, or checker could be copied.
+  for await (const entry of directory) {
+    directoryEntryCount += 1;
+    if (directoryEntryCount > MAX_BUNDLE_DIRECTORY_ENTRIES) {
+      throw new Error(
+        `Expo production JavaScript directory entry scan limit of ${MAX_BUNDLE_DIRECTORY_ENTRIES} was exceeded.`,
+      );
+    }
+
+    if (!entry.isFile() || !EXPO_WEB_BUNDLE_NAME.test(entry.name)) continue;
+
+    fileCount += 1;
+    if (fileCount > MAX_BUNDLE_FILE_COUNT) {
+      throw new Error(
+        `Expo production JavaScript directory exceeds the ${MAX_BUNDLE_FILE_COUNT}-file scan limit.`,
+      );
+    }
+
+    const absolutePath = path.join(bundleDirectory, entry.name);
+    let fileStats;
+    try {
+      fileStats = await stat(absolutePath);
+    } catch (error) {
+      throw new Error(`Unable to inspect Expo bundle ${jsonPath(entry.name)}: ${errorMessage(error)}.`);
+    }
+
+    if (!fileStats.isFile()) continue;
+    if (fileStats.size > MAX_BUNDLE_FILE_BYTES) {
+      throw new Error(
+        `Expo bundle ${jsonPath(entry.name)} exceeds the per-file scan limit of ${MAX_BUNDLE_FILE_BYTES} bytes.`,
+      );
+    }
+
+    totalBytes += fileStats.size;
+    if (totalBytes > MAX_TOTAL_BUNDLE_BYTES) {
+      throw new Error(
+        `Expo production JavaScript exceeds the total scan limit of ${MAX_TOTAL_BUNDLE_BYTES} bytes.`,
+      );
+    }
+
+    bundles.push({
+      absolutePath,
+      relativePath: path.posix.join(EXPO_WEB_BUNDLE_DIRECTORY, entry.name),
+      size: fileStats.size,
+    });
+  }
+
+  if (bundles.length === 0) {
+    throw new Error(
+      `No valid Expo production JavaScript bundles found in ${jsonPath(EXPO_WEB_BUNDLE_DIRECTORY)}. Expected files named like \`index-<content-hash>.js\`.`,
+    );
+  }
+
+  return bundles;
 }
 
-async function findPresentationMarkers(files: ExportFile[]) {
+async function findPresentationMarkers(bundles: readonly BundleFile[]) {
   const markers = new Set<string>();
 
-  for (const file of files) {
-    if (!JAVASCRIPT_EXTENSION.test(file.relativePath)) continue;
+  for (const bundle of bundles) {
+    let file;
+    try {
+      file = await open(bundle.absolutePath, "r");
+    } catch (error) {
+      throw new Error(`Unable to open Expo bundle ${jsonPath(bundle.relativePath)}: ${errorMessage(error)}.`);
+    }
 
-    const content = await readFile(file.absolutePath, "utf8");
-    for (const marker of PRESENTATION_MARKERS) {
-      if (exactStringLiteralExpression(marker).test(content)) markers.add(marker);
+    try {
+      let position = 0;
+      let carry = "";
+
+      while (position < bundle.size) {
+        const buffer = Buffer.allocUnsafe(Math.min(BUNDLE_READ_CHUNK_BYTES, bundle.size - position));
+        const { bytesRead } = await file.read(buffer, 0, buffer.length, position);
+        if (bytesRead === 0) {
+          throw new Error(`Unexpected end of Expo bundle ${jsonPath(bundle.relativePath)}.`);
+        }
+
+        const content = carry + buffer.toString("utf8", 0, bytesRead);
+        for (const [marker, expression] of PRESENTATION_MARKER_EXPRESSIONS) {
+          if (expression.test(content)) markers.add(marker);
+        }
+        carry = content.slice(-MARKER_CARRY_BYTES);
+        position += bytesRead;
+      }
+    } catch (error) {
+      throw new Error(`Unable to scan Expo bundle ${jsonPath(bundle.relativePath)}: ${errorMessage(error)}.`);
+    } finally {
+      await file.close();
     }
   }
 
@@ -80,43 +203,46 @@ export async function verifyWebCoreRoutes(exportDirectory: string) {
   let directoryStats;
   try {
     directoryStats = await stat(resolvedDirectory);
-  } catch {
-    throw new Error(
-      `Export directory does not exist: ${resolvedDirectory}. Run \`npx expo export --platform web --output-dir ${resolvedDirectory}\` first.`,
-    );
+  } catch (error) {
+    const reason = errorCode(error) === "ENOENT"
+      ? `Export directory ${jsonPath(resolvedDirectory)} does not exist.`
+      : `Unable to inspect export directory ${jsonPath(resolvedDirectory)}: ${errorMessage(error)}.`;
+    throw verificationFailure(resolvedDirectory, [reason]);
   }
 
   if (!directoryStats.isDirectory()) {
-    throw new Error(`Export path is not a directory: ${resolvedDirectory}.`);
+    throw verificationFailure(resolvedDirectory, [
+      `Export path ${jsonPath(resolvedDirectory)} is not a directory.`,
+    ]);
   }
 
-  const files = await listFiles(resolvedDirectory);
-  const filePaths = new Set(files.map((file) => file.relativePath));
-  const presentationMarkers = await findPresentationMarkers(files);
   const failures: string[] = [];
-
   for (const route of CORE_ROUTES) {
-    if (!route.artifacts.some((artifact) => filePaths.has(artifact))) {
+    const exists = await Promise.all(
+      route.artifacts.map((artifact) => routeArtifactExists(resolvedDirectory, artifact)),
+    );
+    if (!exists.some(Boolean)) {
       failures.push(
         `${route.label} route artifact is missing (expected one of: ${route.artifacts.join(", ")}).`,
       );
     }
   }
 
+  let presentationMarkers: Set<string>;
+  try {
+    presentationMarkers = await findPresentationMarkers(await listExpoWebBundles(resolvedDirectory));
+  } catch (error) {
+    throw verificationFailure(resolvedDirectory, [errorMessage(error)]);
+  }
+
   const missingMarkers = PRESENTATION_MARKERS.filter((marker) => !presentationMarkers.has(marker));
   if (missingMarkers.length > 0) {
     failures.push(
-      `Missing exact presentation marker(s) in bundled JavaScript: ${missingMarkers.join(", ")}.`,
+      `Missing exact presentation marker(s) in Expo production JavaScript: ${missingMarkers.join(", ")}.`,
     );
   }
 
-  if (failures.length > 0) {
-    throw new Error(
-      `Web core route verification failed for ${resolvedDirectory}:\n${failures
-        .map((failure) => `- ${failure}`)
-        .join("\n")}`,
-    );
-  }
+  if (failures.length > 0) throw verificationFailure(resolvedDirectory, failures);
 }
 
 async function main() {
