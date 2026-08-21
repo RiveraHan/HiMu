@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 
+import { breakpoints } from "@/src/theme/breakpoints";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type TrackWithId = { id: string };
@@ -11,17 +12,26 @@ type Props<T extends TrackWithId> = {
   renderTrack: (track: T, index: number) => ReactNode;
 };
 
-/**
- * The first three values map directly to the app's shared CSS breakpoints.
- * At wide desktop canvases, the desktop min card width naturally resolves to
- * six columns without changing the rendered tree or source order.
- */
-export const trackGridColumnLayout = {
-  xs: 1,
-  lg: 2,
-  xl: 4,
-  wide: 6,
-} as const;
+export function resolveTrackGridColumns(width: number) {
+  if (width >= breakpoints.xxl) return 6;
+  if (width >= breakpoints.xl) return 4;
+  if (width >= breakpoints.lg) return 2;
+  return 1;
+}
+
+/** Shared by the rendered component and its breakpoint contract tests. */
+export function createTrackGridItemStyle(minCardWidth: number) {
+  return {
+    flexGrow: 1,
+    minWidth: minCardWidth,
+    flexBasis: {
+      xs: "100%",
+      lg: "48%",
+      xl: "23.5%",
+      xxl: "15%",
+    },
+  } as const;
+}
 
 /**
  * A single flex tree that stays in source/keyboard order at every viewport.
@@ -55,13 +65,5 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.gutter,
     width: "100%",
   },
-  item: (minCardWidth: number) => ({
-    flexGrow: 1,
-    minWidth: minCardWidth,
-    flexBasis: {
-      xs: "100%",
-      lg: "48%",
-      xl: minCardWidth,
-    },
-  }),
+  item: createTrackGridItemStyle,
 }));
