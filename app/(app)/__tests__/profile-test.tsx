@@ -463,6 +463,35 @@ describe("ProfileScreen", () => {
     ]);
   });
 
+  it("uses one responsive dashboard tree for profile content and settings", async () => {
+    mockProfileQuery = settledQuery(profile);
+    mockStatsQuery = settledQuery(stats);
+    mockDjsHeardQuery = settledQuery(0);
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByTestId("profile-desktop-layout")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-header")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-dashboard")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-djs")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-settings")).toBeTruthy();
+    expect(screen.getByLabelText("Account Details")).toBeTruthy();
+    expect(screen.getByLabelText("Music Preferences")).toBeTruthy();
+  });
+
+  it("keeps community DJs out of the listener-owned profile grid", async () => {
+    mockDjsQuery = settledQuery([
+      ...djs,
+      { ...djs[0], id: "community-dj", name: "Community DJ", owner_id: "another-listener" },
+    ]);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("DJ One")).toBeTruthy();
+    expect(screen.queryByText("Community DJ")).toBeNull();
+  });
+
   it("preserves logout confirmation and the confirmed save/sign-out flow", async () => {
     mockConfirm.mockResolvedValue(true);
 

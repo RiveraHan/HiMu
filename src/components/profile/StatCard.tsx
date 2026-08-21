@@ -24,6 +24,8 @@ export function StatCard({ icon, value, label }: Props) {
 const styles = StyleSheet.create((theme) => ({
   card: {
     flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
     alignItems: "center",
     gap: theme.spacing.stackSm,
     padding: theme.spacing.stackMd,

@@ -43,6 +43,11 @@ import {
   User,
 } from "lucide-react-native";
 import { useConfirm } from "@/src/hooks/use-confirm";
+import {
+  ProfileDesktopLayout,
+  ProfileDesktopLayoutSlot,
+  profileDjGridItemStyle,
+} from "@/src/components/profile/ProfileDesktopLayout";
 import { useCallback } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -64,6 +69,7 @@ export default function ProfileScreen() {
   const stats = statsQuery.data;
   const djsHeard = djsHeardQuery.data;
   const djs = djsQuery.data;
+  const ownedDjs = djs?.filter((dj) => dj.owner_id === user?.id);
   const profileLoading = isInitialQueryLoading(profileQuery);
   const statsLoading =
     isInitialQueryLoading(statsQuery) ||
@@ -120,6 +126,7 @@ export default function ProfileScreen() {
   return (
     <ScreenScrollView
       style={styles.root}
+      canvasVariant="wide"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
@@ -134,7 +141,9 @@ export default function ProfileScreen() {
         />
       ) : null}
 
+      <ProfileDesktopLayout>
       {/*Perfil Header*/}
+      <ProfileDesktopLayoutSlot slot="header">
       {profileOfflineWithoutData ? (
         <StateNotice
           kind="offline"
@@ -183,8 +192,10 @@ export default function ProfileScreen() {
           </View>
         </View>
       )}
+      </ProfileDesktopLayoutSlot>
 
       {/*Stats → Vibe Check*/}
+      <ProfileDesktopLayoutSlot slot="dashboard">
       {statsOfflineWithoutData ? (
         <StateNotice
           kind="offline"
@@ -210,6 +221,7 @@ export default function ProfileScreen() {
         />
       ) : (
         <>
+          <ProfileDesktopLayoutSlot slot="stats">
           <Pressable
             onPress={() => router.push("/vibe-check")}
             accessibilityRole="button"
@@ -246,7 +258,9 @@ export default function ProfileScreen() {
           </Pressable>
 
           {/*Listening Identity*/}
-          <View style={styles.section}>
+          </ProfileDesktopLayoutSlot>
+          <ProfileDesktopLayoutSlot slot="identity">
+          <View style={[styles.section, styles.identitySection]}>
             <Text
               variant="labelCaps"
               color="onSurfaceVariant"
@@ -271,10 +285,13 @@ export default function ProfileScreen() {
               }}
             />
           ) : null}
+          </ProfileDesktopLayoutSlot>
         </>
       )}
+      </ProfileDesktopLayoutSlot>
 
       {/*Top DJs*/}
+      <ProfileDesktopLayoutSlot slot="djs">
       {djsOfflineWithoutData ? (
         <StateNotice
           kind="offline"
@@ -292,7 +309,7 @@ export default function ProfileScreen() {
           actionLabel={t("common.actions.retry")}
           onAction={() => void djsQuery.refetch()}
         />
-      ) : djs && djs.length > 0 ? (
+      ) : ownedDjs && ownedDjs.length > 0 ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text
@@ -304,7 +321,7 @@ export default function ProfileScreen() {
             </Text>
           </View>
           <View style={styles.djGrid}>
-            {djs.map((dj) => (
+            {ownedDjs.map((dj) => (
               <Pressable
                 key={dj.id}
                 onPress={() => router.push(`/dj/${dj.id}`)}
@@ -367,8 +384,10 @@ export default function ProfileScreen() {
           />
         </View>
       ) : null}
+      </ProfileDesktopLayoutSlot>
 
       {/*Prefenrences*/}
+      <ProfileDesktopLayoutSlot slot="settings">
       <View style={styles.section}>
           <Text
             variant="labelCaps"
@@ -420,6 +439,8 @@ export default function ProfileScreen() {
             />
           </View>
       </View>
+      </ProfileDesktopLayoutSlot>
+      </ProfileDesktopLayout>
     </ScreenScrollView>
   );
 }
@@ -434,6 +455,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackLg,
   },
   header: {
+    flexDirection: { xs: "column", xl: "row" },
     alignItems: "center",
     gap: theme.spacing.stackMd,
   },
@@ -457,7 +479,7 @@ const styles = StyleSheet.create((theme) => ({
   },
 
   headerText: {
-    alignItems: "center",
+    alignItems: { xs: "center", xl: "flex-start" },
     gap: theme.spacing.stackXs,
   },
   statsRow: {
@@ -466,6 +488,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   section: {
     gap: theme.spacing.stackSm,
+  },
+  identitySection: {
+    flex: { xs: 0, xl: 1 },
   },
   sectionHeader: {
     flexDirection: "row",
@@ -484,8 +509,7 @@ const styles = StyleSheet.create((theme) => ({
 
   djCardWrap: {
     minHeight: 44,
-    flexGrow: 1,
-    flexBasis: "45%",
+    ...profileDjGridItemStyle,
   },
   djCard: {
     alignItems: "center",

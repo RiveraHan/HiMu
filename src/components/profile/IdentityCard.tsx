@@ -30,6 +30,7 @@ export function IdentityCard({ title, description }: Props) {
 
 const styles = StyleSheet.create((theme) => ({
   card: {
+    flex: { xs: 0, xl: 1 },
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.gutter,

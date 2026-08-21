@@ -65,20 +65,24 @@ describe("Profile skeleton compositions", () => {
         },
       ),
     ).toBe(true);
+    expect(StyleSheet.flatten(screen.getByTestId("profile-stats-skeleton").props.style))
+      .toEqual(expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }));
     expectNoInteractions(tree);
   });
 
-  it("matches the heading and two DJ cards", async () => {
+  it("matches the heading and responsive DJ grid geometry", async () => {
     const screen = await render(<ProfileDjsSkeleton />);
     const tree = screen.toJSON();
     const skeletons = findSkeletons(tree);
 
-    expect(skeletons).toHaveLength(7);
+    expect(skeletons).toHaveLength(13);
     expect(
       skeletons.filter(
         ({ props }) => StyleSheet.flatten(props.style).height === 64,
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(4);
+    expect(StyleSheet.flatten(screen.getByTestId("profile-djs-skeleton-grid").props.style))
+      .toEqual(expect.objectContaining({ flexWrap: "wrap" }));
     expectNoInteractions(tree);
   });
 });
