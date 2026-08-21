@@ -6,6 +6,7 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useDerivedValue,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
@@ -25,6 +26,7 @@ type Props = {
 };
 export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
   const { t } = useTranslation();
+  const reduceMotion = useReducedMotion();
   const [width, setWidth] = useState(0);
   const scrubbing = useSharedValue(false);
   const scrubPosition = useSharedValue(0);
@@ -51,11 +53,13 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
       }
     }
 
+    if (reduceMotion) return p;
+
     return withTiming(p, {
       duration: 200,
       easing: Easing.out(Easing.ease),
     });
-  }, [positionSec, durationSec]);
+  }, [positionSec, durationSec, reduceMotion]);
 
   const commitSeek = (p: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

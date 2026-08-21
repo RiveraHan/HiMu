@@ -1,6 +1,11 @@
 import { getEdgeErrorPayload } from "@/src/api/edge-errors";
 import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
+import { PlayerArtwork } from "@/src/components/player/PlayerArtwork";
+import {
+  PlayerDesktopLayout,
+  PlayerDesktopLayoutSlot,
+} from "@/src/components/player/PlayerDesktopLayout";
 import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
 import { useTrackPrivateDetails } from "@/src/hooks/use-track-private-details";
@@ -25,7 +30,7 @@ import {
   SkipForward,
   Sparkle,
 } from "lucide-react-native";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -54,6 +59,9 @@ export default function PlayerScreen() {
   const toast = useToast();
   const isFavorited = useIsFavorited(track?.id);
   const toggleFavorite = useToggleFavorite();
+  const [displayedArtworkSource, setDisplayedArtworkSource] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (!track && router.canDismiss()) router.dismiss();
@@ -88,14 +96,14 @@ export default function PlayerScreen() {
   return (
     <View style={styles.root}>
       {/* Background */}
-      {track.album_art_url && (
+      {displayedArtworkSource === track.album_art_url && track.album_art_url ? (
         <Image
           source={track.album_art_url}
           style={styles.bg}
           blurRadius={80}
           contentFit="cover"
         />
-      )}
+      ) : null}
       <View style={styles.bgOverlay} />
       <LinearGradient
         colors={["transparent", theme.colors.surface]}
@@ -131,9 +139,6 @@ export default function PlayerScreen() {
               style={styles.nowPlaying}
             >
               {t("playback.player.nowPlaying")}
-            </Text>
-            <Text variant="labelCaps" color="primary" style={styles.subLabel}>
-              {t("playback.player.highFidelityAudio")}
             </Text>
           </View>
 
@@ -178,209 +183,209 @@ export default function PlayerScreen() {
           )}
         </View>
 
-        {/* Album art */}
-        <View style={styles.artWrap}>
-          <View style={styles.artFrame}>
-            <Image
-              source={track.album_art_url}
-              style={styles.art}
-              contentFit="cover"
-              transition={200}
-            />
-            {/* Floating save action, anchored to the artwork itself rather
-                than the top bar — reads as "favorite this song", not just
-                another toolbar icon. */}
-            <View style={styles.favoriteOverlay}>
-              <IconButton
-                variant="glassStrong"
-                icon={
-                  <Heart
-                    size={22}
-                    color={
-                      isFavorited.data
-                        ? theme.colors.primary
-                        : theme.colors.onSurfaceVariant
+        <PlayerDesktopLayout>
+          <PlayerDesktopLayoutSlot slot="artwork">
+            <View style={styles.artWrap}>
+              <View style={styles.artFrame}>
+                <PlayerArtwork
+                  source={track.album_art_url}
+                  accessibilityLabel={t("playback.player.artwork.label", {
+                    title: track.title,
+                  })}
+                  onDisplay={() => setDisplayedArtworkSource(track.album_art_url)}
+                />
+                {/* Floating save action remains attached to the artwork. */}
+                <View style={styles.favoriteOverlay}>
+                  <IconButton
+                    variant="glassStrong"
+                    icon={
+                      <Heart
+                        size={22}
+                        color={
+                          isFavorited.data
+                            ? theme.colors.primary
+                            : theme.colors.onSurfaceVariant
+                        }
+                        fill={
+                          isFavorited.data ? theme.colors.primary : "transparent"
+                        }
+                      />
                     }
-                    fill={
-                      isFavorited.data ? theme.colors.primary : "transparent"
+                    onPress={() =>
+                      toggleFavorite.mutate({
+                        track,
+                        isFavorited: !!isFavorited.data,
+                      })
+                    }
+                    accessibilityLabel={
+                      isFavorited.data
+                        ? t("playback.player.actions.removeFavorite")
+                        : t("playback.player.actions.saveFavorite")
                     }
                   />
-                }
-                onPress={() =>
-                  toggleFavorite.mutate({
-                    track,
-                    isFavorited: !!isFavorited.data,
-                  })
-                }
-                accessibilityLabel={
-                  isFavorited.data
-                    ? t("playback.player.actions.removeFavorite")
-                    : t("playback.player.actions.saveFavorite")
-                }
-              />
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
+          </PlayerDesktopLayoutSlot>
 
-        {/* Meta and Controls */}
-        <View style={styles.bottom}>
-          <View style={styles.meta}>
-            <View style={styles.badge}>
-              <Sparkle size={14} color={theme.colors.primary} />
-              <Text variant="labelCaps" color="primary">
-                {isExternal
-                  ? t("playback.player.source.audius")
-                  : t("playback.player.source.himu")}
-              </Text>
-            </View>
-            <Text variant="h1" numberOfLines={1} style={styles.title}>
-              {track.title}
-            </Text>
-            <Text variant="bodyLg" color="onSurfaceVariant" numberOfLines={1}>
-              {track.artist}
-            </Text>
-            {privateDetails.data ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("playback.player.actions.createVersion")}
-                onPress={() => router.push({
-                  pathname: "/create-track",
-                  params: {
-                    djId: privateDetails.data!.djId,
-                    sourceTrackId: privateDetails.data!.trackId,
-                  },
-                } as unknown as Href)}
-                style={({ pressed }) => [
-                  styles.versionAction,
-                  pressed && styles.playPressed,
-                ]}
-              >
-                <Text variant="labelCaps" color="primary">
-                  {t("playback.player.actions.createVersion")}
+          <PlayerDesktopLayoutSlot slot="playback">
+            <View style={styles.bottom}>
+              <View style={styles.meta}>
+                <View style={styles.badge}>
+                  <Sparkle size={14} color={theme.colors.primary} />
+                  <Text variant="labelCaps" color="primary">
+                    {isExternal
+                      ? t("playback.player.source.audius")
+                      : t("playback.player.source.himu")}
+                  </Text>
+                </View>
+                <Text variant="h1" numberOfLines={1} style={styles.title}>
+                  {track.title}
                 </Text>
-              </Pressable>
-            ) : null}
-          </View>
+                <Text variant="bodyLg" color="onSurfaceVariant" numberOfLines={1}>
+                  {track.artist}
+                </Text>
+                {privateDetails.data ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t("playback.player.actions.createVersion")}
+                    onPress={() => router.push({
+                      pathname: "/create-track",
+                      params: {
+                        djId: privateDetails.data!.djId,
+                        sourceTrackId: privateDetails.data!.trackId,
+                      },
+                    } as unknown as Href)}
+                    style={({ pressed }) => [
+                      styles.versionAction,
+                      pressed && styles.playPressed,
+                    ]}
+                  >
+                    <Text variant="labelCaps" color="primary">
+                      {t("playback.player.actions.createVersion")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
 
-          <View style={styles.seekBlock}>
-            {/* Controls would go here */}
-            <SeekBar
-              positionSec={positionSec}
-              durationSec={durationSec}
-              onSeek={seek}
-            />
-            <View style={styles.times}>
-              <Text
-                variant="labelCaps"
-                style={styles.time}
-                color="onSurfaceVariant"
-              >
-                {formatTime(positionSec)}
-              </Text>
-              <Text
-                variant="labelCaps"
-                color="onSurfaceVariant"
-                style={styles.time}
-              >
-                -{formatTime(remaining)}
-              </Text>
-            </View>
-          </View>
-
-          {/*Shuffle*/}
-          <View style={styles.controls}>
-            <Pressable
-              onPress={withHaptic(toggleShuffle)}
-              style={styles.ctrlSm}
-              accessibilityRole="button"
-              accessibilityLabel={t("playback.player.actions.shuffle")}
-              accessibilityState={{ checked: shuffle }}
-            >
-              <Shuffle
-                size={24}
-                color={
-                  shuffle ? theme.colors.primary : theme.colors.onSurfaceVariant
-                }
-              />
-            </Pressable>
-            <Pressable
-              onPress={withHaptic(prev)}
-              style={styles.ctrlMd}
-              accessibilityRole="button"
-              accessibilityLabel={t("playback.player.actions.previous")}
-            >
-              <SkipBack
-                size={36}
-                color={theme.colors.onSurface}
-                fill={theme.colors.onSurface}
-              />
-            </Pressable>
-            <Pressable
-              onPress={withHaptic(toggle, Haptics.ImpactFeedbackStyle.Medium)}
-              style={({ pressed }) => [
-                styles.playBtn,
-                pressed && styles.playPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isPlaying
-                  ? t("playback.player.actions.pause")
-                  : t("playback.player.actions.play")
-              }
-            >
-              {isPlaying ? (
-                <Pause
-                  size={40}
-                  color={theme.colors.onPrimaryContainer}
-                  fill={theme.colors.onPrimaryContainer}
+              <View style={styles.seekBlock}>
+                <SeekBar
+                  positionSec={positionSec}
+                  durationSec={durationSec}
+                  onSeek={seek}
                 />
-              ) : (
-                <Play
-                  size={40}
-                  color={theme.colors.onPrimaryContainer}
-                  fill={theme.colors.onPrimaryContainer}
-                />
-              )}
-            </Pressable>
+                <View style={styles.times}>
+                  <Text
+                    variant="labelCaps"
+                    style={styles.time}
+                    color="onSurfaceVariant"
+                  >
+                    {formatTime(positionSec)}
+                  </Text>
+                  <Text
+                    variant="labelCaps"
+                    color="onSurfaceVariant"
+                    style={styles.time}
+                  >
+                    -{formatTime(remaining)}
+                  </Text>
+                </View>
+              </View>
 
-            <Pressable
-              onPress={withHaptic(next)}
-              style={styles.ctrlMd}
-              accessibilityRole="button"
-              accessibilityLabel={t("playback.player.actions.next")}
-            >
-              <SkipForward
-                size={36}
-                color={theme.colors.onSurface}
-                fill={theme.colors.onSurface}
-              />
-            </Pressable>
-
-            {/*Repeat*/}
-            <Pressable
-              onPress={withHaptic(cycleRepeat)}
-              style={styles.ctrlSm}
-              accessibilityRole="button"
-              accessibilityLabel={t("playback.player.actions.repeat")}
-              accessibilityValue={{
-                text: t(`playback.player.repeatModes.${repeatMode}`),
-              }}
-            >
-              {repeatMode === "one" ? (
-                <Repeat1 size={24} color={theme.colors.primary} />
-              ) : (
-                <Repeat
-                  size={24}
-                  color={
-                    repeatMode === "all"
-                      ? theme.colors.primary
-                      : theme.colors.onSurfaceVariant
+              <View style={styles.controls}>
+                <Pressable
+                  onPress={withHaptic(toggleShuffle)}
+                  style={styles.ctrlSm}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("playback.player.actions.shuffle")}
+                  accessibilityState={{ checked: shuffle }}
+                >
+                  <Shuffle
+                    size={24}
+                    color={
+                      shuffle ? theme.colors.primary : theme.colors.onSurfaceVariant
+                    }
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={withHaptic(prev)}
+                  style={styles.ctrlMd}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("playback.player.actions.previous")}
+                >
+                  <SkipBack
+                    size={36}
+                    color={theme.colors.onSurface}
+                    fill={theme.colors.onSurface}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={withHaptic(toggle, Haptics.ImpactFeedbackStyle.Medium)}
+                  style={({ pressed }) => [
+                    styles.playBtn,
+                    pressed && styles.playPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isPlaying
+                      ? t("playback.player.actions.pause")
+                      : t("playback.player.actions.play")
                   }
-                />
-              )}
-            </Pressable>
-          </View>
-        </View>
+                >
+                  {isPlaying ? (
+                    <Pause
+                      size={40}
+                      color={theme.colors.onPrimaryContainer}
+                      fill={theme.colors.onPrimaryContainer}
+                    />
+                  ) : (
+                    <Play
+                      size={40}
+                      color={theme.colors.onPrimaryContainer}
+                      fill={theme.colors.onPrimaryContainer}
+                    />
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={withHaptic(next)}
+                  style={styles.ctrlMd}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("playback.player.actions.next")}
+                >
+                  <SkipForward
+                    size={36}
+                    color={theme.colors.onSurface}
+                    fill={theme.colors.onSurface}
+                  />
+                </Pressable>
+
+                <Pressable
+                  onPress={withHaptic(cycleRepeat)}
+                  style={styles.ctrlSm}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("playback.player.actions.repeat")}
+                  accessibilityValue={{
+                    text: t(`playback.player.repeatModes.${repeatMode}`),
+                  }}
+                >
+                  {repeatMode === "one" ? (
+                    <Repeat1 size={24} color={theme.colors.primary} />
+                  ) : (
+                    <Repeat
+                      size={24}
+                      color={
+                        repeatMode === "all"
+                          ? theme.colors.primary
+                          : theme.colors.onSurfaceVariant
+                      }
+                    />
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </PlayerDesktopLayoutSlot>
+        </PlayerDesktopLayout>
       </View>
     </View>
   );
@@ -421,12 +426,6 @@ const styles = StyleSheet.create((theme) => ({
   nowPlaying: {
     letterSpacing: 3,
   },
-  subLabel: {
-    fontSize: 10,
-    letterSpacing: 2,
-    opacity: 0.9,
-  },
-
   artWrap: {
     flex: 1,
     alignItems: "center",
@@ -436,21 +435,8 @@ const styles = StyleSheet.create((theme) => ({
 
   artFrame: {
     width: "100%",
-    maxWidth: 340,
+    maxWidth: { xs: 340, xl: 480, xxl: 560 },
     aspectRatio: 1,
-  },
-
-  art: {
-    width: "100%",
-    height: "100%",
-    borderRadius: theme.borderRadius.xl,
-    borderCurve: "continuous",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.glassBorder,
-
-    ...(process.env.EXPO_OS === "ios"
-      ? { boxShadow: "0 30px 60px rgba(0,0,0,0.6)" }
-      : { elevation: 16 }),
   },
 
   favoriteOverlay: {
@@ -460,6 +446,8 @@ const styles = StyleSheet.create((theme) => ({
   },
 
   bottom: {
+    flex: { xs: 0, xl: 1 },
+    justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
   },
   meta: {

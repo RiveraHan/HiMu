@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import PlayerScreen from "@/app/player";
 import i18n from "@/src/i18n";
 
@@ -8,7 +9,7 @@ const track = {
   title: "Signal Bloom",
   artist: "DJ One",
   audio_url: "https://example.com/track.mp3",
-  album_art_url: null,
+  album_art_url: "https://media.overinn.com/covers/signal-bloom.webp",
   duration: 180,
   genre: "House",
 };
@@ -153,6 +154,39 @@ describe("PlayerScreen localization", () => {
 
     expect(screen.getByText("Signal Bloom")).toBeTruthy();
     expect(screen.getByText("DJ One")).toBeTruthy();
+  });
+
+  test("keeps one compact-ordered stage while CSS maps it to a desktop two-column landmark", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    const stage = screen.getByTestId("player-desktop-stage");
+    expect(StyleSheet.flatten(stage.props.style)).toEqual(
+      expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }),
+    );
+    expect(screen.getByTestId("player-desktop-stage").children).toEqual([
+      screen.getByTestId("player-desktop-artwork"),
+      screen.getByTestId("player-desktop-playback"),
+    ]);
+    expect(screen.getAllByRole("button", { name: "Pause" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Next" })).toHaveLength(1);
+  });
+
+  test("uses source attribution rather than an unconditional audio-quality claim", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    expect(screen.getByText("IN HIMU")).toBeTruthy();
+    expect(screen.queryByText("HIGH-FIDELITY AUDIO")).toBeNull();
+  });
+
+  test("keeps a local artwork retry separate from the owner cover regeneration action", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    fireEvent.press(screen.getByRole("button", { name: "Retry artwork" }));
+
+    expect(mockRegenerate).not.toHaveBeenCalled();
   });
 
   test.each([false, true])("exposes shuffle checked state %s", async (shuffle) => {

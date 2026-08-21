@@ -1,10 +1,14 @@
 export const playback = {
   player: {
     nowPlaying: "REPRODUCIENDO AHORA",
-    highFidelityAudio: "AUDIO DE ALTA FIDELIDAD",
     source: {
       audius: "VÍA AUDIUS",
-      himu: "SELECCIONADA POR LA IA DE HIMU",
+      himu: "EN HIMU",
+    },
+    artwork: {
+      label: "Portada de {{title}}",
+      unavailable: "Portada no disponible",
+      retry: "Reintentar portada",
     },
     cover: {
       title: "Portada",

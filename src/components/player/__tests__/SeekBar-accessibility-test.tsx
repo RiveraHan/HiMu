@@ -2,6 +2,19 @@ import { fireEvent, render } from "@testing-library/react-native";
 import { SeekBar } from "../SeekBar";
 import i18n from "@/src/i18n";
 
+let mockReducedMotion = false;
+const mockWithTiming = jest.fn((value: number) => value);
+
+jest.mock("react-native-reanimated", () => {
+  const actual = jest.requireActual("react-native-reanimated");
+  return {
+    __esModule: true,
+    ...actual,
+    useReducedMotion: () => mockReducedMotion,
+    withTiming: (value: number) => mockWithTiming(value),
+  };
+});
+
 const renderSeekBar = async (positionSec: number, durationSec: number) => {
   const onSeek = jest.fn();
   const screen = await render(
@@ -13,6 +26,11 @@ const renderSeekBar = async (positionSec: number, durationSec: number) => {
   );
   return { control: screen.getByRole("adjustable"), onSeek };
 };
+
+beforeEach(() => {
+  mockReducedMotion = false;
+  mockWithTiming.mockClear();
+});
 
 const adjust = (
   control: ReturnType<Awaited<ReturnType<typeof render>>["getByRole"]>,
@@ -68,4 +86,12 @@ test("advertises localized ten-second adjustment actions", async () => {
     { name: "increment", label: "Avanzar 10 segundos" },
     { name: "decrement", label: "Retroceder 10 segundos" },
   ]);
+});
+
+test("tracks the reported position without timing animation when reduced motion is enabled", async () => {
+  mockReducedMotion = true;
+
+  await renderSeekBar(30, 100);
+
+  expect(mockWithTiming).not.toHaveBeenCalled();
 });
