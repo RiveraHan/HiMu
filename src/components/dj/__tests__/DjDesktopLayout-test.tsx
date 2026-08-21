@@ -7,6 +7,8 @@ import {
   DJ_TRACK_MIN_CARD_WIDTH,
 } from "../DjDesktopLayout";
 import { breakpoints } from "@/src/theme/breakpoints";
+import { canvasMaxWidth } from "@/src/theme/layout";
+import { darkTheme } from "@/src/theme/theme";
 import {
   createTrackGridItemStyle,
   resolveTrackGridColumns,
@@ -63,15 +65,30 @@ describe("DjDesktopLayout", () => {
   it.each([1024, 1440, 1920])(
     "uses a %ipx canvas contract with no orphaned DJ track cards",
     (viewportWidth) => {
-      const gutter = 16;
-      const usableWidth = Math.min(viewportWidth, 1280) - 48;
+      const itemStyle = createTrackGridItemStyle(DJ_TRACK_MIN_CARD_WIDTH);
+      const gutter = darkTheme.spacing.gutter;
+      const usableWidth = Math.min(viewportWidth, canvasMaxWidth.max) -
+        2 * darkTheme.spacing.pageMargin;
       const columns = resolveTrackGridColumns(viewportWidth);
-      const basis = columns === 4 ? usableWidth * 0.235 : usableWidth * 0.15;
+      const basisPercent = (Object.entries(breakpoints) as [
+        keyof typeof breakpoints,
+        number,
+      ][])
+        .filter(([, breakpoint]) => breakpoint <= viewportWidth)
+        .reduce(
+          (current, [name]) =>
+            name in itemStyle.flexBasis
+              ? itemStyle.flexBasis[name as keyof typeof itemStyle.flexBasis]
+              : current,
+          "100%",
+        );
+      const basis = usableWidth * Number.parseFloat(basisPercent) / 100;
       const cardWidth = Math.max(DJ_TRACK_MIN_CARD_WIDTH, basis);
 
-      expect(createTrackGridItemStyle(DJ_TRACK_MIN_CARD_WIDTH)).toEqual(
+      expect(itemStyle).toEqual(
         expect.objectContaining({ minWidth: DJ_TRACK_MIN_CARD_WIDTH }),
       );
+      expect(columns).toBe(viewportWidth >= breakpoints.xxl ? 6 : 4);
       expect(columns * cardWidth + (columns - 1) * gutter).toBeLessThanOrEqual(usableWidth);
       expect((columns + 1) * cardWidth + columns * gutter).toBeGreaterThan(usableWidth);
     },
