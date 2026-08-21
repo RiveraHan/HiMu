@@ -246,6 +246,42 @@ describe("PlayerScreen localization", () => {
     expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
   });
 
+  test("ignores a retained undisplayed first-A callback after B commits and A returns", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const firstA = screen.getByTestId("himu-image-native");
+
+    mockTrack = { ...track, album_art_url: "https://media.overinn.com/covers/b.webp" };
+    await screen.rerender(<PlayerScreen />);
+    mockTrack = track;
+    await screen.rerender(<PlayerScreen />);
+    const currentA = screen.getByTestId("himu-image-native");
+
+    await fireEvent(firstA, "display");
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+
+    await fireEvent(currentA, "display");
+    expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
+  });
+
+  test("restores atmosphere only after the retry generation displays", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const artwork = screen.getByTestId("himu-image-native");
+
+    await fireEvent(artwork, "display");
+    await fireEvent(artwork, "error", { error: "cover failed" });
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Retry artwork" }));
+    expect(screen.getByTestId("player-artwork-loading")).toBeTruthy();
+    expect(screen.queryByTestId("player-artwork-atmosphere")).toBeNull();
+    expect(mockRegenerate).not.toHaveBeenCalled();
+
+    await fireEvent(screen.getByTestId("himu-image-native"), "display");
+    expect(screen.getByTestId("player-artwork-atmosphere")).toBeTruthy();
+  });
+
   test("clears a displayed atmosphere when its current artwork generation errors", async () => {
     await i18n.changeLanguage("en");
     const screen = await render(<PlayerScreen />);

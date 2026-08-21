@@ -30,7 +30,14 @@ import {
   SkipForward,
   Sparkle,
 } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -454,7 +461,7 @@ function ArtworkAtmosphereController({
   const token = useState(() => Symbol("artwork-controller"))[0];
   const active = useRef(true);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onActivate(token, identity);
     return () => {
       active.current = false;
