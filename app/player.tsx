@@ -450,7 +450,7 @@ type ArtworkAtmosphereControllerProps = {
 };
 
 /** Keyed by a committed, tuple-safe track/source identity at the call site. */
-function ArtworkAtmosphereController({
+export function ArtworkAtmosphereController({
   identity,
   onActivate,
   onAtmosphereChange,
