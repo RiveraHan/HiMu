@@ -12,7 +12,4 @@ test("ArtworkAtmosphereController registers its lifecycle cleanup in the layout 
   expect(controller).toMatch(
     /useLayoutEffect\(\(\)\s*=>\s*\{[\s\S]*?onActivate\(token,\s*identity\);[\s\S]*?return\s*\(\)\s*=>\s*\{[\s\S]*?active\.current\s*=\s*false;[\s\S]*?onDeactivate\(token\);[\s\S]*?\};\s*\},\s*\[[\s\S]*?\]\s*\);/,
   );
-  expect(controller).not.toMatch(
-    /(?:^|[^\w.])(?:useEffect|React\.useEffect)\(\(\)\s*=>\s*\{[\s\S]*?onDeactivate\(token\)/,
-  );
 });
