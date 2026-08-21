@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 
 import { breakpoints } from "@/src/theme/breakpoints";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type TrackWithId = { id: string };
@@ -43,12 +44,9 @@ export function TrackGrid<T extends TrackWithId>({
   minCardWidth,
   renderTrack,
 }: Props<T>) {
+  useWebCorePresentation("himu-web-core-presentation/track-grid");
   return (
-    <View
-      nativeID="himu-web-core-track-grid"
-      style={styles.grid}
-      testID="track-grid"
-    >
+    <View style={styles.grid} testID="track-grid">
       {tracks.map((track, index) => (
         <View
           key={track.id}

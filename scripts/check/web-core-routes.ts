@@ -20,16 +20,16 @@ const CORE_ROUTES = [
 ] as const;
 
 const PRESENTATION_MARKERS = [
-  "himu-web-core-app-shell",
-  "himu-web-core-desktop-rail",
-  "himu-web-core-login-hero",
-  "himu-web-core-home-grid",
-  "himu-web-core-profile-layout",
-  "himu-web-core-player-stage",
-  "himu-web-core-dj-layout",
-  "himu-web-core-focus-stage",
-  "himu-web-core-vibe-dashboard",
-  "himu-web-core-track-grid",
+  "himu-web-core-presentation/app-shell",
+  "himu-web-core-presentation/desktop-rail",
+  "himu-web-core-presentation/login-hero",
+  "himu-web-core-presentation/home-grid",
+  "himu-web-core-presentation/profile-layout",
+  "himu-web-core-presentation/player-stage",
+  "himu-web-core-presentation/dj-layout",
+  "himu-web-core-presentation/focus-stage",
+  "himu-web-core-presentation/vibe-dashboard",
+  "himu-web-core-presentation/track-grid",
 ] as const;
 
 const EXPO_WEB_BUNDLE_DIRECTORY = path.join("_expo", "static", "js", "web");

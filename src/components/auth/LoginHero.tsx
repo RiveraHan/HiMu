@@ -6,6 +6,7 @@ import { Atmosphere } from "@/src/components/Atmosphere";
 import { GlassCard } from "@/src/components/GlassCard";
 import { ScreenCanvas } from "@/src/components/ScreenCanvas";
 import { Text } from "@/src/components/Text";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { Logo } from "@/src/components/icons";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function LoginHero({ children }: Props) {
+  useWebCorePresentation("himu-web-core-presentation/login-hero");
   const { t } = useTranslation();
 
   return (
@@ -26,11 +28,7 @@ export function LoginHero({ children }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <ScreenCanvas variant="wide" style={styles.canvas}>
-          <View
-            nativeID="himu-web-core-login-hero"
-            testID="login-hero-desktop"
-            style={styles.hero}
-          >
+          <View testID="login-hero-desktop" style={styles.hero}>
             <View testID="login-hero-promise" style={styles.promisePanel}>
               <View style={styles.brand}>
                 <View style={styles.logoWrapper}>

@@ -11,6 +11,7 @@ import {
   VibeInsightSkeleton,
 } from "@/src/components";
 import { Text } from "@/src/components/Text";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { useDJs } from "@/src/hooks/use-home";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
@@ -31,6 +32,7 @@ import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 export default function VibeCheckScreen() {
+  useWebCorePresentation("himu-web-core-presentation/vibe-dashboard");
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
@@ -70,11 +72,7 @@ export default function VibeCheckScreen() {
         subtitle={t("playback.vibe.subtitle")}
       />
 
-      <View
-        nativeID="himu-web-core-vibe-dashboard"
-        testID="vibe-dashboard"
-        style={styles.dashboard}
-      >
+      <View testID="vibe-dashboard" style={styles.dashboard}>
         <View testID="vibe-insights" style={styles.insights}>
       {vibeOfflineWithoutData ? (
         <StateNotice

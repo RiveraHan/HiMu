@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
 import { Text } from "@/src/components/Text";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type RailItem = {
@@ -59,6 +60,7 @@ export function resolveDesktopRailArea(pathname: string): DesktopRailArea | null
 }
 
 export function DesktopRail() {
+  useWebCorePresentation("himu-web-core-presentation/desktop-rail");
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
@@ -102,7 +104,6 @@ export function DesktopRail() {
   return (
     <View
       accessibilityLabel="Main navigation"
-      nativeID="himu-web-core-desktop-rail"
       style={[
         styles.root,
         {

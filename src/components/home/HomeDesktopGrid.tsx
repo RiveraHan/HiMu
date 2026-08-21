@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
@@ -21,12 +22,9 @@ type SlotProps = {
 export function HomeDesktopGrid({
   children,
 }: Props) {
+  useWebCorePresentation("himu-web-core-presentation/home-grid");
   return (
-    <View
-      nativeID="himu-web-core-home-grid"
-      testID="home-desktop-grid"
-      style={styles.root}
-    >
+    <View testID="home-desktop-grid" style={styles.root}>
       {children}
     </View>
   );

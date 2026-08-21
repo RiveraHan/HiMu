@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 
 type Props = {
   children: ReactNode;
@@ -22,12 +23,9 @@ export const DJ_TRACK_MIN_CARD_WIDTH = 185;
  * keyboard order while breakpoint styles create a wider hero and track canvas.
  */
 export function DjDesktopLayout({ children }: Props) {
+  useWebCorePresentation("himu-web-core-presentation/dj-layout");
   return (
-    <View
-      nativeID="himu-web-core-dj-layout"
-      testID="dj-desktop-layout"
-      style={styles.root}
-    >
+    <View testID="dj-desktop-layout" style={styles.root}>
       {children}
     </View>
   );

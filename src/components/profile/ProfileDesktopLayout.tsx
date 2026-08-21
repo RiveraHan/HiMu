@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { View } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 
 type Props = {
   children: ReactNode;
@@ -25,12 +26,9 @@ export const profileDjGridItemStyle = {
  * source and keyboard order while desktop CSS arranges the dashboard.
  */
 export function ProfileDesktopLayout({ children }: Props) {
+  useWebCorePresentation("himu-web-core-presentation/profile-layout");
   return (
-    <View
-      nativeID="himu-web-core-profile-layout"
-      testID="profile-desktop-layout"
-      style={styles.root}
-    >
+    <View testID="profile-desktop-layout" style={styles.root}>
       {children}
     </View>
   );

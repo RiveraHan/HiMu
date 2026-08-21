@@ -2,6 +2,7 @@ import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, StateNotice, Text } from "@/src/components";
 import { FocusAtmosphere } from "@/src/components/focus/FocusAtmosphere";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { useFocusTimer } from "@/src/hooks/use-focus-timer";
 import { useFocusTracks } from "@/src/hooks/use-home";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
@@ -21,6 +22,7 @@ import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 export default function FocusModeScreen() {
+  useWebCorePresentation("himu-web-core-presentation/focus-stage");
   const { t } = useTranslation();
   useKeepAwake();
   const insets = useSafeAreaInsets();
@@ -158,11 +160,7 @@ export default function FocusModeScreen() {
         </View>
 
         {/* Center */}
-        <View
-          nativeID="himu-web-core-focus-stage"
-          style={styles.center}
-          testID="focus-central-stage"
-        >
+        <View style={styles.center} testID="focus-central-stage">
           {offlineWithoutData ? (
             <StateNotice
               kind="offline"

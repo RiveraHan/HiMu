@@ -26,6 +26,19 @@ const coreRouteArtifacts = [
 ];
 
 const presentationMarkers = [
+  "himu-web-core-presentation/app-shell",
+  "himu-web-core-presentation/desktop-rail",
+  "himu-web-core-presentation/login-hero",
+  "himu-web-core-presentation/home-grid",
+  "himu-web-core-presentation/profile-layout",
+  "himu-web-core-presentation/player-stage",
+  "himu-web-core-presentation/dj-layout",
+  "himu-web-core-presentation/focus-stage",
+  "himu-web-core-presentation/vibe-dashboard",
+  "himu-web-core-presentation/track-grid",
+];
+
+const strippedNativeIdMarkers = [
   "himu-web-core-app-shell",
   "himu-web-core-desktop-rail",
   "himu-web-core-login-hero",
@@ -138,7 +151,7 @@ async function expectCheckerFailure(exportDirectory: string, diagnostic: string)
 }
 
 describe("web core route checker", () => {
-  test("accepts all core routes and stable native presentation IDs from Expo production assets", async () => {
+  test("accepts all core routes and presentation registrations from Expo production assets", async () => {
     await withFixture(async (exportDirectory) => {
       await expect(verifyWebCoreRoutes(exportDirectory)).resolves.toBeUndefined();
     });
@@ -156,11 +169,11 @@ describe("web core route checker", () => {
   test("rejects a longer presentation token instead of treating it as a marker", async () => {
     await withFixture(
       async (exportDirectory) => {
-        await expectCheckerFailure(exportDirectory, "desktop-rail");
+        await expectCheckerFailure(exportDirectory, "himu-web-core-presentation/desktop-rail");
       },
       {
         bundleContent: presentationMarkers
-          .map((marker) => `nativeID:"${marker === "himu-web-core-desktop-rail" ? "himu-web-core-desktop-railing" : marker}"`)
+          .map((marker) => `nativeID:"${marker === "himu-web-core-presentation/desktop-rail" ? "himu-web-core-presentation/desktop-railing" : marker}"`)
           .join(";"),
       },
     );
@@ -169,12 +182,12 @@ describe("web core route checker", () => {
   test("rejects markers copied into route HTML when the production bundle lacks them", async () => {
     await withFixture(
       async (exportDirectory) => {
-        await expectCheckerFailure(exportDirectory, "himu-web-core-home-grid");
+        await expectCheckerFailure(exportDirectory, "himu-web-core-presentation/home-grid");
       },
       {
         htmlContent: presentationMarkers.map((marker) => `data-marker="${marker}"`).join(" "),
         bundleContent: presentationMarkers
-          .filter((marker) => marker !== "himu-web-core-home-grid")
+          .filter((marker) => marker !== "himu-web-core-presentation/home-grid")
           .map((marker) => `nativeID:"${marker}"`)
           .join(";"),
       },
@@ -184,11 +197,11 @@ describe("web core route checker", () => {
   test("rejects markers found only in unrelated JavaScript outside Expo production assets", async () => {
     await withFixture(
       async (exportDirectory) => {
-        await expectCheckerFailure(exportDirectory, "himu-web-core-vibe-dashboard");
+        await expectCheckerFailure(exportDirectory, "himu-web-core-presentation/vibe-dashboard");
       },
       {
         bundleContent: presentationMarkers
-          .filter((marker) => marker !== "himu-web-core-vibe-dashboard")
+          .filter((marker) => marker !== "himu-web-core-presentation/vibe-dashboard")
           .map((marker) => `nativeID:"${marker}"`)
           .join(";"),
         unrelatedJavaScriptContent: presentationMarkers
@@ -201,11 +214,11 @@ describe("web core route checker", () => {
   test("rejects markers found only in an invalid JavaScript filename beside the Expo bundle", async () => {
     await withFixture(
       async (exportDirectory) => {
-        await expectCheckerFailure(exportDirectory, "himu-web-core-profile-layout");
+        await expectCheckerFailure(exportDirectory, "himu-web-core-presentation/profile-layout");
       },
       {
         bundleContent: presentationMarkers
-          .filter((marker) => marker !== "himu-web-core-profile-layout")
+          .filter((marker) => marker !== "himu-web-core-presentation/profile-layout")
           .map((marker) => `nativeID:"${marker}"`)
           .join(";"),
         unrelatedProductionJavaScriptContent: presentationMarkers
@@ -218,14 +231,23 @@ describe("web core route checker", () => {
   test("rejects the former production-stripped testID values as presentation evidence", async () => {
     await withFixture(
       async (exportDirectory) => {
-        await expectCheckerFailure(exportDirectory, "himu-web-core-app-shell");
+        await expectCheckerFailure(exportDirectory, "himu-web-core-presentation/app-shell");
       },
       { bundleContent: strippedTestIdMarkers.map((marker) => `testID:"${marker}"`).join(";") },
     );
   });
 
+  test("rejects the former nativeID values as presentation evidence", async () => {
+    await withFixture(
+      async (exportDirectory) => {
+        await expectCheckerFailure(exportDirectory, "himu-web-core-presentation/app-shell");
+      },
+      { bundleContent: strippedNativeIdMarkers.map((marker) => `nativeID:\"${marker}\"`).join(";") },
+    );
+  });
+
   test("finds an exact marker split across bounded bundle read chunks", async () => {
-    const splitMarker = "himu-web-core-desktop-rail";
+    const splitMarker = "himu-web-core-presentation/desktop-rail";
     const largePrefix = "x".repeat(64 * 1024 - 5);
     await withFixture(
       async (exportDirectory) => {

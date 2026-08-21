@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 
 type Props = {
   children: ReactNode;
@@ -19,12 +20,9 @@ type SlotProps = {
  * while giving artwork and playback equal space on a desktop canvas.
  */
 export function PlayerDesktopLayout({ children }: Props) {
+  useWebCorePresentation("himu-web-core-presentation/player-stage");
   return (
-    <View
-      nativeID="himu-web-core-player-stage"
-      testID="player-desktop-stage"
-      style={styles.root}
-    >
+    <View testID="player-desktop-stage" style={styles.root}>
       {children}
     </View>
   );
