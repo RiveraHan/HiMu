@@ -21,7 +21,8 @@
     "check:creative-generation": "node --import tsx scripts/check/creative-generation-contracts.ts",
     "check:creative-generation-migration": "node --import tsx scripts/check/creative-generation-migration.ts",
     "check:creative-draft-function": "node --import tsx scripts/check/creative-draft-function.ts",
-    "check:web-foundation": "node --import tsx scripts/check/web-foundation.ts"
+    "check:web-foundation": "node --import tsx scripts/check/web-foundation.ts",
+    "check:web-core-routes": "node --import tsx scripts/check/web-core-routes.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
