@@ -1,5 +1,4 @@
 import { act, render } from "@testing-library/react-native";
-import { useCallback, useState } from "react";
 import { Text } from "react-native";
 
 import { ArtworkAtmosphereController } from "@/app/player";
@@ -17,52 +16,59 @@ type ControllerCallbacks = {
   onStatusChange: (status: "idle" | "loading" | "loaded" | "error") => void;
 };
 
-function Harness({ identity, callbacks }: { identity: string; callbacks: Map<string, ControllerCallbacks> }) {
-  const [current, setCurrent] = useState({ token: null as symbol | null, identity: "", displayed: false });
-  const activate = useCallback((token: symbol, nextIdentity: string) => {
-    setCurrent({ token, identity: nextIdentity, displayed: false });
-  }, []);
-  const change = useCallback((update: { token: symbol; identity: string; displayed: boolean }) => {
-    setCurrent((previous) => previous.token === update.token
-      ? { ...previous, identity: update.identity, displayed: update.displayed }
-      : previous);
-  }, []);
-  const deactivate = useCallback((token: symbol) => {
-    setCurrent((previous) => previous.token === token
-      ? { token: null, identity: "", displayed: false }
-      : previous);
-  }, []);
-
-  return (
+test("an unmounted first-A callback emits nothing after a committed A-to-B-to-A lifecycle", async () => {
+  const callbacks = new Map<string, ControllerCallbacks>();
+  const onActivate = jest.fn();
+  const onDeactivate = jest.fn();
+  const onAtmosphereChange = jest.fn();
+  const renderController = (identity: string) => (
     <ArtworkAtmosphereController
       key={identity}
       identity={identity}
-      onActivate={activate}
-      onAtmosphereChange={change}
-      onDeactivate={deactivate}
+      onActivate={onActivate}
+      onDeactivate={onDeactivate}
+      onAtmosphereChange={onAtmosphereChange}
     >
       {(nextCallbacks) => {
         callbacks.set(identity, nextCallbacks);
-        return <Text testID="atmosphere-state">{`${current.identity}:${current.displayed}`}</Text>;
+        return <Text>{identity}</Text>;
       }}
     </ArtworkAtmosphereController>
   );
-}
 
-test("an unmounted first-A callback cannot activate the later A controller", async () => {
-  const callbacks = new Map<string, ControllerCallbacks>();
-  const screen = await render(<Harness identity='["A"]' callbacks={callbacks} />);
+  const screen = await render(renderController('["A"]'));
+  await act(async () => undefined);
   const oldA = callbacks.get('["A"]')!;
+  const firstAToken = onActivate.mock.calls[0][0] as symbol;
 
-  await act(async () => {
-    await screen.rerender(<Harness identity='["B"]' callbacks={callbacks} />);
-    await screen.rerender(<Harness identity='["A-2"]' callbacks={callbacks} />);
-  });
-  const currentA = callbacks.get('["A-2"]')!;
+  await screen.rerender(renderController('["B"]'));
+  await act(async () => undefined);
+  const bToken = onActivate.mock.calls[1][0] as symbol;
 
+  await screen.rerender(renderController('["A"]'));
+  await act(async () => undefined);
+  const currentA = callbacks.get('["A"]')!;
+  const secondAToken = onActivate.mock.calls[2][0] as symbol;
+
+  expect(onActivate.mock.calls.map(([, identity]) => identity)).toEqual([
+    '["A"]', '["B"]', '["A"]',
+  ]);
+  expect(onDeactivate.mock.calls.map(([token]) => token)).toEqual([
+    firstAToken, bToken,
+  ]);
+  expect(firstAToken).not.toBe(bToken);
+  expect(bToken).not.toBe(secondAToken);
+  expect(firstAToken).not.toBe(secondAToken);
+
+  onAtmosphereChange.mockClear();
   await act(async () => oldA.onDisplay());
-  expect(screen.getByTestId("atmosphere-state").props.children).toBe('["A-2"]:false');
+  expect(onAtmosphereChange).not.toHaveBeenCalled();
 
   await act(async () => currentA.onDisplay());
-  expect(screen.getByTestId("atmosphere-state").props.children).toBe('["A-2"]:true');
+  expect(onAtmosphereChange).toHaveBeenCalledTimes(1);
+  expect(onAtmosphereChange).toHaveBeenCalledWith({
+    token: secondAToken,
+    identity: '["A"]',
+    displayed: true,
+  });
 });
