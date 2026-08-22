@@ -21,6 +21,7 @@ type RouteName = "/preferences" | "/account-settings";
 
 type SettingsSnapshot = {
   route: RouteName;
+  documentLanguage: string;
   viewportWidth: number;
   viewportHeight: number;
   direction: string;
@@ -114,6 +115,7 @@ function SettingsBrowserApp() {
 
       return {
         route: activeRoute,
+        documentLanguage: document.documentElement.lang,
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
         direction: getComputedStyle(grid).flexDirection,

@@ -177,7 +177,8 @@ async function clickLabel(cdp, label, index = 0) {
   );
 }
 
-async function chooseNextSelectOptionByKeyboard(cdp, testID) {
+async function chooseAdjacentSelectOptionByKeyboard(cdp, testID, key) {
+  const windowsVirtualKeyCode = key === "ArrowUp" ? 38 : 40;
   const point = await evaluate(
     cdp,
     `(() => {
@@ -203,15 +204,15 @@ async function chooseNextSelectOptionByKeyboard(cdp, testID) {
   });
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyDown",
-    key: "ArrowDown",
-    code: "ArrowDown",
-    windowsVirtualKeyCode: 40,
+    key,
+    code: key,
+    windowsVirtualKeyCode,
   });
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyUp",
-    key: "ArrowDown",
-    code: "ArrowDown",
-    windowsVirtualKeyCode: 40,
+    key,
+    code: key,
+    windowsVirtualKeyCode,
   });
   await cdp.send("Input.dispatchKeyEvent", {
     type: "keyDown",
@@ -435,7 +436,11 @@ async function main() {
       cdp,
       `window.localStorage.setItem('himu.browser.fail-language-once', 'true')`,
     );
-    await chooseNextSelectOptionByKeyboard(cdp, "language-preference-select");
+    await chooseAdjacentSelectOptionByKeyboard(
+      cdp,
+      "language-preference-select",
+      "ArrowDown",
+    );
     const failedLanguageAccount = await waitFor(async () => {
       const state = await readSettings(cdp, "/account-settings", "row");
       return state.languagePreference === "en" &&
@@ -459,6 +464,33 @@ async function main() {
         ? state
         : null;
     }, "Language retry did not persist through the actual locale owner");
+
+    await chooseAdjacentSelectOptionByKeyboard(
+      cdp,
+      "language-preference-select",
+      "ArrowDown",
+    );
+    const spanishLanguageAccount = await waitFor(async () => {
+      const state = await readSettings(cdp, "/account-settings", "row");
+      return state.languagePreference === "es" &&
+        state.remoteLanguagePreference === "es" &&
+        state.documentLanguage === "es"
+        ? state
+        : null;
+    }, "Live Spanish selection did not update the HTML language");
+    await chooseAdjacentSelectOptionByKeyboard(
+      cdp,
+      "language-preference-select",
+      "ArrowUp",
+    );
+    const restoredEnglishLanguageAccount = await waitFor(async () => {
+      const state = await readSettings(cdp, "/account-settings", "row");
+      return state.languagePreference === "en" &&
+        state.remoteLanguagePreference === "en" &&
+        state.documentLanguage === "en"
+        ? state
+        : null;
+    }, "Live English selection did not restore the HTML language");
 
     await resize(cdp, 390, 844);
     const compactAccount = await readSettings(cdp, "/account-settings", "column");
@@ -554,6 +586,8 @@ async function main() {
           compactAccount,
           failedLanguageAccount,
           savedLanguageAccount,
+          spanishLanguageAccount,
+          restoredEnglishLanguageAccount,
           remountedPreferences,
           remountedAccount,
         },

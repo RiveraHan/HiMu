@@ -33,6 +33,8 @@ async function main() {
     compactAccount,
     failedLanguageAccount,
     savedLanguageAccount,
+    spanishLanguageAccount,
+    restoredEnglishLanguageAccount,
     remountedPreferences,
     remountedAccount,
   } = result.snapshots;
@@ -93,6 +95,12 @@ async function main() {
   assert.equal(savedLanguageAccount.languagePreference, "en");
   assert.equal(savedLanguageAccount.languageSaveErrorVisible, false);
   assert.equal(savedLanguageAccount.remoteLanguagePreference, "en");
+  assert.equal(spanishLanguageAccount.languagePreference, "es");
+  assert.equal(spanishLanguageAccount.remoteLanguagePreference, "es");
+  assert.equal(spanishLanguageAccount.documentLanguage, "es");
+  assert.equal(restoredEnglishLanguageAccount.languagePreference, "en");
+  assert.equal(restoredEnglishLanguageAccount.remoteLanguagePreference, "en");
+  assert.equal(restoredEnglishLanguageAccount.documentLanguage, "en");
   assert.deepEqual(JSON.parse(savedLanguageAccount.storedLanguageState), {
     preference: "en",
     pendingSync: false,
