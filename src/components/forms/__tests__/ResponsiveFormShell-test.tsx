@@ -12,11 +12,18 @@ const steps = [
   { id: "review", label: "Review" },
 ];
 
-function FormShellFixture({ form }: { form?: React.ReactNode }) {
+function FormShellFixture({
+  form,
+  headerDisabled = false,
+}: {
+  form?: React.ReactNode;
+  headerDisabled?: boolean;
+}) {
   return (
     <ResponsiveFormShell
       title="Create your DJ"
       description="Shape their sound before you publish."
+      headerDisabled={headerDisabled}
       steps={steps}
       activeStep="identity"
       form={form ?? (
@@ -39,6 +46,12 @@ function FormShellFixture({ form }: { form?: React.ReactNode }) {
 }
 
 describe("ResponsiveFormShell", () => {
+  it("keeps the shared back action disabled while its workflow is pending", async () => {
+    const screen = await render(<FormShellFixture headerDisabled />);
+
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+  });
+
   it("keeps the compact form, review, and footer in source order", async () => {
     const screen = await render(<FormShellFixture />);
     const layout = screen.getByTestId("responsive-form-content");

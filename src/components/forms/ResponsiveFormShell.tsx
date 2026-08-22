@@ -16,6 +16,7 @@ import { StickyReviewPanel } from "./StickyReviewPanel";
 type Props = {
   title: string;
   description?: string;
+  headerDisabled?: boolean;
   steps: readonly FormStep[];
   activeStep: string;
   form: ReactNode;
@@ -31,6 +32,7 @@ type Props = {
 export function ResponsiveFormShell({
   title,
   description,
+  headerDisabled = false,
   steps,
   activeStep,
   form,
@@ -43,7 +45,11 @@ export function ResponsiveFormShell({
       testID="responsive-form-scroll-view"
     >
       <ScreenCanvas variant="wide" testID="responsive-form-shell" style={styles.shell}>
-        <ScreenHeader title={title} subtitle={description} />
+        <ScreenHeader
+          title={title}
+          subtitle={description}
+          disabled={headerDisabled}
+        />
         <View testID="responsive-form-content" style={styles.content}>
           <FormStepRail steps={steps} activeStep={activeStep} />
           <View testID="responsive-form-editor" style={styles.editor}>

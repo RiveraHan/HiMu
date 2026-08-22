@@ -244,6 +244,10 @@ export default function CreateTrackScreen() {
     setSubmitError(false);
   }, [recordKey]);
 
+  useEffect(() => () => {
+    submitFlight.current = null;
+  }, [recordKey]);
+
   useEffect(() => {
     if (state || !baseDraft || !owned) return;
     void prepare();
@@ -494,6 +498,7 @@ export default function CreateTrackScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ResponsiveFormShell
         title={t("dj.profile.prepareAction")}
+        headerDisabled={isStarting || isSubmitting}
         steps={steps}
         activeStep={composition.activeStep}
         form={composition.form}

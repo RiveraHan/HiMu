@@ -16,6 +16,7 @@ const mockRegenerateTitle = jest.fn();
 const mockRegenerateDirection = jest.fn();
 const mockRegenerateLyrics = jest.fn();
 const mockGenerate = jest.fn();
+const mockBack = jest.fn();
 const mockReplace = jest.fn();
 let mockOnline = true;
 let mockActiveMix: null | { status: string } = null;
@@ -37,7 +38,7 @@ const dj = () => ({
 });
 
 jest.mock("expo-router", () => ({
-  router: { back: jest.fn(), replace: mockReplace },
+  router: { back: mockBack, canGoBack: () => true, replace: mockReplace },
   useLocalSearchParams: () => ({ djId: "dj-one", sourceTrackId: mockSourceTrackId }),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({
@@ -115,6 +116,7 @@ describe("CreateTrackScreen", () => {
     mockRegenerateDirection.mockReset();
     mockRegenerateLyrics.mockReset();
     mockGenerate.mockReset().mockResolvedValue({ jobId: "job-one" });
+    mockBack.mockReset();
     mockReplace.mockReset();
   });
 
@@ -562,6 +564,46 @@ describe("CreateTrackScreen", () => {
 
     expect(mockGenerate).toHaveBeenCalledTimes(1);
     await act(async () => resolveGeneration({ jobId: "job-one" }));
+  });
+
+  it("disables in-app back navigation while a submit is pending", async () => {
+    mockGenerate.mockReturnValueOnce(new Promise(() => undefined));
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+    await fireEvent.press(screen.getByRole("button", { name: "Review generation" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Confirm and generate" }));
+
+    const back = screen.getByRole("button", { name: "Back" });
+    await waitFor(() => expect(back).toBeDisabled());
+    await fireEvent.press(back);
+    expect(mockBack).not.toHaveBeenCalled();
+    await screen.unmount();
+  });
+
+  it("ignores a successful submit continuation after unmount", async () => {
+    let resolveGeneration!: (value: unknown) => void;
+    const generation = new Promise((resolve) => {
+      resolveGeneration = resolve;
+    });
+    mockGenerate.mockReturnValueOnce(generation);
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+    await fireEvent.press(screen.getByRole("button", { name: "Review generation" }));
+    const confirm = screen.getByRole("button", { name: "Confirm and generate" });
+    await act(async () => {
+      confirm.props.onClick({ nativeEvent: {} });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledTimes(1));
+
+    await screen.unmount();
+    await act(async () => {
+      resolveGeneration({ jobId: "job-one" });
+      await generation;
+      await Promise.resolve();
+    });
+
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it("ignores a failed generation after the route source changes", async () => {
