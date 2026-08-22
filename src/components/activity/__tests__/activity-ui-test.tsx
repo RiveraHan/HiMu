@@ -51,6 +51,8 @@ function activity(overrides: Partial<ActivityItem> = {}): ActivityItem {
     failureReason: null,
     recoveryAvailable: false,
     retryLyrics: null,
+    retryBrief: null,
+    sourceTrackId: null,
     visibility: "private",
     detail: null,
     seen: false,

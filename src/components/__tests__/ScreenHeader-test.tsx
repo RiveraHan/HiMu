@@ -41,7 +41,7 @@ test("keeps a custom left action authoritative", async () => {
   mockCanGoBack = false;
   const onLeftPress = jest.fn();
   const screen = await render(
-    <ScreenHeader title="Details" onLeftPress={onLeftPress} fallbackHref="/safe" />,
+    <ScreenHeader title="Details" onLeftPress={onLeftPress} fallbackHref="/favorites" />,
   );
   await fireEvent.press(screen.getByRole("button", { name: "Back" }));
 
