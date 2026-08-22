@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 
 import { Text } from "@/src/components/Text";
-import type { LayoutMode } from "@/src/theme/layout";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+
+import { formLayout, responsiveFormStyle } from "./form-layout";
 
 export type FormStep = {
   id: string;
@@ -16,10 +17,6 @@ type Props = {
   activeStep: string;
   children?: ReactNode;
 };
-
-// Desktop is the only layout mode that presents the progress rail. The shell
-// keeps it in source order so the compact form never needs a separate tree.
-const railLayoutMode: LayoutMode = "desktop";
 
 export function FormStepRail({ steps, activeStep, children }: Props) {
   return (
@@ -65,8 +62,11 @@ export function FormStepRail({ steps, activeStep, children }: Props) {
 
 const styles = StyleSheet.create((theme) => ({
   rail: {
-    display: { xs: "none", xl: railLayoutMode === "desktop" ? "flex" : "none" },
-    flex: { xs: 0, xl: 1 },
+    display: responsiveFormStyle(
+      formLayout.compact.railDisplay,
+      formLayout.desktop.railDisplay,
+    ),
+    flex: responsiveFormStyle(0, 1),
     minWidth: 180,
     maxWidth: 240,
     gap: theme.spacing.stackMd,

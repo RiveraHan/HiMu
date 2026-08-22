@@ -3,6 +3,8 @@ import { View } from "react-native";
 
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
+import { formLayout, responsiveFormStyle } from "./form-layout";
+
 type Props = {
   children: ReactNode;
 };
@@ -21,10 +23,13 @@ export function StickyReviewPanel({ children }: Props) {
 
 const styles = StyleSheet.create((theme) => ({
   panel: {
-    position: { xs: "relative", xl: "sticky" } as never,
-    top: { xs: 0, xl: theme.spacing.pageMargin },
-    alignSelf: { xs: "stretch", xl: "flex-start" },
-    width: { xs: "100%", xl: 300 },
+    position: responsiveFormStyle(
+      formLayout.compact.reviewPosition,
+      formLayout.desktop.reviewPosition,
+    ) as never,
+    top: responsiveFormStyle(0, theme.spacing.pageMargin),
+    alignSelf: responsiveFormStyle("stretch", "flex-start"),
+    width: responsiveFormStyle("100%", 300),
     minWidth: 0,
   },
 }));

@@ -6,6 +6,7 @@ import { ScreenHeader } from "@/src/components/ScreenHeader";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 import { FormStepRail, type FormStep } from "./FormStepRail";
+import { formLayout, responsiveFormStyle } from "./form-layout";
 import { StickyReviewPanel } from "./StickyReviewPanel";
 
 type Props = {
@@ -56,17 +57,21 @@ const styles = StyleSheet.create((theme) => ({
     paddingBottom: theme.spacing.stackLg,
   },
   content: {
-    flexDirection: { xs: "column", xl: "row" },
-    alignItems: { xs: "stretch", xl: "flex-start" },
+    flexDirection: responsiveFormStyle(
+      formLayout.compact.contentDirection,
+      formLayout.desktop.contentDirection,
+    ),
+    alignItems: responsiveFormStyle("stretch", "flex-start"),
     gap: theme.spacing.stackLg,
     minWidth: 0,
   },
   editor: {
-    flex: { xs: 0, xl: 1 },
+    flex: responsiveFormStyle(0, 1),
     minWidth: 0,
     width: "100%",
   },
   footer: {
+    position: formLayout.compact.footerPosition,
     width: "100%",
     minWidth: 0,
   },
