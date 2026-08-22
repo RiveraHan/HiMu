@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import {
   StatCardSkeleton,
   TrackRowSkeleton,
@@ -66,6 +66,9 @@ export function DjProfileSkeleton({
 const styles = StyleSheet.create((theme) => ({
   root: { flex: 1, backgroundColor: theme.colors.background },
   body: {
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     alignItems: "center",
     gap: theme.spacing.stackLg,

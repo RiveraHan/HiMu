@@ -7,19 +7,31 @@ import i18n from "@/src/i18n";
 type MockQuery = {
   data: unknown;
   isPending: boolean;
+  isError: boolean;
   fetchStatus: "fetching" | "paused" | "idle";
+  refetch: jest.Mock;
 };
 
 const initialQuery = (): MockQuery => ({
   data: undefined,
   isPending: true,
+  isError: false,
   fetchStatus: "fetching",
+  refetch: jest.fn(),
 });
 
 const settledQuery = <T,>(
   data: T,
   fetchStatus: MockQuery["fetchStatus"] = "idle",
-): MockQuery => ({ data, isPending: false, fetchStatus });
+): MockQuery => ({ data, isPending: false, isError: false, fetchStatus, refetch: jest.fn() });
+
+const failedQuery = (data: unknown = undefined): MockQuery => ({
+  data,
+  isPending: false,
+  isError: true,
+  fetchStatus: "idle",
+  refetch: jest.fn(),
+});
 
 const profile = {
   name: "Listener One",
@@ -56,6 +68,9 @@ const mockReplayTour = jest.fn();
 const mockConfirm = jest.fn();
 const mockFlushListeningStats = jest.fn();
 const mockSignOut = jest.fn();
+let mockOnline = true;
+let mockUser: { id: string } | null = { id: "listener-one" };
+let mockAuthIsLoading = false;
 
 jest.mock("@/src/components", () => {
   const React = require("react");
@@ -97,20 +112,44 @@ jest.mock("@/src/components", () => {
       label: string;
       onPress?: () => void;
       right?: React.ReactNode;
-    }) =>
-      React.createElement(
-        Pressable,
-        {
-          accessibilityLabel: label,
-          accessibilityRole: "button",
-          disabled: !onPress,
-          onPress,
-        },
+    }) => {
+      const content = React.createElement(
+        React.Fragment,
+        null,
         React.createElement(NativeText, null, label),
         right,
-      ),
+      );
+
+      return onPress
+        ? React.createElement(
+            Pressable,
+            {
+              accessibilityLabel: label,
+              accessibilityRole: "button",
+              onPress,
+            },
+            content,
+          )
+        : React.createElement(View, null, content);
+    },
     StatCard: ({ value, label }: { value: string; label: string }) =>
       React.createElement(NativeText, { testID: `stat-${label}` }, `${value} ${label}`),
+    StateNotice: ({ title, actionLabel, onAction }: {
+      title: string;
+      actionLabel?: string;
+      onAction?: () => void;
+    }) => React.createElement(
+      View,
+      null,
+      React.createElement(NativeText, null, title),
+      actionLabel && onAction
+        ? React.createElement(Pressable, {
+            accessibilityRole: "button",
+            accessibilityLabel: actionLabel,
+            onPress: onAction,
+          }, React.createElement(NativeText, null, actionLabel))
+        : null,
+    ),
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
     ProfileDjsSkeleton: placeholder("profile-djs-skeleton"),
@@ -131,6 +170,13 @@ jest.mock("@/src/onboarding", () => ({
 jest.mock("@/src/hooks/use-confirm", () => ({
   useConfirm: () => mockConfirm,
 }));
+jest.mock("@/src/hooks/use-auth", () => ({
+  useCurrentUser: () => mockUser,
+}));
+jest.mock("@/src/stores/auth-store", () => ({
+  useAuthStore: (selector: (state: { isLoading: boolean }) => unknown) =>
+    selector({ isLoading: mockAuthIsLoading }),
+}));
 jest.mock("@/src/hooks/use-home", () => ({
   useDJs: () => mockUseDJs(),
 }));
@@ -141,6 +187,9 @@ jest.mock("@/src/hooks/use-profile", () => ({
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useTabBarPadding: () => 96,
+}));
+jest.mock("@/src/hooks/use-online-status", () => ({
+  useOnlineStatus: () => mockOnline,
 }));
 jest.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
@@ -176,6 +225,9 @@ describe("ProfileScreen", () => {
     mockFlushListeningStats.mockResolvedValue(undefined);
     mockSignOut.mockReset();
     mockSignOut.mockResolvedValue(undefined);
+    mockOnline = true;
+    mockUser = { id: "listener-one" };
+    mockAuthIsLoading = false;
   });
 
   it("renders the Profile surface in Spanish", async () => {
@@ -224,7 +276,7 @@ describe("ProfileScreen", () => {
     expect(screen.getByText("PREFERENCES")).toBeTruthy();
     expect(screen.getByLabelText("Account Details")).toBeTruthy();
     expect(screen.getByLabelText("Music Preferences")).toBeTruthy();
-    expect(screen.getByLabelText("Subscription")).toBeTruthy();
+    expect(screen.queryByLabelText("Subscription")).toBeNull();
     expect(screen.getByLabelText("Replay product tour")).toBeTruthy();
     expect(screen.getByLabelText("Logout")).toBeTruthy();
     expect(mockUseProfile).toHaveBeenCalledTimes(1);
@@ -305,6 +357,89 @@ describe("ProfileScreen", () => {
     expect(screen.getByText("DJ One")).toBeTruthy();
   });
 
+  it("shows a retryable profile failure without false Listener or Free labels", async () => {
+    mockProfileQuery = failedQuery();
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("Profile unavailable")).toBeTruthy();
+    expect(screen.queryByText("Listener")).toBeNull();
+    expect(screen.queryByText("FREE")).toBeNull();
+    expect(screen.queryByText("Free")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockProfileQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("PREFERENCES")).toBeTruthy();
+  });
+
+  it("keeps pending-idle profile data unresolved instead of rendering defaults", async () => {
+    mockProfileQuery = { ...initialQuery(), fetchStatus: "idle" };
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByTestId("profile-identity-skeleton")).toBeTruthy();
+    expect(screen.queryByText("Listener")).toBeNull();
+    expect(screen.queryByText("FREE")).toBeNull();
+    expect(screen.queryByText("Free")).toBeNull();
+  });
+
+  it("keeps profile identity visible when stats fail and retries both stats reads", async () => {
+    mockProfileQuery = settledQuery(profile);
+    mockStatsQuery = failedQuery();
+    mockDjsHeardQuery = failedQuery();
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("Listener One")).toBeTruthy();
+    expect(screen.getByText("Listening stats are unavailable")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockStatsQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(mockDjsHeardQuery.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("distinguishes failed and empty DJ sections with actionable states", async () => {
+    mockDjsQuery = failedQuery();
+    const failed = await render(<ProfileScreen />);
+    expect(failed.getByText("DJs are unavailable")).toBeTruthy();
+    await fireEvent.press(failed.getByRole("button", { name: "Retry" }));
+    expect(mockDjsQuery.refetch).toHaveBeenCalledTimes(1);
+    await failed.unmount();
+
+    mockDjsQuery = settledQuery([]);
+    const empty = await render(<ProfileScreen />);
+    expect(empty.getByRole("button", { name: "Create a DJ" })).toBeTruthy();
+    await fireEvent.press(empty.getByRole("button", { name: "Create a DJ" }));
+    expect(mockRouterPush).toHaveBeenCalledWith("/create-dj");
+  });
+
+  it("renders a cached empty DJ refetch failure instead of a create empty state", async () => {
+    mockDjsQuery = failedQuery([]);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("DJs are unavailable")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create a DJ" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockDjsQuery.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses offline-before-loading and preserves cached Profile under one banner", async () => {
+    mockOnline = false;
+    mockProfileQuery = { ...initialQuery(), fetchStatus: "paused" };
+    const offline = await render(<ProfileScreen />);
+    expect(offline.getByText("You're offline")).toBeTruthy();
+    expect(offline.queryByTestId("profile-identity-skeleton")).toBeNull();
+    await offline.unmount();
+
+    mockProfileQuery = settledQuery(profile);
+    mockStatsQuery = settledQuery(stats);
+    mockDjsHeardQuery = settledQuery(0);
+    mockDjsQuery = settledQuery(djs);
+    const cached = await render(<ProfileScreen />);
+    expect(cached.getByText("You're offline")).toBeTruthy();
+    expect(cached.getByText("Listener One")).toBeTruthy();
+    expect(cached.getByText("DJ One")).toBeTruthy();
+  });
+
   it("preserves the premium subscription tier display", async () => {
     mockProfileQuery = settledQuery(premiumProfile);
 
@@ -312,6 +447,8 @@ describe("ProfileScreen", () => {
 
     expect(screen.getByText("PRO")).toBeTruthy();
     expect(screen.getByText("Pro")).toBeTruthy();
+    expect(screen.getByText("Subscription")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Subscription" })).toBeNull();
   });
 
   it("preserves Profile navigation handlers", async () => {
@@ -332,6 +469,76 @@ describe("ProfileScreen", () => {
       ["/account-settings"],
       ["/preferences"],
     ]);
+  });
+
+  it("uses one responsive dashboard tree for profile content and settings", async () => {
+    mockProfileQuery = settledQuery(profile);
+    mockStatsQuery = settledQuery(stats);
+    mockDjsHeardQuery = settledQuery(0);
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByTestId("profile-desktop-layout")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-header")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-dashboard")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-djs")).toBeTruthy();
+    expect(screen.getByTestId("profile-desktop-settings")).toBeTruthy();
+    expect(screen.getByLabelText("Account Details")).toBeTruthy();
+    expect(screen.getByLabelText("Music Preferences")).toBeTruthy();
+  });
+
+  it("keeps community DJs out of the listener-owned profile grid", async () => {
+    mockDjsQuery = settledQuery([
+      ...djs,
+      { ...djs[0], id: "community-dj", name: "Community DJ", owner_id: "another-listener" },
+    ]);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByText("DJ One")).toBeTruthy();
+    expect(screen.queryByText("Community DJ")).toBeNull();
+  });
+
+  it("keeps cached DJs neutral while auth is initializing without a listener", async () => {
+    mockUser = null;
+    mockAuthIsLoading = true;
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.getByTestId("profile-djs-skeleton")).toBeTruthy();
+    expect(screen.queryByText("DJ One")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create a DJ" })).toBeNull();
+  });
+
+  it("renders no Profile surface once auth settles signed out", async () => {
+    mockUser = null;
+    mockAuthIsLoading = false;
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+
+    expect(screen.queryByTestId("screen-scroll-view")).toBeNull();
+    expect(screen.queryByTestId("profile-djs-skeleton")).toBeNull();
+    expect(screen.queryByText("DJ One")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create a DJ" })).toBeNull();
+  });
+
+  it("reveals cached owned DJs only after the signed-in listener resolves", async () => {
+    mockUser = null;
+    mockAuthIsLoading = true;
+    mockDjsQuery = settledQuery(djs);
+
+    const screen = await render(<ProfileScreen />);
+    expect(screen.getByTestId("profile-djs-skeleton")).toBeTruthy();
+
+    mockUser = { id: "listener-one" };
+    mockAuthIsLoading = false;
+    await screen.rerender(<ProfileScreen />);
+
+    expect(screen.queryByTestId("profile-djs-skeleton")).toBeNull();
+    expect(screen.getByText("DJ One")).toBeTruthy();
   });
 
   it("preserves logout confirmation and the confirmed save/sign-out flow", async () => {
@@ -366,8 +573,8 @@ describe("ProfileScreen", () => {
       expect.objectContaining({ flex: 1, backgroundColor: "#0D0D12" }),
     );
     expect(mockInvalidateQueries.mock.calls).toEqual([
-      [{ queryKey: queryKeys.stats.listening }],
-      [{ queryKey: queryKeys.stats.djsHeard }],
+      [{ queryKey: queryKeys.stats.listening("listener-one") }],
+      [{ queryKey: queryKeys.stats.djsHeard("listener-one") }],
     ]);
   });
 });

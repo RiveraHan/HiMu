@@ -10,7 +10,7 @@ import Svg, {
   Path,
   Stop,
 } from "react-native-svg";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 const HEIGHT = 160;
@@ -25,6 +25,7 @@ type Props = {
 
 function buildPaths(values: number[], width: number) {
   const n = values.length;
+  if (n === 0) return EMPTY;
   const max = Math.max(...values, 1);
   const innerH = HEIGHT - PAD_T - PAD_B;
   const stepX = n > 1 ? width / (n - 1) : width;
@@ -85,6 +86,7 @@ export function VibeAreaChart({ data }: Props) {
 
   return (
     <View
+      testID="vibe-area-chart"
       style={styles.wrap}
       accessible
       accessibilityRole="image"
@@ -107,7 +109,11 @@ export function VibeAreaChart({ data }: Props) {
 
         {/* Plot + labels */}
         <View style={styles.plot}>
-          <View style={styles.canvas} onLayout={onLayout}>
+          <View
+            testID="vibe-area-chart-canvas"
+            style={styles.canvas}
+            onLayout={onLayout}
+          >
             {width > 0 && (
               <Svg width={width} height={HEIGHT}>
                 <Defs>
@@ -183,6 +189,7 @@ export function VibeAreaChart({ data }: Props) {
 const styles = StyleSheet.create((theme) => ({
   wrap: {
     gap: theme.spacing.stackXs,
+    minWidth: 0,
   },
   chartRow: {
     flexDirection: "row",
@@ -196,6 +203,7 @@ const styles = StyleSheet.create((theme) => ({
   },
   plot: {
     flex: 1,
+    minWidth: 0,
   },
   canvas: {
     width: "100%",

@@ -2,7 +2,7 @@ import { Text } from "@/src/components/Text";
 import { Check, Plus, X } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type Props = {
   label: string;

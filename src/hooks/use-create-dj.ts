@@ -1,25 +1,34 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { activityMutationKeys } from "@/src/activity/mutation-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCurrentUser } from "./use-auth";
+import { captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
 
 export type CreateDJInput = {
   name: string;
+  identityConcept: string;
   genres: string[];
   moods: string[];
   energy: number; // 1-10
   isInstrumental: boolean;
   vibe?: string;
+  isPublic: boolean;
 };
 
 export function useCreateDJ() {
   const queryClient = useQueryClient();
+  const userId = useCurrentUser()?.id ?? "";
 
   return useMutation({
+    mutationKey: activityMutationKeys.createDj(userId),
+    gcTime: Infinity,
     mutationFn: async (input: CreateDJInput) => {
-      const { data, error } = await supabase.functions.invoke<{
+      const scope = captureAuthScope(userId);
+      const { data, error } = await invokeWithAuthScope<{
         djId: string;
         avatarReady: boolean;
-      }>("create-dj", {
+      }>(supabase.functions, scope, "create-dj", {
         body: input,
       });
 
@@ -29,8 +38,10 @@ export function useCreateDJ() {
 
       return data;
     },
+    onMutate: () => ({ submittedUserId: userId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.djs.all });
+      if (!isCurrentMutationUser(userId)) return;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.djs.all });
     },
   });
 }

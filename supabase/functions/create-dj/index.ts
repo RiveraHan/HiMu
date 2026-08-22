@@ -7,6 +7,8 @@
 import {
   buildAvatarPrompt,
   buildBasePrompt,
+  buildDjIdentityFields,
+  parseIsPublic,
   validateDjInput,
 } from "../_shared/dj-input.ts";
 import { invalid, json } from "../_shared/http.ts";
@@ -14,8 +16,10 @@ import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
-
-const MAX_DJS = 2;
+import {
+  isDjQuotaError,
+  MAX_OWNED_DJS,
+} from "./create-dj-contract.ts";
 
 function slugify(name: string): string {
   return name
@@ -27,20 +31,41 @@ function slugify(name: string): string {
 }
 
 serveAuthed(async (req, user) => {
-  const v = validateDjInput(await req.json());
+  const body = await req.json();
+  const v = validateDjInput(body);
   if (!v.ok) return invalid(v.error);
 
-  const { name, genres, moods, energy, isInstrumental, vibe } = v.data;
+  let isPublic: boolean;
+  try {
+    isPublic = parseIsPublic((body as Record<string, unknown>).isPublic);
+  } catch (error) {
+    return invalid(error instanceof Error ? error.message : "invalid input");
+  }
+
+  const {
+    name,
+    identityConcept,
+    genres,
+    moods,
+    energy,
+    isInstrumental,
+  } = v.data;
 
   // Quota check
-  const { count } = await admin
+  const { count, error: countError } = await admin
     .from("djs")
     .select("id", { count: "exact", head: true })
     .eq("owner_id", user.id);
 
-  if ((count ?? 0) >= MAX_DJS) {
+  if (countError) throw countError;
+
+  if ((count ?? 0) >= MAX_OWNED_DJS) {
     return json(
-      { error: `you already have ${MAX_DJS} DJs`, code: "dj_quota_reached" },
+      {
+        error: `you already have ${MAX_OWNED_DJS} DJ`,
+        code: "dj_quota_reached",
+        limit: MAX_OWNED_DJS,
+      },
       403,
     );
   }
@@ -58,8 +83,8 @@ serveAuthed(async (req, user) => {
         name,
         slug,
         owner_id: user.id,
-        is_public: false,
-        character: vibe,
+        is_public: isPublic,
+        ...buildDjIdentityFields(v.data),
         genre_specialties: genres,
         mood_tags: moods,
         personality_traits: { energy, vibe, isInstrumental },
@@ -69,6 +94,16 @@ serveAuthed(async (req, user) => {
 
     if (error) {
       if (error.code === "23505" && attempt === 0) continue; // slug collision
+      if (isDjQuotaError(error)) {
+        return json(
+          {
+            error: `you already have ${MAX_OWNED_DJS} DJ`,
+            code: "dj_quota_reached",
+            limit: MAX_OWNED_DJS,
+          },
+          403,
+        );
+      }
       throw error;
     }
 
@@ -95,7 +130,7 @@ serveAuthed(async (req, user) => {
         "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
         {
           input: {
-            prompt: buildAvatarPrompt(genres, moods),
+            prompt: buildAvatarPrompt(genres, moods, identityConcept),
             aspect_ratio: "1:1",
             output_format: "jpg",
             safety_tolerance: 5,

@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import Animated, { FadeIn, LinearTransition } from "react-native-reanimated";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type Group = {
   label: string;

@@ -1,9 +1,55 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Linking, StyleSheet as RNStyleSheet } from "react-native";
 
 import LoginScreen from "@/app/(auth)/login";
+import { authApi } from "@/src/api/auth";
 import i18n from "@/src/i18n";
+import { darkTheme, lightTheme } from "@/src/theme/theme";
 
-const mockToastInfo = jest.fn();
+const mockToastError = jest.fn();
+let mockWindowWidth = 390;
+
+function resolveAtWidth<T>(value: T | { xs?: T; xl?: T }, width: number): T | undefined {
+  if (value && typeof value === "object" && ("xs" in value || "xl" in value)) {
+    return width >= 1024 ? value.xl : value.xs;
+  }
+  return value as T;
+}
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({
+    width: mockWindowWidth,
+    height: 844,
+    scale: 1,
+    fontScale: 1,
+  }),
+}));
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
+function relativeLuminance(hex: string) {
+  const channels = hex.match(/\w\w/g)?.map((channel) => Number.parseInt(channel, 16) / 255);
+  if (!channels || channels.length !== 3) throw new Error(`Expected hex color, received ${hex}`);
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const [lighter, darker] = [
+    relativeLuminance(foreground),
+    relativeLuminance(background),
+  ].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 jest.mock("@/src/api/auth", () => ({
   authApi: { signInWithGoogle: jest.fn() },
@@ -23,33 +69,218 @@ jest.mock("expo-audio", () => ({
 }));
 
 jest.mock("@/src/hooks/use-toast", () => ({
-  useToast: () => ({ error: jest.fn(), info: mockToastInfo }),
+  useToast: () => ({ error: mockToastError, info: jest.fn() }),
 }));
 
 describe("Login translations", () => {
   beforeEach(async () => {
+    mockWindowWidth = 390;
     await i18n.changeLanguage("es");
-    mockToastInfo.mockClear();
+    mockToastError.mockClear();
+    jest.mocked(authApi.signInWithGoogle).mockReset();
+    delete process.env.EXPO_PUBLIC_TERMS_URL;
+    delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+    jest.spyOn(Linking, "openURL").mockResolvedValue(true);
   });
 
-  it("renders the authentication entry points in Spanish", async () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("renders without initializing Supabase when public configuration is absent", async () => {
+    const screen = await render(<LoginScreen />);
+
+    expect(screen.getByText("Bienvenido a HiMu")).toBeTruthy();
+  });
+
+  it("renders only the working authentication entry point in Spanish", async () => {
     const screen = await render(<LoginScreen />);
 
     expect(screen.getByText("Bienvenido a HiMu")).toBeTruthy();
     expect(screen.getByText("Tu música, presentada por DJs con IA.")).toBeTruthy();
-    expect(screen.getByText("Continuar con Spotify")).toBeTruthy();
     expect(screen.getByText("Continuar con Google")).toBeTruthy();
-    expect(screen.getByText("Iniciar sesión con correo")).toBeTruthy();
-    expect(screen.getByText("O")).toBeTruthy();
-    expect(screen.getByText(/¿No tienes una cuenta\?/)).toBeTruthy();
-    expect(screen.getByText("Regístrate")).toBeTruthy();
-    expect(screen.getByText("Términos")).toBeTruthy();
-    expect(screen.getByText("Privacidad")).toBeTruthy();
+    expect(screen.queryByText("Continuar con Spotify")).toBeNull();
+    expect(screen.queryByText("Iniciar sesión con correo")).toBeNull();
+    expect(screen.queryByText("O")).toBeNull();
+    expect(screen.queryByText(/¿No tienes una cuenta\?/)).toBeNull();
+    expect(screen.queryByText("Regístrate")).toBeNull();
+    expect(screen.queryByText("Próximamente")).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+    expect(screen.queryByTestId("legal-separator")).toBeNull();
+  });
 
-    fireEvent.press(screen.getByText("Continuar con Spotify"));
-    expect(mockToastInfo).toHaveBeenCalledWith(
-      "Próximamente",
-      "Esta función estará disponible pronto.",
+  it("uses one Google action in the desktop sign-in panel without unsupported login methods", async () => {
+    mockWindowWidth = 1440;
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+
+    expect(screen.getByTestId("login-hero-desktop")).toBeTruthy();
+    expect(screen.getByText("Haz que cada escucha sea tuya.")).toBeTruthy();
+    expect(
+      screen.getByText("Inicia sesión para guardar lo que escuchas y continuar donde lo dejaste."),
+    ).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Continuar con Google" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Términos" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Privacidad" })).toBeTruthy();
+    expect(screen.queryByText("Iniciar sesión con correo")).toBeNull();
+    expect(screen.queryByText(/Invitado|Guest/)).toBeNull();
+  });
+
+  it("keeps the capped compact sign-in content-sized at 700px", async () => {
+    mockWindowWidth = 700;
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+
+    const heroStyle = RNStyleSheet.flatten(
+      screen.getByTestId("login-hero-desktop").props.style,
     );
+    const signInStyle = RNStyleSheet.flatten(
+      screen.getByTestId("login-hero-sign-in").props.style,
+    );
+    const legalFooter = screen.getByRole("link", { name: "Términos" }).parent?.parent;
+
+    expect(resolveAtWidth(heroStyle.flexDirection, 700)).toBe("column");
+    expect(resolveAtWidth(heroStyle.maxWidth, 700)).toBe(520);
+    expect(heroStyle).toEqual(expect.objectContaining({ width: "100%", alignSelf: "center" }));
+    expect(resolveAtWidth(signInStyle.flex, 700)).toBeUndefined();
+    expect(RNStyleSheet.flatten(legalFooter?.props.style)).toEqual(
+      expect.objectContaining({ marginTop: "auto" }),
+    );
+  });
+
+  it("allows only one Google sign-in request while an attempt is pending", async () => {
+    const signIn = deferred<null>();
+    jest.mocked(authApi.signInWithGoogle).mockReturnValue(signIn.promise);
+    const screen = await render(<LoginScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Continuar con Google" }));
+      await Promise.resolve();
+    });
+
+    const pendingButton = screen.getByRole("button", {
+      name: "Iniciando sesión...",
+    });
+    expect(pendingButton).toBeDisabled();
+    expect(pendingButton.props.accessibilityState).toEqual({
+      busy: true,
+      disabled: true,
+    });
+    await fireEvent.press(pendingButton);
+    expect(authApi.signInWithGoogle).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      signIn.resolve(null);
+      await signIn.promise;
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Continuar con Google" }),
+      ).toBeEnabled();
+    });
+  });
+
+  it("shows safe feedback after a rejected sign-in and lets the user retry", async () => {
+    const providerError = new Error("provider details must not reach the user");
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    jest
+      .mocked(authApi.signInWithGoogle)
+      .mockRejectedValueOnce(providerError)
+      .mockResolvedValueOnce(null);
+    const screen = await render(<LoginScreen />);
+
+    await act(async () => {
+      fireEvent.press(
+        screen.getByRole("button", { name: "Continuar con Google" }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "Error al iniciar sesión",
+        "No pudimos iniciar sesión. Inténtalo de nuevo.",
+      );
+    });
+    expect(mockToastError).not.toHaveBeenCalledWith(
+      expect.stringContaining("provider details"),
+    );
+
+    await act(async () => {
+      fireEvent.press(
+        screen.getByRole("button", { name: "Continuar con Google" }),
+      );
+    });
+    await waitFor(() => {
+      expect(authApi.signInWithGoogle).toHaveBeenCalledTimes(2);
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "[LoginScreen] Google sign-in error:",
+      providerError,
+    );
+  });
+
+  it("renders valid legal destinations as 44 by 44 links with one separator", async () => {
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+
+    const terms = screen.getByRole("link", { name: "Términos" });
+    const privacy = screen.getByRole("link", { name: "Privacidad" });
+    expect(RNStyleSheet.flatten(terms.props.style)).toEqual(
+      expect.objectContaining({ minHeight: 44, minWidth: 44 }),
+    );
+    expect(RNStyleSheet.flatten(privacy.props.style)).toEqual(
+      expect.objectContaining({ minHeight: 44, minWidth: 44 }),
+    );
+    // Legal copy is normal-sized text: use the opaque onSurface token in both themes.
+    for (const theme of [darkTheme, lightTheme]) {
+      expect(contrastRatio(theme.colors.onSurface, theme.colors.background))
+        .toBeGreaterThanOrEqual(4.5);
+    }
+    const legalTextStyle = RNStyleSheet.flatten(screen.getByText("Términos").props.style);
+    expect(legalTextStyle).toEqual(expect.objectContaining({
+      color: darkTheme.colors.onSurface,
+    }));
+    expect(legalTextStyle.opacity).toBeUndefined();
+    expect(screen.getAllByTestId("legal-separator")).toHaveLength(1);
+
+    await act(async () => {
+      fireEvent.press(terms);
+    });
+    await act(async () => {
+      fireEvent.press(privacy);
+    });
+    await waitFor(() => {
+      expect(Linking.openURL).toHaveBeenNthCalledWith(1, "https://himu.app/terms");
+      expect(Linking.openURL).toHaveBeenNthCalledWith(2, "https://himu.app/privacy");
+    });
+  });
+
+  it("does not render a separator for one valid legal destination", async () => {
+    process.env.EXPO_PUBLIC_TERMS_URL = "http://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+
+    expect(screen.queryByRole("link", { name: "Términos" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Privacidad" })).toBeTruthy();
+    expect(screen.queryByTestId("legal-separator")).toBeNull();
+  });
+
+  it("shows the generic error toast when a legal destination cannot open", async () => {
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    jest.mocked(Linking.openURL).mockRejectedValueOnce(new Error("unavailable"));
+    const screen = await render(<LoginScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole("link", { name: "Términos" }));
+    });
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        "Algo salió mal. Inténtalo de nuevo.",
+      );
+    });
   });
 });

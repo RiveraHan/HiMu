@@ -1,81 +1,75 @@
 import { usePlayer } from "@/src/audio/use-player";
 import { usePlayerStore } from "@/src/stores/player-store";
-import { Image } from "expo-image";
-import { useRouter, useSegments } from "expo-router";
+import { useRouter } from "expo-router";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react-native";
 import { Pressable, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { MINI_PLAYER_HEIGHT } from "./bottom-chrome-metrics";
 import { IconButton } from "./IconButton";
+import { Artwork } from "./media/Artwork";
 import { Text } from "./Text";
 
 export function MiniPlayer() {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
   const router = useRouter();
-  const segments = useSegments();
   const track = usePlayerStore((state) => state.currentTrack);
   const isPlaying = usePlayerStore((state) => state.isPlaying);
   const positionSec = usePlayerStore((state) => state.positionSec);
   const durationSec = usePlayerStore((state) => state.durationSec);
   const { next, prev, toggle } = usePlayer();
 
-  // Global chrome: hide on the full-screen player modal and on auth screens.
-  if (
-    !track ||
-    segments[0] === "player" ||
-    segments[0] === "(auth)" ||
-    segments[0] === "focus-mode"
-  ) {
-    return null;
-  }
+  if (!track) return null;
 
   const pct = durationSec > 0 ? (positionSec / durationSec) * 100 : 0;
 
-  // On tab screens sit above the floating tab bar; on pushed detail screens
-  // (no tab bar) sit just above the safe area.
-  const onTabs = segments[0] === "(app)";
-  const bottom = onTabs
-    ? insets.bottom + 8 + 64 + theme.spacing.stackSm
-    : insets.bottom + theme.spacing.stackSm;
-
   return (
-    <Pressable
-      onPress={() => router.push("/player")}
-      accessibilityRole="button"
-      accessibilityLabel={t("common.player.open")}
-      style={({ pressed }) => [
-        styles.root,
-        { bottom },
-        pressed && styles.pressed,
-      ]}
+    <View
+      accessible={false}
+      style={styles.root}
+      testID="mini-player"
     >
       <View style={[styles.progress, { width: `${pct}%` }]} />
-      {track.album_art_url ? (
-        <Image
-          source={track.album_art_url}
-          style={styles.art}
-          contentFit="cover"
-          transition={150}
-        />
-      ) : (
-        <View style={[styles.art, styles.artFallback]} />
-      )}
-      <View style={styles.meta}>
-        <Text variant="bodyMd" numberOfLines={1}>
-          {track.title}
-        </Text>
-        <Text
-          variant="bodyMd"
-          color="onSurfaceVariant"
-          opacity={0.6}
-          numberOfLines={1}
-        >
-          {track.artist}
-        </Text>
-      </View>
+      <Pressable
+        accessibilityLabel={t("common.player.openTrack", {
+          title: track.title,
+          artist: track.artist,
+        })}
+        accessibilityRole="button"
+        onPress={() => router.push("/player")}
+        style={({ pressed }) => [
+          styles.metadataControl,
+          pressed && styles.pressed,
+        ]}
+      >
+        {track.album_art_url ? (
+          <Artwork
+            source={track.album_art_url}
+            size={48}
+            style={styles.art}
+            contentFit="cover"
+            transition={150}
+            fallback={<View style={[styles.art, styles.artFallback]} />}
+            componentLabel="MiniPlayer artwork"
+          />
+        ) : (
+          <View style={[styles.art, styles.artFallback]} />
+        )}
+        <View style={styles.meta}>
+          <Text variant="bodyMd" numberOfLines={1}>
+            {track.title}
+          </Text>
+          <Text
+            variant="bodyMd"
+            color="onSurfaceVariant"
+            opacity={0.6}
+            numberOfLines={1}
+          >
+            {track.artist}
+          </Text>
+        </View>
+      </Pressable>
 
       <IconButton
         icon={<SkipBack size={20} color={theme.colors.onSurfaceVariant} />}
@@ -104,6 +98,7 @@ export function MiniPlayer() {
         accessibilityLabel={
           isPlaying ? t("common.actions.pause") : t("common.actions.play")
         }
+        accessibilityState={{ selected: isPlaying }}
         size="md"
       />
       <IconButton
@@ -112,17 +107,14 @@ export function MiniPlayer() {
         accessibilityLabel={t("common.actions.next")}
         size="md"
       />
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   root: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    marginHorizontal: "6%",
-    height: 64,
+    width: "100%",
+    minHeight: MINI_PLAYER_HEIGHT,
     paddingHorizontal: theme.spacing.stackSm,
     flexDirection: "row",
     alignItems: "center",
@@ -136,7 +128,7 @@ const styles = StyleSheet.create((theme) => ({
   },
 
   pressed: {
-    transform: [{ scale: 0.98 }],
+    opacity: 0.7,
   },
 
   progress: {
@@ -153,6 +145,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   artFallback: {
     backgroundColor: theme.colors.glassTint,
+  },
+  metadataControl: {
+    minHeight: 44,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackSm,
   },
   meta: {
     flex: 1,

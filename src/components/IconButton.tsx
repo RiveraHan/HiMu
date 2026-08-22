@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Pressable } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { Pressable, type AccessibilityState } from "react-native";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 const SIZES = { sm: 36, md: 44, lg: 52 } as const;
 
@@ -11,6 +11,7 @@ type Props = {
   size?: keyof typeof SIZES;
   variant?: "plain" | "glass" | "glassStrong";
   accessibilityLabel?: string;
+  accessibilityState?: AccessibilityState;
   testID?: string;
 };
 
@@ -21,6 +22,7 @@ export function IconButton({
   size = "md",
   variant = "plain",
   accessibilityLabel,
+  accessibilityState,
   testID,
 }: Props) {
   const dimension = SIZES[size];
@@ -33,6 +35,7 @@ export function IconButton({
       hitSlop={hitSlop}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ ...accessibilityState, disabled }}
       testID={testID}
       style={({ pressed }) => [
         styles.base,

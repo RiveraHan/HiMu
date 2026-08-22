@@ -6,7 +6,14 @@ module.exports = function (api) {
     // presets: ['module:@react-native/babel-preset'],
 
     // or for Expo
-    presets: ['babel-preset-expo'],
+    presets: [[
+      'babel-preset-expo',
+      {
+        web: {
+          unstable_transformImportMeta: true
+        }
+      }
+    ]],
 
     // other config
     plugins: [
@@ -16,7 +23,8 @@ module.exports = function (api) {
             // all files under this folder will be processed by the Babel plugin
             // if you need to include more folders, or customize discovery process
             // check available babel options
-            root: 'src'
+            root: 'src',
+            autoProcessPaths: ['app']
         }]
     ]
   }

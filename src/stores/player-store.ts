@@ -9,6 +9,8 @@ export type PlayerTrack = {
   album_art_url: string | null;
   duration: number | null;
   genre?: string | null;
+  owner_id?: string | null;
+  is_public?: boolean;
 };
 
 type State = {

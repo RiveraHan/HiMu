@@ -6,6 +6,8 @@ export type LocaleContextValue = {
   resolvedLanguage: SupportedLanguage;
   setPreference: (preference: LanguagePreference) => Promise<void>;
   isSaving: boolean;
+  saveError?: boolean;
+  retryPreference?: () => void;
 };
 
 export const LocaleContext = createContext<LocaleContextValue | null>(null);

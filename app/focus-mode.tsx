@@ -1,28 +1,34 @@
 import { usePlayer } from "@/src/audio/use-player";
-import { IconButton, Text } from "@/src/components";
+import { IconButton, StateNotice, Text } from "@/src/components";
 import { FocusAtmosphere } from "@/src/components/focus/FocusAtmosphere";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
+import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { useFocusTimer } from "@/src/hooks/use-focus-timer";
 import { useFocusTracks } from "@/src/hooks/use-home";
+import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import { filterExcluded } from "@/src/utils/weighted-shuffle";
+import { isInitialQueryLoading } from "@/src/utils/query-state";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
-import { Pause, Play, SkipBack, SkipForward, X } from "lucide-react-native";
+import { Check, Pause, Play, SkipBack, SkipForward, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef } from "react";
-import { Pressable, View } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import Animated, { FadeIn, FadeOut, useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 export default function FocusModeScreen() {
+  useWebCorePresentation("himu-web-core-presentation/focus-stage");
   const { t } = useTranslation();
   useKeepAwake();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const online = useOnlineStatus();
+  const reduceMotion = useReducedMotion();
 
   const timer = useFocusTimer({
     onComplete: () =>
@@ -33,7 +39,8 @@ export default function FocusModeScreen() {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const { toggle: toggleAudio, next, prev, load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
-  const { data: focusData } = useFocusTracks();
+  const focusQuery = useFocusTracks();
+  const focusData = focusQuery.data;
   const taste = useTasteProfile();
 
   // Focus queue: calmest first (energy asc, then bpm asc; nulls = neutral mid),
@@ -84,6 +91,17 @@ export default function FocusModeScreen() {
   const running = timer.status === "running";
   const canToggle = timer.status !== "idle" || focusQueue.length > 0;
   const label = t(`playback.focus.status.${timer.status}`);
+  const offlineWithoutData =
+    !online && focusQuery.fetchStatus === "paused" && focusData === undefined;
+  const focusLoading = isInitialQueryLoading(focusQuery);
+  const blockingFocusError = focusQuery.isError && focusData === undefined;
+  const focusEmpty =
+    timer.status === "idle" && focusData !== undefined && focusQueue.length === 0;
+
+  const closeFocus = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/");
+  };
 
   // One control for the whole session: timer + music start/pause together.
   const onSessionToggle = () => {
@@ -113,11 +131,14 @@ export default function FocusModeScreen() {
     <View style={styles.root}>
       <FocusAtmosphere />
 
-      <View
-        style={[
+      <ScrollView
+        testID="focus-content-scroll"
+        style={styles.contentScroll}
+        contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top + theme.spacing.stackMd },
         ]}
+        showsVerticalScrollIndicator
       >
         {/* Header */}
         <View style={styles.header}>
@@ -136,29 +157,101 @@ export default function FocusModeScreen() {
           <IconButton
             variant="glass"
             icon={<X size={24} color={theme.colors.onSurfaceVariant} />}
-            onPress={() => router.canGoBack() && router.back()}
+            onPress={closeFocus}
             accessibilityLabel={t("playback.focus.actions.end")}
           />
         </View>
 
         {/* Center */}
-        <View style={styles.center}>
-          <FocusOrb active={running} />
+        <View style={styles.center} testID="focus-central-stage">
+          {offlineWithoutData ? (
+            <StateNotice
+              kind="offline"
+              title={t("common.errors.offline")}
+              message={t("common.errors.reconnect")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void focusQuery.refetch()}
+            />
+          ) : focusLoading ? (
+            <ActivityIndicator
+              accessibilityLabel={t("common.states.loading")}
+              color={theme.colors.primary}
+              testID="focus-loading"
+            />
+          ) : blockingFocusError || focusData === undefined ? (
+            <StateNotice
+              kind={online ? "error" : "offline"}
+              title={t("playback.focus.unavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void focusQuery.refetch()}
+            />
+          ) : focusEmpty ? (
+            <View style={styles.focusContent}>
+              <StateNotice
+                kind="empty"
+                title={t("playback.focus.empty")}
+                actionLabel={t("profile.favorites.discoverAction")}
+                onAction={() => router.replace("/(app)/discover")}
+              />
+              {focusQuery.isError || !online ? (
+                <StateNotice
+                  compact
+                  kind={online ? "error" : "offline"}
+                  title={
+                    online
+                      ? t("playback.focus.unavailable")
+                      : t("common.errors.offline")
+                  }
+                  actionLabel={t("common.actions.retry")}
+                  onAction={() => void focusQuery.refetch()}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.focusContent}>
+              <FocusOrb active={running} />
+              {focusQuery.isError || !online ? (
+                <StateNotice
+                  compact
+                  kind={online ? "error" : "offline"}
+                  title={
+                    online
+                      ? t("playback.focus.unavailable")
+                      : t("common.errors.offline")
+                  }
+                  actionLabel={t("common.actions.retry")}
+                  onAction={() => void focusQuery.refetch()}
+                />
+              ) : null}
+            </View>
+          )}
         </View>
 
         {/* Idle preset chips */}
         {timer.status === "idle" && (
           <Animated.View
-            entering={FadeIn}
-            exiting={FadeOut}
+            entering={reduceMotion ? undefined : FadeIn}
+            exiting={reduceMotion ? undefined : FadeOut}
             style={styles.presets}
+            testID="focus-presets"
           >
             {timer.presets.map((m) => (
               <Pressable
                 key={m}
                 onPress={() => timer.setPreset(m)}
                 style={[styles.chip, timer.minutes === m && styles.chipActive]}
+                accessibilityRole="button"
+                accessibilityLabel={t("playback.focus.presetMinutes", { minutes: m })}
+                accessibilityState={{ selected: timer.minutes === m }}
               >
+                {timer.minutes === m ? (
+                  <View testID={`focus-preset-selected-${m}`}>
+                    <Check
+                      size={14}
+                      color={theme.colors.onPrimaryContainer}
+                    />
+                  </View>
+                ) : null}
                 <Text
                   variant="labelCaps"
                   color={
@@ -239,15 +332,19 @@ export default function FocusModeScreen() {
             </Pressable>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   root: { flex: 1, backgroundColor: theme.colors.background },
+  contentScroll: { flex: 1 },
   content: {
-    flex: 1,
+    flexGrow: 1,
+    width: "100%",
+    maxWidth: { xs: undefined, xl: 1120 },
+    alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     justifyContent: "space-between",
   },
@@ -273,9 +370,17 @@ const styles = StyleSheet.create((theme) => ({
   timer: { fontVariant: ["tabular-nums"] },
   center: {
     flex: 1,
+    width: "100%",
+    maxWidth: { xs: undefined, xl: 640 },
+    alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
     marginTop: "-5%",
+  },
+  focusContent: {
+    alignItems: "center",
+    gap: theme.spacing.stackLg,
+    width: "100%",
   },
   presets: {
     flexDirection: "row",
@@ -284,6 +389,12 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing.stackLg,
   },
   chip: {
+    minWidth: 44,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.stackXs,
     paddingHorizontal: theme.spacing.stackMd,
     paddingVertical: theme.spacing.stackSm,
     borderRadius: theme.borderRadius.full,

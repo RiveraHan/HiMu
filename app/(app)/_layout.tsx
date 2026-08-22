@@ -5,12 +5,26 @@ import { Redirect, Tabs } from "expo-router";
 import { Compass, Home, type LucideIcon, User } from "lucide-react-native";
 import {
   ActivityIndicator,
+  I18nManager,
   Platform,
-  View
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { resolveLayoutMode } from "@/src/theme/layout";
+
+export function resolveTabBarGeometry(
+  windowWidth: number,
+  isRTL: boolean,
+): { width: number; start: number; end: "auto"; x: number } {
+  const width = Math.min(windowWidth * 0.88, 720);
+  const x = (windowWidth - width) / 2;
+  const start = isRTL ? windowWidth - width - x : x;
+
+  return { width, start, end: "auto", x };
+}
 
 function TabIcon({
   Icon,
@@ -57,6 +71,7 @@ export default function Applayout() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const { width: windowWidth } = useWindowDimensions();
   const session = useAuthStore((state) => state.session);
   const isLoading = useAuthStore((state) => state.isLoading);
 
@@ -70,14 +85,21 @@ export default function Applayout() {
 
   if (!session) return <Redirect href="/(auth)/login" />;
 
+  const tabBarGeometry = resolveTabBarGeometry(windowWidth, I18nManager.isRTL);
+  const isDesktop = resolveLayoutMode(windowWidth) === "desktop";
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
+          display: isDesktop ? "none" : "flex",
           position: "absolute",
-          marginHorizontal: "6%",
+          width: tabBarGeometry.width,
+          start: tabBarGeometry.start,
+          end: tabBarGeometry.end,
+          marginHorizontal: 0,
           bottom: insets.bottom + 8,
           height: 64,
           borderRadius: theme.borderRadius.full,

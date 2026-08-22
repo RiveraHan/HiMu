@@ -2,7 +2,7 @@ import { Avatar } from "@/src/components/Avatar";
 import { Text } from "@/src/components/Text";
 import { ChevronRight } from "lucide-react-native";
 import { Pressable, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { useTranslation } from "react-i18next";
 

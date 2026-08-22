@@ -8,7 +8,7 @@
 
 A cross-platform mobile music app built around AI DJ personas. Every DJ has its own
 character, signature genres, and curated catalog — stream their tracks through a
-full-screen player with background playback, follow the ones you like, and watch
+full-screen player with background playback, save tracks you like, and watch
 your habits come to life in a personal _Vibe Check_.
 
 [![Expo SDK 54](https://img.shields.io/badge/Expo_SDK-54-000020?logo=expo&logoColor=white)](https://expo.dev)
@@ -22,8 +22,8 @@ your habits come to life in a personal _Vibe Check_.
 
 [![RepoRanker](https://reporanker.com/badge/RiveraHan/HiMu)](https://reporanker.com/repos/RiveraHan/HiMu)
 
-> **Status:** Actively in development. AI-generated tracks and DJ voice, plus
-> subscriptions, are experimental and currently disabled.
+> **Status:** Beta: core listening and personalization are active; AI generation
+> requires the configured Supabase Edge Functions and provider secrets.
 
 ---
 
@@ -58,7 +58,8 @@ your habits come to life in a personal _Vibe Check_.
 
 - Full-screen player with album art, a scrubbable progress bar, and queue navigation
 - Background audio playback (lock screen / control center) on iOS and Android
-- A persistent global mini-player that follows you across every screen
+- MiniPlayer remains available across authenticated browsing and detail screens;
+  auth, full Player, Focus Mode, and onboarding intentionally hide bottom chrome
 - Browse and discover DJs from Home and Discover
 
 **🎙️ DJ personas**
@@ -66,12 +67,14 @@ your habits come to life in a personal _Vibe Check_.
 - Rich DJ profiles: sonic philosophy, curated genres, and full track list
 - "Live now" indicators for DJs currently on air
 - Resident DJ badges
+- Manual-mix results persist in Activity and recover after an app restart
+- Create, train, and cover-generation progress stays visible for the current
+  session; generated results never autoplay
 
 **📊 Insights & personalization**
 
 - **Vibe Check** — personal listening stats: top DJs, top genres, and trends over time
 - Music preferences that tailor your feed
-- A community space
 
 **🔐 Accounts**
 
@@ -166,9 +169,12 @@ Copy `.env.example` to `.env` and fill in the required values:
 | `EXPO_PUBLIC_API_URL`              |    ✅    | Supabase REST endpoint     |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` |    ✅    | Google OAuth web client ID |
 | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` |    ✅    | Google OAuth iOS client ID |
+| `EXPO_PUBLIC_TERMS_URL`            |    ◐     | Real, owner-supplied HTTPS Terms destination |
+| `EXPO_PUBLIC_PRIVACY_URL`          |    ◐     | Real, owner-supplied HTTPS Privacy destination |
 
-> `.env.example` also lists optional keys for experimental AI features that are
-> **currently disabled** — they aren't needed to run the app.
+The legal URLs are optional for internal builds but required for a public beta.
+AI generation also requires deployed Edge Functions plus the Replicate and R2
+server secrets listed in `.env.example`.
 
 ---
 
@@ -179,7 +185,7 @@ HiMu/
 ├── app/                      # Expo Router routes (file-based navigation)
 │   ├── _layout.tsx           # Root stack, global providers, mini-player
 │   ├── (auth)/               # Login (Google Sign-In)
-│   ├── (app)/                # Tab group: Home · Discover · Community · Profile
+│   ├── (app)/                # Tab group: Home · Discover · Profile
 │   ├── dj/[id].tsx           # DJ profile
 │   ├── player.tsx            # Full-screen player (modal)
 │   ├── vibe-check.tsx        # Listening stats

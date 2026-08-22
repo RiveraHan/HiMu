@@ -16,6 +16,11 @@ describe("DjProfileSkeleton", () => {
     expect(screen.getByTestId("profile-header").parent).toHaveStyle({
       alignSelf: "stretch",
     });
+    expect(screen.getByTestId("profile-header").parent?.parent).toHaveStyle({
+      width: "100%",
+      maxWidth: 720,
+      alignSelf: "center",
+    });
   });
 
   it("hides the vertical scroll indicator", async () => {

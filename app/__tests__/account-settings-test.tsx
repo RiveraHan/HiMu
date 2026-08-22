@@ -1,34 +1,85 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from "@testing-library/react-native";
-import { Alert } from "react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Alert, Linking, StyleSheet as RNStyleSheet } from "react-native";
 import AccountSettingsScreen from "@/app/account-settings";
-import type { UserPreferences } from "@/src/types/preferences";
 
-const mockSetPreference = jest.fn();
-const mockUpdateSettings = jest.fn();
-let mockIsSaving = false;
-const mockSettings: UserPreferences = {
-  language: "en",
-  audio: { lossless: false, downloadQuality: "high" },
-  notifications: { push: true, emailNewsletters: false },
+type MockProfileQuery = {
+  data: unknown;
+  isPending: boolean;
+  isError: boolean;
+  fetchStatus: "fetching" | "paused" | "idle";
+  refetch: jest.Mock;
 };
+
+const initialProfileQuery = (): MockProfileQuery => ({
+  data: undefined,
+  isPending: true,
+  isError: false,
+  fetchStatus: "fetching",
+  refetch: jest.fn(),
+});
+
+const settledProfileQuery = (data: unknown): MockProfileQuery => ({
+  data,
+  isPending: false,
+  isError: false,
+  fetchStatus: "idle",
+  refetch: jest.fn(),
+});
+
+const failedProfileQuery = (data: unknown = undefined): MockProfileQuery => ({
+  data,
+  isPending: false,
+  isError: true,
+  fetchStatus: "idle",
+  refetch: jest.fn(),
+});
+
+const freeProfile = { subscriptionTier: "free" };
+const premiumProfile = { subscriptionTier: "premium" };
+const mockSetPreference = jest.fn();
+const mockConfirm = jest.fn();
+const mockFlushListeningStats = jest.fn();
+const mockSignOut = jest.fn();
+const mockReplace = jest.fn();
+const mockToastError = jest.fn();
+let mockIsSaving = false;
+let mockOnline = true;
+let mockProfileQuery = initialProfileQuery();
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, string>) => {
       const translations: Record<string, string> = {
-        "settings.sections.language": "Language",
+        "common.actions.cancel": "Cancel",
+        "common.actions.retry": "Retry",
+        "common.errors.offline": "You're offline",
+        "common.errors.generic": "Something went wrong. Please try again.",
+        "common.auth.privacy": "Privacy",
+        "common.auth.terms": "Terms",
+        "profile.profileUnavailable": "Profile unavailable",
+        "settings.currentDevice": "Current device",
+        "settings.email": "Email",
+        "settings.free": "Free",
+        "settings.header.subtitle": "Manage your account",
+        "settings.header.title": "Account settings",
+        "settings.language.en": "English",
+        "settings.language.es": "Español",
         "settings.language.label": "Language",
         "settings.language.system": "Use device language",
         "settings.language.systemResolved": "Device language ({{language}})",
-        "settings.language.en": "English",
-        "settings.language.es": "Español",
-        "settings.lossless": "Lossless audio",
-        "settings.push": "Push notifications",
-        "settings.newsletters": "Newsletters",
-        "settings.downloadQuality": "Download quality",
-        "settings.quality.low": "Low",
-        "common.actions.cancel": "Cancel",
+        "settings.premium": "Premium",
+        "settings.sections.account": "Account",
+        "settings.sections.audio": "Audio Quality",
+        "settings.sections.devices": "Devices",
+        "settings.sections.language": "Language",
+        "settings.sections.legal": "Legal & support",
+        "settings.sections.notifications": "Notifications",
+        "settings.sections.destructive": "Sign out of HiMu",
+        "settings.legalUnavailable": "Legal links are unavailable",
+        "settings.signOut": "Sign out",
+        "settings.subscription": "Subscription",
+        "settings.thisDevice": "This device",
       };
       const translation = translations[key] ?? key;
 
@@ -44,9 +95,42 @@ jest.mock("react-i18next", () => ({
 
 jest.mock("@/src/components", () => {
   const React = require("react");
-  const { Pressable, Text: NativeText, View } = require("react-native");
+  const {
+    Alert: NativeAlert,
+    Pressable,
+    Text: NativeText,
+    View,
+  } = require("react-native");
 
   return {
+    LanguagePreferencePicker: () => {
+      const value = "Device language (English)";
+      return React.createElement(
+        Pressable,
+        {
+          accessibilityLabel: "Language",
+          accessibilityRole: "button",
+          accessibilityState: { disabled: mockIsSaving },
+          accessibilityValue: { text: value },
+          disabled: mockIsSaving,
+          onPress: () =>
+            NativeAlert.alert("Language", undefined, [
+              { text: "Use device language", onPress: () => void mockSetPreference("system") },
+              { text: "English", onPress: () => void mockSetPreference("en") },
+              { text: "Español", onPress: () => void mockSetPreference("es") },
+              { text: "Cancel", style: "cancel" },
+            ]),
+        },
+        [
+          React.createElement(NativeText, { key: "label" }, "Language"),
+          React.createElement(NativeText, { key: "value" }, value),
+        ],
+      );
+    },
+    SettingsDesktopGrid: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
+      React.createElement(View, { testID }, children),
+    SettingsDesktopGridItem: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
+      React.createElement(View, { testID }, children),
     ScreenHeader: ({ title, subtitle }: { title: string; subtitle: string }) =>
       React.createElement(View, null, [
         React.createElement(NativeText, { key: "title" }, title),
@@ -58,44 +142,78 @@ jest.mock("@/src/components", () => {
       label,
       value,
       onPress,
+      disabled = false,
+      accessibilityRole = "button",
     }: {
       label: string;
-      value: string;
+      value?: string;
       onPress?: () => void;
-    }) =>
-      React.createElement(
-        Pressable,
-        {
-          accessibilityLabel: label,
-          accessibilityRole: "button",
-          disabled: !onPress,
-          onPress,
-        },
+      disabled?: boolean;
+      accessibilityRole?: "button" | "link";
+    }) => {
+      const content = React.createElement(
+        React.Fragment,
+        null,
         React.createElement(NativeText, null, label),
-        React.createElement(NativeText, null, value),
-      ),
-    SettingsSection: ({ children, title }: { children: React.ReactNode; title: string }) =>
-      React.createElement(View, null, [
+        value ? React.createElement(NativeText, null, value) : null,
+      );
+
+      return onPress
+        ? React.createElement(
+            Pressable,
+            {
+              accessibilityLabel: label,
+              accessibilityRole,
+              accessibilityState: { disabled },
+              accessibilityValue: value ? { text: value } : undefined,
+              disabled,
+              onPress,
+            },
+            content,
+          )
+        : React.createElement(View, null, content);
+    },
+    SettingsSection: ({
+      children,
+      title,
+      testID,
+    }: {
+      children: React.ReactNode;
+      title: string;
+      testID?: string;
+    }) =>
+      React.createElement(View, { testID }, [
         React.createElement(NativeText, { key: "title" }, title),
         children,
       ]),
-    SettingsToggleRow: ({
-      label,
-      onValueChange,
-      value,
+    SettingsToggleRow: ({ label }: { label: string }) =>
+      React.createElement(NativeText, null, label),
+    StateNotice: ({
+      actionLabel,
+      kind,
+      onAction,
+      title,
     }: {
-      label: string;
-      onValueChange: (value: boolean) => void;
-      value: boolean;
+      actionLabel?: string;
+      kind: string;
+      onAction?: () => void;
+      title: string;
     }) =>
       React.createElement(
-        Pressable,
-        {
-          accessibilityLabel: label,
-          accessibilityRole: "switch",
-          onPress: () => onValueChange(!value),
-        },
-        React.createElement(NativeText, null, label),
+        View,
+        { testID: `notice-${kind}` },
+        React.createElement(NativeText, null, title),
+        actionLabel && onAction
+          ? React.createElement(
+              Pressable,
+              {
+                accessibilityLabel: actionLabel,
+                accessibilityRole: "button",
+                onPress: onAction,
+              },
+              React.createElement(NativeText, null, actionLabel),
+            )
+          : null,
       ),
     Text: ({ children }: { children: React.ReactNode }) =>
       React.createElement(NativeText, null, children),
@@ -110,44 +228,83 @@ jest.mock("@/src/i18n/use-locale", () => ({
     isSaving: mockIsSaving,
   }),
 }));
-jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => null }));
-jest.mock("@/src/hooks/use-profile", () => ({ useProfile: () => ({ data: null }) }));
+jest.mock("@/src/hooks/use-auth", () => ({
+  useCurrentUser: () => ({ email: "listener@himu.app" }),
+}));
+jest.mock("@/src/hooks/use-profile", () => ({
+  useProfile: () => mockProfileQuery,
+}));
 jest.mock("@/src/hooks/use-settings", () => ({
-  useSettings: () => ({ data: mockSettings }),
-  useUpdateSettings: () => ({ mutate: mockUpdateSettings }),
+  useSettings: () => ({ data: undefined }),
+  useUpdateSettings: () => ({ mutate: jest.fn() }),
+}));
+jest.mock("@/src/hooks/use-online-status", () => ({
+  useOnlineStatus: () => mockOnline,
 }));
 jest.mock("@/src/audio/use-player", () => ({
-  usePlayer: () => ({ flushListeningStats: jest.fn() }),
+  usePlayer: () => ({ flushListeningStats: mockFlushListeningStats }),
 }));
-jest.mock("@/src/hooks/use-confirm", () => ({ useConfirm: () => jest.fn() }));
-jest.mock("@/src/hooks/use-tab-bar-padding", () => ({ useMiniPlayerPadding: () => 0 }));
-jest.mock("@/src/api/auth", () => ({ authApi: { signOut: jest.fn() } }));
-jest.mock("expo-router", () => ({ router: { replace: jest.fn() } }));
-jest.mock("expo-device", () => ({ osName: null, osVersion: null }));
+jest.mock("@/src/hooks/use-confirm", () => ({ useConfirm: () => mockConfirm }));
+jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
+  useMiniPlayerPadding: () => 0,
+}));
+jest.mock("@/src/hooks/use-toast", () => ({
+  useToast: () => ({ error: mockToastError }),
+}));
+jest.mock("@/src/api/auth", () => ({
+  authApi: { signOut: (...args: unknown[]) => mockSignOut(...args) },
+}));
+jest.mock("expo-router", () => ({
+  router: { replace: (...args: unknown[]) => mockReplace(...args) },
+}));
+jest.mock("expo-device", () => ({
+  deviceName: "Test phone",
+  osName: null,
+  osVersion: null,
+}));
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
-jest.mock("react-native-unistyles", () => ({
-  useUnistyles: () => ({
-    theme: {
-      colors: {
-        error: "#f00",
-        onSurfaceVariant: "#111",
-        outline: "#222",
-        primary: "#333",
-        primaryContainer: "#444",
-      },
-      spacing: { stackMd: 8, stackLg: 16, stackSm: 4, pageMargin: 20 },
+jest.mock("react-native-unistyles", () => {
+  const theme = {
+    borderRadius: { full: 999 },
+    colors: {
+      background: "#000",
+      error: "#f00",
+      onSurfaceVariant: "#111",
+      outline: "#222",
+      primaryContainer: "#444",
     },
-  }),
-  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-}));
+    spacing: { stackMd: 8, stackLg: 16, stackSm: 4, pageMargin: 20 },
+  };
+
+  return {
+    useUnistyles: () => ({ theme }),
+    StyleSheet: {
+      configure: jest.fn(),
+      create: (styles: unknown) =>
+        typeof styles === "function"
+          ? styles(theme)
+          : styles,
+      hairlineWidth: 1,
+    },
+  };
+});
 
 describe("AccountSettingsScreen", () => {
   beforeEach(() => {
     mockSetPreference.mockReset();
-    mockUpdateSettings.mockReset();
+    mockConfirm.mockReset().mockResolvedValue(false);
+    mockFlushListeningStats.mockReset().mockResolvedValue(undefined);
+    mockSignOut.mockReset().mockResolvedValue(undefined);
+    mockReplace.mockReset();
+    mockToastError.mockReset();
     mockIsSaving = false;
+    mockOnline = true;
+    mockProfileQuery = initialProfileQuery();
+    delete process.env.EXPO_PUBLIC_TERMS_URL;
+    delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+    jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
     jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
   });
 
@@ -155,56 +312,179 @@ describe("AccountSettingsScreen", () => {
     jest.restoreAllMocks();
   });
 
-  it("shows the resolved device language and maps every language option", async () => {
+  it("keeps only account, language, device, and sign-out settings", async () => {
     const screen = await render(<AccountSettingsScreen />);
 
-    expect(screen.getByLabelText("Language")).toBeTruthy();
-    expect(screen.getByText("Device language (English)")).toBeTruthy();
+    expect(screen.getByText("Account")).toBeTruthy();
+    expect(screen.getAllByText("Language")).toHaveLength(2);
+    expect(screen.getByText("Devices")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.queryByText("Audio Quality")).toBeNull();
+    expect(screen.queryByText("Notifications")).toBeNull();
+  });
 
-    await fireEvent.press(screen.getByLabelText("Language"));
+  it("renders an informational placeholder without inventing a Free tier", async () => {
+    const screen = await render(<AccountSettingsScreen />);
 
+    expect(screen.getByText("Subscription")).toBeTruthy();
+    expect(screen.getByText("—")).toBeTruthy();
+    expect(screen.queryByText("Free")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Subscription" })).toBeNull();
+  });
+
+  it("replaces a first profile failure with a retry notice", async () => {
+    mockProfileQuery = failedProfileQuery();
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(screen.getByText("Profile unavailable")).toBeTruthy();
+    expect(screen.queryByText("Free")).toBeNull();
+    expect(screen.queryByText("—")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockProfileQuery.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows offline retry before the first-load placeholder", async () => {
+    mockOnline = false;
+    mockProfileQuery = { ...initialProfileQuery(), fetchStatus: "paused" };
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(screen.getByText("You're offline")).toBeTruthy();
+    expect(screen.getByTestId("notice-offline")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.queryByText("—")).toBeNull();
+    expect(screen.queryByText("Free")).toBeNull();
+  });
+
+  it("keeps a cached premium tier with a compact retry notice", async () => {
+    mockProfileQuery = failedProfileQuery(premiumProfile);
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(screen.getByText("Subscription")).toBeTruthy();
+    expect(screen.getByText("Premium")).toBeTruthy();
+    expect(screen.getByText("Profile unavailable")).toBeTruthy();
+    expect(screen.queryByText("Free")).toBeNull();
+    fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+    expect(mockProfileQuery.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a cached free tier with an offline retry notice", async () => {
+    mockOnline = false;
+    mockProfileQuery = settledProfileQuery(freeProfile);
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(screen.getByText("Free")).toBeTruthy();
+    expect(screen.getByText("Profile unavailable")).toBeTruthy();
+    expect(screen.getByTestId("notice-offline")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Subscription" })).toBeNull();
+  });
+
+  it("exposes the language value on the interactive row", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+    const language = screen.getByRole("button", { name: "Language" });
+
+    expect(language).toHaveProp("accessibilityValue", {
+      text: "Device language (English)",
+    });
+    fireEvent.press(language);
     expect(Alert.alert).toHaveBeenCalledWith("Language", undefined, [
       expect.objectContaining({ text: "Use device language" }),
       expect.objectContaining({ text: "English" }),
       expect.objectContaining({ text: "Español" }),
       expect.objectContaining({ text: "Cancel", style: "cancel" }),
     ]);
-
-    const actions = jest.mocked(Alert.alert).mock.calls[0][2]!;
-    actions[0].onPress?.();
-    actions[1].onPress?.();
-    actions[2].onPress?.();
-
-    expect(mockSetPreference).toHaveBeenNthCalledWith(1, "system");
-    expect(mockSetPreference).toHaveBeenNthCalledWith(2, "en");
-    expect(mockSetPreference).toHaveBeenNthCalledWith(3, "es");
   });
 
-  it("does not open the language picker while saving a preference", async () => {
+  it("saves the selected language through the existing locale owner", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "Language" }));
+    const options = jest.mocked(Alert.alert).mock.calls[0]?.[2];
+
+    options?.find((option) => option.text === "Español")?.onPress?.();
+
+    expect(mockSetPreference).toHaveBeenCalledTimes(1);
+    expect(mockSetPreference).toHaveBeenCalledWith("es");
+  });
+
+  it("keeps the saving language row a disabled semantic button", async () => {
     mockIsSaving = true;
     const screen = await render(<AccountSettingsScreen />);
+    const language = screen.getByRole("button", { name: "Language" });
 
-    await fireEvent.press(screen.getByLabelText("Language"));
-
+    expect(language).toHaveProp("accessibilityState", { disabled: true });
+    expect(language).toHaveProp("accessibilityValue", {
+      text: "Device language (English)",
+    });
+    fireEvent.press(language);
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 
-  it("writes only field-scoped audio and notification patches", async () => {
+  it("gives sign out a 44-point minimum target", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+    const signOut = screen.getByRole("button", { name: "Sign out" });
+
+    expect(RNStyleSheet.flatten(signOut.props.style)).toEqual(
+      expect.objectContaining({ minHeight: 44 }),
+    );
+  });
+
+  it("renders configured legal URLs as links and recovers from an open failure", async () => {
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    jest.mocked(Linking.openURL).mockRejectedValueOnce(new Error("unavailable"));
     const screen = await render(<AccountSettingsScreen />);
 
-    await fireEvent.press(screen.getByLabelText("Lossless audio"));
-    await fireEvent.press(screen.getByLabelText("Push notifications"));
-    await fireEvent.press(screen.getByLabelText("Newsletters"));
-    await fireEvent.press(screen.getByLabelText("Download quality"));
+    const terms = screen.getByRole("link", { name: "Terms" });
+    const privacy = screen.getByRole("link", { name: "Privacy" });
+    await act(async () => {
+      fireEvent.press(terms);
+    });
+    await act(async () => {
+      fireEvent.press(privacy);
+    });
 
-    const qualityActions = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2];
-    qualityActions?.[0].onPress?.();
+    expect(Linking.openURL).toHaveBeenNthCalledWith(1, "https://himu.app/terms");
+    expect(Linking.openURL).toHaveBeenNthCalledWith(2, "https://himu.app/privacy");
+    expect(mockToastError).toHaveBeenCalledWith("Something went wrong. Please try again.");
+  });
 
-    expect(mockUpdateSettings.mock.calls).toEqual([
-      [{ audio: { lossless: true } }],
-      [{ notifications: { push: false } }],
-      [{ notifications: { emailNewsletters: true } }],
-      [{ audio: { downloadQuality: "low" } }],
+  it("keeps an explicit non-actionable state when legal URLs are missing", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(screen.getByText("Legal links are unavailable")).toBeTruthy();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("does not mutate the session until destructive confirmation succeeds", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(mockFlushListeningStats).not.toHaveBeenCalled();
+    expect(mockSignOut).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
+    expect(mockFlushListeningStats).not.toHaveBeenCalled();
+    expect(mockSignOut).not.toHaveBeenCalled();
+
+    mockConfirm.mockResolvedValueOnce(true);
+    fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+    expect(mockFlushListeningStats).toHaveBeenCalledTimes(1);
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps identity, preferences, session, and destructive controls in compact reading order", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    const grid = screen.getByTestId("account-settings-grid");
+    expect(grid.children).toEqual([
+      screen.getByTestId("account-identity-zone"),
+      screen.getByTestId("account-language-zone"),
+      screen.getByTestId("account-session-zone"),
+      screen.getByTestId("account-legal-zone"),
+      screen.getByTestId("account-destructive-zone"),
     ]);
+    expect(screen.getAllByRole("button").map((control) => control.props.accessibilityLabel))
+      .toEqual(["Language", "Sign out"]);
+    expect(screen.getByTestId("account-destructive-section")).toBeTruthy();
   });
 });

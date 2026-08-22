@@ -1,13 +1,19 @@
-import { act, render } from "@testing-library/react-native";
-import { View } from "react-native";
+import { act, fireEvent, render, within } from "@testing-library/react-native";
+import { StyleSheet as RNStyleSheet, Text as NativeText, View } from "react-native";
 
+import { Button } from "@/src/components/Button";
 import { ConfirmDialogHost } from "@/src/components/ConfirmDialog";
 import { MiniPlayer } from "@/src/components/MiniPlayer";
+import { DJAvatar } from "@/src/components/DJAvatar";
+import { LibraryCard } from "@/src/components/LibraryCard";
 import { PlaylistCard } from "@/src/components/PlaylistCard";
 import { ScreenHeader } from "@/src/components/ScreenHeader";
 import { ToastHost } from "@/src/components/Toast";
 import { TrackCard } from "@/src/components/TrackCard";
+import { DjHero } from "@/src/components/dj/DjHero";
 import { Chip } from "@/src/components/preferences/Chip";
+import { SettingRow } from "@/src/components/profile/SettingsRow";
+import { SettingsInfoRow } from "@/src/components/settings/SettingsInfoRow";
 import i18n from "@/src/i18n";
 import { useConfirmStore } from "@/src/stores/confirm-store";
 import { usePlayerStore } from "@/src/stores/player-store";
@@ -68,14 +74,61 @@ describe("shared component translations", () => {
     );
 
     expect(screen.getByLabelText("Atrás")).toBeTruthy();
-    expect(screen.getByLabelText("Abrir reproductor")).toBeTruthy();
-    expect(screen.getByLabelText("Pausar")).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: "Abrir reproductor: Canción dinámica de Artista dinámico",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Anterior" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Siguiente" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pausar" })).toHaveProp(
+      "accessibilityState",
+      { disabled: false, selected: true },
+    );
     expect(screen.getByLabelText("Descartar")).toBeTruthy();
     expect(screen.getByLabelText("Eliminar Ambient")).toBeTruthy();
     expect(screen.getByText("Encabezado dinámico")).toBeTruthy();
     expect(screen.getByText("Canción dinámica")).toBeTruthy();
     expect(screen.getByText("Artista dinámico")).toBeTruthy();
     expect(screen.getByText("Título dinámico")).toBeTruthy();
+  });
+
+  it("keeps the MiniPlayer as exactly four sibling controls", async () => {
+    usePlayerStore.getState().setNowPlaying(
+      {
+        id: "track-1", title: "Tema", artist: "Artista", audio_url: "https://example.com/a.mp3", album_art_url: null, duration: 180,
+      }, [], 0,
+    );
+    const screen = await render(<MiniPlayer />);
+    const player = screen.getByTestId("mini-player");
+    expect(within(player).getAllByRole("button")).toHaveLength(4);
+  });
+
+  it("keeps a 64-point minimum without fixing height for large text scaling", async () => {
+    usePlayerStore.getState().setNowPlaying(
+      {
+        id: "track-1", title: "A deliberately long scalable track title", artist: "Artist", audio_url: "https://example.com/a.mp3", album_art_url: null, duration: 180,
+      }, [], 0,
+    );
+    const screen = await render(<MiniPlayer />);
+    const style = RNStyleSheet.flatten(screen.getByTestId("mini-player").props.style);
+    expect(style).toEqual(expect.objectContaining({ minHeight: 64 }));
+    expect(style.height).toBeUndefined();
+  });
+
+  it("uses actionable semantics only for interactive avatar and library cards", async () => {
+    const screen = await render(
+      <View>
+        <DJAvatar fallback="N" name="Nova" isLive onPress={jest.fn()} testID="interactive-avatar" />
+        <DJAvatar fallback="N" name="Nova" testID="static-avatar" />
+        <LibraryCard label="Generated" title="Night drive" onPress={jest.fn()} testID="interactive-library" />
+        <LibraryCard label="Generated" title="Night drive" testID="static-library" />
+      </View>,
+    );
+    expect(screen.getByRole("button", { name: "Nova, live" })).toHaveStyle({ minHeight: 44, minWidth: 44 });
+    expect(screen.getByRole("button", { name: "Generated: Night drive" })).toBeTruthy();
+    expect(screen.getByTestId("static-avatar").type).toBe("View");
+    expect(screen.getByTestId("static-library").type).toBe("View");
   });
 
   it("localizes shared card metadata", async () => {
@@ -97,6 +150,50 @@ describe("shared component translations", () => {
     expect(screen.getByText("Lista dinámica")).toBeTruthy();
   });
 
+  it("renders highlighted track state with localized visible and spoken cues", async () => {
+    const screen = await render(
+      <TrackCard
+        title="Mezcla nueva"
+        artist="DJ Uno"
+        variant="row"
+        highlighted
+        highlightedLabel="Nueva"
+        accessibilityHint="Mezcla recién generada"
+      />,
+    );
+
+    expect(screen.getByText("Nueva")).toBeTruthy();
+    const row = screen.getByA11yHint("Mezcla recién generada");
+    expect(row).toHaveProp("accessibilityState", { selected: true });
+  });
+
+  it("renders explicit owner-private badges without deriving one resource from another", async () => {
+    const screen = await render(
+      <View>
+        <DJAvatar
+          fallback="N"
+          name="Nova"
+          isPrivate
+          privateLabel="Privado"
+          onPress={jest.fn()}
+        />
+        <TrackCard
+          title="Mezcla"
+          artist="Nova"
+          isPrivate
+          privateLabel="Privado"
+        />
+        <TrackCard title="Pública" artist="Nova" />
+        <DjHero name="Nova" isPrivate privateLabel="Privado" />
+      </View>,
+    );
+
+    expect(screen.getAllByText("Privado")).toHaveLength(3);
+    expect(screen.getAllByLabelText("Nova, Privado")).toHaveLength(2);
+    expect(screen.getByLabelText("Mezcla, Nova, Privado")).toBeTruthy();
+    expect(screen.getByLabelText("Pública, Nova")).toBeTruthy();
+  });
+
   it("localizes default confirmation actions and preserves overrides", async () => {
     void useConfirmStore.getState().request({ title: "Título dinámico" });
     const screen = await render(<ConfirmDialogHost />);
@@ -116,5 +213,81 @@ describe("shared component translations", () => {
 
     expect(screen.getByText("Hazlo")).toBeTruthy();
     expect(screen.getByText("Nunca")).toBeTruthy();
+  });
+
+  it("exposes all Button variants as named controls with disabled and busy state", async () => {
+    const screen = await render(
+      <View>
+        <Button label="Principal" disabled />
+        <Button variant="glass" label="Vidrio" loading loadingLabel="Cargando" />
+        <Button variant="ghost" label="Fantasma" />
+      </View>,
+    );
+
+    expect(screen.getByRole("button", { name: "Principal" })).toHaveProp(
+      "accessibilityState",
+      { disabled: true, busy: false },
+    );
+    expect(screen.getByRole("button", { name: "Cargando" })).toHaveProp(
+      "accessibilityState",
+      { disabled: true, busy: true },
+    );
+    const ghost = screen.getByRole("button", { name: "Fantasma" });
+    expect(ghost).toHaveProp("accessibilityState", { disabled: false, busy: false });
+    expect(RNStyleSheet.flatten(ghost.props.style)).toEqual(
+      expect.objectContaining({ minHeight: 44, minWidth: 44 }),
+    );
+  });
+
+  it("keeps informational settings visible without actionable semantics", async () => {
+    const screen = await render(
+      <View>
+        <SettingRow
+          icon={<View />}
+          label="Suscripción de perfil"
+          right={<NativeText>Premium de perfil</NativeText>}
+        />
+        <SettingsInfoRow
+          icon={<View />}
+          label="Suscripción de cuenta"
+          value="Premium de cuenta"
+        />
+      </View>,
+    );
+
+    expect(screen.getByText("Suscripción de perfil")).toBeTruthy();
+    expect(screen.getByText("Premium de perfil")).toBeTruthy();
+    expect(screen.getByText("Suscripción de cuenta")).toBeTruthy();
+    expect(screen.getByText("Premium de cuenta")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Suscripción de perfil" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Suscripción de cuenta" }),
+    ).toBeNull();
+  });
+
+  it("keeps a disabled settings action semantic and exposes its current value", async () => {
+    const onPress = jest.fn();
+    const screen = await render(
+      <SettingsInfoRow
+        icon={<View />}
+        label="Idioma"
+        value="Español"
+        onPress={onPress}
+        disabled
+        accessory={<NativeText>⌄</NativeText>}
+      />,
+    );
+    const language = screen.getByRole("button", { name: "Idioma" });
+
+    expect(language).toHaveProp("accessibilityValue", { text: "Español" });
+    expect(language).toHaveProp("accessibilityState", { disabled: true });
+    expect(RNStyleSheet.flatten(language.props.style)).toEqual(
+      expect.objectContaining({ minHeight: 44 }),
+    );
+    expect(screen.getByText("⌄")).toBeTruthy();
+    fireEvent.press(language);
+    expect(onPress).not.toHaveBeenCalled();
   });
 });

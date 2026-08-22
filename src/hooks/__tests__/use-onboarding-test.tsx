@@ -16,6 +16,18 @@ import {
 } from "@/src/onboarding/onboarding-machine";
 
 jest.mock("../use-auth", () => ({ useCurrentUser: jest.fn() }));
+jest.mock("@/src/api/auth-scope", () => {
+  const actual = jest.requireActual("@/src/api/auth-scope");
+  return {
+    ...actual,
+    captureAuthScope: (userId: string) => ({
+      userId,
+      authorization: `Bearer fixture-${userId}`,
+    }),
+    assertCurrentMutationUser: jest.fn(),
+    isCurrentMutationUser: () => true,
+  };
+});
 jest.mock("@/src/api/supabase", () => ({
   supabase: { from: jest.fn() },
 }));

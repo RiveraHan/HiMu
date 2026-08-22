@@ -1,7 +1,7 @@
 import { Play } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import { Avatar } from "../Avatar";
@@ -60,7 +60,7 @@ export function OnAirHero({
       </View>
 
       <View style={styles.main}>
-        <Avatar src={avatarUrl} fallback={djName} size="lg" />
+        <Avatar src={avatarUrl} fallback={djName} size="lg" eager />
         <View style={styles.meta}>
           <Text variant="h2" numberOfLines={1}>
             {djName}
@@ -118,6 +118,8 @@ export function OnAirHero({
 const styles = StyleSheet.create((theme) => ({
   card: {
     gap: theme.spacing.stackMd,
+    minHeight: { xs: undefined, xl: 220 },
+    justifyContent: { xs: "flex-start", xl: "center" },
   },
   eyebrow: {
     flexDirection: "row",

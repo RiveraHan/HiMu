@@ -1,6 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { Platform, type ViewProps } from 'react-native';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, withUnistyles } from '@/src/theme/unistyles';
 
 interface Props extends ViewProps {
   level?: 1 | 2 | 3;
@@ -15,6 +15,8 @@ const androidBlurProps =
       }
     : undefined;
 
+const UnistylesBlurView = withUnistyles(BlurView);
+
 export function GlassView({
   level = 2,
   style,
@@ -26,7 +28,7 @@ export function GlassView({
     level === 1 ? styles.level1 : level === 2 ? styles.level2 : styles.level3;
 
   return (
-    <BlurView
+    <UnistylesBlurView
       tint='systemThickMaterialDark'
       intensity={intensity}
       style={[styles.base, levelStyle, style]}
@@ -34,7 +36,7 @@ export function GlassView({
       {...props}
     >
       {children}
-    </BlurView>
+    </UnistylesBlurView>
   );
 }
 

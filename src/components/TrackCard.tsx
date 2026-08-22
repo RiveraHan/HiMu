@@ -1,8 +1,8 @@
-import { Image } from "expo-image";
-import { Music } from "lucide-react-native";
+import { Check, Lock, Music } from "lucide-react-native";
 import { Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { HimuImage } from "./media/HimuImage";
 import { Text } from "./Text";
 
 type Props = {
@@ -10,11 +10,16 @@ type Props = {
   cover?: string | null;
   blurhash?: string;
   artist: string;
-  variant?: "tile" | "row";
+  variant?: "tile" | "row" | "adaptive";
   isPlaying?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   accessibilityLabel?: string;
+  accessibilityHint?: string;
+  highlighted?: boolean;
+  highlightedLabel?: string;
+  isPrivate?: boolean;
+  privateLabel?: string;
   testID?: string;
 };
 export function TrackCard({
@@ -27,23 +32,51 @@ export function TrackCard({
   onPress,
   onLongPress,
   accessibilityLabel,
+  accessibilityHint,
+  highlighted = false,
+  highlightedLabel,
+  isPrivate = false,
+  privateLabel,
   testID,
 }: Props) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const isRow = variant === "row";
+  const isAdaptive = variant === "adaptive";
+  const coverStyle = isRow
+    ? styles.coverRow
+    : isAdaptive
+      ? styles.coverAdaptive
+      : styles.coverTile;
+  const spokenLabel = [
+    accessibilityLabel ?? `${title}, ${artist}`,
+    isPrivate ? privateLabel : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const coverNode = cover ? (
-    <Image
+    <HimuImage
       source={cover}
       placeholder={blurhash ? { blurhash } : undefined}
       transition={200}
       contentFit="cover"
-      style={isRow ? styles.coverRow : styles.coverTile}
+      style={coverStyle}
+      fallback={
+        <View
+          style={[
+            coverStyle,
+            styles.coverFallback,
+          ]}
+        >
+          <Music size={28} color={theme.colors.onSurfaceVariant} />
+        </View>
+      }
+      componentLabel="TrackCard artwork"
     />
   ) : (
     <View
-      style={[isRow ? styles.coverRow : styles.coverTile, styles.coverFallback]}
+      style={[coverStyle, styles.coverFallback]}
     >
       <Music size={28} color={theme.colors.onSurfaceVariant} />
     </View>
@@ -52,16 +85,19 @@ export function TrackCard({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={spokenLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityRole={onPress ? "button" : undefined}
+      accessibilityState={{ selected: highlighted }}
       testID={testID}
       style={({ pressed }) => [
-        isRow ? styles.rootRow : styles.rootTile,
+        isRow ? styles.rootRow : isAdaptive ? styles.rootAdaptive : styles.rootTile,
+        (isRow || isAdaptive) && highlighted && styles.highlightedRow,
         pressed && styles.pressed,
       ]}
     >
       {coverNode}
-      <View style={isRow ? styles.metaRow : styles.metaTile}>
+      <View style={isRow ? styles.metaRow : isAdaptive ? styles.metaAdaptive : styles.metaTile}>
         <Text variant="bodyMd" numberOfLines={1}>
           {title}
         </Text>
@@ -78,6 +114,22 @@ export function TrackCard({
             {t("common.states.nowPlaying")}
           </Text>
         )}
+        {isPrivate && privateLabel ? (
+          <View style={styles.privateBadge}>
+            <Lock size={14} color={theme.colors.onSurfaceVariant} />
+            <Text variant="labelCaps" color="onSurfaceVariant">
+              {privateLabel}
+            </Text>
+          </View>
+        ) : null}
+        {highlighted && highlightedLabel ? (
+          <View style={styles.highlightBadge}>
+            <Check size={14} color={theme.colors.primary} />
+            <Text variant="labelCaps" color="primary">
+              {highlightedLabel}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -91,6 +143,18 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.stackSm,
+  },
+  rootAdaptive: {
+    flexDirection: { xs: "row", xl: "column" },
+    alignItems: { xs: "center", xl: "stretch" },
+    gap: theme.spacing.stackSm,
+  },
+  highlightedRow: {
+    padding: theme.spacing.stackSm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.glassTintStrong,
   },
   pressed: {
     transform: [{ scale: 0.95 }],
@@ -109,6 +173,14 @@ const styles = StyleSheet.create((theme) => ({
     borderCurve: "continuous",
     backgroundColor: theme.colors.glassTint,
   },
+  coverAdaptive: {
+    width: { xs: 64, xl: "100%" },
+    height: { xs: 64, xl: "auto" },
+    aspectRatio: { xs: undefined, xl: 1 },
+    borderRadius: theme.borderRadius.md,
+    borderCurve: "continuous",
+    backgroundColor: theme.colors.glassTint,
+  },
   coverFallback: {
     alignItems: "center",
     justifyContent: "center",
@@ -119,5 +191,22 @@ const styles = StyleSheet.create((theme) => ({
   metaRow: {
     flex: 1,
     gap: 2,
+  },
+  metaAdaptive: {
+    flex: { xs: 1, xl: 0 },
+    gap: 2,
+    minWidth: 0,
+  },
+  highlightBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: theme.spacing.stackXs,
+  },
+  privateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: theme.spacing.stackXs,
   },
 }));

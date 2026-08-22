@@ -3,6 +3,12 @@ import { supabase } from "@/src/api/supabase";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  authMutationKey,
+  captureAuthScope,
+  isCurrentMutationUser,
+  setAuthScopeHeader,
+} from "@/src/api/auth-scope";
 
 export type FavoriteTrack = PlayerTrack & { favoritedAt: string };
 
@@ -11,7 +17,7 @@ export type FavoriteTrack = PlayerTrack & { favoritedAt: string };
 export function useFavorites() {
   const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.favorites.all,
+    queryKey: queryKeys.favorites.all(user?.id ?? null),
     enabled: !!user,
     queryFn: async (): Promise<FavoriteTrack[]> => {
       const { data, error } = await supabase
@@ -43,7 +49,7 @@ export function useFavorites() {
 export function useIsFavorited(trackId: string | undefined) {
   const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.favorites.isFavorited(trackId ?? ""),
+    queryKey: queryKeys.favorites.isFavorited(user?.id ?? null, trackId ?? ""),
     enabled: !!trackId && !!user,
     queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
@@ -62,9 +68,11 @@ export function useIsFavorited(trackId: string | undefined) {
 // cache so the player's heart responds instantly; rolls back on error.
 export function useToggleFavorite() {
   const user = useCurrentUser();
+  const userId = user?.id ?? "";
   const qc = useQueryClient();
 
   return useMutation({
+    mutationKey: authMutationKey("toggle-favorite", userId),
     mutationFn: async ({
       track,
       isFavorited,
@@ -72,43 +80,50 @@ export function useToggleFavorite() {
       track: PlayerTrack;
       isFavorited: boolean;
     }) => {
-      if (!user) throw new Error("not signed in");
+      const scope = captureAuthScope(userId);
 
       if (isFavorited) {
-        const { error } = await supabase
-          .from("favorites")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("track_id", track.id);
+        const { error } = await setAuthScopeHeader(
+          supabase
+            .from("favorites")
+            .delete()
+            .eq("user_id", scope.userId)
+            .eq("track_id", track.id),
+          scope,
+        );
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("favorites").insert({
-          user_id: user.id,
-          track_id: track.id,
-          title: track.title,
-          artist: track.artist,
-          audio_url: track.audio_url,
-          album_art_url: track.album_art_url,
-          duration: track.duration,
-          genre: track.genre ?? null,
-        });
+        const { error } = await setAuthScopeHeader(
+          supabase.from("favorites").insert({
+            user_id: scope.userId,
+            track_id: track.id,
+            title: track.title,
+            artist: track.artist,
+            audio_url: track.audio_url,
+            album_art_url: track.album_art_url,
+            duration: track.duration,
+            genre: track.genre ?? null,
+          }),
+          scope,
+        );
         if (error) throw error;
       }
     },
     onMutate: async ({ track, isFavorited }) => {
-      const key = queryKeys.favorites.isFavorited(track.id);
+      const key = queryKeys.favorites.isFavorited(userId, track.id);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<boolean>(key);
       qc.setQueryData(key, !isFavorited);
       return { previous, key };
     },
     onError: (_err, _vars, context) => {
-      if (context) qc.setQueryData(context.key, context.previous);
+      if (context && isCurrentMutationUser(userId)) {
+        qc.setQueryData(context.key, context.previous);
+      }
     },
     onSettled: () => {
-      // favorites.all (["favorites"]) is a prefix of isFavorited's key, so
-      // this alone also invalidates every isFavorited query.
-      qc.invalidateQueries({ queryKey: queryKeys.favorites.all });
+      if (!isCurrentMutationUser(userId)) return;
+      qc.invalidateQueries({ queryKey: queryKeys.favorites.all(userId) });
     },
   });
 }

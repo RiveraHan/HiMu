@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 import { ScrollView, Text } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 export default function CommunityScreen() {

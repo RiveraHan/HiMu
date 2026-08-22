@@ -1,9 +1,10 @@
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { HimuImage } from "../media/HimuImage";
 import { Text } from "../Text";
 import { useTranslation } from "react-i18next";
+import { Lock } from "lucide-react-native";
 
 const HERO_HEIGHT = 380;
 
@@ -13,20 +14,44 @@ type Props = {
   isLive?: boolean;
   tagline?: string;
   testID?: string;
+  isPrivate?: boolean;
+  privateLabel?: string;
 };
 
-export function DjHero({ name, avatarUrl, isLive, tagline, testID }: Props) {
+export function DjHero({
+  name,
+  avatarUrl,
+  isLive,
+  tagline,
+  testID,
+  isPrivate = false,
+  privateLabel,
+}: Props) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
 
   return (
-    <View testID={testID} style={styles.hero}>
+    <View
+      accessible
+      accessibilityLabel={[
+        name,
+        isLive ? t("dj.profile.live") : null,
+        isPrivate ? privateLabel : null,
+      ]
+        .filter(Boolean)
+        .join(", ")}
+      testID={testID}
+      style={styles.hero}
+    >
       {avatarUrl ? (
-        <Image
+        <HimuImage
           source={avatarUrl}
           style={styles.image}
           contentFit="cover"
           transition={200}
+          eager
+          fallback={<View style={[styles.image, styles.fallback]} />}
+          componentLabel="DjHero artwork"
         />
       ) : (
         <View style={[styles.image, styles.fallback]} />
@@ -52,6 +77,14 @@ export function DjHero({ name, avatarUrl, isLive, tagline, testID }: Props) {
               {tagline}
             </Text>
           )}
+          {isPrivate && privateLabel ? (
+            <View style={styles.privateBadge}>
+              <Lock size={14} color={theme.colors.onSurfaceVariant} />
+              <Text variant="labelCaps" color="onSurfaceVariant">
+                {privateLabel}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <Text variant="display">{name}</Text>
       </View>
@@ -100,6 +133,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.glassTintStrong,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.glassBorder,
+  },
+  privateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackXs,
   },
   liveDot: {
     width: 6,

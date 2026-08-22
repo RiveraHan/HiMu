@@ -1,7 +1,7 @@
 import { DJ_MOODS, GENRES } from "./music-catalog.ts";
 import { sanitize } from "./text.ts";
 
-export type DjInput = {
+export type DjTraitsInput = {
   name: string;
   genres: string[];
   moods: string[];
@@ -9,6 +9,32 @@ export type DjInput = {
   isInstrumental: boolean;
   vibe: string | null;
 };
+
+export type DjInput = DjTraitsInput & {
+  identityConcept: string;
+};
+
+export function validateIdentityConcept(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error("identityConcept must be text");
+  }
+  const concept = value.trim();
+  if (concept.length < 10 || concept.length > 240) {
+    throw new Error("identityConcept must be 10-240 characters");
+  }
+  if (/[\u0000-\u001f\u007f]/.test(concept)) {
+    throw new Error("identityConcept has unsupported control characters");
+  }
+  if (/(?:https?:\/\/|www\.)\S+/i.test(concept)) {
+    throw new Error("identityConcept must not contain a URL");
+  }
+  return concept;
+}
+
+export function parseIsPublic(value: unknown): boolean {
+  if (typeof value !== "boolean") throw new Error("isPublic must be a boolean");
+  return value;
+}
 
 function pickList(value: unknown, allowed: readonly string[]): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -22,9 +48,9 @@ function pickList(value: unknown, allowed: readonly string[]): string[] | null {
     : null;
 }
 
-export function validateDjInput(
+export function validateDjTraitsInput(
   body: unknown,
-): { ok: true; data: DjInput } | { ok: false; error: string } {
+): { ok: true; data: DjTraitsInput } | { ok: false; error: string } {
   const b = (body ?? {}) as Record<string, unknown>;
 
   const name = typeof b.name === "string" ? sanitize(b.name, 24) : "";
@@ -70,19 +96,55 @@ export function validateDjInput(
   };
 }
 
+export function validateDjInput(
+  body: unknown,
+): { ok: true; data: DjInput } | { ok: false; error: string } {
+  const traits = validateDjTraitsInput(body);
+  if (!traits.ok) return traits;
+  try {
+    const identityConcept = validateIdentityConcept(
+      (body as Record<string, unknown>).identityConcept,
+    );
+    return { ok: true, data: { ...traits.data, identityConcept } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "invalid identityConcept",
+    };
+  }
+}
+
 // Fixed prompt template (the only free text is the sanitized vibe).
-export function buildBasePrompt(d: DjInput): string {
+export function buildBasePrompt(
+  d: DjTraitsInput & { identityConcept?: string | null },
+): string {
   return (
     `${d.genres.join(" and ").toLowerCase()} music, ` +
     `${d.moods.join(", ").toLowerCase()} mood, energy ${d.energy}/10` +
-    (d.vibe ? `, ${d.vibe}` : "")
+    (d.vibe ? `, ${d.vibe}` : "") +
+    (d.identityConcept ? `, fictional DJ identity: ${d.identityConcept}` : "")
   );
 }
 
-export function buildAvatarPrompt(genres: string[], moods: string[]): string {
+export function buildDjIdentityFields(d: DjInput): {
+  character: string | null;
+  identity_concept: string;
+} {
+  return {
+    character: d.vibe,
+    identity_concept: d.identityConcept,
+  };
+}
+
+export function buildAvatarPrompt(
+  genres: string[],
+  moods: string[],
+  identityConcept?: string | null,
+): string {
   return (
     `stylized portrait of a fictional AI DJ persona, ` +
     `${genres.join(" ").toLowerCase()} ${moods.join(" ").toLowerCase()} aesthetic, ` +
+    (identityConcept ? `identity concept: ${identityConcept}, ` : "") +
     `cinematic lighting, digital art, premium, no text, no watermark`
   );
 }

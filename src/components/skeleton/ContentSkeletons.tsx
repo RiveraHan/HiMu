@@ -1,5 +1,6 @@
 import { ScrollView, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { shelfLayout, shelfLayoutBreakpoints } from "@/src/components/home/shelf-layout";
 import { GlassCard } from "@/src/components/GlassCard";
 import { Skeleton } from "./Skeleton";
 
@@ -15,10 +16,12 @@ export function TrackRowSkeleton() {
   );
 }
 
-export function TrackTileSkeleton() {
+export function TrackTileSkeleton({ artworkTestID }: { artworkTestID?: string }) {
   return (
-    <View style={styles.trackTile}>
-      <Skeleton height={140} radius={12} />
+    <View style={styles.trackTileContent}>
+      <View testID={artworkTestID} style={styles.trackArtwork}>
+        <Skeleton height="100%" radius={12} />
+      </View>
       <Skeleton width="84%" height={20} radius={4} />
       <Skeleton width="58%" height={16} radius={4} />
     </View>
@@ -43,11 +46,18 @@ export function ContentShelfSkeleton() {
         horizontal
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
-        style={styles.edgeToEdge}
+        testID="content-shelf-skeleton-scroll"
+        style={styles.shelfScroll}
         contentContainerStyle={styles.shelf}
       >
-        {[0, 1, 2].map((index) => (
-          <TrackTileSkeleton key={index} />
+        {[0, 1, 2, 3, 4, 5].map((index) => (
+          <View
+            key={index}
+            testID={`content-shelf-skeleton-tile-${index}`}
+            style={[styles.trackTile, index > 2 && styles.desktopOnly]}
+          >
+            <TrackTileSkeleton artworkTestID={`content-shelf-skeleton-artwork-${index}`} />
+          </View>
         ))}
       </ScrollView>
     </View>
@@ -85,14 +95,39 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing.stackSm,
   },
-  trackTile: { width: 140, gap: theme.spacing.stackSm },
+  trackTile: {
+    width: shelfLayoutBreakpoints.tileWidth,
+    flexBasis: shelfLayoutBreakpoints.tileBasis,
+    flexGrow: shelfLayoutBreakpoints.tileGrow,
+    minWidth: shelfLayoutBreakpoints.tileMinWidth,
+    maxWidth: shelfLayoutBreakpoints.tileMaxWidth,
+    gap: theme.spacing.stackSm,
+  },
+  trackTileContent: { gap: theme.spacing.stackSm },
+  trackArtwork: {
+    width: "100%",
+    aspectRatio: 1,
+  },
   djAvatar: { width: 80, alignItems: "center", gap: theme.spacing.stackSm },
   section: { gap: theme.spacing.stackMd },
   edgeToEdge: { marginHorizontal: -theme.spacing.pageMargin },
-  shelf: {
-    paddingHorizontal: theme.spacing.pageMargin,
-    gap: theme.spacing.gutter,
+  shelfScroll: {
+    marginHorizontal: {
+      xs: shelfLayout.compact.scrollMargin === "edge" ? -theme.spacing.pageMargin : 0,
+      xl: shelfLayout.desktop.scrollMargin,
+    },
   },
+  shelf: {
+    paddingHorizontal: {
+      xs: shelfLayout.compact.horizontalInset === "page" ? theme.spacing.pageMargin : 0,
+      xl: shelfLayout.desktop.horizontalInset,
+    },
+    flexDirection: "row",
+    gap: theme.spacing.gutter,
+    flexWrap: shelfLayoutBreakpoints.flexWrap,
+    width: shelfLayoutBreakpoints.contentWidth,
+  },
+  desktopOnly: { display: shelfLayoutBreakpoints.extraSkeletonDisplay },
   statCard: {
     flex: 1,
     alignItems: "center",

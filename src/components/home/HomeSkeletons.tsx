@@ -1,5 +1,5 @@
 import { ScrollView, View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { DjAvatarSkeleton, GlassCard, Skeleton } from "@/src/components";
 
 export function HomeHeroSkeleton() {
@@ -47,7 +47,11 @@ export function HomeVibeSkeleton() {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  hero: { gap: theme.spacing.stackMd },
+  hero: {
+    gap: theme.spacing.stackMd,
+    minHeight: { xs: undefined, xl: 220 },
+    justifyContent: { xs: "flex-start", xl: "center" },
+  },
   heroBody: {
     flexDirection: "row",
     alignItems: "center",

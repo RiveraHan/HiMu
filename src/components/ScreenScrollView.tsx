@@ -9,13 +9,18 @@ import Animated, {
   useAnimatedScrollHandler,
   useSharedValue,
 } from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import {
+  ScreenCanvas,
+  type ScreenCanvasVariant,
+} from "./ScreenCanvas";
 import { StatusBarScrim } from "./StatusBarScrim";
 
-type Props = ScrollViewProps & {
+type Props = Omit<ScrollViewProps, "onScroll"> & {
   children: ReactNode;
   /** Style for the outer container — the screen background lives here. */
   style?: StyleProp<ViewStyle>;
+  canvasVariant?: ScreenCanvasVariant;
   onScrollRef?: (node: { scrollTo(options: { y: number; animated: boolean }): void } | null) => void;
 };
 
@@ -27,7 +32,9 @@ type Props = ScrollViewProps & {
 export function ScreenScrollView({
   children,
   style,
+  contentContainerStyle,
   showsVerticalScrollIndicator = false,
+  canvasVariant = "readable",
   onScrollRef,
   ...rest
 }: Props) {
@@ -39,13 +46,16 @@ export function ScreenScrollView({
   return (
     <View style={[styles.root, style]}>
       <Animated.ScrollView
+        {...rest}
         ref={onScrollRef}
         onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={showsVerticalScrollIndicator}
-        {...rest}
+        contentContainerStyle={undefined}
       >
-        {children}
+        <ScreenCanvas variant={canvasVariant} style={contentContainerStyle}>
+          {children}
+        </ScreenCanvas>
       </Animated.ScrollView>
       <StatusBarScrim scrollY={scrollY} />
     </View>

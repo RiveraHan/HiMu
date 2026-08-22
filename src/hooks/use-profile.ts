@@ -7,7 +7,7 @@ export function useProfile() {
   const user = useCurrentUser();
 
   return useQuery({
-    queryKey: queryKeys.profile.me,
+    queryKey: queryKeys.profile.me(user?.id ?? null),
     enabled: !!user,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -42,13 +42,16 @@ export function useProfile() {
 }
 
 export function useListeningTotals() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.stats.listening,
+    queryKey: queryKeys.stats.listening(user?.id ?? null),
+    enabled: !!user,
     staleTime: 30_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("listening_stats")
-        .select("minutes_listened, tracks_played, top_genre");
+        .select("minutes_listened, tracks_played, top_genre")
+        .eq("user_id", user!.id);
       if (error) throw error;
 
       const minutes = data.reduce((s, r) => s + (r.minutes_listened ?? 0), 0);
@@ -70,13 +73,16 @@ export function useListeningTotals() {
 }
 
 export function useDjsHeard() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.stats.djsHeard,
+    queryKey: queryKeys.stats.djsHeard(user?.id ?? null),
+    enabled: !!user,
     staleTime: 30_000,
     queryFn: async () => {
       const { count, error } = await supabase
         .from("dj_listens")
-        .select("dj_id", { count: "exact", head: true });
+        .select("dj_id", { count: "exact", head: true })
+        .eq("user_id", user!.id);
       if (error) throw error;
       return count ?? 0;
     },

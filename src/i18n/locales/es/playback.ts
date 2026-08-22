@@ -1,15 +1,20 @@
 export const playback = {
   player: {
     nowPlaying: "REPRODUCIENDO AHORA",
-    highFidelityAudio: "AUDIO DE ALTA FIDELIDAD",
     source: {
       audius: "VÍA AUDIUS",
-      himu: "SELECCIONADA POR LA IA DE HIMU",
+      himu: "EN HIMU",
+    },
+    artwork: {
+      label: "Portada de {{title}}",
+      unavailable: "Portada no disponible",
+      retry: "Reintentar portada",
     },
     cover: {
       title: "Portada",
       regenerated: "Portada regenerada.",
       error: "No se pudo regenerar la portada; puede que hayas alcanzado el límite de hoy.",
+      quotaError: "Alcanzaste el límite diario de creaciones ({{limit}}). Inténtalo mañana.",
     },
     actions: {
       close: "Cerrar reproductor",
@@ -22,6 +27,7 @@ export const playback = {
       pause: "Pausar",
       next: "Siguiente",
       repeat: "Repetir",
+      createVersion: "Crear una versión nueva",
     },
     repeatModes: {
       off: "Repetición desactivada",
@@ -38,6 +44,8 @@ export const playback = {
   },
   focus: {
     title: "Modo concentración",
+    unavailable: "El audio de enfoque no está disponible",
+    empty: "No hay canciones de enfoque disponibles",
     status: {
       idle: "LISTO",
       running: "CONCENTRACIÓN PROFUNDA",
@@ -58,6 +66,11 @@ export const playback = {
     kicker: "ESTA SEMANA",
     title: "Vibe Check",
     subtitle: "Tu evolución sonora esta semana.",
+    unavailable: "Los datos de escucha no están disponibles",
+    empty: "Empieza a escuchar para crear tu Vibe Check",
+    djsUnavailable: "Los datos de DJs no están disponibles",
+    noDjs: "Aún no hay DJs para clasificar",
+    goHome: "Ir al inicio",
     resonanceFlow: "Flujo de resonancia",
     mostlyGenre: "Principalmente {{genre}}",
     thisWeek: "Esta semana",

@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { View, useWindowDimensions } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 export function FocusAtmosphere() {
   const { theme } = useUnistyles();

@@ -1,4 +1,7 @@
-export const darkTheme = {
+import { HIMU_FONT_FAMILIES, HIMU_SYSTEM_FONT_FAMILIES } from "./fonts";
+
+function createDarkTheme(fontFamilies: typeof HIMU_FONT_FAMILIES) {
+  return {
   colors: {
     // Surfaces & backgrounds
     // background is intentionally darker than `surface` (per Stitch design): the screen body
@@ -96,27 +99,27 @@ export const darkTheme = {
   },
   typography: {
     display: {
-      fontFamily: "Manrope-Bold",
+      fontFamily: fontFamilies.bold,
       fontSize: 40,
       lineHeight: 44,
       letterSpacing: -0.04 * 40,
     },
     h1: {
-      fontFamily: "Manrope-Bold",
+      fontFamily: fontFamilies.bold,
       fontSize: 32,
       lineHeight: 38.4,
       letterSpacing: -0.03 * 32,
     },
     h2: {
-      fontFamily: "Manrope-SemiBold",
+      fontFamily: fontFamilies.semiBold,
       fontSize: 24,
       lineHeight: 31.2,
       letterSpacing: -0.02 * 24,
     },
-    bodyLg: { fontFamily: "Manrope-Regular", fontSize: 18, lineHeight: 28.8 },
-    bodyMd: { fontFamily: "Manrope-Regular", fontSize: 16, lineHeight: 25.6 },
+    bodyLg: { fontFamily: fontFamilies.regular, fontSize: 18, lineHeight: 28.8 },
+    bodyMd: { fontFamily: fontFamilies.regular, fontSize: 16, lineHeight: 25.6 },
     labelCaps: {
-      fontFamily: "Manrope-SemiBold",
+      fontFamily: fontFamilies.semiBold,
       fontSize: 12,
       lineHeight: 12,
       letterSpacing: 0.1 * 12,
@@ -136,7 +139,11 @@ export const darkTheme = {
   opacity: {
     ghost: 0.4,
   },
-} as const;
+  } as const;
+}
+
+export const darkTheme = createDarkTheme(HIMU_FONT_FAMILIES);
+export const darkFontFallbackTheme = createDarkTheme(HIMU_SYSTEM_FONT_FAMILIES);
 
 export const lightTheme = {
   ...darkTheme,
@@ -153,7 +160,22 @@ export const lightTheme = {
   },
 } as const;
 
+export const lightFontFallbackTheme = {
+  ...darkFontFallbackTheme,
+  colors: {
+    ...darkFontFallbackTheme.colors,
+    background: "#ffffff",
+    surface: "#ffffff",
+    onSurface: "#1c1b1f",
+    glassBorder: "rgba(0,0,0,0.05)",
+    glassTint: "rgba(0,0,0,0.03)",
+    glassTintStrong: "rgba(0,0,0,0.06)",
+  },
+} as const;
+
 export const appThemes = {
   dark: darkTheme,
   light: lightTheme,
+  darkFontFallback: darkFontFallbackTheme,
+  lightFontFallback: lightFontFallbackTheme,
 } as const;

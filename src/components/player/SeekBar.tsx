@@ -1,18 +1,20 @@
 import * as Haptics from "expo-haptics";
 import { useState } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useDerivedValue,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
 import { formatTime } from "@/src/utils/format-time";
 import { useTranslation } from "react-i18next";
+import { SeekBarKeyboardControl } from "./SeekBarKeyboardControl";
 
 const KNOB = 16;
 // Screen-reader adjustable actions seek in a predictable fixed interval.
@@ -25,6 +27,7 @@ type Props = {
 };
 export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
   const { t } = useTranslation();
+  const reduceMotion = useReducedMotion();
   const [width, setWidth] = useState(0);
   const scrubbing = useSharedValue(false);
   const scrubPosition = useSharedValue(0);
@@ -32,6 +35,48 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
   // reported position catches up to it — see the derived value below.
   const settling = useSharedValue(false);
   const settleTarget = useSharedValue(0);
+  const accessibilityLabel = t("playback.player.seek.label");
+  const accessibilityValueText = t("playback.player.seek.value", {
+    position: formatTime(positionSec),
+    duration: formatTime(durationSec),
+  });
+  const nativeAccessibilityProps = Platform.OS === "web"
+    ? {}
+    : {
+        accessible: true,
+        accessibilityRole: "adjustable" as const,
+        accessibilityLabel,
+        accessibilityHint: t("playback.player.seek.hint"),
+        accessibilityActions: [
+          {
+            name: "increment" as const,
+            label: t("playback.player.seek.increment", {
+              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
+            }),
+          },
+          {
+            name: "decrement" as const,
+            label: t("playback.player.seek.decrement", {
+              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
+            }),
+          },
+        ],
+        onAccessibilityAction: (event: {
+          nativeEvent: { actionName: string };
+        }) => {
+          if (event.nativeEvent.actionName === "increment") {
+            seekByAccessibilityStep(ACCESSIBILITY_SEEK_STEP_SECONDS);
+          } else if (event.nativeEvent.actionName === "decrement") {
+            seekByAccessibilityStep(-ACCESSIBILITY_SEEK_STEP_SECONDS);
+          }
+        },
+        accessibilityValue: {
+          min: 0,
+          max: Math.max(durationSec, 0),
+          now: Math.min(Math.max(positionSec, 0), Math.max(durationSec, 0)),
+          text: accessibilityValueText,
+        },
+      };
 
   const pct = useDerivedValue(() => {
     if (scrubbing.value) return scrubPosition.value;
@@ -51,11 +96,13 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
       }
     }
 
+    if (reduceMotion) return p;
+
     return withTiming(p, {
       duration: 200,
       easing: Easing.out(Easing.ease),
     });
-  }, [positionSec, durationSec]);
+  }, [positionSec, durationSec, reduceMotion]);
 
   const commitSeek = (p: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -98,45 +145,19 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
       <View
         style={styles.hitbox}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-        accessible
-        accessibilityRole="adjustable"
-        accessibilityLabel={t("playback.player.seek.label")}
-        accessibilityHint={t("playback.player.seek.hint")}
-        accessibilityActions={[
-          {
-            name: "increment",
-            label: t("playback.player.seek.increment", {
-              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
-            }),
-          },
-          {
-            name: "decrement",
-            label: t("playback.player.seek.decrement", {
-              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
-            }),
-          },
-        ]}
-        onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "increment") {
-            seekByAccessibilityStep(ACCESSIBILITY_SEEK_STEP_SECONDS);
-          } else if (event.nativeEvent.actionName === "decrement") {
-            seekByAccessibilityStep(-ACCESSIBILITY_SEEK_STEP_SECONDS);
-          }
-        }}
-        accessibilityValue={{
-          min: 0,
-          max: Math.max(durationSec, 0),
-          now: Math.min(Math.max(positionSec, 0), Math.max(durationSec, 0)),
-          text: t("playback.player.seek.value", {
-            position: formatTime(positionSec),
-            duration: formatTime(durationSec),
-          }),
-        }}
+        {...nativeAccessibilityProps}
       >
         <View style={styles.track}>
           <Animated.View style={[styles.fill, fillStyle]} />
         </View>
         <Animated.View style={[styles.knob, knobStyle]} />
+        <SeekBarKeyboardControl
+          label={accessibilityLabel}
+          valueText={accessibilityValueText}
+          positionSec={positionSec}
+          durationSec={durationSec}
+          onSeek={onSeek}
+        />
       </View>
     </GestureDetector>
   );

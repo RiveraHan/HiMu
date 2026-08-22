@@ -1,62 +1,97 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { upsertQueuedGenerationActivity } from "@/src/activity/generation-activity";
+import type { ActivityItem } from "@/src/activity/types";
 import { useLocale } from "@/src/i18n/use-locale";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCurrentUser } from "./use-auth";
+import { authMutationKey, captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
+import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
 
-// Requests a new mix from a DJ and polls the job until it's ready.
+type GenerateMixInput = {
+  djId: string;
+  brief: ConfirmedGenerationBriefV1;
+  sourceTrackId?: string | null;
+};
+
+type GenerateMixResponse = {
+  jobId: string;
+  isPublic: boolean;
+  brief: ConfirmedGenerationBriefV1;
+  sourceTrackId: string | null;
+};
+
+function isConfirmedBrief(value: unknown): value is ConfirmedGenerationBriefV1 {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const brief = value as Record<string, unknown>;
+  return brief.version === 1 && typeof brief.title === "string" &&
+    typeof brief.creativeDirection === "string" &&
+    (brief.mode === "instrumental" || brief.mode === "vocal") &&
+    (brief.visibility === "private" || brief.visibility === "public") &&
+    typeof brief.traitSnapshot === "object" && brief.traitSnapshot != null;
+}
+
 export function useGenerateMix() {
-  const [jobId, setJobId] = useState<string | null>(null);
   const { resolvedLanguage } = useLocale();
+  const user = useCurrentUser();
+  const queryClient = useQueryClient();
+  const userId = user?.id ?? "";
 
   const start = useMutation({
-    mutationFn: async ({ djId, lyrics }: { djId: string; lyrics?: string }) => {
-      const { data, error } = await supabase.functions.invoke<{
-        jobId: string;
-      }>("generate-mix", {
+    mutationKey: authMutationKey("generate-mix", userId),
+    mutationFn: async (input: GenerateMixInput) => {
+      const { djId, brief, sourceTrackId = null } = input;
+      const scope = captureAuthScope(userId);
+      const { data, error } = await invokeWithAuthScope<GenerateMixResponse>(
+        supabase.functions,
+        scope,
+        "generate-mix",
+        {
         body: {
           djId,
+          brief,
+          sourceTrackId,
           language: resolvedLanguage,
           localHour: new Date().getHours(),
-          ...(lyrics ? { lyrics } : {}),
         },
       });
       if (error) throw error;
-      if (!data?.jobId) throw new Error("generate-mix did not return a jobId");
-      return data.jobId;
-    },
-    onSuccess: setJobId,
-  });
-
-  const job = useQuery({
-    queryKey: queryKeys.generationJobs.detail(jobId),
-    enabled: !!jobId,
-    // Poll state machine: every 3s until it finishes.
-    refetchInterval: (query) => {
-      const s = query.state.data?.status;
-      return s === "ready" || s === "failed" ? false : 3000;
-    },
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("generation_jobs")
-        .select("status, error, track_id, tracks(*)")
-        .eq("id", jobId!)
-        .single();
-
-      if (error) throw error;
-
+      if (
+        typeof data?.jobId !== "string" ||
+        data.jobId.trim().length === 0 ||
+        typeof data.isPublic !== "boolean" ||
+        !isConfirmedBrief(data.brief) ||
+        (data.sourceTrackId !== null && typeof data.sourceTrackId !== "string")
+      ) {
+        throw new Error("generate-mix returned an invalid response");
+      }
       return data;
     },
+    onSuccess: (data, variables) => {
+      if (!isCurrentMutationUser(userId)) return;
+      const queryKey = queryKeys.generationJobs.activity(userId);
+      queryClient.setQueryData<ActivityItem[]>(queryKey, (current) =>
+        upsertQueuedGenerationActivity(current, {
+          jobId: data.jobId,
+          djId: variables.djId,
+          title: data.brief.title,
+          retryLyrics: null,
+          retryBrief: data.brief,
+          sourceTrackId: data.sourceTrackId,
+          visibility: data.isPublic ? "public" : "private",
+          nowMs: Date.now(),
+        }),
+      );
+      void queryClient.invalidateQueries({ queryKey });
+    },
   });
-
-  const reset = () => setJobId(null);
 
   return {
     generate: start.mutate,
+    generateAsync: start.mutateAsync,
     isStarting: start.isPending,
-    status: job.data?.status ?? (start.isPending ? "queued" : null),
-    track: job.data?.tracks ?? null, // ready for load() when status === "ready"
-    error: job.data?.error ?? null,
-    reset,
+    error: start.error,
   };
 }

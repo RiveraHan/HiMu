@@ -1,29 +1,36 @@
 import { View } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { GlassCard } from "@/src/components/GlassCard";
+import { profileDjGridItemStyle } from "@/src/components/profile/ProfileDesktopLayout";
 import { StatCardSkeleton } from "@/src/components/skeleton/ContentSkeletons";
 import { Skeleton } from "@/src/components/skeleton/Skeleton";
 
 export function ProfileIdentitySkeleton() {
   return (
-    <View style={styles.identity}>
+    <View testID="profile-identity-skeleton" style={styles.identity}>
       <Skeleton width={128} height={128} radius={9999} />
-      <Skeleton width={176} height={38} radius={8} />
-      <Skeleton width={104} height={20} radius={4} />
+      <View testID="profile-identity-skeleton-text" style={styles.identityText}>
+        <Skeleton width={176} height={38} radius={8} />
+        <Skeleton width={104} height={20} radius={4} />
+      </View>
     </View>
   );
 }
 
 export function ProfileStatsSkeleton() {
   return (
-    <>
-      <View style={styles.statsRow}>
-        <StatCardSkeleton />
-        <StatCardSkeleton />
-        <StatCardSkeleton />
+    <View testID="profile-stats-skeleton" style={styles.statsDashboard}>
+      <View style={styles.statsColumn}>
+        <View style={styles.statsRow}>
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </View>
       </View>
-      <Skeleton height={140} radius={16} />
-    </>
+      <View style={styles.identityCard}>
+        <Skeleton height={140} radius={16} />
+      </View>
+    </View>
   );
 }
 
@@ -31,9 +38,17 @@ export function ProfileDjsSkeleton() {
   return (
     <View style={styles.section}>
       <Skeleton width={70} height={12} radius={3} />
-      <View style={styles.djGrid}>
-        {[0, 1].map((index) => (
-          <GlassCard key={index} style={styles.djCard}>
+      <View testID="profile-djs-skeleton-grid" style={styles.djGrid}>
+        {[0, 1, 2, 3].map((index) => (
+          <GlassCard
+            key={index}
+            testID={`profile-djs-skeleton-card-${index}`}
+            style={[
+              styles.djCard,
+              index === 2 && styles.desktopOnlyDjCard,
+              index === 3 && styles.wideDesktopOnlyDjCard,
+            ]}
+          >
             <Skeleton width={64} height={64} radius={9999} />
             <Skeleton width="64%" height={20} radius={4} />
             <Skeleton width="44%" height={12} radius={3} />
@@ -45,13 +60,39 @@ export function ProfileDjsSkeleton() {
 }
 
 const styles = StyleSheet.create((theme) => ({
-  identity: { alignItems: "center", gap: theme.spacing.stackMd },
+  identity: {
+    flexDirection: { xs: "column", xl: "row" },
+    alignItems: "center",
+    gap: theme.spacing.stackMd,
+  },
+  identityText: {
+    alignItems: { xs: "center", xl: "flex-start" },
+    gap: theme.spacing.stackXs,
+  },
+  statsDashboard: {
+    flexDirection: { xs: "column", xl: "row" },
+    gap: theme.spacing.stackLg,
+  },
+  statsColumn: {
+    flex: { xs: 0, xl: 3 },
+    minWidth: 0,
+  },
+  identityCard: {
+    flex: { xs: 0, xl: 2 },
+    minWidth: 0,
+  },
   statsRow: { flexDirection: "row", gap: theme.spacing.gutter },
   section: { gap: theme.spacing.stackMd },
-  djGrid: { flexDirection: "row", gap: theme.spacing.gutter },
+  djGrid: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.gutter },
   djCard: {
-    flex: 1,
+    ...profileDjGridItemStyle,
     alignItems: "center",
     gap: theme.spacing.stackSm,
+  },
+  desktopOnlyDjCard: {
+    display: { xs: "none", xl: "flex" },
+  },
+  wideDesktopOnlyDjCard: {
+    display: { xs: "none", xxl: "flex" },
   },
 }));

@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
-import { Platform, Pressable, StyleProp, ViewStyle } from "react-native";
-import { StyleSheet } from "react-native-unistyles";
+import { Pressable, StyleProp, ViewStyle } from "react-native";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { GlassCard } from "./GlassCard";
 import { Text } from "./Text";
 
@@ -60,6 +60,9 @@ export function Button({
   if (variant === "glass") {
     return (
       <Pressable
+        accessibilityLabel={text}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled, busy: loading }}
         onPress={onPress}
         disabled={isDisabled}
         testID={testID}
@@ -79,10 +82,14 @@ export function Button({
   if (variant === "ghost") {
     return (
       <Pressable
+        accessibilityLabel={text}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled, busy: loading }}
         onPress={onPress}
         disabled={isDisabled}
         testID={testID}
         style={({ pressed }) => [
+          styles.ghost,
           isDisabled && styles.disabled,
           pressed && styles.pressed,
           style,
@@ -95,6 +102,9 @@ export function Button({
 
   return (
     <Pressable
+      accessibilityLabel={text}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       onPress={onPress}
       disabled={isDisabled}
       testID={testID}
@@ -122,10 +132,7 @@ const styles = StyleSheet.create((theme) => ({
     borderCurve: "continuous",
     backgroundColor: theme.colors.primaryContainer,
     paddingHorizontal: theme.spacing.gutter,
-    ...Platform.select({
-      android: { elevation: 6 },
-      default: { boxShadow: theme.shadows.primaryButton },
-    }),
+    boxShadow: theme.shadows.primaryButton,
   },
   destructive: {
     backgroundColor: theme.colors.errorContainer,
@@ -139,6 +146,15 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackSm,
     borderRadius: theme.borderRadius.md,
     padding: 0,
+  },
+  ghost: {
+    minHeight: 44,
+    minWidth: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.stackSm,
+    paddingHorizontal: theme.spacing.gutter,
   },
   label: {
     flexShrink: 1,

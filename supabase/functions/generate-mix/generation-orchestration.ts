@@ -7,15 +7,166 @@ import {
   type GenerationLanguage,
   parseGenerationLanguage,
   persistedAudiusArtistName,
-  validateLyrics,
 } from "./generation-models.ts";
+import {
+  validateConfirmedBrief,
+  type AuthoritativeDjTraits,
+  type ConfirmedGenerationBriefV1,
+} from "../_shared/creative-generation.ts";
 
-type JobSummary = { id: string; status: string };
+type JobSummary = { id: string; status: string; isPublic: boolean };
+type ManualJobSummary = JobSummary & {
+  brief: ConfirmedGenerationBriefV1 | null;
+  sourceTrackId: string | null;
+};
+type DailyJobSummary = JobSummary & { djId: string; updatedAt: string };
+
+export const GENERATION_JOB_LEASE_MS = 15 * 60 * 1000;
+export const MANUAL_JOB_LEASE_MS = GENERATION_JOB_LEASE_MS;
+const MANUAL_DAILY_LIMIT = 3;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export type ManualJobReservation =
+  | {
+    outcome: "created";
+    jobId: string;
+    dailyLimit: number;
+    queuedAt: string;
+    isPublic: boolean;
+    brief: ConfirmedGenerationBriefV1;
+    sourceTrackId: string | null;
+  }
+  | {
+    outcome: "existing";
+    jobId: string;
+    dailyLimit: number;
+    isPublic: boolean;
+    brief: ConfirmedGenerationBriefV1;
+    sourceTrackId: string | null;
+  }
+  | { outcome: "quota"; jobId: null; dailyLimit: number };
+
+export function mapManualJobReservation(
+  data: unknown,
+  error: unknown,
+): ManualJobReservation {
+  if (error) throw error;
+  if (!Array.isArray(data) || data.length !== 1) {
+    throw new Error("invalid manual job reservation result");
+  }
+
+  const row = data[0] as Record<string, unknown>;
+  if (typeof row.daily_limit !== "number") {
+    throw new Error("invalid manual job reservation result");
+  }
+  if (
+    row.outcome === "quota" &&
+    row.job_id === null &&
+    row.daily_limit === MANUAL_DAILY_LIMIT &&
+    row.queued_at === null &&
+    row.is_public === null
+  ) {
+    return {
+      outcome: "quota",
+      jobId: null,
+      dailyLimit: row.daily_limit,
+    };
+  }
+  if (
+    row.outcome === "created" &&
+    typeof row.job_id === "string" &&
+    row.job_id.length > 0 &&
+    typeof row.queued_at === "string" &&
+    row.queued_at.length > 0 &&
+    typeof row.is_public === "boolean"
+  ) {
+    const brief = reservationBrief(row.generation_brief);
+    return {
+      outcome: "created",
+      jobId: row.job_id,
+      dailyLimit: row.daily_limit,
+      queuedAt: row.queued_at,
+      isPublic: row.is_public,
+      brief,
+      sourceTrackId: reservationSourceTrackId(row.source_track_id),
+    };
+  }
+  if (
+    row.outcome === "existing" &&
+    typeof row.job_id === "string" &&
+    row.job_id.length > 0 &&
+    typeof row.is_public === "boolean"
+  ) {
+    const brief = reservationBrief(row.generation_brief);
+    return {
+      outcome: "existing",
+      jobId: row.job_id,
+      dailyLimit: row.daily_limit,
+      isPublic: row.is_public,
+      brief,
+      sourceTrackId: reservationSourceTrackId(row.source_track_id),
+    };
+  }
+  throw new Error("invalid manual job reservation result");
+}
+
+function reservationBrief(value: unknown): ConfirmedGenerationBriefV1 {
+  if (
+    value == null || typeof value !== "object" || Array.isArray(value) ||
+    (value as Record<string, unknown>).version !== 1
+  ) {
+    throw new Error("invalid manual job reservation result");
+  }
+  return value as ConfirmedGenerationBriefV1;
+}
+
+function reservationSourceTrackId(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("invalid manual job reservation result");
+  }
+  return value;
+}
+
+export function mapUpdatedRow(data: unknown, error: unknown): boolean {
+  if (error) throw error;
+  if (data === null) return false;
+  if (
+    typeof data !== "object" || Array.isArray(data) ||
+    typeof (data as Record<string, unknown>).id !== "string"
+  ) {
+    throw new Error("invalid generation job update result");
+  }
+  return true;
+}
+
+export function mapFinalizedGeneratedMix(
+  data: unknown,
+  error: unknown,
+  expectedJobId: string,
+  expectedTrackId: string,
+): { id: string; title: string } {
+  if (error) throw error;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("invalid generated mix finalization result");
+  }
+  const row = data as Record<string, unknown>;
+  if (
+    row.job_id !== expectedJobId ||
+    row.track_id !== expectedTrackId ||
+    typeof row.track_title !== "string"
+  ) {
+    throw new Error("generated mix finalization mismatch");
+  }
+  return { id: row.track_id, title: row.track_title };
+}
 
 export type RunGenerationInput = {
   jobId: string;
+  queuedAt: string;
   cfg: any;
   lyrics: string | null;
+  brief?: ConfirmedGenerationBriefV1 | null;
   seasoning: string[];
   language: GenerationLanguage;
   drop?: { localHour: unknown };
@@ -31,20 +182,55 @@ export type RequestDependencies = {
   findDailyJob: (
     userId: string,
     dropDate: unknown,
-  ) => Promise<JobSummary | null>;
-  requeueDailyJob: (jobId: string, updatedAt: string) => Promise<void>;
+  ) => Promise<DailyJobSummary | null>;
+  requeueDailyJob: (
+    jobId: string,
+    observedStatus: string,
+    observedUpdatedAt: string,
+    requeuedAt: string,
+  ) => Promise<boolean>;
   createDailyJob: (input: {
     userId: string;
     djId: unknown;
     dropDate: unknown;
-  }) => Promise<{ job: JobSummary | null; error: unknown }>;
-  countDailyGenerations: (userId: string) => Promise<number>;
-  dailyGenerationLimit?: number;
-  createManualJob: (input: {
+  }) => Promise<{ job: DailyJobSummary | null; error: unknown }>;
+  findActiveManualJob: (
+    userId: string,
+    djId: unknown,
+  ) => Promise<(ManualJobSummary & { updatedAt: string }) | null>;
+  failStaleManualJob: (
+    jobId: string,
+    observedUpdatedAt: string,
+    failedAt: string,
+  ) => Promise<boolean>;
+  reserveManualJob: (input: {
     userId: string;
     djId: unknown;
-    lyrics: string | null;
-  }) => Promise<{ job: JobSummary | null; error: unknown }>;
+    brief: ConfirmedGenerationBriefV1;
+    isPublic: boolean;
+    sourceTrackId: string | null;
+  }) => Promise<ManualJobReservation>;
+  getSourceTrack: (sourceTrackId: string) => Promise<{
+    id: string;
+    ownerId: string | null;
+    djId: string | null;
+  } | null>;
+  requeueLegacyManualJob: (input: {
+    userId: string;
+    djId: unknown;
+    jobId: string;
+  }) => Promise<
+    | {
+        outcome: "created" | "existing";
+        jobId: string;
+        dailyLimit: number;
+        queuedAt: string;
+        isPublic: boolean;
+        lyrics: string | null;
+      }
+    | { outcome: "quota" | "unavailable"; jobId: null; dailyLimit: number }
+    | null
+  >;
   runGeneration: (input: RunGenerationInput) => Promise<void>;
   waitUntil: (promise: Promise<void>) => void;
   now: () => string;
@@ -63,6 +249,36 @@ function invalid(error: string): RequestResult {
   return result(400, { error, code: "invalid_input" });
 }
 
+function manualResult(job: ManualJobSummary): RequestResult {
+  return result(200, {
+    jobId: job.id,
+    isPublic: job.isPublic,
+    brief: job.brief,
+    sourceTrackId: job.sourceTrackId,
+  });
+}
+
+function authoritativeDjTraits(cfg: any): AuthoritativeDjTraits {
+  const dj = cfg?.djs;
+  const personality = dj?.personality_traits;
+  const energy = personality && typeof personality === "object" &&
+      !Array.isArray(personality)
+    ? (personality as Record<string, unknown>).energy
+    : null;
+  if (!Number.isInteger(energy)) throw new Error("invalid_dj_energy");
+  return {
+    djName: String(dj?.name ?? ""),
+    genres: Array.isArray(dj?.genre_specialties) ? dj.genre_specialties : [],
+    moods: Array.isArray(dj?.mood_tags) ? dj.mood_tags : [],
+    energy: Number(energy),
+    isInstrumental: cfg.is_instrumental === true,
+    vibe: typeof dj?.character === "string" ? dj.character : null,
+    identityConcept: typeof dj?.identity_concept === "string"
+      ? dj.identity_concept
+      : null,
+  };
+}
+
 export async function handleGenerateMixRequest(
   rawBody: unknown,
   userId: string,
@@ -74,17 +290,17 @@ export async function handleGenerateMixRequest(
     : {};
   const {
     djId,
-    lyrics: rawLyrics,
+    brief: rawBrief,
+    sourceTrackId: rawSourceTrackId,
+    legacyJobId: rawLegacyJobId,
     language: rawLanguage,
     localHour,
     dropDate,
   } = body;
 
   let language: GenerationLanguage;
-  let requestedLyrics: string | null;
   try {
     language = parseGenerationLanguage(rawLanguage);
-    requestedLyrics = validateLyrics(rawLyrics);
   } catch (error) {
     return invalid(
       error instanceof Error ? error.message : "invalid generation input",
@@ -98,38 +314,53 @@ export async function handleGenerateMixRequest(
     return invalid("dropDate must be YYYY-MM-DD");
   }
 
-  const cfg = await deps.getDjConfig(djId);
+  const dailyJob = isDrop
+    ? await deps.findDailyJob(userId, dropDate)
+    : null;
+  const effectiveDjId = dailyJob?.djId ?? djId;
+  const cfg = await deps.getDjConfig(effectiveDjId);
   if (!cfg) return result(404, { error: "DJ config not found" });
 
   const owner: string | null = cfg.djs?.owner_id ?? null;
-  if (owner !== null && owner !== userId) {
+  if ((isDrop && owner !== null && owner !== userId) || (!isDrop && owner !== userId)) {
     return result(403, {
       error: "you can't generate with this DJ",
       code: "dj_not_allowed",
     });
   }
 
-  let lyrics: string | null = null;
-  if (!isDrop && requestedLyrics != null) {
-    if (cfg.is_instrumental !== false || owner !== userId) {
-      return invalid("lyrics are only allowed on your own vocal DJs");
-    }
-    lyrics = requestedLyrics;
-  }
-
-  const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
-
   if (isDrop) {
-    const existing = await deps.findDailyJob(userId, dropDate);
-    if (existing && existing.status !== "failed") {
-      return result(200, { jobId: existing.id });
-    }
-
+    const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
+    const existing = dailyJob;
     if (existing) {
-      await deps.requeueDailyJob(existing.id, deps.now());
+      const active = existing.status === "queued" ||
+        existing.status === "generating";
+      const requeuedAt = deps.now();
+      const ageMs = Date.parse(requeuedAt) - Date.parse(existing.updatedAt);
+      if (!active && existing.status !== "failed") {
+        return result(200, { jobId: existing.id, isPublic: existing.isPublic });
+      }
+      if (active && ageMs <= GENERATION_JOB_LEASE_MS) {
+        return result(200, { jobId: existing.id, isPublic: existing.isPublic });
+      }
+
+      const requeued = await deps.requeueDailyJob(
+        existing.id,
+        existing.status,
+        existing.updatedAt,
+        requeuedAt,
+      );
+      if (!requeued) {
+        const refreshed = await deps.findDailyJob(userId, dropDate);
+        if (refreshed) {
+          return result(200, { jobId: refreshed.id, isPublic: refreshed.isPublic });
+        }
+        throw new Error("daily job disappeared during requeue");
+      }
       deps.waitUntil(
         deps.runGeneration({
           jobId: existing.id,
+          queuedAt: requeuedAt,
           cfg,
           lyrics: null,
           seasoning,
@@ -137,19 +368,20 @@ export async function handleGenerateMixRequest(
           drop: { localHour },
         }),
       );
-      return result(200, { jobId: existing.id });
+      return result(200, { jobId: existing.id, isPublic: existing.isPublic });
     }
 
     const created = await deps.createDailyJob({ userId, djId, dropDate });
     if (!created.job) {
       const raced = await deps.findDailyJob(userId, dropDate);
-      if (raced) return result(200, { jobId: raced.id });
+      if (raced) return result(200, { jobId: raced.id, isPublic: raced.isPublic });
       throw created.error ?? new Error("could not create drop job");
     }
 
     deps.waitUntil(
       deps.runGeneration({
         jobId: created.job.id,
+        queuedAt: created.job.updatedAt,
         cfg,
         lyrics: null,
         seasoning,
@@ -157,32 +389,172 @@ export async function handleGenerateMixRequest(
         drop: { localHour },
       }),
     );
-    return result(200, { jobId: created.job.id });
+    return result(200, { jobId: created.job.id, isPublic: created.job.isPublic });
   }
 
-  const dailyLimit = deps.dailyGenerationLimit ?? Number.MAX_SAFE_INTEGER;
-  if ((await deps.countDailyGenerations(userId)) >= dailyLimit) {
-    return result(429, {
-      error: `daily limit of ${dailyLimit} mixes reached`,
-      code: "daily_quota_reached",
+  const active = await deps.findActiveManualJob(userId, djId);
+  if (active) {
+    const now = deps.now();
+    const ageMs = Date.parse(now) - Date.parse(active.updatedAt);
+    if (ageMs <= GENERATION_JOB_LEASE_MS) {
+      if (active.brief === null && rawBrief != null) {
+        return result(409, {
+          error: "legacy_job_active",
+          code: "legacy_job_active",
+        });
+      }
+      return manualResult(active);
+    }
+
+    const released = await deps.failStaleManualJob(
+      active.id,
+      active.updatedAt,
+      now,
+    );
+    if (!released) {
+      const refreshed = await deps.findActiveManualJob(userId, djId);
+      if (refreshed) {
+        if (refreshed.brief === null && rawBrief != null) {
+          return result(409, {
+            error: "legacy_job_active",
+            code: "legacy_job_active",
+          });
+        }
+        return manualResult(refreshed);
+      }
+    }
+  }
+
+  if (rawBrief == null && rawLegacyJobId != null) {
+    if (typeof rawLegacyJobId !== "string" || !UUID.test(rawLegacyJobId)) {
+      return invalid("legacyJobId must be a UUID");
+    }
+    const legacy = await deps.requeueLegacyManualJob({
+      userId,
+      djId,
+      jobId: rawLegacyJobId,
+    });
+    if (!legacy) {
+      return result(409, {
+        error: "legacy_retry_unavailable",
+        code: "legacy_retry_unavailable",
+      });
+    }
+    if (legacy.outcome === "quota") {
+      return result(429, {
+        error: "daily generation limit reached",
+        code: "daily_quota_reached",
+        dailyLimit: legacy.dailyLimit,
+      });
+    }
+    if (legacy.outcome === "unavailable") {
+      return result(409, {
+        error: "legacy_retry_unavailable",
+        code: "legacy_retry_unavailable",
+      });
+    }
+    if (legacy.outcome === "existing") {
+      return result(200, {
+        jobId: legacy.jobId,
+        isPublic: legacy.isPublic,
+      });
+    }
+    const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
+    deps.waitUntil(
+      deps.runGeneration({
+        jobId: legacy.jobId,
+        queuedAt: legacy.queuedAt,
+        cfg,
+        lyrics: legacy.lyrics,
+        brief: null,
+        seasoning,
+        language,
+      }),
+    );
+    return result(200, {
+      jobId: legacy.jobId,
+      isPublic: legacy.isPublic,
     });
   }
 
-  const created = await deps.createManualJob({ userId, djId, lyrics });
-  if (!created.job) {
-    throw created.error ?? new Error("could not create job");
+  let brief: ConfirmedGenerationBriefV1;
+  try {
+    brief = validateConfirmedBrief(
+      rawBrief,
+      authoritativeDjTraits(cfg),
+      language,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === "brief_stale") {
+      return result(409, { error: "brief_stale", code: "brief_stale" });
+    }
+    return invalid(error instanceof Error ? error.message : "invalid brief");
   }
 
+  let sourceTrackId: string | null = null;
+  if (rawSourceTrackId != null) {
+    if (typeof rawSourceTrackId !== "string" || rawSourceTrackId.trim() === "") {
+      return invalid("sourceTrackId must be a non-empty string");
+    }
+    if (!UUID.test(rawSourceTrackId)) {
+      return invalid("sourceTrackId must be a UUID");
+    }
+    sourceTrackId = rawSourceTrackId;
+  }
+
+  if (sourceTrackId) {
+    const source = await deps.getSourceTrack(sourceTrackId);
+    if (!source || source.ownerId !== userId || source.djId !== djId) {
+      return result(403, {
+        error: "source_not_allowed",
+        code: "source_not_allowed",
+      });
+    }
+  }
+
+  const reservation = await deps.reserveManualJob({
+    userId,
+    djId,
+    brief,
+    isPublic: brief.visibility === "public",
+    sourceTrackId,
+  });
+  if (reservation.outcome === "quota") {
+    return result(429, {
+      error: `daily limit of ${reservation.dailyLimit} mixes reached`,
+      code: "daily_quota_reached",
+      dailyLimit: reservation.dailyLimit,
+    });
+  }
+  if (reservation.outcome === "existing") {
+    return manualResult({
+      id: reservation.jobId,
+      status: "queued",
+      isPublic: reservation.isPublic,
+      brief: reservation.brief,
+      sourceTrackId: reservation.sourceTrackId,
+    });
+  }
+
+  const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
   deps.waitUntil(
     deps.runGeneration({
-      jobId: created.job.id,
+      jobId: reservation.jobId,
+      queuedAt: reservation.queuedAt,
       cfg,
-      lyrics,
+      lyrics: brief.lyrics,
+      brief,
       seasoning,
       language,
     }),
   );
-  return result(200, { jobId: created.job.id });
+  return manualResult({
+    id: reservation.jobId,
+    status: "queued",
+    isPublic: reservation.isPublic,
+    brief: reservation.brief,
+    sourceTrackId: reservation.sourceTrackId,
+  });
 }
 
 type MediaResponse = {
@@ -212,20 +584,47 @@ type GenerationErrorStage =
   | "audius_pick"
   | "audius_materialize"
   | "caption"
-  | "caption_audio";
+  | "caption_audio"
+  | "terminal_ambiguous"
+  | "job_failure_persist";
 
 export type RunDependencies = {
   updateJob: (
     jobId: string,
+    attemptStartedAt: string,
     patch: Record<string, unknown>,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
+  markJobGenerating: (
+    jobId: string,
+    queuedAt: string,
+    startedAt: string,
+  ) => Promise<boolean>;
+  finalizeGeneratedMix: (input: {
+    jobId: string;
+    trackId: string;
+    title: string;
+    artist: string;
+    audioUrl: string;
+    albumArtUrl: string | null;
+    genre: string | null;
+    moodTags: string[] | null;
+    duration: number;
+    djId: string;
+    caption: string | null;
+    captionAudioUrl: string | null;
+    attemptStartedAt: string;
+    finishedAt: string;
+  }) => Promise<{ id: string; title: string }>;
+  failJobIfActive: (
+    jobId: string,
+    error: string,
+    failedAt: string,
+    fence: { queuedAt?: string; generatingAt: string },
+  ) => Promise<boolean>;
   findAudiusTrack: (externalId: string) => Promise<{ id: string } | null>;
   insertAudiusTrack: (
     track: Record<string, unknown>,
   ) => Promise<{ id: string }>;
-  insertGeneratedTrack: (
-    track: Record<string, unknown>,
-  ) => Promise<{ id: string; title: string }>;
   pickAudiusDrop: (
     dj: any,
     localHour: unknown,
@@ -241,7 +640,7 @@ export type RunDependencies = {
   ) => Promise<string>;
   r2Delete: (keys: string[]) => Promise<void>;
   generateCover: (
-    jobId: string,
+    objectKey: string,
     dj: any,
     instrumental: boolean,
   ) => Promise<string | null>;
@@ -249,6 +648,7 @@ export type RunDependencies = {
   logModel: (event: ModelEvent) => void;
   logError?: (event: { stage: GenerationErrorStage }) => void;
   now: () => string;
+  randomId: () => string;
   random?: () => number;
 };
 
@@ -283,10 +683,20 @@ function parseCaption(raw: string): string | null {
   return line || null;
 }
 
+function generationAttemptKeys(jobId: string, attemptStartedAt: string) {
+  const attempt = encodeURIComponent(attemptStartedAt);
+  return {
+    track: `tracks/generated/${jobId}/${attempt}.mp3`,
+    cover: `covers/generated/${jobId}/${attempt}.jpg`,
+    caption: `captions/generated/${jobId}/${attempt}.mp3`,
+  };
+}
+
 async function buildCaptionAudio(
   input: RunGenerationInput,
   deps: RunDependencies,
   caption: string,
+  objectKey: string,
 ): Promise<string> {
   const dj = input.cfg.djs;
   const request = buildCaptionTtsInput(
@@ -299,7 +709,7 @@ async function buildCaptionAudio(
   const tempUrl = await deps.replicateRun(request.endpoint, request.body);
   const bytes = await downloadProviderMedia(tempUrl, deps.fetchMedia);
   return await deps.r2Put(
-    `captions/generated/${input.jobId}.mp3`,
+    objectKey,
     bytes,
     "audio/mpeg",
   );
@@ -308,6 +718,8 @@ async function buildCaptionAudio(
 async function tryAudiusDrop(
   input: RunGenerationInput,
   deps: RunDependencies,
+  attemptStartedAt: string,
+  captionObjectKey: string,
 ): Promise<boolean> {
   const dj = input.cfg.djs;
   let picked: { pick: any; caption: string } | null;
@@ -339,6 +751,8 @@ async function tryAudiusDrop(
         mood_tags: dj.mood_tags,
         duration: pick.duration ?? null,
         is_ai_generated: false,
+        owner_id: null,
+        is_public: true,
         source: "audius",
         external_id: pick.id,
         dj_id: input.cfg.dj_id,
@@ -348,18 +762,24 @@ async function tryAudiusDrop(
 
     let captionAudioUrl: string | null = null;
     try {
-      captionAudioUrl = await buildCaptionAudio(input, deps, caption);
+      captionAudioUrl = await buildCaptionAudio(
+        input,
+        deps,
+        caption,
+        captionObjectKey,
+      );
     } catch (_error) {
       report(deps, "caption_audio");
     }
 
-    await deps.updateJob(input.jobId, {
+    const finalized = await deps.updateJob(input.jobId, attemptStartedAt, {
       status: "ready",
       track_id: trackId,
       caption,
       caption_audio_url: captionAudioUrl,
       updated_at: deps.now(),
     });
+    if (!finalized) report(deps, "terminal_ambiguous");
     return true;
   } catch (_error) {
     report(deps, "audius_materialize");
@@ -371,21 +791,37 @@ export async function runGeneration(
   input: RunGenerationInput,
   deps: RunDependencies,
 ): Promise<void> {
-  const update = (patch: Record<string, unknown>) =>
-    deps.updateJob(input.jobId, { ...patch, updated_at: deps.now() });
-
+  const attemptStartedAt = deps.now();
+  const objectKeys = generationAttemptKeys(input.jobId, attemptStartedAt);
+  let claimed = false;
   try {
-    await update({ status: "generating" });
+    const started = await deps.markJobGenerating(
+      input.jobId,
+      input.queuedAt,
+      attemptStartedAt,
+    );
+    if (!started) return;
+    claimed = true;
 
-    if (input.drop && await tryAudiusDrop(input, deps)) return;
+    if (
+      input.drop &&
+      await tryAudiusDrop(
+        input,
+        deps,
+        attemptStartedAt,
+        objectKeys.caption,
+      )
+    ) return;
 
     const musicRequest = buildMusicInput({
       basePrompt: String(input.cfg.base_prompt),
       seasoning: input.seasoning,
+      creativeDirection: input.brief?.creativeDirection ?? null,
       instrumental: input.cfg.is_instrumental ?? true,
       durationSeconds: trackSeconds(input.cfg),
       language: input.language,
-      lyrics: input.lyrics ?? boundedDefaultLyrics(input.cfg.default_lyrics),
+      lyrics: input.brief?.lyrics ?? input.lyrics ??
+        boundedDefaultLyrics(input.cfg.default_lyrics),
     });
     observe(deps, "music", input.language);
     const musicUrl = await deps.replicateRun(
@@ -397,7 +833,7 @@ export async function runGeneration(
       deps.fetchMedia,
     );
     const publicUrl = await deps.r2Put(
-      `tracks/generated/${input.jobId}.mp3`,
+      objectKeys.track,
       musicBytes,
       "audio/mpeg",
     );
@@ -405,21 +841,12 @@ export async function runGeneration(
     const dj = input.cfg.djs;
     observe(deps, "cover", input.language);
     const cover = await deps.generateCover(
-      input.jobId,
+      objectKeys.cover,
       dj,
       input.cfg.is_instrumental ?? true,
     );
-    const track = await deps.insertGeneratedTrack({
-      title: creativeTitle(input.language, deps.random),
-      artist: dj.name,
-      audio_url: publicUrl,
-      album_art_url: cover,
-      genre: dj.genre_specialties?.[0] ?? null,
-      mood_tags: dj.mood_tags,
-      duration: trackSeconds(input.cfg),
-      is_ai_generated: true,
-      dj_id: input.cfg.dj_id,
-    });
+    const trackId = deps.randomId();
+    const title = input.brief?.title ?? creativeTitle(input.language, deps.random);
 
     let caption: string | null = null;
     let captionAudioUrl: string | null = null;
@@ -428,7 +855,7 @@ export async function runGeneration(
         const captionRequest = buildCaptionInput({
           dj,
           localHour: input.drop.localHour,
-          trackTitle: track.title,
+          trackTitle: title,
           language: input.language,
         });
         observe(deps, "caption", input.language);
@@ -439,7 +866,12 @@ export async function runGeneration(
         caption = parseCaption(raw);
         if (caption) {
           try {
-            captionAudioUrl = await buildCaptionAudio(input, deps, caption);
+            captionAudioUrl = await buildCaptionAudio(
+              input,
+              deps,
+              caption,
+              objectKeys.caption,
+            );
           } catch (_error) {
             report(deps, "caption_audio");
           }
@@ -449,18 +881,50 @@ export async function runGeneration(
       }
     }
 
-    await update({
-      status: "ready",
-      track_id: track.id,
+    await deps.finalizeGeneratedMix({
+      jobId: input.jobId,
+      trackId,
+      title,
+      artist: dj.name,
+      audioUrl: publicUrl,
+      albumArtUrl: cover,
+      genre: dj.genre_specialties?.[0] ?? null,
+      moodTags: dj.mood_tags ?? null,
+      duration: trackSeconds(input.cfg),
+      djId: input.cfg.dj_id,
       caption,
-      caption_audio_url: captionAudioUrl,
+      captionAudioUrl,
+      attemptStartedAt,
+      finishedAt: deps.now(),
     });
   } catch (error) {
-    await update({ status: "failed", error: String(error).slice(0, 500) });
+    let failed: boolean;
+    try {
+      failed = await deps.failJobIfActive(
+        input.jobId,
+        String(error).slice(0, 500),
+        deps.now(),
+        claimed
+          ? { generatingAt: attemptStartedAt }
+          : {
+            queuedAt: input.queuedAt,
+            generatingAt: attemptStartedAt,
+          },
+      );
+    } catch (_failureError) {
+      report(deps, "job_failure_persist");
+      return;
+    }
+
+    if (!failed) {
+      report(deps, "terminal_ambiguous");
+      return;
+    }
+
     await deps.r2Delete([
-      `tracks/generated/${input.jobId}.mp3`,
-      `covers/generated/${input.jobId}.jpg`,
-      `captions/generated/${input.jobId}.mp3`,
+      objectKeys.track,
+      objectKeys.cover,
+      objectKeys.caption,
     ]);
   }
 }

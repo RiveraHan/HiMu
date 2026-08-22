@@ -1,5 +1,6 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { activityMutationKeys } from "@/src/activity/mutation-keys";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import { FOCUS_MOODS } from "@/src/types/music-preferences";
@@ -14,6 +15,7 @@ import {
 } from "@/src/utils/home-curation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
 
 export type PlayableTrack = {
   id: string;
@@ -23,6 +25,8 @@ export type PlayableTrack = {
   album_art_url: string | null;
   duration: number | null;
   genre: string | null;
+  owner_id?: string | null;
+  is_public?: boolean;
 };
 
 export type ContextualTrack = PlayableTrack & { mood_tags: string[] | null };
@@ -37,6 +41,7 @@ export type RecentTrack = PlayableTrack & {
     avatar_url: string | null;
     genre_specialties: string[] | null;
     owner_id: string | null;
+    is_public: boolean;
   } | null;
 };
 
@@ -50,17 +55,20 @@ export function toPlayerTrack(t: PlayableTrack): PlayerTrack {
     album_art_url: t.album_art_url,
     duration: t.duration,
     genre: t.genre,
+    owner_id: t.owner_id,
+    is_public: t.is_public,
   };
 }
 
 export function useDJs() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.djs.all,
+    queryKey: queryKeys.djs.list(user?.id ?? null),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("djs")
         .select(
-          "id, name, slug, avatar_url, genre_specialties, is_premium, owner_id",
+          "id, name, slug, avatar_url, genre_specialties, is_premium, owner_id, is_public",
         );
 
       if (error) throw error;
@@ -87,17 +95,19 @@ export function useLiveDJIds() {
 }
 
 export function useAIMixTracks() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.tracks.aiMix,
+    queryKey: queryKeys.tracks.aiMix(user?.id ?? null),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags",
+          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
         )
         .eq("is_ai_generated", true)
         .not("audio_url", "is", null)
-        .limit(50);
+        .limit(50)
+        .returns<ContextualTrack[]>();
 
       if (error) throw error;
 
@@ -107,17 +117,24 @@ export function useAIMixTracks() {
 }
 
 export function useFocusTracks() {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.tracks.focus,
+    queryKey: queryKeys.tracks.focus(user?.id ?? null),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, bpm, mood_tags",
+          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, bpm, mood_tags, owner_id, is_public",
         )
         .overlaps("mood_tags", FOCUS_MOODS)
         .not("audio_url", "is", null)
-        .limit(50);
+        .limit(50)
+        .returns<
+          (ContextualTrack & {
+            energy_level: number | null;
+            bpm: number | null;
+          })[]
+        >();
 
       if (error) throw error;
 
@@ -129,13 +146,14 @@ export function useFocusTracks() {
 // Workhorse: newest playable tracks with their DJ embedded. Powers the
 // "Fresh from your DJs" shelf and the On-Air hero.
 export function useRecentTracks(limit = 60) {
+  const user = useCurrentUser();
   return useQuery({
-    queryKey: queryKeys.tracks.recent,
+    queryKey: queryKeys.tracks.recent(user?.id ?? null, limit),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, dj_id, created_at, dj:djs(id, name, avatar_url, genre_specialties, owner_id)",
+          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public, dj_id, created_at, dj:djs(id, name, avatar_url, genre_specialties, owner_id, is_public)",
         )
         .not("audio_url", "is", null)
         .order("created_at", { ascending: false })
@@ -151,16 +169,17 @@ export function useRecentTracks(limit = 60) {
 // Mood-appropriate tracks for the current hour. Keyed by bucket so a new
 // time-of-day fetches its own set instead of serving a stale one from cache.
 export function useTimeOfDayShelf() {
+  const user = useCurrentUser();
   const bucket: TimeOfDayBucket = timeOfDayBucket(new Date().getHours());
   const moods = TIME_OF_DAY_MOODS[bucket];
 
   return useQuery({
-    queryKey: queryKeys.tracks.contextual(bucket),
+    queryKey: queryKeys.tracks.contextual(user?.id ?? null, bucket),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags",
+          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
         )
         .overlaps("mood_tags", moods)
         .not("audio_url", "is", null)
@@ -258,7 +277,7 @@ export function useTrackOwnership(trackId: string | undefined) {
   const user = useCurrentUser();
   const isExternal = trackId?.startsWith("audius:") ?? false;
   return useQuery({
-    queryKey: queryKeys.tracks.ownership(trackId ?? ""),
+    queryKey: queryKeys.tracks.ownership(user?.id ?? null, trackId ?? ""),
     enabled: !!trackId && !!user && !isExternal,
     queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
@@ -278,21 +297,32 @@ export function useTrackOwnership(trackId: string | undefined) {
 }
 
 // Regenerate a track's cover, updating it in place on success.
+export type RegenerateCoverInput = {
+  trackId: string;
+  title: string;
+};
+
 export function useRegenerateCover() {
   const qc = useQueryClient();
+  const userId = useCurrentUser()?.id ?? "";
   const setCoverForTrack = usePlayerStore((s) => s.setCoverForTrack);
   return useMutation({
-    mutationFn: async (trackId: string) => {
-      const { data, error } = await supabase.functions.invoke<{
+    mutationKey: activityMutationKeys.regenerateCover(userId),
+    gcTime: Infinity,
+    mutationFn: async ({ trackId, title }: RegenerateCoverInput) => {
+      const scope = captureAuthScope(userId);
+      const { data, error } = await invokeWithAuthScope<{
         album_art_url: string;
-      }>("regenerate-cover", { body: { trackId } });
+      }>(supabase.functions, scope, "regenerate-cover", { body: { trackId } });
       if (error) throw error;
       if (!data?.album_art_url) throw new Error("no cover returned");
-      return { trackId, albumArtUrl: data.album_art_url };
+      return { trackId, title, albumArtUrl: data.album_art_url };
     },
+    onMutate: () => ({ submittedUserId: userId }),
     onSuccess: ({ trackId, albumArtUrl }) => {
+      if (!isCurrentMutationUser(userId)) return;
       setCoverForTrack(trackId, albumArtUrl);
-      qc.invalidateQueries({ queryKey: ["tracks"] }); // refresh shelves/DJ page covers
+      void qc.invalidateQueries({ queryKey: queryKeys.tracks.all });
     },
   });
 }

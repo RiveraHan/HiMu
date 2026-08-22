@@ -8,6 +8,7 @@ import {
   LibraryCard,
   OnAirHero,
   ScreenScrollView,
+  StateNotice,
   Text,
   VibeSpotlightCard,
 } from "@/src/components";
@@ -33,8 +34,8 @@ import {
   type RecentTrack,
 } from "@/src/hooks/use-home";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
-import { useToast } from "@/src/hooks/use-toast";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import {
@@ -43,18 +44,22 @@ import {
   useAppTour,
   type HomeTourRegistration,
 } from "@/src/onboarding";
+import {
+  HomeDesktopGrid,
+  HomeDesktopGridOffsetTarget,
+  HomeDesktopGridSlot,
+} from "@/src/components/home/HomeDesktopGrid";
 import { HOME_TOUR_STEPS } from "@/src/onboarding/constants";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { formatHours } from "@/src/utils/format-stats";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
-import { ChevronRight, Play, Plus } from "lucide-react-native";
+import { ChevronRight, Music2, Play, Plus } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle } from "react-native-svg";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 export default function HomeScreen() {
@@ -63,10 +68,10 @@ export default function HomeScreen() {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
-  const toast = useToast();
+  const online = useOnlineStatus();
   const djsQuery = useDJs();
-  const { data: liveDJIds } = useLiveDJIds();
-  const { data: aiMix } = useAIMixTracks();
+  const liveQuery = useLiveDJIds();
+  const aiMixQuery = useAIMixTracks();
   const favoritesQuery = useFavorites();
   const { load } = usePlayer();
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
@@ -92,22 +97,45 @@ export default function HomeScreen() {
   } = useAppTour();
 
   const djs = djsQuery.data;
+  const liveDJIds = liveQuery.data;
+  const aiMix = aiMixQuery.data;
   const recent = recentQuery.data;
   const contextual = contextualQuery.data;
   const favorites = favoritesQuery.data;
   const vibe = vibeQuery.data;
 
-  const ownCount = djs?.filter((d) => d.owner_id === user?.id).length ?? 0;
+  const ownedDj = djs?.find((dj) => dj.owner_id === user?.id);
 
   const djsLoading = isInitialQueryLoading(djsQuery);
   const recentLoading = isInitialQueryLoading(recentQuery);
   const contextualLoading = isInitialQueryLoading(contextualQuery);
   const favoritesLoading = isInitialQueryLoading(favoritesQuery);
   const vibeLoading = isInitialQueryLoading(vibeQuery);
+  const aiMixLoading = isInitialQueryLoading(aiMixQuery);
+
+  const blockingDjsError = djsQuery.isError && djs === undefined;
+  const blockingRecentError = recentQuery.isError && recent === undefined;
+  const blockingContextualError = contextualQuery.isError && contextual === undefined;
+  const blockingAiMixError = aiMixQuery.isError && aiMix === undefined;
+  const blockingFavoritesError = favoritesQuery.isError && favorites === undefined;
+  const blockingVibeError = vibeQuery.isError && vibe === undefined;
+  const djsOfflineWithoutData = !online && djsQuery.fetchStatus === "paused" && djs === undefined;
+  const recentOfflineWithoutData = !online && recentQuery.fetchStatus === "paused" && recent === undefined;
+  const contextualOfflineWithoutData = !online && contextualQuery.fetchStatus === "paused" && contextual === undefined;
+  const aiMixOfflineWithoutData = !online && aiMixQuery.fetchStatus === "paused" && aiMix === undefined;
+  const favoritesOfflineWithoutData = !online && favoritesQuery.fetchStatus === "paused" && favorites === undefined;
+  const vibeOfflineWithoutData = !online && vibeQuery.fetchStatus === "paused" && vibe === undefined;
+  const heroOfflineWithoutData =
+    drop.status === "idle" &&
+    !hero &&
+    (djsOfflineWithoutData || recentOfflineWithoutData);
+  const hasCachedHomeData = [djs, liveDJIds, aiMix, recent, contextual, favorites, vibe]
+    .some((value) => value !== undefined);
 
   const showHeroSkeleton =
     (drop.status === "idle" && (djsLoading || recentLoading)) ||
-    (drop.status === "failed" && recentLoading);
+    (drop.status === "failed" && !hero && recentLoading) ||
+    (drop.status === "pending" && !drop.dj && !hero);
 
   const heroTrackId = hero?.track.id ?? null;
 
@@ -131,6 +159,14 @@ export default function HomeScreen() {
       .map(toPlayerTrack);
   }, [contextual, heroTrackId, taste]);
 
+  const playableAiMixes = useMemo<PlayerTrack[]>(() => weightedShuffle(
+    (aiMix ?? []).filter(
+      (track): track is typeof track & { audio_url: string } =>
+        track.audio_url != null,
+    ),
+    taste,
+  ).map(toPlayerTrack), [aiMix, taste]);
+
   function getGreeting(): string {
     const hour = new Date().getHours();
 
@@ -140,16 +176,9 @@ export default function HomeScreen() {
   }
 
   function playAIMixes() {
-    // Taste-weighted order over the raw rows (they carry genre + mood_tags).
-    const pool = weightedShuffle(
-      (aiMix ?? []).filter(
-        (t): t is typeof t & { audio_url: string } => t.audio_url != null,
-      ),
-      taste,
-    ).map(toPlayerTrack);
-    if (!pool.length) return;
+    if (!playableAiMixes.length) return;
     setRepeatMode("all"); // continuous, looping session
-    load(pool[0], pool, 0);
+    load(playableAiMixes[0], playableAiMixes, 0);
   }
 
   const playHero = useCallback(() => {
@@ -215,10 +244,12 @@ export default function HomeScreen() {
     !djsLoading &&
     !showHeroSkeleton &&
     (drop.status !== "idle" || noDropCanBeGenerated);
-  const captureTargetOffset = useCallback((stepId: string) =>
-    (event: LayoutChangeEvent) => {
-      targetOffsetsRef.current.set(stepId, event.nativeEvent.layout.y);
-    }, []);
+  const captureTargetOffset = useCallback(
+    (stepId: string) => (offset: number) => {
+      targetOffsetsRef.current.set(stepId, offset);
+    },
+    [],
+  );
   const settlePendingScroll = useCallback(() => {
     const pending = pendingScrollRef.current;
     if (!pending) return;
@@ -253,11 +284,106 @@ export default function HomeScreen() {
     [homeRegistration, registerHome],
   );
 
+  const openDiscover = () => router.push("/discover");
+  const djsSection = (
+    <View style={styles.section}>
+      <Text variant="h2">{t("home.yourDjs")}</Text>
+      {blockingDjsError ? (
+        <StateNotice
+          compact
+          kind={online ? "error" : "offline"}
+          title={t("home.djsUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djsQuery.refetch()}
+        />
+      ) : null}
+      {djs !== undefined ? (
+        <ScrollView
+          horizontal
+          testID="home-dj-list"
+          showsHorizontalScrollIndicator={false}
+          style={styles.horizontalScroll}
+          contentContainerStyle={styles.horizontalList}
+        >
+          <Pressable
+            testID="home-create-action"
+            onPress={() => {
+              if (ownedDj) {
+                router.push({
+                  pathname: "/create-track",
+                  params: { djId: ownedDj.id },
+                });
+                return;
+              }
+              router.push("/create-dj");
+            }}
+            style={({ pressed }) => [styles.newDJSlot, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={ownedDj ? t("home.createTrack") : t("home.newDj")}
+          >
+            <View testID="home-create-circle" style={styles.newDJCircle}>
+              {ownedDj ? (
+                <Music2 size={24} color={theme.colors.primary} />
+              ) : (
+                <Plus size={24} color={theme.colors.onSurfaceVariant} />
+              )}
+            </View>
+            <Text variant="bodyMd" numberOfLines={1} style={styles.newDJLabel}>
+              {ownedDj ? t("home.createTrack") : t("home.newDj")}
+            </Text>
+            <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6} style={styles.newDJLabel}>
+              {t("home.create")}
+            </Text>
+          </Pressable>
+          {djs.map((dj) => (
+            <DJAvatar
+              key={dj.id}
+              src={dj.avatar_url}
+              fallback={dj.name}
+              name={dj.name}
+              subtitle={dj.genre_specialties?.[0]
+                ? catalogLabel(dj.genre_specialties[0], resolvedLanguage)
+                : undefined}
+              isLive={liveDJIds?.has(dj.id) ?? false}
+              isPrivate={dj.owner_id === user?.id && dj.is_public === false}
+              privateLabel={t("dj.visibility.privateLabel")}
+              desktopSize="xl"
+              onPress={() => router.push(`/dj/${dj.id}`)}
+            />
+          ))}
+        </ScrollView>
+      ) : null}
+      {djsQuery.isError && djs !== undefined ? (
+        <StateNotice
+          compact
+          kind={online ? "error" : "offline"}
+          title={t("home.djsUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void djsQuery.refetch()}
+        />
+      ) : null}
+      {liveQuery.isError ? (
+        <StateNotice
+          compact
+          kind={online ? "error" : "offline"}
+          title={t("home.liveDjsUnavailable")}
+          actionLabel={t("common.actions.retry")}
+          onAction={() => void liveQuery.refetch()}
+        />
+      ) : null}
+    </View>
+  );
+  const readyDrop =
+    drop.status === "ready" && drop.track && drop.dj
+      ? { track: drop.track, dj: drop.dj }
+      : null;
+
   return (
     <ScreenScrollView
       onScrollRef={(node) => { homeScrollRef.current = node; }}
       onMomentumScrollEnd={settlePendingScroll}
       style={styles.root}
+      canvasVariant="max"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
@@ -275,7 +401,7 @@ export default function HomeScreen() {
             onPress={() => router.push("/profile")}
             accessibilityRole="button"
             accessibilityLabel={t("home.openProfile")}
-            style={({ pressed }) => pressed && styles.pressed}
+            style={({ pressed }) => [styles.profileShortcut, pressed && styles.pressed]}
           >
             <Avatar
               src={user?.user_metadata?.avatar_url}
@@ -292,26 +418,57 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        {showHeroSkeleton ? (
+        {!online && hasCachedHomeData ? (
+          <StateNotice
+            compact
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+          />
+        ) : null}
+
+        <HomeDesktopGrid>
+        <HomeDesktopGridSlot slot="hero">
+        {heroOfflineWithoutData ? (
+          <StateNotice
+            compact
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => {
+              if (djs === undefined) void djsQuery.refetch();
+              if (recent === undefined) void recentQuery.refetch();
+            }}
+          />
+        ) : showHeroSkeleton ? (
           <HomeHeroSkeleton />
-        ) : drop.status === "ready" && drop.track && drop.dj ? (
-          <TourTarget id="home.hero" borderRadius={theme.borderRadius["2xl"]} onLayout={captureTargetOffset("home.daily-drop")}>
-            <OnAirHero
-              eyebrow={t("home.dailyDrop.eyebrow")}
-              djName={drop.dj.name}
-              avatarUrl={drop.dj.avatar_url}
-              genre={drop.dj.genre}
-              headline={drop.caption ?? t("home.dailyDrop.fresh")}
-              trackTitle={drop.track.title}
-              isLive={false}
-              onPlay={playDrop}
-              voiceSlot={
-                drop.captionAudioUrl ? (
-                  <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
-                ) : undefined
-              }
-            />
-          </TourTarget>
+        ) : readyDrop ? (
+          <HomeDesktopGridOffsetTarget onOffset={captureTargetOffset("home.daily-drop")}>
+            {(onLayout) => (
+              <TourTarget
+                id="home.hero"
+                borderRadius={theme.borderRadius["2xl"]}
+                onLayout={onLayout}
+              >
+                <OnAirHero
+                  eyebrow={t("home.dailyDrop.eyebrow")}
+                  djName={readyDrop.dj.name}
+                  avatarUrl={readyDrop.dj.avatar_url}
+                  genre={readyDrop.dj.genre}
+                  headline={drop.caption ?? t("home.dailyDrop.fresh")}
+                  trackTitle={readyDrop.track.title}
+                  isLive={false}
+                  onPlay={playDrop}
+                  voiceSlot={
+                    drop.captionAudioUrl ? (
+                      <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
+                    ) : undefined
+                  }
+                />
+              </TourTarget>
+            )}
+          </HomeDesktopGridOffsetTarget>
         ) : drop.status === "pending" && drop.dj ? (
           <OnAirHero
             eyebrow={t("home.dailyDrop.eyebrow")}
@@ -325,181 +482,357 @@ export default function HomeScreen() {
             onPlay={() => {}}
           />
         ) : drop.status === "failed" && hero ? (
-          <TourTarget id="home.hero" borderRadius={theme.borderRadius["2xl"]} onLayout={captureTargetOffset("home.daily-drop")}>
-            <OnAirHero
-              djName={hero.dj.name}
-              avatarUrl={hero.dj.avatar_url}
-              genre={hero.dj.genre}
-              headline={t(`home.timeOfDay.${hero.bucket}.headline`)}
-              trackTitle={hero.track.title}
-              isLive={hero.isLive}
-              onPlay={playHero}
-            />
-          </TourTarget>
+          <HomeDesktopGridOffsetTarget onOffset={captureTargetOffset("home.daily-drop")}>
+            {(onLayout) => (
+              <TourTarget
+                id="home.hero"
+                borderRadius={theme.borderRadius["2xl"]}
+                onLayout={onLayout}
+              >
+                <OnAirHero
+                  djName={hero.dj.name}
+                  avatarUrl={hero.dj.avatar_url}
+                  genre={hero.dj.genre}
+                  headline={hero.bucket
+                    ? t(`home.timeOfDay.${hero.bucket}.headline`)
+                    : t("home.dailyDrop.fresh")}
+                  trackTitle={hero.track.title}
+                  isLive={hero.isLive}
+                  onPlay={playHero}
+                />
+              </TourTarget>
+            )}
+          </HomeDesktopGridOffsetTarget>
         ) : null}
+
+        {drop.status === "failed" || drop.stale ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.dailyDrop.unavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={drop.retry}
+          />
+        ) : null}
+        </HomeDesktopGridSlot>
 
         {/* Your DJs */}
-        {djsLoading ? (
+        <HomeDesktopGridSlot slot="djs">
+        {djsOfflineWithoutData ? (
+          <StateNotice
+            compact
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void djsQuery.refetch()}
+          />
+        ) : djsLoading ? (
           <HomeDjsSkeleton />
-        ) : djs && djs.length > 0 ? (
-          <TourTarget id="home.djs" onLayout={captureTargetOffset("home.djs")}>
-            <View style={styles.section}>
-              <Text variant="h2">{t("home.yourDjs")}</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.horizontalScroll}
-                contentContainerStyle={styles.horizontalList}
-              >
-                {djs.map((dj) => (
-                  <DJAvatar
-                    key={dj.id}
-                    src={dj.avatar_url}
-                    fallback={dj.name}
-                    name={dj.name}
-                    subtitle={
-                      dj.genre_specialties?.[0]
-                        ? catalogLabel(
-                            dj.genre_specialties[0],
-                            resolvedLanguage,
-                          )
-                        : undefined
-                    }
-                    isLive={liveDJIds?.has(dj.id) ?? false}
-                    onPress={() => router.push(`/dj/${dj.id}`)}
-                  />
-                ))}
-                {/* New DJ slot */}
-                <Pressable
-                  onPress={() => {
-                    if (ownCount >= 2) {
-                      toast.warning(
-                        t("home.djLimit.title"),
-                        t("home.djLimit.message"),
-                      );
-                      return;
-                    }
-                    router.push("/create-dj");
-                  }}
-                  style={({ pressed }) => [
-                    styles.newDJSlot,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.newDJCircle}>
-                    <Svg
-                      width={48}
-                      height={48}
-                      style={StyleSheet.absoluteFillObject}
-                    >
-                      <Circle
-                        cx={24}
-                        cy={24}
-                        r={23}
-                        stroke={theme.colors.outlineVariant}
-                        strokeWidth={1.5}
-                        strokeDasharray="4 4"
-                        fill="transparent"
-                      />
-                    </Svg>
-                    <Plus size={24} color={theme.colors.onSurfaceVariant} />
-                  </View>
-                  <Text
-                    variant="bodyMd"
-                    numberOfLines={1}
-                    style={styles.newDJLabel}
-                  >
-                    {t("home.newDj")}
-                  </Text>
-                  <Text
-                    variant="bodyMd"
-                    color="onSurfaceVariant"
-                    opacity={0.6}
-                    style={styles.newDJLabel}
-                  >
-                    {t("home.create")}
-                  </Text>
-                </Pressable>
-              </ScrollView>
-            </View>
-          </TourTarget>
-        ) : null}
+        ) : djs && djs.length > 0 && !blockingDjsError ? (
+          <HomeDesktopGridOffsetTarget onOffset={captureTargetOffset("home.djs")}>
+            {(onLayout) => (
+              <TourTarget id="home.djs" onLayout={onLayout}>
+                {djsSection}
+              </TourTarget>
+            )}
+          </HomeDesktopGridOffsetTarget>
+        ) : djsSection}
+        </HomeDesktopGridSlot>
 
-        {recentLoading ? (
+        <HomeDesktopGridSlot slot="shelves">
+        {recentOfflineWithoutData ? (
+          <StateNotice
+            compact
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void recentQuery.refetch()}
+          />
+        ) : recentLoading ? (
           <ContentShelfSkeleton />
+        ) : blockingRecentError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.freshUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void recentQuery.refetch()}
+          />
         ) : freshTracks.length >= 3 ? (
-          <ContentShelf
-            title={t("home.freshFrequencies")}
-            tracks={freshTracks}
-            onPressTrack={(t, i) => playFromShelf(freshTracks, t, i)}
+          <>
+            <ContentShelf
+              title={t("home.freshFrequencies")}
+              tracks={freshTracks}
+              onPressTrack={(t, i) => playFromShelf(freshTracks, t, i)}
+            />
+            {recentQuery.isError ? (
+              <StateNotice
+                compact
+                kind={online ? "error" : "offline"}
+                title={t("home.freshUnavailable")}
+                actionLabel={t("common.actions.retry")}
+                onAction={() => void recentQuery.refetch()}
+              />
+            ) : null}
+          </>
+        ) : recentQuery.isError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.freshUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void recentQuery.refetch()}
+          />
+        ) : recent !== undefined ? (
+          <StateNotice
+            compact
+            kind="empty"
+            title={t("home.freshEmpty")}
+            actionLabel={t("home.discoverAction")}
+            onAction={openDiscover}
           />
         ) : null}
 
-        {contextualLoading ? (
+        {contextualOfflineWithoutData ? (
+          <StateNotice
+            compact
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void contextualQuery.refetch()}
+          />
+        ) : contextualLoading ? (
           <ContentShelfSkeleton />
+        ) : blockingContextualError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.contextualUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void contextualQuery.refetch()}
+          />
         ) : contextualTracks.length >= 3 ? (
-          <ContentShelf
-            title={contextual?.bucket
-              ? t(`home.timeOfDay.${contextual.bucket}.label`)
-              : t("home.forYou")}
-            tracks={contextualTracks}
-            onPressTrack={(t, i) => playFromShelf(contextualTracks, t, i)}
+          <>
+            <ContentShelf
+              title={contextual?.bucket
+                ? t(`home.timeOfDay.${contextual.bucket}.label`)
+                : t("home.forYou")}
+              tracks={contextualTracks}
+              onPressTrack={(t, i) => playFromShelf(contextualTracks, t, i)}
+            />
+            {contextualQuery.isError ? (
+              <StateNotice
+                compact
+                kind={online ? "error" : "offline"}
+                title={t("home.contextualUnavailable")}
+                actionLabel={t("common.actions.retry")}
+                onAction={() => void contextualQuery.refetch()}
+              />
+            ) : null}
+          </>
+        ) : contextualQuery.isError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.contextualUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void contextualQuery.refetch()}
+          />
+        ) : contextual !== undefined ? (
+          <StateNotice
+            compact
+            kind="empty"
+            title={t("home.contextualEmpty")}
+            actionLabel={t("home.discoverAction")}
+            onAction={openDiscover}
           />
         ) : null}
+        </HomeDesktopGridSlot>
 
         {/* Personalized Library */}
+        <HomeDesktopGridSlot slot="lower">
+        <HomeDesktopGridSlot slot="library">
         <View style={styles.section}>
           <Text variant="h2">{t("home.library.title")}</Text>
 
-          <LibraryCard
-            cover={`${process.env.EXPO_PUBLIC_MEDIA_BASE}/covers/hero/ai-mixes.jpg?v=1`}
-            label={t("home.library.generated")}
-            title={t("home.library.aiMixes")}
-            onPress={playAIMixes}
-            right={
-              <View style={styles.playButton}>
-                <Play
-                  size={22}
-                  color={theme.colors.onSurface}
-                  fill={theme.colors.onSurface}
-                />
-              </View>
-            }
-          />
-
-          {favoritesLoading ? (
+          {aiMixOfflineWithoutData ? (
+            <StateNotice
+              compact
+              kind="offline"
+              title={t("common.errors.offline")}
+              message={t("common.errors.reconnect")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void aiMixQuery.refetch()}
+            />
+          ) : aiMixLoading ? (
             <HomeLibraryRowSkeleton />
-          ) : favorites ? (
-            <LibraryCard
-              cover={favorites?.[0]?.album_art_url ?? null}
-              label={t("home.library.saved")}
-              title={
-                favorites && favorites.length > 0
-                  ? t("home.library.favorites")
-                  : t("home.library.noFavorites")
-              }
-              onPress={() => router.push("/favorites")}
-              right={
-                <View style={styles.playButton}>
-                  <Play
-                    size={22}
-                    color={theme.colors.onSurface}
-                    fill={theme.colors.onSurface}
-                  />
-                </View>
-              }
+          ) : blockingAiMixError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("home.aiMixesUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void aiMixQuery.refetch()}
+            />
+          ) : playableAiMixes.length > 0 ? (
+            <>
+              <LibraryCard
+                cover={`${process.env.EXPO_PUBLIC_MEDIA_BASE}/covers/hero/ai-mixes.jpg?v=1`}
+                label={t("home.library.generated")}
+                title={t("home.library.aiMixes")}
+                onPress={playAIMixes}
+                right={
+                  <View style={styles.playButton}>
+                    <Play size={22} color={theme.colors.onSurface} fill={theme.colors.onSurface} />
+                  </View>
+                }
+              />
+              {aiMixQuery.isError ? (
+                <StateNotice
+                  compact
+                  kind={online ? "error" : "offline"}
+                  title={t("home.aiMixesUnavailable")}
+                  actionLabel={t("common.actions.retry")}
+                  onAction={() => void aiMixQuery.refetch()}
+                />
+              ) : null}
+            </>
+          ) : aiMixQuery.isError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("home.aiMixesUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void aiMixQuery.refetch()}
+            />
+          ) : aiMix !== undefined ? (
+            <StateNotice
+              compact
+              kind="empty"
+              title={t("home.aiMixesEmpty")}
+              actionLabel={t("home.discoverAction")}
+              onAction={openDiscover}
+            />
+          ) : null}
+
+          {favoritesOfflineWithoutData ? (
+            <StateNotice
+              compact
+              kind="offline"
+              title={t("common.errors.offline")}
+              message={t("common.errors.reconnect")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void favoritesQuery.refetch()}
+            />
+          ) : favoritesLoading ? (
+            <HomeLibraryRowSkeleton />
+          ) : blockingFavoritesError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("home.favoritesUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void favoritesQuery.refetch()}
+            />
+          ) : favorites && favorites.length > 0 ? (
+            <>
+              <LibraryCard
+                cover={favorites[0]?.album_art_url ?? null}
+                label={t("home.library.saved")}
+                title={t("home.library.favorites")}
+                onPress={() => router.push("/favorites")}
+                right={
+                  <View style={styles.playButton}>
+                    <Play size={22} color={theme.colors.onSurface} fill={theme.colors.onSurface} />
+                  </View>
+                }
+              />
+              {favoritesQuery.isError ? (
+                <StateNotice
+                  compact
+                  kind={online ? "error" : "offline"}
+                  title={t("home.favoritesUnavailable")}
+                  actionLabel={t("common.actions.retry")}
+                  onAction={() => void favoritesQuery.refetch()}
+                />
+              ) : null}
+            </>
+          ) : favoritesQuery.isError ? (
+            <StateNotice
+              compact
+              kind={online ? "error" : "offline"}
+              title={t("home.favoritesUnavailable")}
+              actionLabel={t("common.actions.retry")}
+              onAction={() => void favoritesQuery.refetch()}
+            />
+          ) : favorites !== undefined ? (
+            <StateNotice
+              compact
+              kind="empty"
+              title={t("home.library.noFavorites")}
+              actionLabel={t("home.discoverAction")}
+              onAction={openDiscover}
             />
           ) : null}
         </View>
+        </HomeDesktopGridSlot>
 
-        {vibeLoading ? (
+        <HomeDesktopGridSlot slot="supporting">
+        {vibeOfflineWithoutData ? (
+          <StateNotice
+            compact
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void vibeQuery.refetch()}
+          />
+        ) : vibeLoading ? (
           <HomeVibeSkeleton />
+        ) : blockingVibeError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.vibeUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void vibeQuery.refetch()}
+          />
         ) : vibe && vibe.hoursThisWeek > 0 ? (
-          <VibeSpotlightCard
-            hours={formatHours(vibe.hoursThisWeek, resolvedLanguage)}
-            topGenre={vibe.topGenre}
-            streak={vibe.streak}
-            onPress={() => router.push("/vibe-check")}
+          <>
+            <VibeSpotlightCard
+              hours={formatHours(vibe.hoursThisWeek, resolvedLanguage)}
+              topGenre={vibe.topGenre}
+              streak={vibe.streak}
+              onPress={() => router.push("/vibe-check")}
+            />
+            {vibeQuery.isError ? (
+              <StateNotice
+                compact
+                kind={online ? "error" : "offline"}
+                title={t("home.vibeUnavailable")}
+                actionLabel={t("common.actions.retry")}
+                onAction={() => void vibeQuery.refetch()}
+              />
+            ) : null}
+          </>
+        ) : vibeQuery.isError ? (
+          <StateNotice
+            compact
+            kind={online ? "error" : "offline"}
+            title={t("home.vibeUnavailable")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void vibeQuery.refetch()}
+          />
+        ) : vibe !== undefined ? (
+          <StateNotice
+            compact
+            kind="empty"
+            title={t("home.vibeEmpty")}
+            actionLabel={t("home.discoverAction")}
+            onAction={openDiscover}
           />
         ) : null}
 
@@ -524,6 +857,9 @@ export default function HomeScreen() {
           </View>
           <ChevronRight size={20} color={theme.colors.onSurfaceVariant} />
         </Pressable>
+        </HomeDesktopGridSlot>
+        </HomeDesktopGridSlot>
+        </HomeDesktopGrid>
     </ScreenScrollView>
   );
 }
@@ -573,25 +909,35 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackMd,
   },
   horizontalScroll: {
-    marginHorizontal: -theme.spacing.pageMargin,
+    marginHorizontal: { xs: -theme.spacing.pageMargin, xl: 0 },
   },
   horizontalList: {
-    paddingHorizontal: theme.spacing.pageMargin,
+    width: { xs: undefined, xl: "100%" },
+    flexDirection: "row",
+    flexWrap: { xs: "nowrap", xl: "wrap" },
+    alignItems: "flex-start",
+    paddingHorizontal: { xs: theme.spacing.pageMargin, xl: 0 },
     gap: theme.spacing.gutter,
   },
   newDJSlot: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
     gap: theme.spacing.stackXs,
   },
   newDJCircle: {
-    width: 48,
-    height: 48,
+    width: { xs: 48, xl: 96 },
+    height: { xs: 48, xl: 96 },
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: theme.colors.outlineVariant,
   },
   newDJLabel: {
     textAlign: "center",
-    width: 80,
+    width: { xs: 80, xl: 120 },
   },
   playButton: {
     width: 48,
@@ -605,5 +951,11 @@ const styles = StyleSheet.create((theme) => ({
   },
   pressed: {
     transform: [{ scale: 0.97 }],
+  },
+  profileShortcut: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
 }));

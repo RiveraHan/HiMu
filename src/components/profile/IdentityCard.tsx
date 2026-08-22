@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { GlassCard } from "@/src/components/GlassCard";
 import { Text } from "@/src/components/Text";
 import { AudioLines } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type Props = {
   title: string;
@@ -30,6 +30,7 @@ export function IdentityCard({ title, description }: Props) {
 
 const styles = StyleSheet.create((theme) => ({
   card: {
+    flex: { xs: 0, xl: 1 },
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.gutter,

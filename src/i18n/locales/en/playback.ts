@@ -1,15 +1,20 @@
 export const playback = {
   player: {
     nowPlaying: "NOW PLAYING",
-    highFidelityAudio: "HIGH-FIDELITY AUDIO",
     source: {
       audius: "VIA AUDIUS",
-      himu: "CURATED BY HIMU AI",
+      himu: "IN HIMU",
+    },
+    artwork: {
+      label: "Artwork for {{title}}",
+      unavailable: "Artwork unavailable",
+      retry: "Retry artwork",
     },
     cover: {
       title: "Cover",
       regenerated: "Cover regenerated.",
       error: "Couldn't regenerate the cover — you may have reached today's limit.",
+      quotaError: "Daily creation limit reached ({{limit}}). Try again tomorrow.",
     },
     actions: {
       close: "Close player",
@@ -22,6 +27,7 @@ export const playback = {
       pause: "Pause",
       next: "Next",
       repeat: "Repeat",
+      createVersion: "Create a new version",
     },
     repeatModes: {
       off: "Repeat off",
@@ -38,6 +44,8 @@ export const playback = {
   },
   focus: {
     title: "Focus Mode",
+    unavailable: "Focus audio is unavailable",
+    empty: "No focus tracks are available",
     status: {
       idle: "READY",
       running: "DEEP FOCUS",
@@ -58,6 +66,11 @@ export const playback = {
     kicker: "THIS WEEK",
     title: "Vibe Check",
     subtitle: "Your sonic evolution this week.",
+    unavailable: "Listening insights are unavailable",
+    empty: "Start listening to build your Vibe Check",
+    djsUnavailable: "DJ insights are unavailable",
+    noDjs: "No DJs to rank yet",
+    goHome: "Go to Home",
     resonanceFlow: "Resonance Flow",
     mostlyGenre: "Mostly {{genre}}",
     thisWeek: "This week",

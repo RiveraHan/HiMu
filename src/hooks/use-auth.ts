@@ -7,15 +7,19 @@ export const useAuthInit = () => {
   const setIsLoading = useAuthStore((state) => state.setIsLoading);
 
   useEffect(() => {
+    let active = true;
+    let receivedAuthEvent = false;
+
     const initializeAuth = async () => {
       try {
         const session = await authApi.getSession();
-        setSession(session);
+        if (active && !receivedAuthEvent) setSession(session);
       } catch (error) {
+        if (!active) return;
         console.error("[useAuthInit] Failed to initialize auth:", error);
-        setSession(null);
+        if (!receivedAuthEvent) setSession(null);
       } finally {
-        setIsLoading(false);
+        if (active) setIsLoading(false);
       }
     };
 
@@ -24,10 +28,15 @@ export const useAuthInit = () => {
     const {
       data: { subscription },
     } = authApi.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      receivedAuthEvent = true;
       setSession(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [setSession, setIsLoading]);
 };
 

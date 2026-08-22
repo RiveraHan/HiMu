@@ -1,10 +1,10 @@
 import { IconButton } from "@/src/components/IconButton";
 import { Text } from "@/src/components/Text";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 import { ChevronLeft, X } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { View } from "react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
 type Props = {
@@ -15,24 +15,31 @@ type Props = {
   subtitle?: string;
   actions?: ReactNode;
   disabled?: boolean;
-};
-
-const goBack = () => {
-  if (router.canGoBack()) router.back();
+  fallbackHref?: Href;
 };
 
 export function ScreenHeader({
   variant = "back",
-  onLeftPress = goBack,
+  onLeftPress,
   kicker,
   title,
   subtitle,
   actions,
   disabled = false,
+  fallbackHref = "/",
 }: Props) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const Icon = variant === "back" ? ChevronLeft : X;
+  const handleLeftPress = () => {
+    if (onLeftPress) {
+      onLeftPress();
+    } else if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(fallbackHref);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -40,7 +47,7 @@ export function ScreenHeader({
         <IconButton
           variant="glass"
           icon={<Icon size={24} color={theme.colors.onSurface} />}
-          onPress={onLeftPress}
+          onPress={handleLeftPress}
           disabled={disabled}
           accessibilityLabel={
             variant === "back"

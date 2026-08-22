@@ -8,9 +8,10 @@ declare global {
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: string;
       EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: string;
       EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: string;
+      EXPO_PUBLIC_TERMS_URL?: string;
+      EXPO_PUBLIC_PRIVACY_URL?: string;
     }
   }
 }
 
 export { };
-

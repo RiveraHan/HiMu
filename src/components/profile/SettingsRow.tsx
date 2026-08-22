@@ -1,8 +1,8 @@
 import { ReactNode } from "react";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import { Text } from "../Text";
 import { ChevronRight } from "lucide-react-native";
-import { StyleSheet, useUnistyles } from "react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type Props = {
   icon: ReactNode;
@@ -21,14 +21,8 @@ export function SettingRow({
 }: Props) {
   const { theme } = useUnistyles();
 
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-    >
+  const content = (
+    <>
       {icon}
       <Text
         variant="bodyMd"
@@ -45,7 +39,20 @@ export function SettingRow({
             opacity={0.5}
           />
         ) : null)}
+    </>
+  );
+
+  return onPress ? (
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      {content}
     </Pressable>
+  ) : (
+    <View style={styles.row}>{content}</View>
   );
 }
 
