@@ -1,7 +1,6 @@
 import { BlurView } from 'expo-blur';
 import { Platform, type ViewProps } from 'react-native';
-import { withUnistyles } from '@/src/theme/unistyles';
-import { StyleSheet } from 'react-native-unistyles';
+import { StyleSheet, withUnistyles } from '@/src/theme/unistyles';
 
 interface Props extends ViewProps {
   level?: 1 | 2 | 3;

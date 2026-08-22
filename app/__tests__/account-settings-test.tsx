@@ -281,6 +281,7 @@ jest.mock("react-native-unistyles", () => {
   return {
     useUnistyles: () => ({ theme }),
     StyleSheet: {
+      configure: jest.fn(),
       create: (styles: unknown) =>
         typeof styles === "function"
           ? styles(theme)
