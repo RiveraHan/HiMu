@@ -225,6 +225,7 @@ test("actual RLS query hooks never expose A's fresh cache after rerendering as B
   keys("B").forEach((key) => expect(client.getQueryData(key)).toBeUndefined());
   aKeys.forEach((key) => expect(client.getQueryData(key)).toBeDefined());
   await hook.unmount();
+  client.getMutationCache().getAll().forEach((mutation) => mutation.destroy());
   client.clear();
 });
 

@@ -10,6 +10,15 @@ import { AppState } from "react-native";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { disposePreferenceCommitQueues } from "@/src/hooks/preference-commit-queue";
 
+async function finalizeScopedQueryRuntime(queryClient: QueryClient) {
+  disposePreferenceCommitQueues(queryClient);
+  await queryClient.cancelQueries();
+  for (const mutation of queryClient.getMutationCache().getAll()) {
+    mutation.destroy();
+  }
+  queryClient.clear();
+}
+
 function ScopedQueryRuntime({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -23,6 +32,7 @@ function ScopedQueryRuntime({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+  const [lifecycle] = useState(() => ({ generation: 0 }));
 
   useEffect(
     () =>
@@ -40,13 +50,15 @@ function ScopedQueryRuntime({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, []);
 
-  useEffect(
-    () => () => {
-      disposePreferenceCommitQueues(queryClient);
-      queryClient.clear();
-    },
-    [queryClient],
-  );
+  useEffect(() => {
+    const generation = ++lifecycle.generation;
+    return () => {
+      queueMicrotask(() => {
+        if (lifecycle.generation !== generation) return;
+        void finalizeScopedQueryRuntime(queryClient);
+      });
+    };
+  }, [lifecycle, queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

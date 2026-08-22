@@ -168,6 +168,45 @@ function useAccountRuntime(
   return { userId, queryClient, accountQuery, mutation };
 }
 
+test("finalizes an auth-scoped runtime only after query and mutation observers detach", async () => {
+  const mutationFn = jest.fn(async (ownerUserId: string) => ({ ownerUserId }));
+  useAuthStore.setState({ session: session("A", "token-a") });
+  const hook = await renderHook(
+    () => useAccountRuntime(mutationFn, jest.fn()),
+    { wrapper: QueryProvider },
+  );
+
+  await waitFor(() => expect(hook.result.current.accountQuery.data).toBe("A query"));
+  await act(async () => {
+    hook.result.current.mutation.mutate();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(hook.result.current.mutation.isSuccess).toBe(true));
+
+  const queryClient = hook.result.current.queryClient;
+  const query = queryClient.getQueryCache().find({
+    queryKey: ["account-query", "A"],
+  });
+  const mutation = queryClient.getMutationCache().getAll()[0];
+  expect(query).toBeDefined();
+  expect(mutation).toBeDefined();
+
+  let queryObserversAtClear: number | undefined;
+  const originalClear = queryClient.clear.bind(queryClient);
+  jest.spyOn(queryClient, "clear").mockImplementation(() => {
+    queryObserversAtClear = query!.getObserversCount();
+    originalClear();
+  });
+  const mutationDestroy = jest.spyOn(mutation!, "destroy");
+
+  await hook.unmount();
+
+  expect(queryObserversAtClear).toBe(0);
+  expect(mutationDestroy).toHaveBeenCalledTimes(1);
+  expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
+  expect(queryClient.getMutationCache().getAll()).toHaveLength(0);
+});
+
 test("drops an offline A mutation at the identity boundary and reconnects only B", async () => {
   onlineManager.setOnline(false);
   const mutationFn = jest.fn(async (ownerUserId: string) => ({ ownerUserId }));
@@ -194,6 +233,7 @@ test("drops an offline A mutation at the identity boundary and reconnects only B
   expect(mutationFn).not.toHaveBeenCalled();
   expect(onVisibleSuccess).not.toHaveBeenCalled();
   expect(clientB.getQueryData(["account-side-effect", "A"])).toBeUndefined();
+  await hook.unmount();
 });
 
 test("a started A completion cannot publish cache or visible side effects into B", async () => {
