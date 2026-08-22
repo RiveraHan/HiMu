@@ -66,3 +66,24 @@ test("instrumental mode hides lyric controls and offline mode disables regenerat
   expect(screen.queryByLabelText("Lyrics")).toBeNull();
   expect(screen.getByRole("button", { name: "Try another title" })).toBeDisabled();
 });
+
+test("keeps the vocal lyric editor bounded to 1000 characters", async () => {
+  const onEdit = jest.fn();
+  const screen = await render(
+    <GenerationBriefEditor
+      state={state}
+      disabled={false}
+      isOnline
+      pendingField={null}
+      errors={{}}
+      onEdit={onEdit}
+      onRegenerate={jest.fn()}
+    />,
+  );
+  const lyrics = screen.getByLabelText("Lyrics");
+  const boundaryValue = "x".repeat(1000);
+
+  expect(lyrics.props.maxLength).toBe(1000);
+  await fireEvent.changeText(lyrics, boundaryValue);
+  expect(onEdit).toHaveBeenCalledWith("lyrics", boundaryValue);
+});

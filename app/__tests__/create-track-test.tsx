@@ -1,6 +1,14 @@
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 import CreateTrackScreen from "@/app/create-track";
+import { resolveResponsiveFormStyle } from "@/src/components/forms/form-layout";
 import i18n from "@/src/i18n";
 
 const mockDraft = jest.fn();
@@ -13,12 +21,14 @@ let mockOnline = true;
 let mockActiveMix: null | { status: string } = null;
 let mockInstrumental = false;
 let mockEnergy = 7;
+let mockUserId = "listener";
+let mockDjOwnerId = "listener";
 let mockSourceTrackId: string | undefined;
 let mockSourceDetails: null | { trackId: string; confirmedLyrics: string; djId: string } = null;
 
 const dj = () => ({
   id: "dj-one",
-  owner_id: "listener",
+  owner_id: mockDjOwnerId,
   identity_concept: "A hopeful selector for luminous early mornings.",
   genre_specialties: ["Pop"],
   mood_tags: ["Energetic"],
@@ -31,7 +41,7 @@ jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ djId: "dj-one", sourceTrackId: mockSourceTrackId }),
 }));
 jest.mock("@/src/hooks/use-auth", () => ({
-  useCurrentUser: () => ({ id: "listener" }),
+  useCurrentUser: () => ({ id: mockUserId }),
 }));
 jest.mock("@/src/hooks/use-dj", () => ({
   useDJ: () => ({ data: dj(), isPending: false, isError: false }),
@@ -40,7 +50,10 @@ jest.mock("@/src/hooks/use-online-status", () => ({
   useOnlineStatus: () => mockOnline,
 }));
 jest.mock("@/src/hooks/use-track-private-details", () => ({
-  useTrackPrivateDetails: () => ({ data: mockSourceDetails, isFetched: true }),
+  useTrackPrivateDetails: (_trackId: string | undefined, owned: boolean) => ({
+    data: owned ? mockSourceDetails : null,
+    isFetched: true,
+  }),
 }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
@@ -80,6 +93,8 @@ describe("CreateTrackScreen", () => {
     mockActiveMix = null;
     mockInstrumental = false;
     mockEnergy = 7;
+    mockUserId = "listener";
+    mockDjOwnerId = "listener";
     mockSourceTrackId = undefined;
     mockSourceDetails = null;
     mockDraft.mockReset().mockResolvedValue({
@@ -124,6 +139,25 @@ describe("CreateTrackScreen", () => {
     })));
   });
 
+  it("composes one mounted editor and live review into compact and desktop layouts", async () => {
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+
+    const content = screen.getByTestId("responsive-form-content");
+    const direction = StyleSheet.flatten(content.props.style).flexDirection;
+    const editor = screen.getByTestId("responsive-form-editor");
+    const review = screen.getByTestId("sticky-review-panel");
+    const footer = screen.getByTestId("responsive-form-footer");
+
+    expect(resolveResponsiveFormStyle(direction, 390)).toBe("column");
+    expect(resolveResponsiveFormStyle(direction, 1440)).toBe("row");
+    expect(within(editor).getByLabelText("Track title")).toBeTruthy();
+    expect(within(review).getByText("Afterglow Letters")).toBeTruthy();
+    expect(within(review).getByText("Vocal · Private")).toBeTruthy();
+    expect(within(footer).getAllByLabelText("Review generation")).toHaveLength(1);
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
   it("regenerates one field without changing the other draft fields", async () => {
     const screen = await render(<CreateTrackScreen />);
     await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
@@ -133,6 +167,81 @@ describe("CreateTrackScreen", () => {
     expect(screen.getByDisplayValue("Open gently, then bloom into a wide luminous chorus.")).toBeTruthy();
     expect(mockRegenerateTitle).toHaveBeenCalledWith(expect.objectContaining({
       exclude: ["Afterglow Letters"],
+    }));
+  });
+
+  it("regenerates direction without changing title or owner-private lyrics", async () => {
+    mockRegenerateDirection.mockResolvedValueOnce({
+      version: 1,
+      kind: "creative-direction",
+      draft: {
+        creativeDirection: "Gather close harmonies before opening into a clear dawn refrain.",
+      },
+    });
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+    const originalLyrics = "[Verse]\nA spark remains\n[Chorus]\nWe rise again";
+
+    await fireEvent.press(screen.getByRole("button", { name: "Try another direction" }));
+
+    await waitFor(() => expect(screen.getByDisplayValue(
+      "Gather close harmonies before opening into a clear dawn refrain.",
+    )).toBeTruthy());
+    expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy();
+    expect(screen.getByDisplayValue(originalLyrics)).toBeTruthy();
+    expect(mockRegenerateDirection).toHaveBeenCalledWith(expect.objectContaining({
+      exclude: ["Open gently, then bloom into a wide luminous chorus."],
+    }));
+  });
+
+  it("regenerates lyrics without changing title or creative direction", async () => {
+    mockRegenerateLyrics.mockResolvedValueOnce({
+      version: 1,
+      kind: "lyrics",
+      draft: {
+        lyricTheme: "choosing the signal that leads home",
+        lyrics: "[Verse]\nThe quiet signal knows my name\n[Chorus]\nI follow light and rise again",
+      },
+    });
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+
+    await fireEvent.press(screen.getByRole("button", { name: "Try other lyrics" }));
+
+    await waitFor(() => expect(screen.getByDisplayValue(
+      "[Verse]\nThe quiet signal knows my name\n[Chorus]\nI follow light and rise again",
+    )).toBeTruthy());
+    expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy();
+    expect(screen.getByDisplayValue(
+      "Open gently, then bloom into a wide luminous chorus.",
+    )).toBeTruthy();
+    expect(mockRegenerateLyrics).toHaveBeenCalledWith(expect.objectContaining({
+      exclude: ["[Verse]\nA spark remains\n[Chorus]\nWe rise again"],
+    }));
+  });
+
+  it("preserves discarded suggestions across repeated regeneration", async () => {
+    mockRegenerateTitle
+      .mockResolvedValueOnce({
+        version: 1,
+        kind: "track-title",
+        draft: { title: "Signals in Glass" },
+      })
+      .mockResolvedValueOnce({
+        version: 1,
+        kind: "track-title",
+        draft: { title: "Morning Frequency" },
+      });
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+
+    await fireEvent.press(screen.getByRole("button", { name: "Try another title" }));
+    await waitFor(() => expect(screen.getByDisplayValue("Signals in Glass")).toBeTruthy());
+    await fireEvent.press(screen.getByRole("button", { name: "Try another title" }));
+
+    await waitFor(() => expect(screen.getByDisplayValue("Morning Frequency")).toBeTruthy());
+    expect(mockRegenerateTitle).toHaveBeenLastCalledWith(expect.objectContaining({
+      exclude: ["Afterglow Letters", "Signals in Glass"],
     }));
   });
 
@@ -154,6 +263,57 @@ describe("CreateTrackScreen", () => {
 
     expect(screen.queryByLabelText("Lyric theme")).toBeNull();
     expect(screen.queryByLabelText("Lyrics")).toBeNull();
+  });
+
+  it("requires explicit final confirmation for an instrumental brief with no lyric payload", async () => {
+    mockInstrumental = true;
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+
+    await fireEvent.press(screen.getByRole("button", { name: "Review generation" }));
+    expect(screen.getByText("Instrumental · Private")).toBeTruthy();
+    expect(mockGenerate).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", { name: "Confirm and generate" }));
+
+    await waitFor(() => expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({
+      brief: expect.objectContaining({
+        mode: "instrumental",
+        lyricTheme: null,
+        lyrics: null,
+      }),
+    })));
+  });
+
+  it("accepts exactly 1000 lyric characters and rejects an over-boundary draft", async () => {
+    const suffix = "\n[Chorus]\nRise";
+    const exactLyrics = "[Verse]\n" + "a".repeat(
+      1000 - "[Verse]\n".length - suffix.length,
+    ) + suffix;
+    const screen = await render(<CreateTrackScreen />);
+    await waitFor(() => expect(screen.getByDisplayValue("Afterglow Letters")).toBeTruthy());
+
+    await fireEvent.changeText(screen.getByLabelText("Lyrics"), exactLyrics);
+    expect(screen.getByRole("button", { name: "Review generation" })).toBeEnabled();
+    await fireEvent.changeText(screen.getByLabelText("Lyrics"), `${exactLyrics}x`);
+    expect(screen.getByRole("button", { name: "Review generation" })).toBeDisabled();
+  });
+
+  it("does not render an editor or owner-private source lyrics for a non-owner", async () => {
+    mockSourceTrackId = "track-source";
+    mockSourceDetails = {
+      trackId: "track-source",
+      confirmedLyrics: "[Verse]\nOwner secret\n[Chorus]\nNever expose this",
+      djId: "dj-one",
+    };
+    mockUserId = "other-listener";
+    const screen = await render(<CreateTrackScreen />);
+
+    await waitFor(() => expect(
+      screen.getByText("This DJ isn't available for track creation."),
+    ).toBeTruthy());
+    expect(screen.queryByLabelText("Lyrics")).toBeNull();
+    expect(screen.queryByText(/Owner secret/)).toBeNull();
+    expect(mockDraft).not.toHaveBeenCalled();
   });
 
   it("blocks review while this DJ already has an active generation", async () => {
@@ -259,7 +419,7 @@ describe("CreateTrackScreen", () => {
 
     await fireEvent.press(screen.getByRole("button", { name: "Back to editing" }));
     await fireEvent.changeText(screen.getByLabelText("Track title"), "Owned Morning Signal");
-    expect(screen.queryByText("Confirm your track")).toBeNull();
+    expect(screen.queryByTestId("generation-confirmation")).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Review generation" }));
     expect(screen.getByText("Owned Morning Signal")).toBeTruthy();
   });

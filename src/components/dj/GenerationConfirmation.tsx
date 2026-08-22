@@ -4,7 +4,10 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@/src/components/Button";
 import { GlassCard } from "@/src/components/GlassCard";
 import { Text } from "@/src/components/Text";
-import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
+import type {
+  ConfirmedGenerationBriefV1,
+  GenerationBriefDraft,
+} from "@/src/types/creative-generation";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
@@ -15,6 +18,37 @@ type Props = {
   onGenerate: () => void;
 };
 
+export function GenerationBriefSummary({
+  brief,
+}: {
+  brief: GenerationBriefDraft;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <GlassCard level={1} testID="generation-brief-summary" style={styles.preview}>
+      <Text variant="h2">{brief.title || "—"}</Text>
+      {brief.traitSnapshot.identityConcept ? (
+        <Text variant="bodyMd" color="onSurfaceVariant">
+          {brief.traitSnapshot.identityConcept}
+        </Text>
+      ) : null}
+      {brief.creativeDirection ? (
+        <Text variant="bodyMd">{brief.creativeDirection}</Text>
+      ) : null}
+      <Text variant="labelCaps" color="onSurfaceVariant">
+        {t(`dj.brief.mode.${brief.mode}`)} · {t(`dj.brief.visibility.${brief.visibility}`)}
+      </Text>
+      {brief.mode === "vocal" && brief.lyricTheme ? (
+        <Text variant="bodyMd">{brief.lyricTheme}</Text>
+      ) : null}
+      {brief.mode === "vocal" && brief.lyrics ? (
+        <Text variant="bodyMd">{brief.lyrics}</Text>
+      ) : null}
+    </GlassCard>
+  );
+}
+
 export function GenerationConfirmation({
   brief,
   disabled,
@@ -24,20 +58,12 @@ export function GenerationConfirmation({
 }: Props) {
   const { t } = useTranslation();
   return (
-    <View style={styles.root}>
+    <View testID="generation-confirmation" style={styles.root}>
       <Text variant="h2">{t("dj.brief.confirmTitle")}</Text>
       <Text variant="bodyMd" color="onSurfaceVariant">
         {t("dj.brief.confirmSubtitle")}
       </Text>
-      <GlassCard level={1} style={styles.preview}>
-        <Text variant="h2">{brief.title}</Text>
-        <Text variant="bodyMd">{brief.creativeDirection}</Text>
-        <Text variant="labelCaps" color="onSurfaceVariant">
-          {t(`dj.brief.mode.${brief.mode}`)} · {t(`dj.brief.visibility.${brief.visibility}`)}
-        </Text>
-        {brief.lyricTheme ? <Text variant="bodyMd">{brief.lyricTheme}</Text> : null}
-        {brief.lyrics ? <Text variant="bodyMd">{brief.lyrics}</Text> : null}
-      </GlassCard>
+      <GenerationBriefSummary brief={brief} />
       <Button
         variant="glass"
         label={t("dj.brief.backToEdit")}

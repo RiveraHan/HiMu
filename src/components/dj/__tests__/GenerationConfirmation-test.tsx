@@ -1,6 +1,9 @@
 import { fireEvent, render } from "@testing-library/react-native";
 
-import { GenerationConfirmation } from "../GenerationConfirmation";
+import {
+  GenerationBriefSummary,
+  GenerationConfirmation,
+} from "../GenerationConfirmation";
 import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
 
 const brief: ConfirmedGenerationBriefV1 = {
@@ -39,4 +42,29 @@ test("shows the exact immutable preview and generates only after a deliberate pr
 
   await fireEvent.press(screen.getByRole("button", { name: "Confirm and generate" }));
   expect(onGenerate).toHaveBeenCalledTimes(1);
+});
+
+test("renders a live vocal review without exposing a final action", async () => {
+  const screen = await render(<GenerationBriefSummary brief={brief} />);
+
+  expect(screen.getByTestId("generation-brief-summary")).toBeTruthy();
+  expect(screen.getByText("Afterglow Letters")).toBeTruthy();
+  expect(screen.getByText("finding courage at sunrise")).toBeTruthy();
+  expect(screen.getByText(brief.lyrics!)).toBeTruthy();
+  expect(screen.getByText("Vocal · Private")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Confirm and generate" })).toBeNull();
+});
+
+test("omits owner-private lyric content from an instrumental review", async () => {
+  const instrumental: ConfirmedGenerationBriefV1 = {
+    ...brief,
+    mode: "instrumental",
+    lyricTheme: null,
+    lyrics: null,
+  };
+  const screen = await render(<GenerationBriefSummary brief={instrumental} />);
+
+  expect(screen.getByText("Instrumental · Private")).toBeTruthy();
+  expect(screen.queryByText("finding courage at sunrise")).toBeNull();
+  expect(screen.queryByText(brief.lyrics!)).toBeNull();
 });

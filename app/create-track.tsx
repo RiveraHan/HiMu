@@ -1,8 +1,11 @@
 import { useActivity } from "@/src/activity";
 import { Button } from "@/src/components/Button";
 import { GenerationBriefEditor } from "@/src/components/dj/GenerationBriefEditor";
-import { GenerationConfirmation } from "@/src/components/dj/GenerationConfirmation";
-import { ScreenHeader } from "@/src/components/ScreenHeader";
+import {
+  GenerationBriefSummary,
+  GenerationConfirmation,
+} from "@/src/components/dj/GenerationConfirmation";
+import { ResponsiveFormShell } from "@/src/components/forms/ResponsiveFormShell";
 import { StateNotice } from "@/src/components/StateNotice";
 import {
   useRegenerateTrackField,
@@ -33,10 +36,10 @@ import {
 } from "@/src/utils/generation-brief-state";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 function draftFromDJ(
   dj: NonNullable<ReturnType<typeof useDJ>["data"]>,
@@ -101,7 +104,6 @@ export default function CreateTrackScreen() {
   }>();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
-  const { theme } = useUnistyles();
   const online = useOnlineStatus();
   const user = useCurrentUser();
   const djQuery = useDJ(djId);
@@ -378,96 +380,139 @@ export default function CreateTrackScreen() {
     }
   };
 
-  const content = (() => {
+  const composition = (() => {
     if (djQuery.isError || sourceInvalid || (dj !== undefined && !owned)) {
-      return <StateNotice kind="error" title={t("dj.brief.ownershipError")} />;
+      return {
+        activeStep: "details",
+        form: <StateNotice kind="error" title={t("dj.brief.ownershipError")} />,
+        review: null,
+        footer: null,
+      };
     }
     if (recordChanged || !state) {
-      return <StateNotice kind="empty" title={t("dj.brief.preparing")} />;
+      return {
+        activeStep: "details",
+        form: <StateNotice kind="empty" title={t("dj.brief.preparing")} />,
+        review: null,
+        footer: null,
+      };
     }
     if (state.confirmed) {
-      return (
-        <>
-          <GenerationConfirmation
-            brief={state.confirmed}
-            disabled={!online || generationBlocked || isStarting || isSubmitting}
-            isSubmitting={isStarting || isSubmitting}
-            onBack={() => {
-              setSubmitError(false);
-              setState((current) => current ? { ...current, confirmed: null } : current);
-            }}
-            onGenerate={() => void onGenerate()}
-          />
-          {submitError ? (
-            <StateNotice kind="error" title={t("dj.profile.genericError")} compact />
-          ) : null}
-        </>
-      );
+      return {
+        activeStep: "review",
+        form: null,
+        review: (
+          <View style={styles.confirmation}>
+            <GenerationConfirmation
+              brief={state.confirmed}
+              disabled={!online || generationBlocked || isStarting || isSubmitting}
+              isSubmitting={isStarting || isSubmitting}
+              onBack={() => {
+                setSubmitError(false);
+                setState((current) => current
+                  ? { ...current, confirmed: null }
+                  : current);
+              }}
+              onGenerate={() => void onGenerate()}
+            />
+            {submitError ? (
+              <StateNotice kind="error" title={t("dj.profile.genericError")} compact />
+            ) : null}
+          </View>
+        ),
+        footer: null,
+      };
     }
-    return (
-      <>
-        {initialError ? (
-          <StateNotice
-            kind="error"
-            title={t("dj.brief.unavailableTitle")}
-            message={t("dj.brief.unavailable")}
-            actionLabel={online ? t("dj.brief.retry") : undefined}
-            onAction={online ? () => void prepare() : undefined}
+    return {
+      activeStep: "details",
+      form: (
+        <View style={styles.editor}>
+          {initialError ? (
+            <StateNotice
+              kind="error"
+              title={t("dj.brief.unavailableTitle")}
+              message={t("dj.brief.unavailable")}
+              actionLabel={online ? t("dj.brief.retry") : undefined}
+              onAction={online ? () => void prepare() : undefined}
+            />
+          ) : null}
+          {!online ? (
+            <StateNotice kind="offline" title={t("dj.brief.offlineDraft")} compact />
+          ) : null}
+          {state.isTraitSnapshotStale ? (
+            <StateNotice
+              kind="error"
+              title={t("dj.brief.staleTitle")}
+              message={t("dj.brief.staleMessage")}
+              actionLabel={online ? t("dj.brief.retry") : undefined}
+              onAction={online ? () => void prepare() : undefined}
+            />
+          ) : null}
+          <GenerationBriefEditor
+            state={state}
+            disabled={isStarting || isSubmitting || generationBlocked}
+            isOnline={online}
+            pendingField={pendingField}
+            errors={errors}
+            onEdit={onEdit}
+            onRegenerate={(field) => void onRegenerate(field)}
           />
-        ) : null}
-        {!online ? (
-          <StateNotice kind="offline" title={t("dj.brief.offlineDraft")} compact />
-        ) : null}
-        {state.isTraitSnapshotStale ? (
-          <StateNotice
-            kind="error"
-            title={t("dj.brief.staleTitle")}
-            message={t("dj.brief.staleMessage")}
-            actionLabel={online ? t("dj.brief.retry") : undefined}
-            onAction={online ? () => void prepare() : undefined}
-          />
-        ) : null}
-        <GenerationBriefEditor
-          state={state}
-          disabled={isStarting || isSubmitting || generationBlocked}
-          isOnline={online}
-          pendingField={pendingField}
-          errors={errors}
-          onEdit={onEdit}
-          onRegenerate={(field) => void onRegenerate(field)}
-        />
+        </View>
+      ),
+      review: <GenerationBriefSummary brief={state.draft} />,
+      footer: (
         <Button
           label={t("dj.brief.review")}
           disabled={!canConfirmBrief(state) || isStarting || isSubmitting || generationBlocked}
           onPress={onReview}
         />
-      </>
-    );
+      ),
+    };
   })();
 
+  const steps = [
+    {
+      id: "details",
+      label: t("dj.brief.titleLabel"),
+      description: t("dj.brief.directionLabel"),
+    },
+    {
+      id: "lyrics",
+      label: state?.draft.mode === "vocal"
+        ? t("dj.brief.lyricsLabel")
+        : t("dj.brief.mode.instrumental"),
+      description: t(`dj.brief.mode.${state?.draft.mode ?? "instrumental"}`),
+    },
+    {
+      id: "review",
+      label: t("dj.brief.confirmTitle"),
+      description: t("dj.brief.confirmSubtitle"),
+    },
+  ] as const;
+
   return (
-    <View style={styles.root}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
-        ]}
-      >
-        <ScreenHeader
-          title={t("dj.profile.prepareAction")}
-          disabled={isStarting || isSubmitting}
-        />
-        {content}
-      </ScrollView>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <ResponsiveFormShell
+        title={t("dj.profile.prepareAction")}
+        steps={steps}
+        activeStep={composition.activeStep}
+        form={composition.form}
+        review={composition.review}
+        footer={(
+          <View style={[styles.footer, { paddingBottom }]}>
+            {composition.footer}
+          </View>
+        )}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   root: { flex: 1, backgroundColor: theme.colors.background },
-  content: {
+  editor: {
     gap: theme.spacing.stackLg,
-    paddingHorizontal: theme.spacing.gutter,
   },
+  confirmation: { gap: theme.spacing.stackMd },
+  footer: { width: "100%" },
 }));
