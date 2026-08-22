@@ -1,10 +1,10 @@
 import { render } from "@testing-library/react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { FormStepRail } from "../FormStepRail";
 import { ResponsiveFormShell } from "../ResponsiveFormShell";
 import { StickyReviewPanel } from "../StickyReviewPanel";
-import { resolveResponsiveFormLayout } from "../form-layout";
+import { resolveResponsiveFormStyle } from "../form-layout";
 
 const steps = [
   { id: "traits", label: "Traits" },
@@ -119,56 +119,66 @@ describe("ResponsiveFormShell", () => {
     [1440, "row", "flex", "sticky"],
   ] as const)(
     "maps %ipx to the expected form regions without removing the footer",
-    (width, direction, railDisplay, reviewPosition) => {
-      expect(resolveResponsiveFormLayout(width)).toEqual(
-        expect.objectContaining({
-          contentDirection: direction,
-          railDisplay,
-          reviewPosition,
-          footerPosition: "relative",
-        }),
+    async (width, direction, railDisplay, reviewPosition) => {
+      const screen = await render(<FormShellFixture />);
+      const contentStyle = StyleSheet.flatten(
+        screen.getByTestId("responsive-form-content").props.style,
       );
+      const railStyle = StyleSheet.flatten(
+        screen.getByTestId("form-step-rail").props.style,
+      );
+      const reviewStyle = StyleSheet.flatten(
+        screen.getByTestId("sticky-review-panel").props.style,
+      );
+      const footerStyle = StyleSheet.flatten(
+        screen.getByTestId("responsive-form-footer").props.style,
+      );
+
+      expect(resolveResponsiveFormStyle(contentStyle.flexDirection, width)).toBe(direction);
+      expect(resolveResponsiveFormStyle(railStyle.display, width)).toBe(railDisplay);
+      expect(resolveResponsiveFormStyle(reviewStyle.position, width)).toBe(reviewPosition);
+      expect(footerStyle.position).toBe("relative");
     },
   );
 
   it("keeps the final action reachable in scroll flow at the effective 200 percent zoom viewport", async () => {
     const effectiveViewport = { width: 720, height: 422 };
     const screen = await render(
-      <ScrollView
-        testID="effective-zoom-scroll-view"
-        style={effectiveViewport}
-        contentContainerStyle={{ flexGrow: 1 }}
-      >
-        <View
-          testID="effective-zoom-scroll-content"
-          style={{ minHeight: effectiveViewport.height * 2 }}
-        >
-          <FormShellFixture
-            form={
-              <Pressable accessibilityRole="button" accessibilityLabel="Edit identity">
-                <Text>Edit identity</Text>
-              </Pressable>
-            }
-          />
-        </View>
-      </ScrollView>,
+      <FormShellFixture
+        form={
+          <View
+            testID="effective-zoom-form-content"
+            style={{ minHeight: effectiveViewport.height * 2 }}
+          >
+            <Pressable accessibilityRole="button" accessibilityLabel="Edit identity">
+              <Text>Edit identity</Text>
+            </Pressable>
+          </View>
+        }
+      />,
     );
-    const scrollView = screen.getByTestId("effective-zoom-scroll-view");
-    const scrollContent = screen.getByTestId("effective-zoom-scroll-content");
+    const scrollView = screen.getByTestId("responsive-form-scroll-view");
     const footer = screen.getByTestId("responsive-form-footer");
+    const tallForm = screen.getByTestId("effective-zoom-form-content");
 
-    expect(resolveResponsiveFormLayout(effectiveViewport.width).contentDirection).toBe("column");
-    expect(StyleSheet.flatten(scrollView.props.style)).toEqual(effectiveViewport);
-    expect(StyleSheet.flatten(scrollView.props.contentContainerStyle)).toEqual({ flexGrow: 1 });
-    expect(StyleSheet.flatten(scrollContent.props.style).minHeight).toBeGreaterThan(
+    expect(resolveResponsiveFormStyle(
+      StyleSheet.flatten(screen.getByTestId("responsive-form-content").props.style).flexDirection,
+      effectiveViewport.width,
+    )).toBe("column");
+    expect(StyleSheet.flatten(scrollView.props.style)).toEqual(
+      expect.objectContaining({ flex: 1 }),
+    );
+    expect(StyleSheet.flatten(scrollView.props.contentContainerStyle)).toEqual(
+      expect.objectContaining({ flexGrow: 1 }),
+    );
+    expect(StyleSheet.flatten(tallForm.props.style).minHeight).toBeGreaterThan(
       effectiveViewport.height,
     );
-    expect(scrollContent.children).toEqual([screen.getByTestId("responsive-form-shell")]);
     expect(footer.children).toEqual([
       screen.getByRole("button", { name: "Create DJ" }),
     ]);
     expect(StyleSheet.flatten(footer.props.style)).toEqual(
-      expect.objectContaining({ position: "relative" }),
+      expect.objectContaining({ position: "relative", flexShrink: 0 }),
     );
   });
 });

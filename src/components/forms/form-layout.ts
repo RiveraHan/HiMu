@@ -14,17 +14,6 @@ const desktopFormLayout = {
   footerPosition: "relative",
 } as const;
 
-export type ResponsiveFormLayout = typeof compactFormLayout | typeof desktopFormLayout;
-
-/**
- * Resolves the same compact/desktop presentation contract consumed by the
- * Unistyles maps below. Medium intentionally retains compact form flow.
- */
-export function resolveResponsiveFormLayout(width: number): ResponsiveFormLayout {
-  const mode: LayoutMode = resolveLayoutMode(width);
-  return mode === "desktop" ? desktopFormLayout : compactFormLayout;
-}
-
 /** Creates a mobile-first Unistyles map from the canonical form layout values. */
 export function responsiveFormStyle<const Compact, const Desktop>(
   compact: Compact,
@@ -33,7 +22,47 @@ export function responsiveFormStyle<const Compact, const Desktop>(
   return { xs: compact, xl: desktop };
 }
 
-export const formLayout = {
-  compact: compactFormLayout,
-  desktop: desktopFormLayout,
+type ResponsiveFormStyle<Compact, Desktop> = {
+  xs: Compact;
+  xl: Desktop;
+};
+
+/**
+ * Resolves an exact responsive style map that a form component passed to
+ * Unistyles. Medium intentionally retains the compact form presentation.
+ */
+export function resolveResponsiveFormStyle<Compact, Desktop>(
+  style: ResponsiveFormStyle<Compact, Desktop>,
+  width: number,
+): Compact | Desktop {
+  const mode: LayoutMode = resolveLayoutMode(width);
+  return style[mode === "desktop" ? "xl" : "xs"];
+}
+
+/**
+ * The single source of truth for responsive form presentation. Components use
+ * these exact values in their Unistyles maps; tests resolve the rendered maps
+ * through `resolveResponsiveFormStyle` at each viewport contract.
+ */
+export const formLayoutContract = {
+  contentDirection: responsiveFormStyle(
+    compactFormLayout.contentDirection,
+    desktopFormLayout.contentDirection,
+  ),
+  railDisplay: responsiveFormStyle(
+    compactFormLayout.railDisplay,
+    desktopFormLayout.railDisplay,
+  ),
+  railFlex: responsiveFormStyle(0, 1),
+  reviewPosition: responsiveFormStyle(
+    compactFormLayout.reviewPosition,
+    desktopFormLayout.reviewPosition,
+  ),
+  editorFlex: responsiveFormStyle(0, 1),
+  scrollStyle: { flex: 1 },
+  scrollContentStyle: { flexGrow: 1 },
+  footerStyle: {
+    position: compactFormLayout.footerPosition,
+    flexShrink: 0,
+  },
 } as const;

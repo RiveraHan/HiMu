@@ -4,7 +4,7 @@ import { View } from "react-native";
 import { Text } from "@/src/components/Text";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
-import { formLayout, responsiveFormStyle } from "./form-layout";
+import { formLayoutContract } from "./form-layout";
 
 export type FormStep = {
   id: string;
@@ -62,11 +62,8 @@ export function FormStepRail({ steps, activeStep, children }: Props) {
 
 const styles = StyleSheet.create((theme) => ({
   rail: {
-    display: responsiveFormStyle(
-      formLayout.compact.railDisplay,
-      formLayout.desktop.railDisplay,
-    ),
-    flex: responsiveFormStyle(0, 1),
+    display: formLayoutContract.railDisplay,
+    flex: formLayoutContract.railFlex,
     minWidth: 180,
     maxWidth: 240,
     gap: theme.spacing.stackMd,
