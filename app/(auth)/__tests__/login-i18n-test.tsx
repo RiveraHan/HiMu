@@ -127,7 +127,7 @@ describe("Login translations", () => {
     expect(screen.queryByText(/Invitado|Guest/)).toBeNull();
   });
 
-  it("resolves a capped, footer-anchored compact panel at 700px", async () => {
+  it("keeps the capped compact sign-in content-sized at 700px", async () => {
     mockWindowWidth = 700;
     process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
     process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
@@ -144,7 +144,7 @@ describe("Login translations", () => {
     expect(resolveAtWidth(heroStyle.flexDirection, 700)).toBe("column");
     expect(resolveAtWidth(heroStyle.maxWidth, 700)).toBe(520);
     expect(heroStyle).toEqual(expect.objectContaining({ width: "100%", alignSelf: "center" }));
-    expect(resolveAtWidth(signInStyle.flex, 700)).toBe(1);
+    expect(resolveAtWidth(signInStyle.flex, 700)).toBeUndefined();
     expect(RNStyleSheet.flatten(legalFooter?.props.style)).toEqual(
       expect.objectContaining({ marginTop: "auto" }),
     );
