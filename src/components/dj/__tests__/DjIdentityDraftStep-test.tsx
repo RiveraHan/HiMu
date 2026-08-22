@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { useState } from "react";
 import { Pressable, Text } from "react-native";
 
@@ -159,4 +159,64 @@ test("trait changes mark a confirmed identity stale without erasing its text", a
   await waitFor(() => expect(screen.getByText("Review after trait changes")).toBeTruthy());
   expect(screen.getByDisplayValue("Static Bloom")).toBeTruthy();
   expect(screen.queryByText("Identity confirmed")).toBeNull();
+});
+
+test("ignores identity candidates that resolve after a newer trait request", async () => {
+  let resolveFirst!: (value: unknown) => void;
+  let resolveSecond!: (value: unknown) => void;
+  mockDraft
+    .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+    .mockImplementationOnce(() => new Promise((resolve) => (resolveSecond = resolve)));
+
+  function RaceHarness() {
+    const [value, setValue] = useState<DjIdentityDraftValue>({
+      name: "",
+      identityConcept: "",
+      provenance: "custom",
+      confirmed: false,
+    });
+    const [energy, setEnergy] = useState(6);
+    return (
+      <>
+        <DjIdentityDraftStep
+          traits={{ ...traits, energy }}
+          value={value}
+          onChange={setValue}
+        />
+        <Pressable testID="change-traits" onPress={() => setEnergy(7)}>
+          <Text>Change traits</Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  const newerCandidates = candidates.map((candidate) => ({
+    ...candidate,
+    name: `New ${candidate.name}`,
+  }));
+  const screen = await render(<RaceHarness />);
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await fireEvent.press(screen.getByTestId("change-traits"));
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(2));
+
+  await act(async () => {
+    resolveSecond({
+      version: 1,
+      kind: "dj-identity",
+      draft: { candidates: newerCandidates },
+    });
+  });
+  await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(3));
+  expect(screen.getByText("New Static Bloom")).toBeTruthy();
+
+  await act(async () => {
+    resolveFirst({
+      version: 1,
+      kind: "dj-identity",
+      draft: { candidates },
+    });
+  });
+  expect(screen.getAllByRole("radio")).toHaveLength(3);
+  expect(screen.getByText("New Static Bloom")).toBeTruthy();
+  expect(screen.queryByText("Static Bloom")).toBeNull();
 });

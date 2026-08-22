@@ -71,7 +71,8 @@ export function DjIdentityDraftStep({
 
   async function requestDrafts() {
     if (!canDraft(traits) || disabled) return;
-    requestedFingerprint.current = fingerprint;
+    const requestFingerprint = fingerprint;
+    requestedFingerprint.current = requestFingerprint;
     setDraftFailed(false);
     try {
       const response = await draftMutation.mutateAsync({
@@ -80,9 +81,11 @@ export function DjIdentityDraftStep({
         exclude: candidates.map((candidate) => candidate.name),
       });
       if (response.kind !== "dj-identity") throw new Error("invalid identity draft");
+      if (requestedFingerprint.current !== requestFingerprint) return;
       setCandidates(response.draft.candidates);
       setSelectedName(null);
     } catch {
+      if (requestedFingerprint.current !== requestFingerprint) return;
       setDraftFailed(true);
     }
   }

@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import TrainDJScreen from "@/app/train-dj/[id]";
 import { ActivityProvider, useActivity } from "@/src/activity/ActivityProvider";
 import { supabase } from "@/src/api/supabase";
 import { TrainDjSkeleton } from "@/src/components/dj/TrainDjSkeleton";
+import { resolveResponsiveFormStyle } from "@/src/components/forms/form-layout";
 import i18n from "@/src/i18n";
 
 const mockUpdate = jest.fn();
@@ -17,6 +19,7 @@ let mockUseRealUpdate = false;
 let mockLatestActivity: ReturnType<typeof useActivity> | null = null;
 let mockOnline = true;
 let mockUser: { id: string } | null = { id: "listener" };
+let mockRouteId = "dj-one";
 
 const ownedDj = {
   id: "dj-one",
@@ -126,12 +129,30 @@ jest.mock("@/src/i18n/use-locale", () => ({
 }));
 jest.mock("@/src/components", () => {
   const React = require("react");
-  const { Pressable, Text, View } = require("react-native");
+  const { Pressable, Text, TextInput, View } = require("react-native");
   const { TrainDjSkeleton } = jest.requireActual("@/src/components/dj/TrainDjSkeleton");
+  const { ResponsiveFormShell } = jest.requireActual("@/src/components/forms/ResponsiveFormShell");
   return {
     Avatar: () => React.createElement(View),
-    DjTraitsForm: () => React.createElement(View),
+    DjTraitsForm: ({ values, onChange, disabled }: {
+      values: { name: string; genres: string[]; moods: string[]; energy: number; mode: string; vibe: string };
+      onChange: (patch: { name?: string }) => void;
+      disabled?: boolean;
+    }) => React.createElement(View, { testID: "dj-traits-form" },
+      React.createElement(TextInput, {
+        accessibilityLabel: "DJ name",
+        value: values.name,
+        editable: !disabled,
+        onChangeText: (name: string) => onChange({ name }),
+      }),
+      React.createElement(Text, null, values.genres.join(", ")),
+      React.createElement(Text, null, values.moods.join(", ")),
+      React.createElement(Text, null, String(values.energy)),
+      React.createElement(Text, null, values.mode),
+      React.createElement(Text, null, values.vibe),
+    ),
     EqualizerBars: () => React.createElement(View),
+    ResponsiveFormShell,
     TrainDjSkeleton,
     Text: ({ children }: { children: React.ReactNode }) => React.createElement(Text, null, children),
     PrefSection: ({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) =>
@@ -169,12 +190,16 @@ jest.mock("@/src/components", () => {
 });
 jest.mock("expo-router", () => ({
   router: { back: jest.fn(), push: jest.fn(), canGoBack: () => true, replace: jest.fn() },
-  useLocalSearchParams: () => ({ id: "dj-one" }),
+  useLocalSearchParams: () => ({ id: mockRouteId }),
 }));
 jest.mock("lucide-react-native", () => {
   const React = require("react");
   const { View } = require("react-native");
-  return { RefreshCw: () => React.createElement(View) };
+  return {
+    ChevronLeft: () => React.createElement(View),
+    RefreshCw: () => React.createElement(View),
+    X: () => React.createElement(View),
+  };
 });
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -210,6 +235,7 @@ beforeEach(() => {
   mockLatestActivity = null;
   mockOnline = true;
   mockUser = { id: "listener" };
+  mockRouteId = "dj-one";
   mockDjQuery = settledDjQuery(ownedDj);
 });
 
@@ -291,7 +317,7 @@ test.each([
   mockDjQuery = settledDjQuery(ownedDj, { isError: online, fetchStatus });
   const screen = await render(<TrainDJScreen />);
 
-  expect(screen.getByText("Save changes")).toBeTruthy();
+  expect(screen.getAllByText("Save changes").length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText(title)).toBeTruthy();
   expect(screen.getByTestId("compact-notice")).toBeTruthy();
   await fireEvent.press(screen.getByRole("button", { name: "Retry" }));
@@ -304,7 +330,7 @@ test("renders Spanish training and preserves canonical saved values", async () =
   const screen = await render(<TrainDJScreen />);
 
   expect(screen.getByText("Entrenar tu DJ")).toBeTruthy();
-  expect(screen.getByText("Guardar cambios")).toBeTruthy();
+  expect(screen.getAllByText("Guardar cambios").length).toBeGreaterThanOrEqual(1);
 
   fireEvent.press(screen.getByRole("button", { name: "Guardar cambios" }));
   expect(mockUpdate).toHaveBeenCalledWith(
@@ -319,6 +345,78 @@ test("keeps Back available while an update is pending", async () => {
   const screen = await render(<TrainDJScreen />);
 
   expect(screen.getByRole("button", { name: "Back" }).props.accessibilityState.disabled).toBeFalsy();
+});
+
+test.each([390, 1440])(
+  "composes the saved Train DJ values at %ipx through one rail/editor/review tree without implicit save",
+  async (width) => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<TrainDJScreen />);
+
+    const contentStyle = StyleSheet.flatten(
+      screen.getByTestId("responsive-form-content").props.style,
+    );
+    const railStyle = StyleSheet.flatten(
+      screen.getByTestId("form-step-rail").props.style,
+    );
+    const reviewStyle = StyleSheet.flatten(
+      screen.getByTestId("sticky-review-panel").props.style,
+    );
+
+    expect(resolveResponsiveFormStyle(contentStyle.flexDirection, width)).toBe(
+      width < 1024 ? "column" : "row",
+    );
+    expect(resolveResponsiveFormStyle(railStyle.display, width)).toBe(
+      width < 1024 ? "none" : "flex",
+    );
+    expect(resolveResponsiveFormStyle(reviewStyle.position, width)).toBe(
+      width < 1024 ? "relative" : "sticky",
+    );
+    expect(screen.getByTestId("train-dj-review")).toHaveTextContent(/Lumen/);
+    expect(screen.getByTestId("train-dj-review")).toHaveTextContent(/Ambient/);
+    expect(screen.getByTestId("train-dj-review")).toHaveTextContent(/Focus/);
+    expect(screen.getAllByRole("button", { name: "Save changes" })).toHaveLength(1);
+
+    fireEvent(screen.getByDisplayValue("Lumen"), "blur");
+    await fireEvent.press(screen.getByRole("button", { name: "Back" }));
+    expect(mockUpdate).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Save changes" }));
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Lumen",
+        genres: ["Ambient"],
+        moods: ["Focus"],
+        energy: 5,
+        isInstrumental: true,
+        regenerateAvatar: false,
+      }),
+      expect.any(Object),
+    );
+  },
+);
+
+test("resets the local editor to the newly loaded DJ when the route id changes", async () => {
+  await i18n.changeLanguage("en");
+  const screen = await render(<TrainDJScreen />);
+  await fireEvent.changeText(screen.getByDisplayValue("Lumen"), "Unsaved Lumen");
+  expect(screen.getByDisplayValue("Unsaved Lumen")).toBeTruthy();
+
+  mockRouteId = "dj-two";
+  mockDjQuery = settledDjQuery({
+    ...ownedDj,
+    id: "dj-two",
+    name: "Solace",
+    identity_concept: "A careful curator balancing quiet pulse with open-air warmth.",
+    genre_specialties: ["Jazz"],
+    mood_tags: ["Dreamy"],
+  });
+  await screen.rerender(<TrainDJScreen />);
+
+  expect(screen.getByDisplayValue("Solace")).toBeTruthy();
+  expect(screen.queryByDisplayValue("Unsaved Lumen")).toBeNull();
+  expect(mockUpdate).not.toHaveBeenCalled();
 });
 
 test.each([

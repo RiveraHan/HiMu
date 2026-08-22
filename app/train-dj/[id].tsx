@@ -5,6 +5,7 @@ import {
   DjTraitsForm,
   EqualizerBars,
   PrefSection,
+  ResponsiveFormShell,
   ScreenHeader,
   ScreenScrollView,
   StateNotice,
@@ -21,7 +22,7 @@ import { useUpdateDJ } from "@/src/hooks/use-update-dj";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { router, useLocalSearchParams } from "expo-router";
 import { RefreshCw } from "lucide-react-native";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -66,6 +67,35 @@ export default function TrainDJScreen() {
   const djLoading = isInitialQueryLoading(djQuery);
   const blockingDjError = djQuery.isError && dj === undefined;
   const fallbackHref = dj ? (`/dj/${dj.id}` as const) : "/";
+
+  if (dj && dj.owner_id === user?.id) {
+    const refreshNotice = djQuery.isError || !online ? (
+      <StateNotice
+        compact
+        kind={online ? "error" : "offline"}
+        title={
+          online
+            ? t("dj.train.loadUnavailableTitle")
+            : t("common.errors.offline")
+        }
+        message={online ? t("dj.train.loadUnavailable") : undefined}
+        actionLabel={t("common.actions.retry")}
+        onAction={() => void djQuery.refetch()}
+      />
+    ) : null;
+
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <TrainForm
+          key={dj.id}
+          djId={dj.id}
+          dj={dj}
+          notice={refreshNotice}
+          paddingBottom={paddingBottom}
+        />
+      </View>
+    );
+  }
 
   return (
     <ScreenScrollView
@@ -112,30 +142,22 @@ export default function TrainDJScreen() {
         />
       ) : dj.owner_id !== user?.id ? (
         <StateNotice kind="empty" title={t("dj.train.unavailable")} />
-      ) : (
-        <>
-          <TrainForm djId={id} dj={dj} />
-          {djQuery.isError || !online ? (
-            <StateNotice
-              compact
-              kind={online ? "error" : "offline"}
-              title={
-                online
-                  ? t("dj.train.loadUnavailableTitle")
-                  : t("common.errors.offline")
-              }
-              message={online ? t("dj.train.loadUnavailable") : undefined}
-              actionLabel={t("common.actions.retry")}
-              onAction={() => void djQuery.refetch()}
-            />
-          ) : null}
-        </>
-      )}
+      ) : null}
     </ScreenScrollView>
   );
 }
 
-function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
+function TrainForm({
+  djId,
+  dj,
+  notice,
+  paddingBottom,
+}: {
+  djId: string;
+  dj: DJData;
+  notice: ReactNode;
+  paddingBottom: number;
+}) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
 
@@ -160,6 +182,23 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
 
   const patch = (p: Partial<DjTraits>) => setTraits((t) => ({ ...t, ...p }));
   const canSubmit = canSubmitDjTraits(traits);
+  const steps = [
+    {
+      id: "portrait",
+      label: t("dj.train.portrait"),
+      description: t("dj.train.portraitSubtitle"),
+    },
+    {
+      id: "traits",
+      label: t("dj.traits.identity"),
+      description: t("dj.train.subtitle", { name: dj.name }),
+    },
+    {
+      id: "review",
+      label: t("dj.train.save"),
+      description: t("dj.train.portraitSubtitle"),
+    },
+  ] as const;
 
   function submit(regenerateAvatar: boolean) {
     setAction(regenerateAvatar ? "regen" : "save");
@@ -186,40 +225,87 @@ function TrainForm({ djId, dj }: { djId: string; dj: DJData }) {
   }
 
   return (
-    <>
-      <PrefSection
-        title={t("dj.train.portrait")}
-        subtitle={t("dj.train.portraitSubtitle")}
-      >
-        <View style={styles.portraitRow}>
-          <View style={regenerating && styles.portraitDim}>
-            <Avatar src={dj.avatar_url} fallback={dj.name} size="2xl" />
-          </View>
-          {regenerating ? (
-            <RegenStatus />
-          ) : (
-            <Button
-              variant="glass"
-              label={t("dj.train.regenerate")}
-              leftIcon={<RefreshCw size={16} color={theme.colors.onSurface} />}
-              onPress={() => submit(true)}
-              disabled={!canSubmit || isPending}
-              style={styles.regenBtn}
-            />
-          )}
+    <ResponsiveFormShell
+      title={t("dj.train.title")}
+      description={t("dj.train.subtitle", { name: dj.name })}
+      steps={steps}
+      activeStep={canSubmit ? "review" : "traits"}
+      form={
+        <View style={styles.editor}>
+          <PrefSection
+            title={t("dj.train.portrait")}
+            subtitle={t("dj.train.portraitSubtitle")}
+          >
+            <View style={styles.portraitRow}>
+              <View style={regenerating && styles.portraitDim}>
+                <Avatar src={dj.avatar_url} fallback={dj.name} size="2xl" />
+              </View>
+              {regenerating ? (
+                <RegenStatus />
+              ) : (
+                <Button
+                  variant="glass"
+                  label={t("dj.train.regenerate")}
+                  leftIcon={<RefreshCw size={16} color={theme.colors.onSurface} />}
+                  onPress={() => submit(true)}
+                  disabled={!canSubmit || isPending}
+                  style={styles.regenBtn}
+                />
+              )}
+            </View>
+          </PrefSection>
+          <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
+          {notice}
         </View>
-      </PrefSection>
+      }
+      review={
+        <View testID="train-dj-review" style={styles.review}>
+          <PrefSection
+            title={t("dj.traits.identity")}
+            subtitle={dj.identity_concept ?? t("dj.train.subtitle", { name: dj.name })}
+          >
+            <View style={styles.identityRow}>
+              <Avatar src={dj.avatar_url} fallback={dj.name} size="lg" />
+              <Text variant="h2">{traits.name.trim() || dj.name}</Text>
+            </View>
+          </PrefSection>
+          <PrefSection
+            title={t("dj.traits.genres")}
+            subtitle={traits.genres.join(", ")}
+          >
+            <SummaryRow label={t("dj.traits.moods")} value={traits.moods.join(", ")} />
+            <SummaryRow label={t("dj.traits.energy")} value={`${traits.energy}/10`} />
+            <SummaryRow
+              label={t("dj.traits.sound")}
+              value={t(`dj.traits.${traits.mode}`)}
+            />
+            {traits.vibe.trim() ? (
+              <SummaryRow label={t("dj.traits.vibe")} value={traits.vibe.trim()} />
+            ) : null}
+          </PrefSection>
+        </View>
+      }
+      footer={
+        <View style={[styles.footer, { paddingBottom }]}>
+          <Button
+            label={t("dj.train.save")}
+            loadingLabel={t("dj.train.saving")}
+            loading={isPending && action === "save"}
+            disabled={!canSubmit || isPending}
+            onPress={() => submit(false)}
+          />
+        </View>
+      }
+    />
+  );
+}
 
-      <DjTraitsForm values={traits} onChange={patch} disabled={isPending} />
-
-      <Button
-        label={t("dj.train.save")}
-        loadingLabel={t("dj.train.saving")}
-        loading={isPending && action === "save"}
-        disabled={!canSubmit || isPending}
-        onPress={() => submit(false)}
-      />
-    </>
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.summaryRow}>
+      <Text color="outline">{label}</Text>
+      <Text>{value || "—"}</Text>
+    </View>
   );
 }
 
@@ -231,6 +317,23 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
+  },
+  editor: {
+    gap: theme.spacing.stackLg,
+  },
+  review: {
+    gap: theme.spacing.stackLg,
+  },
+  identityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.stackMd,
+  },
+  summaryRow: {
+    gap: theme.spacing.stackXs,
+  },
+  footer: {
+    width: "100%",
   },
   portraitRow: {
     flexDirection: "row",
