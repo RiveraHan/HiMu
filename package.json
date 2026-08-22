@@ -90,6 +90,7 @@
     "preset": "jest-expo",
     "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
     "testPathIgnorePatterns": ["<rootDir>/.worktrees/"],
+    "modulePathIgnorePatterns": ["<rootDir>/.worktrees/"],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
     },

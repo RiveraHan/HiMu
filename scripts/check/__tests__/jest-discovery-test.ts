@@ -1,5 +1,6 @@
 /** @jest-environment node */
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { runCLI } from "@jest/core";
 
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -26,6 +27,19 @@ async function normalJestDiscovery() {
 }
 
 describe("normal Jest discovery", () => {
+  it("excludes nested worktrees from both test discovery and the haste module map", () => {
+    const packageJson = JSON.parse(
+      readFileSync(path.join(projectRoot, "package.json"), "utf8"),
+    );
+
+    expect(packageJson.jest.testPathIgnorePatterns).toContain(
+      "<rootDir>/.worktrees/",
+    );
+    expect(packageJson.jest.modulePathIgnorePatterns).toContain(
+      "<rootDir>/.worktrees/",
+    );
+  });
+
   it("excludes explicit Chrome QA launchers and their browser-only support", async () => {
     const discovered = await normalJestDiscovery();
     const browserQaEntries = discovered.filter(
