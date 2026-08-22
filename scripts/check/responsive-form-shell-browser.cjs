@@ -121,6 +121,7 @@ async function main() {
   });
   const login390 = await runFixture("login", { width: 390, height: 844 });
   const login768 = await runFixture("login", { width: 768, height: 1024 });
+  const login1024 = await runFixture("login", { width: 1024, height: 1366 });
   const login1440 = await runFixture("login", { width: 1440, height: 900 });
   for (const compactLogin of [login390, login768]) {
     assert.ok(compactLogin.promise.height >= 180, "compact promise must keep its intrinsic height");
@@ -135,10 +136,27 @@ async function main() {
     assert.equal(compactLogin.signInStyle.backgroundColor, "rgba(0, 0, 0, 0)");
     assert.equal(compactLogin.signInStyle.backdropFilter, "none");
   }
-  assert.ok(login1440.signIn.height >= 440, "desktop sign-in must keep its designed minimum height");
-  assert.ok(login1440.signIn.width <= 460);
-  assert.notEqual(login1440.signInStyle.backgroundColor, "rgba(0, 0, 0, 0)");
-  assert.notEqual(login1440.signInStyle.backdropFilter, "none");
+  for (const [desktopLogin, viewportWidth] of [
+    [login1024, 1024],
+    [login1440, 1440],
+  ]) {
+    assert.ok(desktopLogin.signIn.height >= 360, "desktop sign-in must keep its designed minimum height");
+    assert.ok(desktopLogin.signIn.width <= 440);
+    assert.ok(
+      Math.abs(desktopLogin.promise.top - desktopLogin.signIn.top) <= 1 &&
+      Math.abs(desktopLogin.promise.bottom - desktopLogin.signIn.bottom) <= 1,
+      "desktop promise and sign-in panels must share one vertical alignment",
+    );
+    assert.ok(
+      Math.abs(
+        (desktopLogin.promise.centerX + desktopLogin.signIn.centerX) / 2 -
+        viewportWidth / 2,
+      ) <= 1,
+      "desktop login columns must be centered as one composition",
+    );
+    assert.notEqual(desktopLogin.signInStyle.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.notEqual(desktopLogin.signInStyle.backdropFilter, "none");
+  }
 
   process.stdout.write(
     "Responsive form shell browser check passed: production scroll flow, focus, 200% zoom reachability, and GlassCard style forwarding.\n",

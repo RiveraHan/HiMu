@@ -46,7 +46,7 @@ describe("LoginHero", () => {
     expect(screen.getAllByRole("button", { name: "Continue with Google" })).toHaveLength(1);
   });
 
-  it("uses a responsive 5/4 desktop composition with one benefit list and sign-in action", async () => {
+  it("uses a balanced centered desktop composition with one benefit list and sign-in action", async () => {
     mockWindowWidth = 1440;
     const screen = await render(
       <LoginHero>
@@ -56,19 +56,39 @@ describe("LoginHero", () => {
 
     const hero = screen.getByTestId("login-hero-desktop");
     expect(StyleSheet.flatten(hero.props.style)).toEqual(
-      expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }),
+      expect.objectContaining({
+        flexDirection: { xs: "column", xl: "row" },
+        alignItems: { xs: "stretch", xl: "center" },
+        justifyContent: { xs: "flex-start", xl: "center" },
+        maxWidth: { xs: 520, xl: 1040 },
+      }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("login-hero-promise").props.style)).toEqual(
-      expect.objectContaining({ flex: { xs: undefined, xl: 5 } }),
+      expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 1 },
+        flexShrink: { xs: 0, xl: 1 },
+        maxWidth: { xs: undefined, xl: 440 },
+        minHeight: { xs: undefined, xl: 360 },
+      }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("login-hero-sign-in").props.style)).toEqual(
-      expect.objectContaining({ flex: { xs: undefined, xl: 4 } }),
+      expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 1 },
+        flexShrink: { xs: 0, xl: 1 },
+        maxWidth: { xs: undefined, xl: 440 },
+        minHeight: { xs: undefined, xl: 360 },
+      }),
     );
     expect(screen.getByText("Make every listen yours.")).toBeTruthy();
     expect(screen.getByText("Discover music shaped around your taste.")).toBeTruthy();
     expect(screen.getByTestId("login-benefit").props.role).toBe("listitem");
     expect(screen.getByText("Make every listen yours.").parent).not.toBe(
       screen.getByTestId("login-benefit-list"),
+    );
+    expect(StyleSheet.flatten(screen.getByTestId("login-benefit").props.style)).toEqual(
+      expect.objectContaining({ textAlign: "center" }),
     );
     expect(screen.getByText("Sign in to save your listening and pick up where you left off.")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Continue with Google" })).toHaveLength(1);

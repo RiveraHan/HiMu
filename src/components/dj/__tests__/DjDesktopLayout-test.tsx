@@ -63,6 +63,28 @@ describe("DjDesktopLayout", () => {
     expect(resolved).toBe(direction);
   });
 
+  it("keeps hero and action sections at their natural height before the desktop split", async () => {
+    const screen = await render(
+      <DjDesktopLayout>
+        <DjDesktopLayoutSlot slot="hero"><Text>Hero</Text></DjDesktopLayoutSlot>
+        <DjDesktopLayoutSlot slot="actions"><Text>Actions</Text></DjDesktopLayoutSlot>
+      </DjDesktopLayout>,
+    );
+
+    expect(StyleSheet.flatten(screen.getByTestId("dj-desktop-hero").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 3 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
+    expect(StyleSheet.flatten(screen.getByTestId("dj-desktop-actions").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 2 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
+  });
+
   it.each([1024, 1440, 1920])(
     "uses a %ipx canvas contract with no orphaned DJ track cards",
     (viewportWidth) => {

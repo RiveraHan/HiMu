@@ -41,15 +41,19 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     flexDirection: { xs: "column", xl: "row" },
     alignItems: "stretch",
-    gap: { xs: 0, xl: theme.spacing.stackLg * 2 },
+    gap: { xs: theme.spacing.stackLg, xl: theme.spacing.stackLg * 2 },
     minWidth: 0,
   },
   artwork: {
-    flex: { xs: 1, xl: 1 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 1 },
+    flexShrink: { xs: 0, xl: 1 },
     minWidth: 0,
   },
   playback: {
-    flex: { xs: 0, xl: 1 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 1 },
+    flexShrink: { xs: 0, xl: 1 },
     minWidth: 0,
   },
 }));

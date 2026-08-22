@@ -42,6 +42,26 @@ describe("ProfileDesktopLayout", () => {
     expect(screen.getByTestId("settings")).toBeTruthy();
   });
 
+  it("keeps compact stats and identity sections at their natural height", async () => {
+    const screen = await render(
+      <ProfileDesktopLayout>
+        <ProfileDesktopLayoutSlot slot="dashboard">
+          <ProfileDesktopLayoutSlot slot="stats"><View testID="stats" /></ProfileDesktopLayoutSlot>
+          <ProfileDesktopLayoutSlot slot="identity"><View testID="identity" /></ProfileDesktopLayoutSlot>
+        </ProfileDesktopLayoutSlot>
+      </ProfileDesktopLayout>,
+    );
+
+    for (const slot of ["stats", "identity"]) {
+      expect(StyleSheet.flatten(screen.getByTestId(`profile-desktop-${slot}`).props.style))
+        .toEqual(expect.objectContaining({
+          flexBasis: { xs: "auto", xl: 0 },
+          flexGrow: { xs: 0, xl: slot === "stats" ? 3 : 2 },
+          flexShrink: { xs: 0, xl: 1 },
+        }));
+    }
+  });
+
   it("retains the listener initial when a profile avatar fails", async () => {
     jest.spyOn(console, "warn").mockImplementation();
     const screen = await render(

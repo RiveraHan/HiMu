@@ -56,7 +56,9 @@ export function LoginHero({ children }: Props) {
                 </Text>
               </View>
               <View style={styles.benefitSection}>
-                <Text variant="h2">{t("common.auth.desktopTitle")}</Text>
+                <Text variant="h2" style={styles.centeredCopy}>
+                  {t("common.auth.desktopTitle")}
+                </Text>
                 <View
                   testID="login-benefit-list"
                   accessibilityRole="list"
@@ -67,6 +69,7 @@ export function LoginHero({ children }: Props) {
                     role="listitem"
                     variant="bodyLg"
                     color="onSurfaceVariant"
+                    style={styles.centeredCopy}
                   >
                     {t("common.auth.desktopBenefit")}
                   </Text>
@@ -107,10 +110,11 @@ const styles = StyleSheet.create((theme) => ({
   hero: {
     flex: 1,
     width: "100%",
-    maxWidth: { xs: 520, xl: undefined },
+    maxWidth: { xs: 520, xl: 1040 },
     alignSelf: "center",
     flexDirection: { xs: "column", xl: "row" },
-    alignItems: "stretch",
+    alignItems: { xs: "stretch", xl: "center" },
+    justifyContent: { xs: "flex-start", xl: "center" },
     gap: { xs: theme.spacing.stackLg, xl: theme.spacing.stackLg * 2 },
     paddingTop: { xs: theme.spacing.stackLg * 2, xl: theme.spacing.stackLg * 2 },
     paddingBottom: {
@@ -119,18 +123,26 @@ const styles = StyleSheet.create((theme) => ({
     },
   },
   promisePanel: {
-    flex: { xs: undefined, xl: 5 },
-    justifyContent: { xs: "flex-start", xl: "center" },
-    gap: theme.spacing.stackLg,
-  },
-  signInPanel: {
-    flex: { xs: undefined, xl: 4 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 1 },
+    flexShrink: { xs: 0, xl: 1 },
     justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
     alignSelf: { xs: "stretch", xl: "center" },
     width: "100%",
-    maxWidth: { xs: undefined, xl: 460 },
-    minHeight: { xs: undefined, xl: 440 },
+    maxWidth: { xs: undefined, xl: 440 },
+    minHeight: { xs: undefined, xl: 360 },
+  },
+  signInPanel: {
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 1 },
+    flexShrink: { xs: 0, xl: 1 },
+    justifyContent: { xs: "flex-start", xl: "center" },
+    gap: theme.spacing.stackLg,
+    alignSelf: { xs: "stretch", xl: "center" },
+    width: "100%",
+    maxWidth: { xs: undefined, xl: 440 },
+    minHeight: { xs: undefined, xl: 360 },
     padding: { xs: 0, xl: theme.spacing.cardPadding },
     backgroundColor: { xs: "transparent", xl: theme.colors.glassTint },
     borderWidth: { xs: 0, xl: 1 },
@@ -146,9 +158,13 @@ const styles = StyleSheet.create((theme) => ({
   },
   benefitSection: {
     display: { xs: "none", xl: "flex" },
+    alignItems: "center",
     gap: theme.spacing.stackSm,
   },
   benefits: {},
+  centeredCopy: {
+    textAlign: "center",
+  },
   signInIntro: {
     display: { xs: "none", xl: "flex" },
     gap: theme.spacing.stackSm,

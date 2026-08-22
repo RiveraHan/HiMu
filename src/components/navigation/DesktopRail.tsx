@@ -105,20 +105,18 @@ export function DesktopRail({ ownedDjId }: { ownedDjId?: string | null }) {
         area: "create",
         primary: true,
         };
-  const utilityItems: RailItem[] = [
-    {
-      href: "/favorites",
-      icon: Heart,
-      label: t("profile.favorites.title"),
-      area: "favorites",
-    },
-    {
-      href: "/(app)/profile",
-      icon: User,
-      label: t("common.navigation.profile"),
-      area: "profile",
-    },
-  ];
+  const favoritesItem: RailItem = {
+    href: "/favorites",
+    icon: Heart,
+    label: t("profile.favorites.title"),
+    area: "favorites",
+  };
+  const profileItem: RailItem = {
+    href: "/(app)/profile",
+    icon: User,
+    label: t("common.navigation.profile"),
+    area: "profile",
+  };
 
   const renderItem = ({ href, icon: Icon, label, area, primary, disabled }: RailItem) => {
     const active = activeArea === area;
@@ -185,16 +183,11 @@ export function DesktopRail({ ownedDjId }: { ownedDjId?: string | null }) {
       ]}
       testID="desktop-rail"
     >
-      <View style={styles.topGroups}>
-        <View style={styles.items} testID="desktop-rail-primary-links">
-          {primaryItems.map(renderItem)}
-        </View>
-        <View testID="desktop-rail-create-action">
-          {renderItem(createItem)}
-        </View>
+      <View style={styles.items} testID="desktop-rail-main-links">
+        {[...primaryItems, createItem, favoritesItem].map(renderItem)}
       </View>
-      <View style={styles.items} testID="desktop-rail-utility-links">
-        {utilityItems.map(renderItem)}
+      <View testID="desktop-rail-account-link">
+        {renderItem(profileItem)}
       </View>
     </View>
   );
@@ -216,9 +209,6 @@ const styles = StyleSheet.create((theme) => ({
   items: {
     gap: theme.spacing.stackSm,
   },
-  topGroups: {
-    gap: theme.spacing.stackLg,
-  },
   item: {
     width: 56,
     height: 56,
@@ -226,7 +216,7 @@ const styles = StyleSheet.create((theme) => ({
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.full,
     borderWidth: 2,
     borderColor: "transparent",
   },

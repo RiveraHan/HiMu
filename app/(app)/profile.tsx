@@ -270,7 +270,7 @@ export default function ProfileScreen() {
           {/*Listening Identity*/}
           </ProfileDesktopLayoutSlot>
           <ProfileDesktopLayoutSlot slot="identity">
-          <View style={[styles.section, styles.identitySection]}>
+          <View style={styles.section}>
             <Text
               variant="labelCaps"
               color="onSurfaceVariant"
@@ -498,9 +498,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   section: {
     gap: theme.spacing.stackSm,
-  },
-  identitySection: {
-    flex: { xs: 0, xl: 1 },
   },
   sectionHeader: {
     flexDirection: "row",

@@ -12,6 +12,9 @@ import { Text } from "../../src/components/Text";
 function geometry(node: HTMLElement) {
   const rect = node.getBoundingClientRect();
   return {
+    left: rect.left,
+    right: rect.right,
+    centerX: rect.left + rect.width / 2,
     top: rect.top,
     bottom: rect.bottom,
     width: rect.width,

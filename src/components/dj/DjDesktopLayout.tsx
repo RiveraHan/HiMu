@@ -53,12 +53,16 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   hero: {
-    flex: { xs: 0, xl: 3 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 3 },
+    flexShrink: { xs: 0, xl: 1 },
     gap: theme.spacing.stackLg,
     minWidth: 0,
   },
   actions: {
-    flex: { xs: 0, xl: 2 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 2 },
+    flexShrink: { xs: 0, xl: 1 },
     gap: theme.spacing.stackLg,
     minWidth: 0,
     justifyContent: { xs: "flex-start", xl: "center" },

@@ -8,6 +8,7 @@ import {
 } from "../PlayerDesktopLayout";
 import { PlayerArtwork } from "../PlayerArtwork";
 import { breakpoints } from "@/src/theme/breakpoints";
+import { darkTheme } from "@/src/theme/theme";
 
 jest.mock("expo-image", () => ({
   Image: ({ onLoad, onDisplay, onError, ...props }: Record<string, unknown>) => {
@@ -51,6 +52,29 @@ describe("Player desktop stage", () => {
       screen.getByTestId("player-desktop-artwork"),
       screen.getByTestId("player-desktop-playback"),
     ]);
+  });
+
+  it("keeps compact artwork and playback content-sized before the desktop split", async () => {
+    const screen = await render(
+      <PlayerDesktopLayout>
+        <PlayerDesktopLayoutSlot slot="artwork"><Text>Artwork</Text></PlayerDesktopLayoutSlot>
+        <PlayerDesktopLayoutSlot slot="playback"><Text>Playback</Text></PlayerDesktopLayoutSlot>
+      </PlayerDesktopLayout>,
+    );
+
+    expect(StyleSheet.flatten(screen.getByTestId("player-desktop-stage").props.style))
+      .toEqual(expect.objectContaining({
+        gap: { xs: darkTheme.spacing.stackLg, xl: darkTheme.spacing.stackLg * 2 },
+      }));
+
+    for (const slot of ["artwork", "playback"]) {
+      expect(StyleSheet.flatten(screen.getByTestId(`player-desktop-${slot}`).props.style))
+        .toEqual(expect.objectContaining({
+          flexBasis: { xs: "auto", xl: 0 },
+          flexGrow: { xs: 0, xl: 1 },
+          flexShrink: { xs: 0, xl: 1 },
+        }));
+    }
   });
 
   test.each([

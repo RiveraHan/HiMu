@@ -459,6 +459,21 @@ describe("HomeScreen", () => {
     });
   });
 
+  it("keeps the available creation action first in the DJ shelf", async () => {
+    mockDjsQuery = settledQuery([{
+      id: "dj-one",
+      owner_id: "user",
+      name: "DJ One",
+      avatar_url: null,
+      genre_specialties: ["House"],
+    }]);
+    const screen = await render(<HomeScreen />);
+
+    const action = screen.getByTestId("home-create-action");
+    expect(action.parent?.children[0]).toBe(action);
+    expect(screen.getByRole("button", { name: "Create track" })).toBe(action);
+  });
+
   it("renders cached short and empty refetch failures as retryable errors", async () => {
     mockDjsQuery = failedQuery([]);
     mockRecentQuery = failedQuery([]);

@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, within } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 import { DesktopRail } from "@/src/components/navigation/DesktopRail";
 import i18n from "@/src/i18n";
+import { darkTheme } from "@/src/theme/theme";
 
 let mockPathname = "/(app)/discover";
 let mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -60,12 +62,21 @@ describe("DesktopRail", () => {
       .toBe(true);
   });
 
-  it("separates primary, creation, and utility navigation instead of clustering every icon", async () => {
+  it("keeps main destinations in one evenly spaced group and anchors only the account action", async () => {
     const screen = await render(<DesktopRail ownedDjId="owned-dj" />);
 
-    expect(screen.getByTestId("desktop-rail-primary-links").children).toHaveLength(2);
-    expect(screen.getByTestId("desktop-rail-create-action").children).toHaveLength(1);
-    expect(screen.getByTestId("desktop-rail-utility-links").children).toHaveLength(2);
+    const main = screen.getByTestId("desktop-rail-main-links");
+    expect(main.children).toHaveLength(4);
+    expect(within(main).getAllByRole("link").map((link) => link.props.accessibilityLabel)).toEqual([
+      "Home",
+      "Discover",
+      "Create track",
+      "Favorites",
+    ]);
+    expect(StyleSheet.flatten(main.props.style)).toEqual(expect.objectContaining({
+      gap: darkTheme.spacing.stackSm,
+    }));
+    expect(screen.getByTestId("desktop-rail-account-link").children).toHaveLength(1);
     expect(screen.getByTestId("desktop-rail")).toHaveStyle({
       justifyContent: "space-between",
     });

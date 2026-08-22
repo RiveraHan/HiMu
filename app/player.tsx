@@ -220,7 +220,7 @@ export default function PlayerScreen() {
 
         <PlayerDesktopLayout>
           <PlayerDesktopLayoutSlot slot="artwork">
-            <View style={styles.artWrap}>
+            <View testID="player-artwork-wrap" style={styles.artWrap}>
               <View style={styles.artFrame}>
                 <ArtworkAtmosphereController
                   key={artworkIdentity}
@@ -275,7 +275,7 @@ export default function PlayerScreen() {
           </PlayerDesktopLayoutSlot>
 
           <PlayerDesktopLayoutSlot slot="playback">
-            <View style={styles.bottom}>
+            <View testID="player-playback-wrap" style={styles.bottom}>
               <View style={styles.meta}>
                 <View style={styles.badge}>
                   <Sparkle size={14} color={theme.colors.primary} />
@@ -527,7 +527,9 @@ const styles = StyleSheet.create((theme) => ({
     letterSpacing: 3,
   },
   artWrap: {
-    flex: 1,
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 1 },
+    flexShrink: { xs: 0, xl: 1 },
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: theme.spacing.stackLg,
@@ -546,7 +548,9 @@ const styles = StyleSheet.create((theme) => ({
   },
 
   bottom: {
-    flex: { xs: 0, xl: 1 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 1 },
+    flexShrink: { xs: 0, xl: 1 },
     justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
   },

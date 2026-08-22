@@ -305,23 +305,8 @@ export default function HomeScreen() {
           style={styles.horizontalScroll}
           contentContainerStyle={styles.horizontalList}
         >
-          {djs.map((dj) => (
-            <DJAvatar
-              key={dj.id}
-              src={dj.avatar_url}
-              fallback={dj.name}
-              name={dj.name}
-              subtitle={dj.genre_specialties?.[0]
-                ? catalogLabel(dj.genre_specialties[0], resolvedLanguage)
-                : undefined}
-              isLive={liveDJIds?.has(dj.id) ?? false}
-              isPrivate={dj.owner_id === user?.id && dj.is_public === false}
-              privateLabel={t("dj.visibility.privateLabel")}
-              desktopSize="xl"
-              onPress={() => router.push(`/dj/${dj.id}`)}
-            />
-          ))}
           <Pressable
+            testID="home-create-action"
             onPress={() => {
               if (ownedDj) {
                 router.push({
@@ -350,6 +335,22 @@ export default function HomeScreen() {
               {t("home.create")}
             </Text>
           </Pressable>
+          {djs.map((dj) => (
+            <DJAvatar
+              key={dj.id}
+              src={dj.avatar_url}
+              fallback={dj.name}
+              name={dj.name}
+              subtitle={dj.genre_specialties?.[0]
+                ? catalogLabel(dj.genre_specialties[0], resolvedLanguage)
+                : undefined}
+              isLive={liveDJIds?.has(dj.id) ?? false}
+              isPrivate={dj.owner_id === user?.id && dj.is_public === false}
+              privateLabel={t("dj.visibility.privateLabel")}
+              desktopSize="xl"
+              onPress={() => router.push(`/dj/${dj.id}`)}
+            />
+          ))}
         </ScrollView>
       ) : null}
       {djsQuery.isError && djs !== undefined ? (

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet as RNStyleSheet } from "react-native";
 import VibeCheckScreen from "@/app/vibe-check";
 import i18n from "@/src/i18n";
 import type { DayPoint } from "@/src/utils/vibe-stats";
@@ -324,6 +325,25 @@ describe("VibeCheckScreen", () => {
     expect(screen.getByTestId("vibe-ranking")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
     expect(screen.getByRole("image", { name: summary })).toBeTruthy();
+  });
+
+  it("keeps insight and ranking sections at their natural height before the desktop split", async () => {
+    mockVibeQuery = settledQuery(listeningVibe, mockVibeRefetch);
+    mockDjsQuery = settledQuery(djs, mockDjsRefetch);
+    const screen = await render(<VibeCheckScreen />);
+
+    expect(RNStyleSheet.flatten(screen.getByTestId("vibe-insights").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 3 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
+    expect(RNStyleSheet.flatten(screen.getByTestId("vibe-ranking").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 2 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
   });
 
   it.each([

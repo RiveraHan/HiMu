@@ -24,6 +24,7 @@ const fixtureEntry = path.join(harnessDirectory, fixtureEntries[fixtureKey]);
 const loginViewports = new Map([
   ["390x844", { width: 390, height: 844 }],
   ["768x1024", { width: 768, height: 1024 }],
+  ["1024x1366", { width: 1024, height: 1366 }],
   ["1440x900", { width: 1440, height: 900 }],
 ]);
 const requestedLoginViewport = `${process.env.HIMU_BROWSER_WIDTH || 390}x${process.env.HIMU_BROWSER_HEIGHT || 844}`;

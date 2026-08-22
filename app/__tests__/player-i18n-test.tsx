@@ -192,6 +192,24 @@ describe("PlayerScreen localization", () => {
     expect(screen.getAllByRole("button", { name: "Next" })).toHaveLength(1);
   });
 
+  test("keeps compact artwork and playback wrappers at their natural height", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    expect(StyleSheet.flatten(screen.getByTestId("player-artwork-wrap").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 1 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
+    expect(StyleSheet.flatten(screen.getByTestId("player-playback-wrap").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 1 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
+  });
+
   test("keeps transport reachable by vertical scroll at an effective 720x450 viewport", async () => {
     await i18n.changeLanguage("en");
     const screen = await render(
