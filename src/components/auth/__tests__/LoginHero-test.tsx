@@ -62,7 +62,7 @@ describe("LoginHero", () => {
       expect.objectContaining({ flex: { xs: undefined, xl: 5 } }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("login-hero-sign-in").props.style)).toEqual(
-      expect.objectContaining({ flex: { xs: 1, xl: 4 } }),
+      expect.objectContaining({ flex: { xs: undefined, xl: 4 } }),
     );
     expect(screen.getByText("Make every listen yours.")).toBeTruthy();
     expect(screen.getByText("Discover music shaped around your taste.")).toBeTruthy();

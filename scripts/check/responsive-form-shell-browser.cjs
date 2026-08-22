@@ -11,10 +11,17 @@ const runner = path.join(
 );
 
 async function main() {
-  const runFixture = async (fixture) => {
+  const runFixture = async (fixture, viewport) => {
     const { stdout } = await execFileAsync(process.execPath, [runner], {
       cwd: projectRoot,
-      env: { ...process.env, HIMU_BROWSER_FIXTURE: fixture },
+      env: {
+        ...process.env,
+        HIMU_BROWSER_FIXTURE: fixture,
+        ...(viewport ? {
+          HIMU_BROWSER_WIDTH: String(viewport.width),
+          HIMU_BROWSER_HEIGHT: String(viewport.height),
+        } : {}),
+      },
       maxBuffer: 20 * 1024 * 1024,
       timeout: 60_000,
     });
@@ -112,11 +119,26 @@ async function main() {
     padding: "13px",
     gap: "9px",
   });
-  const compactLogin = await runFixture("login");
-  assert.ok(compactLogin.promise.height >= 180, "compact promise must keep its intrinsic height");
-  assert.ok(compactLogin.signIn.top > compactLogin.promise.top);
-  assert.ok(compactLogin.action.top >= compactLogin.signIn.top);
-  assert.ok(compactLogin.action.bottom <= compactLogin.signIn.bottom);
+  const login390 = await runFixture("login", { width: 390, height: 844 });
+  const login768 = await runFixture("login", { width: 768, height: 1024 });
+  const login1440 = await runFixture("login", { width: 1440, height: 900 });
+  for (const compactLogin of [login390, login768]) {
+    assert.ok(compactLogin.promise.height >= 180, "compact promise must keep its intrinsic height");
+    assert.ok(compactLogin.signIn.top > compactLogin.promise.top);
+    assert.ok(compactLogin.signIn.height <= 180, "compact sign-in must remain content-sized");
+    assert.ok(compactLogin.action.top >= compactLogin.signIn.top);
+    assert.ok(compactLogin.footer.bottom <= compactLogin.signIn.bottom + 1);
+    assert.ok(
+      compactLogin.footer.top - compactLogin.action.bottom <= 40,
+      "compact sign-in must not contain a giant empty field",
+    );
+    assert.equal(compactLogin.signInStyle.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.equal(compactLogin.signInStyle.backdropFilter, "none");
+  }
+  assert.ok(login1440.signIn.height >= 440, "desktop sign-in must keep its designed minimum height");
+  assert.ok(login1440.signIn.width <= 460);
+  assert.notEqual(login1440.signInStyle.backgroundColor, "rgba(0, 0, 0, 0)");
+  assert.notEqual(login1440.signInStyle.backdropFilter, "none");
 
   process.stdout.write(
     "Responsive form shell browser check passed: production scroll flow, focus, 200% zoom reachability, and GlassCard style forwarding.\n",

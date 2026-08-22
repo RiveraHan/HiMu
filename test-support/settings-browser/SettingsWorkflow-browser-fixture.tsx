@@ -32,6 +32,8 @@ type SettingsSnapshot = {
   ambientSelected: boolean;
   languageValue: string | null;
   languageDisabled: boolean;
+  languageLabelFontFamily: string | null;
+  languageSelectFontFamily: string | null;
   legalLabels: string[];
   legalMissingVisible: boolean;
   languagePreference: string | null;
@@ -102,6 +104,9 @@ function SettingsBrowserApp() {
       const languageSelect = document.querySelector<HTMLSelectElement>(
         '[data-testid="language-preference-select"]',
       );
+      const languageLabel = document.querySelector<HTMLElement>(
+        'label[for="himu-language-preference"]',
+      );
       const ambient = elementsByLabel("Ambient")[0];
       const legalLabels = Array.from(
         document.querySelectorAll<HTMLElement>('[role="link"][aria-label]'),
@@ -129,6 +134,12 @@ function SettingsBrowserApp() {
         languageDisabled:
           languageSelect?.disabled ??
           language?.getAttribute("aria-disabled") === "true",
+        languageLabelFontFamily: languageLabel
+          ? getComputedStyle(languageLabel).fontFamily
+          : null,
+        languageSelectFontFamily: languageSelect
+          ? getComputedStyle(languageSelect).fontFamily
+          : null,
         legalLabels,
         legalMissingVisible:
           document.body.textContent?.includes("Legal links are unavailable") ?? false,

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { Platform, ScrollView, useWindowDimensions, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { Atmosphere } from "@/src/components/Atmosphere";
@@ -8,6 +8,7 @@ import { ScreenCanvas } from "@/src/components/ScreenCanvas";
 import { Text } from "@/src/components/Text";
 import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { Logo } from "@/src/components/icons";
+import { breakpoints } from "@/src/theme/breakpoints";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
@@ -17,6 +18,19 @@ type Props = {
 export function LoginHero({ children }: Props) {
   useWebCorePresentation("himu-web-core-presentation/login-hero");
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
+  const compactWeb = Platform.OS === "web" && width < breakpoints.xl;
+  const signInContent = (
+    <>
+      <View style={styles.signInIntro}>
+        <Text variant="h2">{t("common.auth.desktopSignInTitle")}</Text>
+        <Text variant="bodyMd" color="onSurfaceVariant">
+          {t("common.auth.desktopSignInExplanation")}
+        </Text>
+      </View>
+      {children}
+    </>
+  );
 
   return (
     <View style={styles.root}>
@@ -59,15 +73,15 @@ export function LoginHero({ children }: Props) {
                 </View>
               </View>
             </View>
-            <GlassCard testID="login-hero-sign-in" level={2} style={styles.signInPanel}>
-              <View style={styles.signInIntro}>
-                <Text variant="h2">{t("common.auth.desktopSignInTitle")}</Text>
-                <Text variant="bodyMd" color="onSurfaceVariant">
-                  {t("common.auth.desktopSignInExplanation")}
-                </Text>
+            {compactWeb ? (
+              <View testID="login-hero-sign-in" style={styles.signInPanel}>
+                {signInContent}
               </View>
-              {children}
-            </GlassCard>
+            ) : (
+              <GlassCard testID="login-hero-sign-in" level={2} style={styles.signInPanel}>
+                {signInContent}
+              </GlassCard>
+            )}
           </View>
         </ScreenCanvas>
       </ScrollView>
@@ -110,7 +124,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackLg,
   },
   signInPanel: {
-    flex: { xs: 1, xl: 4 },
+    flex: { xs: undefined, xl: 4 },
     justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
     alignSelf: { xs: "stretch", xl: "center" },

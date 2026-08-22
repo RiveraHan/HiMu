@@ -21,9 +21,18 @@ if (!Object.hasOwn(fixtureEntries, fixtureKey)) {
   throw new Error(`Unsupported browser fixture: ${fixtureKey}`);
 }
 const fixtureEntry = path.join(harnessDirectory, fixtureEntries[fixtureKey]);
+const loginViewports = new Map([
+  ["390x844", { width: 390, height: 844 }],
+  ["768x1024", { width: 768, height: 1024 }],
+  ["1440x900", { width: 1440, height: 900 }],
+]);
+const requestedLoginViewport = `${process.env.HIMU_BROWSER_WIDTH || 390}x${process.env.HIMU_BROWSER_HEIGHT || 844}`;
 const viewport = fixtureKey === "login"
-  ? { width: 390, height: 844 }
+  ? loginViewports.get(requestedLoginViewport)
   : { width: 720, height: 422 };
+if (!viewport) {
+  throw new Error(`Unsupported Login browser viewport: ${requestedLoginViewport}`);
+}
 
 function findChrome() {
   const candidates = [

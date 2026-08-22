@@ -76,6 +76,10 @@ async function main() {
     assert.equal(account.legalMissingVisible, false);
     includesInOrder(account.focusLabels, ["Language", "Terms", "Privacy", "Sign Out"]);
   }
+  for (const account of [desktopAccount, compactAccount]) {
+    assert.match(account.languageLabelFontFamily, /Manrope-Regular/);
+    assert.match(account.languageSelectFontFamily, /Manrope-Regular/);
+  }
   assert.equal(desktopAccount.direction, "row");
   assert.equal(compactAccount.direction, "column");
 

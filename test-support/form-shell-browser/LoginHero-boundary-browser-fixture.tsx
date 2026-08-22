@@ -19,18 +19,31 @@ function geometry(node: HTMLElement) {
   };
 }
 
+function visualStyle(node: HTMLElement) {
+  const style = getComputedStyle(node);
+  return {
+    backgroundColor: style.backgroundColor,
+    backdropFilter: style.backdropFilter,
+  };
+}
+
 function Fixture() {
   useLayoutEffect(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const promise = document.querySelector<HTMLElement>('[data-testid="login-hero-promise"]');
       const signIn = document.querySelector<HTMLElement>('[data-testid="login-hero-sign-in"]');
       const action = document.querySelector<HTMLElement>('[data-testid="compact-login-action"]');
-      if (!promise || !signIn || !action) throw new Error("Missing compact LoginHero probe");
+      const footer = document.querySelector<HTMLElement>('[data-testid="compact-login-footer"]');
+      if (!promise || !signIn || !action || !footer) {
+        throw new Error("Missing compact LoginHero probe");
+      }
 
       document.querySelector("#browser-test-result")!.textContent = JSON.stringify({
         promise: geometry(promise),
         signIn: geometry(signIn),
         action: geometry(action),
+        footer: geometry(footer),
+        signInStyle: visualStyle(signIn),
       });
     }));
   }, []);
@@ -45,7 +58,7 @@ function Fixture() {
       >
         <Text>Continue with Google</Text>
       </Pressable>
-      <View style={{ flex: 1 }} />
+      <View testID="compact-login-footer" style={{ height: 44, marginTop: "auto" }} />
     </LoginHero>
   );
 }

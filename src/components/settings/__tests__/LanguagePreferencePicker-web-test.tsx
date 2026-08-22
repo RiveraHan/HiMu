@@ -57,7 +57,10 @@ describe("LanguagePreferenceSelect", () => {
     });
 
     const select = container.querySelector<HTMLSelectElement>("select");
+    const label = container.querySelector<HTMLLabelElement>("label");
     expect(select?.getAttribute("aria-label")).toBe("Language");
+    expect(label?.style.fontFamily).toContain("Manrope-Regular");
+    expect(select?.style.fontFamily).toContain("Manrope-Regular");
     expect(Array.from(select!.options).map((option) => option.value)).toEqual([
       "system",
       "en",

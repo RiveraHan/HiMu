@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { isLanguagePreference } from "@/src/i18n/locale";
 import type { LanguagePreference } from "@/src/i18n/types";
 import { useLocale } from "@/src/i18n/use-locale";
+import { HIMU_FONT_FAMILIES } from "@/src/theme/fonts";
 
 type Labels = {
   label: string;
@@ -125,6 +126,7 @@ const styles = {
   },
   label: {
     color: "#e4e1e9",
+    fontFamily: HIMU_FONT_FAMILIES.regular,
     fontSize: 18,
     lineHeight: 1.6,
   },
@@ -134,6 +136,7 @@ const styles = {
     borderRadius: 8,
     color: "#e4e1e9",
     font: "inherit",
+    fontFamily: HIMU_FONT_FAMILIES.regular,
     minHeight: 44,
     padding: "8px 12px",
     width: "100%",
