@@ -15,6 +15,7 @@ import {
 import type { LanguagePreference } from "./types";
 import { LocaleContext } from "./use-locale";
 import { isCurrentMutationUser } from "@/src/api/auth-scope";
+import { syncDocumentLanguage } from "./document-language";
 
 function showPersistenceError() {
   useToastStore
@@ -331,19 +332,25 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     setRetryVersion((version) => version + 1);
   }, []);
 
+  const resolvedLanguage = resolveLanguage(preference, deviceLanguageCode);
+
+  useEffect(() => {
+    syncDocumentLanguage(resolvedLanguage);
+  }, [resolvedLanguage]);
+
   const value = useMemo(
     () => ({
       preference,
-      resolvedLanguage: resolveLanguage(preference, deviceLanguageCode),
+      resolvedLanguage,
       setPreference,
       isSaving,
       saveError,
       retryPreference,
     }),
     [
-      deviceLanguageCode,
       isSaving,
       preference,
+      resolvedLanguage,
       retryPreference,
       saveError,
       setPreference,

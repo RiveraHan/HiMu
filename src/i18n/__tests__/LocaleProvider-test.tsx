@@ -14,12 +14,21 @@ import {
 } from "../locale-storage";
 import { LocaleProvider } from "../LocaleProvider";
 import { useLocale } from "../use-locale";
+import { syncDocumentLanguage as syncWebDocumentLanguage } from "../document-language.web";
 
 let mockUser: { id: string } | null = null;
 let mockSettings: UserPreferences | undefined;
 let mockDeviceLanguageCode = "en";
 const mockMutateAsync = jest.fn<Promise<void>, [UserPreferencesPatch]>();
 const mockShowToast = jest.fn();
+const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+
+function installDocumentLanguage(initialLanguage: string) {
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { documentElement: { lang: initialLanguage } },
+  });
+}
 
 jest.mock("@/src/hooks/use-auth", () => ({
   useCurrentUser: () => mockUser,
@@ -47,6 +56,14 @@ jest.mock("@/src/stores/toast-store", () => ({
     getState: () => ({ show: mockShowToast }),
   },
 }));
+jest.mock("../document-language", () =>
+  jest.requireActual("../document-language.web"),
+);
+
+const { syncDocumentLanguage: syncNativeDocumentLanguage } =
+  jest.requireActual<typeof import("../document-language.native")>(
+    "../document-language.native",
+  );
 
 type LocaleValue = ReturnType<typeof useLocale>;
 let currentLocale: LocaleValue | null = null;
@@ -107,7 +124,39 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (originalDocument) {
+    Object.defineProperty(globalThis, "document", originalDocument);
+  } else {
+    Reflect.deleteProperty(globalThis, "document");
+  }
   jest.restoreAllMocks();
+});
+
+test("keeps the web document language aligned with initial and live preferences", async () => {
+  mockDeviceLanguageCode = "es-MX";
+  installDocumentLanguage("en");
+
+  await renderProvider();
+
+  await waitFor(() => expect(document.documentElement.lang).toBe("es"));
+  await act(async () => currentLocale!.setPreference("en"));
+  await waitFor(() => expect(document.documentElement.lang).toBe("en"));
+  await act(async () => currentLocale!.setPreference("es"));
+  await waitFor(() => expect(document.documentElement.lang).toBe("es"));
+});
+
+test("does not touch the document language on native", async () => {
+  installDocumentLanguage("native-owner");
+
+  syncNativeDocumentLanguage("es");
+
+  expect(document.documentElement.lang).toBe("native-owner");
+});
+
+test("does not require a document during web static rendering", () => {
+  Reflect.deleteProperty(globalThis, "document");
+
+  expect(() => syncWebDocumentLanguage("es")).not.toThrow();
 });
 
 test("an unauthenticated user resolves system from the device", async () => {
