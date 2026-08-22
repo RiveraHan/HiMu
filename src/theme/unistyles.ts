@@ -2,6 +2,7 @@ import {
   StyleSheet as UnistylesStyleSheet,
   UnistylesRuntime,
   useUnistyles,
+  withUnistyles,
 } from "react-native-unistyles";
 
 import { breakpoints } from "./breakpoints";
@@ -26,4 +27,4 @@ UnistylesStyleSheet.configure({
 });
 
 export const StyleSheet = UnistylesStyleSheet;
-export { UnistylesRuntime, useUnistyles };
+export { UnistylesRuntime, useUnistyles, withUnistyles };

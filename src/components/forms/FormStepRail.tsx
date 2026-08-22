@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { Platform, useWindowDimensions, View } from "react-native";
 
 import { Text } from "@/src/components/Text";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
-import { formLayoutContract } from "./form-layout";
+import {
+  formLayoutContract,
+  resolveResponsiveFormStyle,
+} from "./form-layout";
 
 export type FormStep = {
   id: string;
@@ -19,12 +22,20 @@ type Props = {
 };
 
 export function FormStepRail({ steps, activeStep, children }: Props) {
+  const { width } = useWindowDimensions();
+
   return (
     <View
       testID="form-step-rail"
       accessibilityRole="list"
       accessibilityLabel="Form steps"
-      style={styles.rail}
+      style={[
+        styles.rail,
+        Platform.OS === "web" ? {
+          display: resolveResponsiveFormStyle(formLayoutContract.railDisplay, width),
+          flex: resolveResponsiveFormStyle(formLayoutContract.railFlex, width),
+        } : undefined,
+      ]}
     >
       {steps.map((step, index) => {
         const active = step.id === activeStep;

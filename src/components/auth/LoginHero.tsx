@@ -105,7 +105,7 @@ const styles = StyleSheet.create((theme) => ({
     },
   },
   promisePanel: {
-    flex: { xs: 0, xl: 5 },
+    flex: { xs: undefined, xl: 5 },
     justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
   },

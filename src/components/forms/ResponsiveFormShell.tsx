@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { Platform, ScrollView, useWindowDimensions, View } from "react-native";
 
 import { ScreenCanvas } from "@/src/components/ScreenCanvas";
 import { ScreenHeader } from "@/src/components/ScreenHeader";
@@ -10,6 +10,7 @@ import {
   formLayoutContract,
   formScrollViewProps,
   responsiveFormStyle,
+  resolveResponsiveFormStyle,
 } from "./form-layout";
 import { StickyReviewPanel } from "./StickyReviewPanel";
 
@@ -39,6 +40,8 @@ export function ResponsiveFormShell({
   review,
   footer,
 }: Props) {
+  const { width } = useWindowDimensions();
+
   return (
     <ScrollView
       {...formScrollViewProps}
@@ -50,9 +53,31 @@ export function ResponsiveFormShell({
           subtitle={description}
           disabled={headerDisabled}
         />
-        <View testID="responsive-form-content" style={styles.content}>
+        <View
+          testID="responsive-form-content"
+          style={[
+            styles.content,
+            Platform.OS === "web" ? {
+              flexDirection: resolveResponsiveFormStyle(
+                formLayoutContract.contentDirection,
+                width,
+              ),
+            } : undefined,
+          ]}
+        >
           <FormStepRail steps={steps} activeStep={activeStep} />
-          <View testID="responsive-form-editor" style={styles.editor}>
+          <View
+            testID="responsive-form-editor"
+            style={[
+              styles.editor,
+              Platform.OS === "web" ? {
+                flex: resolveResponsiveFormStyle(
+                  formLayoutContract.editorFlex,
+                  width,
+                ),
+              } : undefined,
+            ]}
+          >
             {form}
           </View>
           <StickyReviewPanel>{review}</StickyReviewPanel>

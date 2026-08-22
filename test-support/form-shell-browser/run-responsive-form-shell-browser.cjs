@@ -7,12 +7,23 @@ const { getDefaultConfig } = require("@expo/metro-config");
 const { runBuild } = require("@expo/metro/metro");
 
 const harnessDirectory = path.dirname(path.resolve(process.argv[1]));
-const projectRoot = path.resolve(harnessDirectory, "../../../../..");
-const fixtureEntry = path.join(
-  harnessDirectory,
-  "ResponsiveFormShell-browser-fixture.tsx",
-);
-const viewport = { width: 720, height: 422 };
+const projectRoot = path.resolve(harnessDirectory, "../..");
+const fixtureEntries = {
+  form: "ResponsiveFormShell-browser-fixture.tsx",
+  image: "HimuImage-boundary-browser-fixture.tsx",
+  animated: "Animated-boundary-browser-fixture.tsx",
+  canvas: "ScreenCanvas-boundary-browser-fixture.tsx",
+  gesture: "GestureRoot-boundary-browser-fixture.tsx",
+  login: "LoginHero-boundary-browser-fixture.tsx",
+};
+const fixtureKey = process.env.HIMU_BROWSER_FIXTURE || "form";
+if (!Object.hasOwn(fixtureEntries, fixtureKey)) {
+  throw new Error(`Unsupported browser fixture: ${fixtureKey}`);
+}
+const fixtureEntry = path.join(harnessDirectory, fixtureEntries[fixtureKey]);
+const viewport = fixtureKey === "login"
+  ? { width: 390, height: 844 }
+  : { width: 720, height: 422 };
 
 function findChrome() {
   const candidates = [
@@ -53,6 +64,8 @@ async function main() {
     const bundlePath = path.join(outputDirectory, "fixture.js");
     const htmlPath = path.join(outputDirectory, "fixture.html");
     const metroConfig = getDefaultConfig(projectRoot);
+    metroConfig.resetCache = true;
+    metroConfig.cacheVersion = `responsive-form-shell-${Date.now()}`;
 
     metroConfig.resolver.blockList = metroConfig.resolver.blockList.filter(
       (pattern) => !pattern.test(fixtureEntry),

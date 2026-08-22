@@ -7,7 +7,7 @@ const { getDefaultConfig } = require("@expo/metro-config");
 const { runBuild } = require("@expo/metro/metro");
 
 const harnessDirectory = path.dirname(path.resolve(process.argv[1]));
-const projectRoot = path.resolve(harnessDirectory, "../../..");
+const projectRoot = path.resolve(harnessDirectory, "../..");
 const fixtureEntry = path.join(
   harnessDirectory,
   "CreateDjWorkflow-browser-fixture.tsx",
@@ -249,20 +249,26 @@ async function main() {
   } finally {
     cdp?.close();
     if (browser && browser.exitCode === null) {
+      const gracefulExit = new Promise((resolve) => browser.once("exit", resolve));
       browser.kill("SIGTERM");
       await Promise.race([
-        new Promise((resolve) => browser.once("exit", resolve)),
+        gracefulExit,
         new Promise((resolve) => setTimeout(resolve, 2000)),
       ]);
       if (browser.exitCode === null) {
+        const forcedExit = new Promise((resolve) => browser.once("exit", resolve));
         browser.kill("SIGKILL");
-        await new Promise((resolve) => browser.once("exit", resolve));
+        await Promise.race([
+          forcedExit,
+          new Promise((resolve) => setTimeout(resolve, 2000)),
+        ]);
       }
     }
-    fs.rmSync(outputDirectory, {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await fs.promises.rm(outputDirectory, {
       recursive: true,
       force: true,
-      maxRetries: 10,
+      maxRetries: 20,
       retryDelay: 500,
     });
   }

@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { Platform, useWindowDimensions, View } from "react-native";
 
-import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
-import { formLayoutContract, responsiveFormStyle } from "./form-layout";
+import {
+  formLayoutContract,
+  responsiveFormStyle,
+  resolveResponsiveFormStyle,
+} from "./form-layout";
 
 type Props = {
   children: ReactNode;
@@ -14,8 +18,31 @@ type Props = {
  * normal document position on compact and medium layouts.
  */
 export function StickyReviewPanel({ children }: Props) {
+  const { width } = useWindowDimensions();
+  const { theme } = useUnistyles();
+
   return (
-    <View testID="sticky-review-panel" style={styles.panel as never}>
+    <View
+      testID="sticky-review-panel"
+      style={[
+        styles.panel as never,
+        Platform.OS === "web" ? {
+          position: resolveResponsiveFormStyle(
+            formLayoutContract.reviewPosition,
+            width,
+          ),
+          top: resolveResponsiveFormStyle(
+            responsiveFormStyle(0, theme.spacing.pageMargin),
+            width,
+          ),
+          alignSelf: resolveResponsiveFormStyle(
+            responsiveFormStyle("stretch", "flex-start"),
+            width,
+          ),
+          width: resolveResponsiveFormStyle(responsiveFormStyle("100%", 300), width),
+        } as never : undefined,
+      ]}
+    >
       {children}
     </View>
   );

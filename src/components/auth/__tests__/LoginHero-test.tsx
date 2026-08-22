@@ -59,7 +59,7 @@ describe("LoginHero", () => {
       expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("login-hero-promise").props.style)).toEqual(
-      expect.objectContaining({ flex: { xs: 0, xl: 5 } }),
+      expect.objectContaining({ flex: { xs: undefined, xl: 5 } }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("login-hero-sign-in").props.style)).toEqual(
       expect.objectContaining({ flex: { xs: 1, xl: 4 } }),

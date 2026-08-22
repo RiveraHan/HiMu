@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useState } from "react";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -40,6 +40,43 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
     position: formatTime(positionSec),
     duration: formatTime(durationSec),
   });
+  const nativeAccessibilityProps = Platform.OS === "web"
+    ? {}
+    : {
+        accessible: true,
+        accessibilityRole: "adjustable" as const,
+        accessibilityLabel,
+        accessibilityHint: t("playback.player.seek.hint"),
+        accessibilityActions: [
+          {
+            name: "increment" as const,
+            label: t("playback.player.seek.increment", {
+              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
+            }),
+          },
+          {
+            name: "decrement" as const,
+            label: t("playback.player.seek.decrement", {
+              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
+            }),
+          },
+        ],
+        onAccessibilityAction: (event: {
+          nativeEvent: { actionName: string };
+        }) => {
+          if (event.nativeEvent.actionName === "increment") {
+            seekByAccessibilityStep(ACCESSIBILITY_SEEK_STEP_SECONDS);
+          } else if (event.nativeEvent.actionName === "decrement") {
+            seekByAccessibilityStep(-ACCESSIBILITY_SEEK_STEP_SECONDS);
+          }
+        },
+        accessibilityValue: {
+          min: 0,
+          max: Math.max(durationSec, 0),
+          now: Math.min(Math.max(positionSec, 0), Math.max(durationSec, 0)),
+          text: accessibilityValueText,
+        },
+      };
 
   const pct = useDerivedValue(() => {
     if (scrubbing.value) return scrubPosition.value;
@@ -108,37 +145,7 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
       <View
         style={styles.hitbox}
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-        accessible
-        accessibilityRole="adjustable"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityHint={t("playback.player.seek.hint")}
-        accessibilityActions={[
-          {
-            name: "increment",
-            label: t("playback.player.seek.increment", {
-              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
-            }),
-          },
-          {
-            name: "decrement",
-            label: t("playback.player.seek.decrement", {
-              seconds: ACCESSIBILITY_SEEK_STEP_SECONDS,
-            }),
-          },
-        ]}
-        onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "increment") {
-            seekByAccessibilityStep(ACCESSIBILITY_SEEK_STEP_SECONDS);
-          } else if (event.nativeEvent.actionName === "decrement") {
-            seekByAccessibilityStep(-ACCESSIBILITY_SEEK_STEP_SECONDS);
-          }
-        }}
-        accessibilityValue={{
-          min: 0,
-          max: Math.max(durationSec, 0),
-          now: Math.min(Math.max(positionSec, 0), Math.max(durationSec, 0)),
-          text: accessibilityValueText,
-        }}
+        {...nativeAccessibilityProps}
       >
         <View style={styles.track}>
           <Animated.View style={[styles.fill, fillStyle]} />

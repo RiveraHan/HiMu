@@ -1,14 +1,14 @@
-import "../../../src/theme";
-import "../../../src/i18n";
+import "../../src/theme";
+import "../../src/i18n";
 
 import { useEffect } from "react";
 // @ts-expect-error React DOM is an installed runtime dependency without local type declarations.
 import { createRoot } from "react-dom/client";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import CreateDJScreen from "../../create-dj";
-import TrainDJScreen from "../../train-dj/[id]";
-import { LocaleContext } from "../../../src/i18n/use-locale";
+import CreateDJScreen from "../../app/create-dj";
+import TrainDJScreen from "../../app/train-dj/[id]";
+import { LocaleContext } from "../../src/i18n/use-locale";
 
 type WorkflowSnapshot = {
   viewportWidth: number;

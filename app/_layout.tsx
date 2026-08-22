@@ -18,7 +18,7 @@ import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { ActivityIndicator, View } from "react-native";
 import { useEffect, useState } from "react";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { UnistylesGestureHandlerRootView } from "@/src/components/UnistylesGestureHandlerRootView";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { HIMU_FONTS } from "@/src/theme/fonts";
 import { UnistylesRuntime } from "@/src/theme/unistyles";
@@ -151,7 +151,7 @@ export default function RootLayout() {
 
   if (!fontsLoaded && (!fontError || !fontFallbackReady)) {
     return (
-      <GestureHandlerRootView style={styles.root}>
+      <UnistylesGestureHandlerRootView style={styles.root}>
         <View
           style={styles.loader}
           testID={fontError ? "root-font-fallback-loader" : "root-font-loader"}
@@ -159,18 +159,18 @@ export default function RootLayout() {
           <ActivityIndicator color={theme.colors.primary} />
         </View>
         <StatusBar style="light" />
-      </GestureHandlerRootView>
+      </UnistylesGestureHandlerRootView>
     );
   }
 
   return (
-    <GestureHandlerRootView
+    <UnistylesGestureHandlerRootView
       style={styles.root}
       testID={fontError ? "root-font-fallback" : undefined}
     >
       <AppProviders />
       <StatusBar style="light" />
-    </GestureHandlerRootView>
+    </UnistylesGestureHandlerRootView>
   );
 }
 

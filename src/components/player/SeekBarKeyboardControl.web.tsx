@@ -75,7 +75,9 @@ export function SeekBarWebKeyboardControl({
         inset: 0,
         borderRadius: 12,
         cursor: "pointer",
-        outline: focused ? "2px solid #bdc2ff" : "none",
+        outlineColor: focused ? "#5f68d8" : "transparent",
+        outlineStyle: "solid",
+        outlineWidth: focused ? 2 : 0,
         outlineOffset: 2,
       }}
     />

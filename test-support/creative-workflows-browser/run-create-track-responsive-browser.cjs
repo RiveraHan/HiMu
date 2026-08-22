@@ -7,7 +7,7 @@ const { getDefaultConfig } = require("@expo/metro-config");
 const { runBuild } = require("@expo/metro/metro");
 
 const harnessDirectory = path.dirname(path.resolve(process.argv[1]));
-const projectRoot = path.resolve(harnessDirectory, "../../..");
+const projectRoot = path.resolve(harnessDirectory, "../..");
 const fixtureEntry = path.join(
   harnessDirectory,
   "CreateTrackWorkflow-browser-fixture.tsx",

@@ -1,13 +1,13 @@
-import "../../../src/theme";
-import "../../../src/i18n";
+import "../../src/theme";
+import "../../src/i18n";
 
 import { useEffect } from "react";
 // @ts-expect-error React DOM is an installed runtime dependency without local type declarations.
 import { createRoot } from "react-dom/client";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import CreateTrackScreen from "../../create-track";
-import { LocaleContext } from "../../../src/i18n/use-locale";
+import CreateTrackScreen from "../../app/create-track";
+import { LocaleContext } from "../../src/i18n/use-locale";
 import { privateSourceLyrics } from "./create-track-browser-hooks";
 
 type WorkflowSnapshot = {

@@ -99,6 +99,7 @@ jest.mock("@/src/theme/unistyles", () => {
       },
       setTheme: (...args: unknown[]) => mockSetTheme(...args),
     },
+    withUnistyles: (Component: React.ComponentType) => Component,
     useUnistyles: () => ({ theme: darkTheme, rt: {} }),
   };
 });

@@ -33,6 +33,7 @@ jest.mock("react-native-unistyles", () => {
       create: (styles) =>
         typeof styles === "function" ? styles(darkTheme) : styles,
     },
+    withUnistyles: (Component) => Component,
     useUnistyles: () => ({ theme: darkTheme, rt: {} }),
   };
 });
