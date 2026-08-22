@@ -44,6 +44,7 @@ export * from "./profile/ProfileSkeletons";
 
 // Settings
 export * from "./settings/SettingsInfoRow";
+export * from "./settings/SettingsDesktopGrid";
 export * from "./settings/SettingsSection";
 export * from "./settings/SettingsToggleRow";
 export * from "./settings/Toggle";

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from "@testing-library/react-native";
-import { Alert, StyleSheet as RNStyleSheet } from "react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Alert, Linking, StyleSheet as RNStyleSheet } from "react-native";
 import AccountSettingsScreen from "@/app/account-settings";
 
 type MockProfileQuery = {
@@ -38,6 +38,11 @@ const failedProfileQuery = (data: unknown = undefined): MockProfileQuery => ({
 const freeProfile = { subscriptionTier: "free" };
 const premiumProfile = { subscriptionTier: "premium" };
 const mockSetPreference = jest.fn();
+const mockConfirm = jest.fn();
+const mockFlushListeningStats = jest.fn();
+const mockSignOut = jest.fn();
+const mockReplace = jest.fn();
+const mockToastError = jest.fn();
 let mockIsSaving = false;
 let mockOnline = true;
 let mockProfileQuery = initialProfileQuery();
@@ -49,6 +54,9 @@ jest.mock("react-i18next", () => ({
         "common.actions.cancel": "Cancel",
         "common.actions.retry": "Retry",
         "common.errors.offline": "You're offline",
+        "common.errors.generic": "Something went wrong. Please try again.",
+        "common.auth.privacy": "Privacy",
+        "common.auth.terms": "Terms",
         "profile.profileUnavailable": "Profile unavailable",
         "settings.currentDevice": "Current device",
         "settings.email": "Email",
@@ -65,7 +73,10 @@ jest.mock("react-i18next", () => ({
         "settings.sections.audio": "Audio Quality",
         "settings.sections.devices": "Devices",
         "settings.sections.language": "Language",
+        "settings.sections.legal": "Legal & support",
         "settings.sections.notifications": "Notifications",
+        "settings.sections.destructive": "Sign out of HiMu",
+        "settings.legalUnavailable": "Legal links are unavailable",
         "settings.signOut": "Sign out",
         "settings.subscription": "Subscription",
         "settings.thisDevice": "This device",
@@ -87,6 +98,10 @@ jest.mock("@/src/components", () => {
   const { Pressable, Text: NativeText, View } = require("react-native");
 
   return {
+    SettingsDesktopGrid: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
+      React.createElement(View, { testID }, children),
+    SettingsDesktopGridItem: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
+      React.createElement(View, { testID }, children),
     ScreenHeader: ({ title, subtitle }: { title: string; subtitle: string }) =>
       React.createElement(View, null, [
         React.createElement(NativeText, { key: "title" }, title),
@@ -99,11 +114,13 @@ jest.mock("@/src/components", () => {
       value,
       onPress,
       disabled = false,
+      accessibilityRole = "button",
     }: {
       label: string;
       value?: string;
       onPress?: () => void;
       disabled?: boolean;
+      accessibilityRole?: "button" | "link";
     }) => {
       const content = React.createElement(
         React.Fragment,
@@ -117,7 +134,7 @@ jest.mock("@/src/components", () => {
             Pressable,
             {
               accessibilityLabel: label,
-              accessibilityRole: "button",
+              accessibilityRole,
               accessibilityState: { disabled },
               accessibilityValue: value ? { text: value } : undefined,
               disabled,
@@ -130,11 +147,13 @@ jest.mock("@/src/components", () => {
     SettingsSection: ({
       children,
       title,
+      testID,
     }: {
       children: React.ReactNode;
       title: string;
+      testID?: string;
     }) =>
-      React.createElement(View, null, [
+      React.createElement(View, { testID }, [
         React.createElement(NativeText, { key: "title" }, title),
         children,
       ]),
@@ -194,14 +213,21 @@ jest.mock("@/src/hooks/use-online-status", () => ({
   useOnlineStatus: () => mockOnline,
 }));
 jest.mock("@/src/audio/use-player", () => ({
-  usePlayer: () => ({ flushListeningStats: jest.fn() }),
+  usePlayer: () => ({ flushListeningStats: mockFlushListeningStats }),
 }));
-jest.mock("@/src/hooks/use-confirm", () => ({ useConfirm: () => jest.fn() }));
+jest.mock("@/src/hooks/use-confirm", () => ({ useConfirm: () => mockConfirm }));
 jest.mock("@/src/hooks/use-tab-bar-padding", () => ({
   useMiniPlayerPadding: () => 0,
 }));
-jest.mock("@/src/api/auth", () => ({ authApi: { signOut: jest.fn() } }));
-jest.mock("expo-router", () => ({ router: { replace: jest.fn() } }));
+jest.mock("@/src/hooks/use-toast", () => ({
+  useToast: () => ({ error: mockToastError }),
+}));
+jest.mock("@/src/api/auth", () => ({
+  authApi: { signOut: (...args: unknown[]) => mockSignOut(...args) },
+}));
+jest.mock("expo-router", () => ({
+  router: { replace: (...args: unknown[]) => mockReplace(...args) },
+}));
 jest.mock("expo-device", () => ({
   deviceName: "Test phone",
   osName: null,
@@ -238,9 +264,17 @@ jest.mock("react-native-unistyles", () => {
 describe("AccountSettingsScreen", () => {
   beforeEach(() => {
     mockSetPreference.mockReset();
+    mockConfirm.mockReset().mockResolvedValue(false);
+    mockFlushListeningStats.mockReset().mockResolvedValue(undefined);
+    mockSignOut.mockReset().mockResolvedValue(undefined);
+    mockReplace.mockReset();
+    mockToastError.mockReset();
     mockIsSaving = false;
     mockOnline = true;
     mockProfileQuery = initialProfileQuery();
+    delete process.env.EXPO_PUBLIC_TERMS_URL;
+    delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+    jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
     jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
   });
 
@@ -330,6 +364,17 @@ describe("AccountSettingsScreen", () => {
     ]);
   });
 
+  it("saves the selected language through the existing locale owner", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+    fireEvent.press(screen.getByRole("button", { name: "Language" }));
+    const options = jest.mocked(Alert.alert).mock.calls[0]?.[2];
+
+    options?.find((option) => option.text === "Español")?.onPress?.();
+
+    expect(mockSetPreference).toHaveBeenCalledTimes(1);
+    expect(mockSetPreference).toHaveBeenCalledWith("es");
+  });
+
   it("keeps the saving language row a disabled semantic button", async () => {
     mockIsSaving = true;
     const screen = await render(<AccountSettingsScreen />);
@@ -350,5 +395,66 @@ describe("AccountSettingsScreen", () => {
     expect(RNStyleSheet.flatten(signOut.props.style)).toEqual(
       expect.objectContaining({ minHeight: 44 }),
     );
+  });
+
+  it("renders configured legal URLs as links and recovers from an open failure", async () => {
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    jest.mocked(Linking.openURL).mockRejectedValueOnce(new Error("unavailable"));
+    const screen = await render(<AccountSettingsScreen />);
+
+    const terms = screen.getByRole("link", { name: "Terms" });
+    const privacy = screen.getByRole("link", { name: "Privacy" });
+    await act(async () => {
+      fireEvent.press(terms);
+    });
+    await act(async () => {
+      fireEvent.press(privacy);
+    });
+
+    expect(Linking.openURL).toHaveBeenNthCalledWith(1, "https://himu.app/terms");
+    expect(Linking.openURL).toHaveBeenNthCalledWith(2, "https://himu.app/privacy");
+    expect(mockToastError).toHaveBeenCalledWith("Something went wrong. Please try again.");
+  });
+
+  it("keeps an explicit non-actionable state when legal URLs are missing", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(screen.getByText("Legal links are unavailable")).toBeTruthy();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("does not mutate the session until destructive confirmation succeeds", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(mockFlushListeningStats).not.toHaveBeenCalled();
+    expect(mockSignOut).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
+    expect(mockFlushListeningStats).not.toHaveBeenCalled();
+    expect(mockSignOut).not.toHaveBeenCalled();
+
+    mockConfirm.mockResolvedValueOnce(true);
+    fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/"));
+    expect(mockFlushListeningStats).toHaveBeenCalledTimes(1);
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps identity, preferences, session, and destructive controls in compact reading order", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    const grid = screen.getByTestId("account-settings-grid");
+    expect(grid.children).toEqual([
+      screen.getByTestId("account-identity-zone"),
+      screen.getByTestId("account-language-zone"),
+      screen.getByTestId("account-session-zone"),
+      screen.getByTestId("account-legal-zone"),
+      screen.getByTestId("account-destructive-zone"),
+    ]);
+    expect(screen.getAllByRole("button").map((control) => control.props.accessibilityLabel))
+      .toEqual(["Language", "Sign out"]);
+    expect(screen.getByTestId("account-destructive-section")).toBeTruthy();
   });
 });

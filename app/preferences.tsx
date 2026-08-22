@@ -3,6 +3,8 @@ import {
   PrefSection,
   ScreenHeader,
   ScreenScrollView,
+  SettingsDesktopGrid,
+  SettingsDesktopGridItem,
   StateNotice,
   TrackRowSkeleton,
   VibeSlider,
@@ -132,7 +134,9 @@ export default function MusicPreferencesScreen() {
 
   return (
     <ScreenScrollView
+      testID="preferences-settings-scroll"
       style={styles.root}
+      canvasVariant="wide"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
@@ -167,65 +171,73 @@ export default function MusicPreferencesScreen() {
         />
       ) : (
         <>
-          <PrefSection
-            title={t("dj.preferences.genreAffinity")}
-            icon={
-              <AudioLines size={20} color={theme.colors.primaryContainer} />
-            }
-          >
-            <GroupedChipPicker
-              groups={GENRE_GROUPS}
-              selected={prefs.genres}
-              onToggle={toggleGenre}
-              getGroupLabel={(value) =>
-                catalogGroupLabel(value, resolvedLanguage)
-              }
-              getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
-              disabled={!ready}
-            />
-          </PrefSection>
+          <SettingsDesktopGrid testID="preferences-settings-grid">
+            <SettingsDesktopGridItem testID="preference-genre-zone">
+              <PrefSection
+                title={t("dj.preferences.genreAffinity")}
+                icon={
+                  <AudioLines size={20} color={theme.colors.primaryContainer} />
+                }
+              >
+                <GroupedChipPicker
+                  groups={GENRE_GROUPS}
+                  selected={prefs.genres}
+                  onToggle={toggleGenre}
+                  getGroupLabel={(value) =>
+                    catalogGroupLabel(value, resolvedLanguage)
+                  }
+                  getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
+                  disabled={!ready}
+                />
+              </PrefSection>
+            </SettingsDesktopGridItem>
 
-          <PrefSection
-            title={t("dj.preferences.vibeMapping")}
-            icon={
-              <SlidersHorizontal
-                size={20}
-                color={theme.colors.primaryContainer}
-              />
-            }
-          >
-            <VibeSlider
-              leftLabel={t("dj.preferences.organicAcoustic")}
-              rightLabel={t("dj.preferences.syntheticElectronic")}
-              value={prefs.vibeMapping.organicElectronic}
-              disabled={!ready}
-              onCommit={setVibe("organicElectronic")}
-            />
-            <VibeSlider
-              leftLabel={t("dj.preferences.melancholic")}
-              rightLabel={t("dj.preferences.euphoric")}
-              value={prefs.vibeMapping.melancholicEuphoric}
-              disabled={!ready}
-              onCommit={setVibe("melancholicEuphoric")}
-            />
-          </PrefSection>
+            <SettingsDesktopGridItem testID="preference-vibe-zone">
+              <PrefSection
+                title={t("dj.preferences.vibeMapping")}
+                icon={
+                  <SlidersHorizontal
+                    size={20}
+                    color={theme.colors.primaryContainer}
+                  />
+                }
+              >
+                <VibeSlider
+                  leftLabel={t("dj.preferences.organicAcoustic")}
+                  rightLabel={t("dj.preferences.syntheticElectronic")}
+                  value={prefs.vibeMapping.organicElectronic}
+                  disabled={!ready}
+                  onCommit={setVibe("organicElectronic")}
+                />
+                <VibeSlider
+                  leftLabel={t("dj.preferences.melancholic")}
+                  rightLabel={t("dj.preferences.euphoric")}
+                  value={prefs.vibeMapping.melancholicEuphoric}
+                  disabled={!ready}
+                  onCommit={setVibe("melancholicEuphoric")}
+                />
+              </PrefSection>
+            </SettingsDesktopGridItem>
 
-          <PrefSection
-            title={t("dj.preferences.excludedMoods")}
-            subtitle={t("dj.preferences.excludedMoodsSubtitle")}
-            icon={<Ban size={20} color={theme.colors.error} />}
-          >
-            <GroupedChipPicker
-              groups={MOOD_GROUPS}
-              selected={prefs.excludedMoods}
-              onToggle={toggleExcluded}
-              getGroupLabel={(value) =>
-                catalogGroupLabel(value, resolvedLanguage)
-              }
-              getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
-              disabled={!ready}
-            />
-          </PrefSection>
+            <SettingsDesktopGridItem testID="preference-excluded-zone">
+              <PrefSection
+                title={t("dj.preferences.excludedMoods")}
+                subtitle={t("dj.preferences.excludedMoodsSubtitle")}
+                icon={<Ban size={20} color={theme.colors.error} />}
+              >
+                <GroupedChipPicker
+                  groups={MOOD_GROUPS}
+                  selected={prefs.excludedMoods}
+                  onToggle={toggleExcluded}
+                  getGroupLabel={(value) =>
+                    catalogGroupLabel(value, resolvedLanguage)
+                  }
+                  getItemLabel={(value) => catalogLabel(value, resolvedLanguage)}
+                  disabled={!ready}
+                />
+              </PrefSection>
+            </SettingsDesktopGridItem>
+          </SettingsDesktopGrid>
           {preferencesQuery.isError || !online ? (
             <StateNotice
               compact

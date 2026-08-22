@@ -9,6 +9,8 @@ export const settings = {
     audio: "Audio Quality",
     notifications: "Notifications",
     devices: "Connected Devices",
+    legal: "Legal & Support",
+    destructive: "Sign out of HiMu",
   },
   email: "Email Address",
   subscription: "Subscription",
@@ -28,6 +30,7 @@ export const settings = {
   newslettersDescription: "Curated weekly digests",
   currentDevice: "Current Device",
   thisDevice: "This Device",
+  legalUnavailable: "Legal links are unavailable",
   signOut: "Sign Out",
   signOutQuestion: "Are you sure you want to sign out?",
   language: {

@@ -1,7 +1,7 @@
 import { ComponentProps, ReactNode } from "react";
 import { Text } from "@/src/components/Text";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
-import { Pressable, View } from "react-native";
+import { Pressable, View, type AccessibilityRole } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 
 type Props = {
@@ -13,6 +13,7 @@ type Props = {
   accessory?: ReactNode;
   onPress?: () => void;
   disabled?: boolean;
+  accessibilityRole?: AccessibilityRole;
 };
 
 export function SettingsInfoRow({
@@ -24,6 +25,7 @@ export function SettingsInfoRow({
   accessory,
   onPress,
   disabled = false,
+  accessibilityRole = "button",
 }: Props) {
   const { theme } = useUnistyles();
 
@@ -56,7 +58,7 @@ export function SettingsInfoRow({
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       accessibilityLabel={label}
       accessibilityValue={value ? { text: value } : undefined}
       accessibilityState={{ disabled }}

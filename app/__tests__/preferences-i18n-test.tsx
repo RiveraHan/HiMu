@@ -82,6 +82,10 @@ jest.mock("@/src/components", () => {
   const { Pressable, Text, View } = require("react-native");
 
   return {
+    SettingsDesktopGrid: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
+      React.createElement(View, { testID }, children),
+    SettingsDesktopGridItem: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
+      React.createElement(View, { testID }, children),
     ScreenScrollView: ({ children }: { children: React.ReactNode }) =>
       React.createElement(View, null, children),
     ScreenHeader: ({ kicker, title, subtitle }: Record<string, string>) =>
@@ -226,6 +230,20 @@ test("keeps cached preferences visible while offline", async () => {
 
   expect(screen.getByText("Genre Affinity")).toBeTruthy();
   expect(screen.getByText("You're offline")).toBeTruthy();
+});
+
+test("composes the existing preference controls in one stable responsive grid", async () => {
+  await i18n.changeLanguage("en");
+  const screen = await render(<MusicPreferencesScreen />);
+
+  const grid = screen.getByTestId("preferences-settings-grid");
+  expect(grid.children).toEqual([
+    screen.getByTestId("preference-genre-zone"),
+    screen.getByTestId("preference-vibe-zone"),
+    screen.getByTestId("preference-excluded-zone"),
+  ]);
+  expect(screen.getAllByRole("button").map((control) => control.props.accessibilityLabel))
+    .toEqual(["Ambient", "Focus"]);
 });
 
 test("continues one cumulative preference queue across navigation and revisit", async () => {

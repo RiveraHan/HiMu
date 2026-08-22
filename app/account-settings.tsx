@@ -3,6 +3,8 @@ import { usePlayer } from "@/src/audio/use-player";
 import {
   ScreenHeader,
   ScreenScrollView,
+  SettingsDesktopGrid,
+  SettingsDesktopGridItem,
   SettingsInfoRow,
   SettingsSection,
   StateNotice,
@@ -13,18 +15,22 @@ import { useConfirm } from "@/src/hooks/use-confirm";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useProfile } from "@/src/hooks/use-profile";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
+import { useToast } from "@/src/hooks/use-toast";
 import { useLocale } from "@/src/i18n/use-locale";
+import { publicHttpsUrl } from "@/src/utils/public-url";
 import * as Device from "expo-device";
 import { router } from "expo-router";
 import {
   ChevronDown,
+  FileText,
   Gem,
   Languages,
   LogOut,
   Mail,
   Smartphone,
+  ShieldCheck,
 } from "lucide-react-native";
-import { Alert, Pressable } from "react-native";
+import { Alert, Linking, Pressable } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -40,6 +46,7 @@ export default function AccountSettingsScreen() {
   const profile = profileQuery.data;
   const { flushListeningStats } = usePlayer();
   const confirm = useConfirm();
+  const toast = useToast();
   const { preference, resolvedLanguage, setPreference, isSaving } = useLocale();
   const profileOfflineWithoutData =
     !online &&
@@ -53,6 +60,30 @@ export default function AccountSettingsScreen() {
     Device.modelName ??
     Device.productName ??
     t("settings.thisDevice");
+
+  const legalLinks = [
+    {
+      label: t("common.auth.terms"),
+      url: publicHttpsUrl(process.env.EXPO_PUBLIC_TERMS_URL),
+      icon: <FileText size={20} color={theme.colors.onSurfaceVariant} />,
+    },
+    {
+      label: t("common.auth.privacy"),
+      url: publicHttpsUrl(process.env.EXPO_PUBLIC_PRIVACY_URL),
+      icon: <ShieldCheck size={20} color={theme.colors.onSurfaceVariant} />,
+    },
+  ];
+  const validLegalLinks = legalLinks.filter(
+    (item): item is typeof item & { url: string } => item.url !== null,
+  );
+
+  const openLegal = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      toast.error(t("common.errors.generic"));
+    }
+  };
 
   const pickLanguage = () => {
     Alert.alert(t("settings.sections.language"), undefined, [
@@ -87,7 +118,9 @@ export default function AccountSettingsScreen() {
 
   return (
     <ScreenScrollView
+      testID="account-settings-scroll"
       style={styles.root}
+      canvasVariant="wide"
       contentContainerStyle={[
         styles.content,
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
@@ -98,91 +131,128 @@ export default function AccountSettingsScreen() {
         subtitle={t("settings.header.subtitle")}
       />
 
-      <SettingsSection title={t("settings.sections.account")}>
-        <SettingsInfoRow
-          icon={<Mail size={20} color={theme.colors.onSurfaceVariant} />}
-          label={t("settings.email")}
-          value={user?.email ?? "-"}
-        />
-        {profileOfflineWithoutData || blockingProfileError ? (
-          <StateNotice
-            compact
-            kind={profileOfflineWithoutData ? "offline" : "error"}
-            title={
-              profileOfflineWithoutData
-                ? t("common.errors.offline")
-                : t("profile.profileUnavailable")
-            }
-            actionLabel={t("common.actions.retry")}
-            onAction={() => void profileQuery.refetch()}
-          />
-        ) : (
-          <>
+      <SettingsDesktopGrid testID="account-settings-grid">
+        <SettingsDesktopGridItem testID="account-identity-zone">
+          <SettingsSection title={t("settings.sections.account")}>
             <SettingsInfoRow
-              icon={<Gem size={20} color={theme.colors.onSurfaceVariant} />}
-              label={t("settings.subscription")}
-              value={
-                profile
-                  ? profile.subscriptionTier === "premium"
-                    ? t("settings.premium")
-                    : t("settings.free")
-                  : "—"
-              }
+              icon={<Mail size={20} color={theme.colors.onSurfaceVariant} />}
+              label={t("settings.email")}
+              value={user?.email ?? "-"}
             />
-            {profile && (profileQuery.isError || !online) ? (
+            {profileOfflineWithoutData || blockingProfileError ? (
               <StateNotice
                 compact
-                kind={online ? "error" : "offline"}
-                title={t("profile.profileUnavailable")}
+                kind={profileOfflineWithoutData ? "offline" : "error"}
+                title={
+                  profileOfflineWithoutData
+                    ? t("common.errors.offline")
+                    : t("profile.profileUnavailable")
+                }
                 actionLabel={t("common.actions.retry")}
                 onAction={() => void profileQuery.refetch()}
               />
+            ) : (
+              <>
+                <SettingsInfoRow
+                  icon={<Gem size={20} color={theme.colors.onSurfaceVariant} />}
+                  label={t("settings.subscription")}
+                  value={
+                    profile
+                      ? profile.subscriptionTier === "premium"
+                        ? t("settings.premium")
+                        : t("settings.free")
+                      : "—"
+                  }
+                />
+                {profile && (profileQuery.isError || !online) ? (
+                  <StateNotice
+                    compact
+                    kind={online ? "error" : "offline"}
+                    title={t("profile.profileUnavailable")}
+                    actionLabel={t("common.actions.retry")}
+                    onAction={() => void profileQuery.refetch()}
+                  />
+                ) : null}
+              </>
+            )}
+          </SettingsSection>
+        </SettingsDesktopGridItem>
+
+        <SettingsDesktopGridItem testID="account-language-zone">
+          <SettingsSection title={t("settings.sections.language")}>
+            <SettingsInfoRow
+              icon={<Languages size={20} color={theme.colors.onSurfaceVariant} />}
+              label={t("settings.language.label")}
+              value={
+                preference === "system"
+                  ? t("settings.language.systemResolved", {
+                      language: t(`settings.language.${resolvedLanguage}`),
+                    })
+                  : t(`settings.language.${preference}`)
+              }
+              onPress={pickLanguage}
+              disabled={isSaving}
+              accessory={<ChevronDown size={20} color={theme.colors.outline} />}
+            />
+          </SettingsSection>
+        </SettingsDesktopGridItem>
+
+        <SettingsDesktopGridItem testID="account-session-zone">
+          <SettingsSection title={t("settings.sections.devices")}>
+            <SettingsInfoRow
+              icon={
+                <Smartphone size={20} color={theme.colors.primaryContainer} />
+              }
+              label={deviceName}
+              value={`${t("settings.currentDevice")}${osLabel ? ` • ${osLabel}` : ""}`}
+            />
+          </SettingsSection>
+        </SettingsDesktopGridItem>
+
+        <SettingsDesktopGridItem testID="account-legal-zone">
+          <SettingsSection title={t("settings.sections.legal")}>
+            {validLegalLinks.map((item) => (
+              <SettingsInfoRow
+                key={item.label}
+                icon={item.icon}
+                label={item.label}
+                onPress={() => void openLegal(item.url)}
+                accessibilityRole="link"
+              />
+            ))}
+            {legalLinks.some((item) => item.url === null) ? (
+              <StateNotice
+                compact
+                kind="empty"
+                title={t("settings.legalUnavailable")}
+              />
             ) : null}
-          </>
-        )}
-      </SettingsSection>
+          </SettingsSection>
+        </SettingsDesktopGridItem>
 
-      <SettingsSection title={t("settings.sections.language")}>
-        <SettingsInfoRow
-          icon={<Languages size={20} color={theme.colors.onSurfaceVariant} />}
-          label={t("settings.language.label")}
-          value={
-            preference === "system"
-              ? t("settings.language.systemResolved", {
-                  language: t(`settings.language.${resolvedLanguage}`),
-                })
-              : t(`settings.language.${preference}`)
-          }
-          onPress={pickLanguage}
-          disabled={isSaving}
-          accessory={<ChevronDown size={20} color={theme.colors.outline} />}
-        />
-      </SettingsSection>
-
-      <SettingsSection title={t("settings.sections.devices")}>
-        <SettingsInfoRow
-          icon={
-            <Smartphone size={20} color={theme.colors.primaryContainer} />
-          }
-          label={deviceName}
-          value={`${t("settings.currentDevice")}${osLabel ? ` • ${osLabel}` : ""}`}
-        />
-      </SettingsSection>
-
-      <Pressable
-        onPress={onSignOut}
-        accessibilityLabel={t("settings.signOut")}
-        accessibilityRole="button"
-        style={({ pressed }) => [
-          styles.signOut,
-          pressed && styles.signOutPressed,
-        ]}
-      >
-        <LogOut size={20} color={theme.colors.error} />
-        <Text variant="labelCaps" color="error">
-          {t("settings.signOut")}
-        </Text>
-      </Pressable>
+        <SettingsDesktopGridItem testID="account-destructive-zone" size="wide">
+          <SettingsSection
+            title={t("settings.sections.destructive")}
+            tone="destructive"
+            testID="account-destructive-section"
+          >
+            <Pressable
+              onPress={onSignOut}
+              accessibilityLabel={t("settings.signOut")}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.signOut,
+                pressed && styles.signOutPressed,
+              ]}
+            >
+              <LogOut size={20} color={theme.colors.error} />
+              <Text variant="labelCaps" color="error">
+                {t("settings.signOut")}
+              </Text>
+            </Pressable>
+          </SettingsSection>
+        </SettingsDesktopGridItem>
+      </SettingsDesktopGrid>
     </ScreenScrollView>
   );
 }
