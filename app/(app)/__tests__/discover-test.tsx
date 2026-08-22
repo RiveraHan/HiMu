@@ -320,6 +320,10 @@ describe("DiscoverScreen", () => {
       "First",
       "Second",
     ]);
+    expect(screen.getAllByTestId("track-card").map((card) => card.props.variant)).toEqual([
+      "adaptive",
+      "adaptive",
+    ]);
     fireEvent.press(screen.getAllByTestId("track-card")[1]);
     expect(mockSetRepeatMode).toHaveBeenCalledWith("all");
     expect(mockLoad).toHaveBeenCalledWith(results[1], results, 1);

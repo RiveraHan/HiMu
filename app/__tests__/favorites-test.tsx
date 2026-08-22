@@ -154,6 +154,10 @@ describe("FavoritesScreen", () => {
     const screen = await render(<FavoritesScreen />);
 
     expect(screen.getByTestId("track-grid")).toBeTruthy();
+    expect(screen.getAllByTestId("track-card").map((card) => card.props.variant)).toEqual([
+      "adaptive",
+      "adaptive",
+    ]);
     fireEvent.press(screen.getAllByTestId("track-card")[1]);
     expect(mockSetRepeatMode).toHaveBeenCalledWith("all");
     expect(mockLoad).toHaveBeenCalledWith(favorites[1], favorites, 1);

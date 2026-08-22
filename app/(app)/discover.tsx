@@ -162,7 +162,7 @@ export default function DiscoverScreen() {
                 minCardWidth={185}
                 renderTrack={(track, index) => (
                   <TrackCard
-                    variant="row"
+                    variant="adaptive"
                     title={track.title}
                     artist={track.artist}
                     cover={track.album_art_url}

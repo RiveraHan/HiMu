@@ -10,7 +10,7 @@ type Props = {
   cover?: string | null;
   blurhash?: string;
   artist: string;
-  variant?: "tile" | "row";
+  variant?: "tile" | "row" | "adaptive";
   isPlaying?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
@@ -42,6 +42,12 @@ export function TrackCard({
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const isRow = variant === "row";
+  const isAdaptive = variant === "adaptive";
+  const coverStyle = isRow
+    ? styles.coverRow
+    : isAdaptive
+      ? styles.coverAdaptive
+      : styles.coverTile;
   const spokenLabel = [
     accessibilityLabel ?? `${title}, ${artist}`,
     isPrivate ? privateLabel : null,
@@ -55,11 +61,11 @@ export function TrackCard({
       placeholder={blurhash ? { blurhash } : undefined}
       transition={200}
       contentFit="cover"
-      style={isRow ? styles.coverRow : styles.coverTile}
+      style={coverStyle}
       fallback={
         <View
           style={[
-            isRow ? styles.coverRow : styles.coverTile,
+            coverStyle,
             styles.coverFallback,
           ]}
         >
@@ -70,7 +76,7 @@ export function TrackCard({
     />
   ) : (
     <View
-      style={[isRow ? styles.coverRow : styles.coverTile, styles.coverFallback]}
+      style={[coverStyle, styles.coverFallback]}
     >
       <Music size={28} color={theme.colors.onSurfaceVariant} />
     </View>
@@ -85,13 +91,13 @@ export function TrackCard({
       accessibilityState={{ selected: highlighted }}
       testID={testID}
       style={({ pressed }) => [
-        isRow ? styles.rootRow : styles.rootTile,
-        isRow && highlighted && styles.highlightedRow,
+        isRow ? styles.rootRow : isAdaptive ? styles.rootAdaptive : styles.rootTile,
+        (isRow || isAdaptive) && highlighted && styles.highlightedRow,
         pressed && styles.pressed,
       ]}
     >
       {coverNode}
-      <View style={isRow ? styles.metaRow : styles.metaTile}>
+      <View style={isRow ? styles.metaRow : isAdaptive ? styles.metaAdaptive : styles.metaTile}>
         <Text variant="bodyMd" numberOfLines={1}>
           {title}
         </Text>
@@ -138,6 +144,11 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     gap: theme.spacing.stackSm,
   },
+  rootAdaptive: {
+    flexDirection: { xs: "row", xl: "column" },
+    alignItems: { xs: "center", xl: "stretch" },
+    gap: theme.spacing.stackSm,
+  },
   highlightedRow: {
     padding: theme.spacing.stackSm,
     borderWidth: StyleSheet.hairlineWidth,
@@ -162,6 +173,14 @@ const styles = StyleSheet.create((theme) => ({
     borderCurve: "continuous",
     backgroundColor: theme.colors.glassTint,
   },
+  coverAdaptive: {
+    width: { xs: 64, xl: "100%" },
+    height: { xs: 64, xl: "auto" },
+    aspectRatio: { xs: undefined, xl: 1 },
+    borderRadius: theme.borderRadius.md,
+    borderCurve: "continuous",
+    backgroundColor: theme.colors.glassTint,
+  },
   coverFallback: {
     alignItems: "center",
     justifyContent: "center",
@@ -172,6 +191,11 @@ const styles = StyleSheet.create((theme) => ({
   metaRow: {
     flex: 1,
     gap: 2,
+  },
+  metaAdaptive: {
+    flex: { xs: 1, xl: 0 },
+    gap: 2,
+    minWidth: 0,
   },
   highlightBadge: {
     flexDirection: "row",

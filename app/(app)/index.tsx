@@ -47,6 +47,7 @@ import {
 } from "@/src/onboarding";
 import {
   HomeDesktopGrid,
+  HomeDesktopGridOffsetTarget,
   HomeDesktopGridSlot,
 } from "@/src/components/home/HomeDesktopGrid";
 import { HOME_TOUR_STEPS } from "@/src/onboarding/constants";
@@ -57,9 +58,8 @@ import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
 import { ChevronRight, Play, Plus } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Pressable, ScrollView, View, type LayoutChangeEvent } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle } from "react-native-svg";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
 
@@ -248,10 +248,12 @@ export default function HomeScreen() {
     !djsLoading &&
     !showHeroSkeleton &&
     (drop.status !== "idle" || noDropCanBeGenerated);
-  const captureTargetOffset = useCallback((stepId: string) =>
-    (event: LayoutChangeEvent) => {
-      targetOffsetsRef.current.set(stepId, event.nativeEvent.layout.y);
-    }, []);
+  const captureTargetOffset = useCallback(
+    (stepId: string) => (offset: number) => {
+      targetOffsetsRef.current.set(stepId, offset);
+    },
+    [],
+  );
   const settlePendingScroll = useCallback(() => {
     const pending = pendingScrollRef.current;
     if (!pending) return;
@@ -302,6 +304,7 @@ export default function HomeScreen() {
       {djs !== undefined ? (
         <ScrollView
           horizontal
+          testID="home-dj-list"
           showsHorizontalScrollIndicator={false}
           style={styles.horizontalScroll}
           contentContainerStyle={styles.horizontalList}
@@ -318,6 +321,7 @@ export default function HomeScreen() {
               isLive={liveDJIds?.has(dj.id) ?? false}
               isPrivate={dj.owner_id === user?.id && dj.is_public === false}
               privateLabel={t("dj.visibility.privateLabel")}
+              desktopSize="xl"
               onPress={() => router.push(`/dj/${dj.id}`)}
             />
           ))}
@@ -335,18 +339,7 @@ export default function HomeScreen() {
             accessibilityRole="button"
             accessibilityLabel={t("home.newDj")}
           >
-            <View style={styles.newDJCircle}>
-              <Svg width={48} height={48} style={StyleSheet.absoluteFillObject}>
-                <Circle
-                  cx={24}
-                  cy={24}
-                  r={23}
-                  stroke={theme.colors.outlineVariant}
-                  strokeWidth={1.5}
-                  strokeDasharray="4 4"
-                  fill="transparent"
-                />
-              </Svg>
+            <View testID="new-dj-circle" style={styles.newDJCircle}>
               <Plus size={24} color={theme.colors.onSurfaceVariant} />
             </View>
             <Text variant="bodyMd" numberOfLines={1} style={styles.newDJLabel}>
@@ -378,6 +371,10 @@ export default function HomeScreen() {
       ) : null}
     </View>
   );
+  const readyDrop =
+    drop.status === "ready" && drop.track && drop.dj
+      ? { track: drop.track, dj: drop.dj }
+      : null;
 
   return (
     <ScreenScrollView
@@ -444,24 +441,32 @@ export default function HomeScreen() {
           />
         ) : showHeroSkeleton ? (
           <HomeHeroSkeleton />
-        ) : drop.status === "ready" && drop.track && drop.dj ? (
-          <TourTarget id="home.hero" borderRadius={theme.borderRadius["2xl"]} onLayout={captureTargetOffset("home.daily-drop")}>
-            <OnAirHero
-              eyebrow={t("home.dailyDrop.eyebrow")}
-              djName={drop.dj.name}
-              avatarUrl={drop.dj.avatar_url}
-              genre={drop.dj.genre}
-              headline={drop.caption ?? t("home.dailyDrop.fresh")}
-              trackTitle={drop.track.title}
-              isLive={false}
-              onPlay={playDrop}
-              voiceSlot={
-                drop.captionAudioUrl ? (
-                  <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
-                ) : undefined
-              }
-            />
-          </TourTarget>
+        ) : readyDrop ? (
+          <HomeDesktopGridOffsetTarget onOffset={captureTargetOffset("home.daily-drop")}>
+            {(onLayout) => (
+              <TourTarget
+                id="home.hero"
+                borderRadius={theme.borderRadius["2xl"]}
+                onLayout={onLayout}
+              >
+                <OnAirHero
+                  eyebrow={t("home.dailyDrop.eyebrow")}
+                  djName={readyDrop.dj.name}
+                  avatarUrl={readyDrop.dj.avatar_url}
+                  genre={readyDrop.dj.genre}
+                  headline={drop.caption ?? t("home.dailyDrop.fresh")}
+                  trackTitle={readyDrop.track.title}
+                  isLive={false}
+                  onPlay={playDrop}
+                  voiceSlot={
+                    drop.captionAudioUrl ? (
+                      <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
+                    ) : undefined
+                  }
+                />
+              </TourTarget>
+            )}
+          </HomeDesktopGridOffsetTarget>
         ) : drop.status === "pending" && drop.dj ? (
           <OnAirHero
             eyebrow={t("home.dailyDrop.eyebrow")}
@@ -475,19 +480,27 @@ export default function HomeScreen() {
             onPlay={() => {}}
           />
         ) : drop.status === "failed" && hero ? (
-          <TourTarget id="home.hero" borderRadius={theme.borderRadius["2xl"]} onLayout={captureTargetOffset("home.daily-drop")}>
-            <OnAirHero
-              djName={hero.dj.name}
-              avatarUrl={hero.dj.avatar_url}
-              genre={hero.dj.genre}
-              headline={hero.bucket
-                ? t(`home.timeOfDay.${hero.bucket}.headline`)
-                : t("home.dailyDrop.fresh")}
-              trackTitle={hero.track.title}
-              isLive={hero.isLive}
-              onPlay={playHero}
-            />
-          </TourTarget>
+          <HomeDesktopGridOffsetTarget onOffset={captureTargetOffset("home.daily-drop")}>
+            {(onLayout) => (
+              <TourTarget
+                id="home.hero"
+                borderRadius={theme.borderRadius["2xl"]}
+                onLayout={onLayout}
+              >
+                <OnAirHero
+                  djName={hero.dj.name}
+                  avatarUrl={hero.dj.avatar_url}
+                  genre={hero.dj.genre}
+                  headline={hero.bucket
+                    ? t(`home.timeOfDay.${hero.bucket}.headline`)
+                    : t("home.dailyDrop.fresh")}
+                  trackTitle={hero.track.title}
+                  isLive={hero.isLive}
+                  onPlay={playHero}
+                />
+              </TourTarget>
+            )}
+          </HomeDesktopGridOffsetTarget>
         ) : null}
 
         {drop.status === "failed" || drop.stale ? (
@@ -515,9 +528,13 @@ export default function HomeScreen() {
         ) : djsLoading ? (
           <HomeDjsSkeleton />
         ) : djs && djs.length > 0 && !blockingDjsError ? (
-          <TourTarget id="home.djs" onLayout={captureTargetOffset("home.djs")}>
-            {djsSection}
-          </TourTarget>
+          <HomeDesktopGridOffsetTarget onOffset={captureTargetOffset("home.djs")}>
+            {(onLayout) => (
+              <TourTarget id="home.djs" onLayout={onLayout}>
+                {djsSection}
+              </TourTarget>
+            )}
+          </HomeDesktopGridOffsetTarget>
         ) : djsSection}
         </HomeDesktopGridSlot>
 
@@ -890,10 +907,14 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackMd,
   },
   horizontalScroll: {
-    marginHorizontal: -theme.spacing.pageMargin,
+    marginHorizontal: { xs: -theme.spacing.pageMargin, xl: 0 },
   },
   horizontalList: {
-    paddingHorizontal: theme.spacing.pageMargin,
+    width: { xs: undefined, xl: "100%" },
+    flexDirection: "row",
+    flexWrap: { xs: "nowrap", xl: "wrap" },
+    alignItems: "flex-start",
+    paddingHorizontal: { xs: theme.spacing.pageMargin, xl: 0 },
     gap: theme.spacing.gutter,
   },
   newDJSlot: {
@@ -903,14 +924,18 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackXs,
   },
   newDJCircle: {
-    width: 48,
-    height: 48,
+    width: { xs: 48, xl: 96 },
+    height: { xs: 48, xl: 96 },
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: theme.colors.outlineVariant,
   },
   newDJLabel: {
     textAlign: "center",
-    width: 80,
+    width: { xs: 80, xl: 120 },
   },
   playButton: {
     width: 48,

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import DJProfileScreen from "@/app/dj/[id]";
 import i18n from "@/src/i18n";
 import { router } from "expo-router";
@@ -145,6 +146,7 @@ jest.mock("@/src/components", () => {
       isPrivate,
       privateLabel,
       onPress,
+      variant,
     }: {
       accessibilityHint?: string;
       highlighted?: boolean;
@@ -152,6 +154,7 @@ jest.mock("@/src/components", () => {
       isPrivate?: boolean;
       privateLabel?: string;
       onPress?: () => void;
+      variant?: string;
     }) =>
       React.createElement(
         Pressable,
@@ -160,6 +163,7 @@ jest.mock("@/src/components", () => {
           accessibilityRole: "button",
           accessibilityState: { selected: highlighted },
           onPress,
+          variant,
           testID: "track-card",
         },
         highlighted && highlightedLabel
@@ -348,8 +352,16 @@ describe("DJProfileScreen", () => {
     expect(screen.getByTestId("dj-desktop-layout")).toBeTruthy();
     expect(screen.getByTestId("dj-desktop-hero")).toBeTruthy();
     expect(screen.getByTestId("dj-desktop-actions")).toBeTruthy();
+    expect(screen.getByTestId("dj-desktop-top").children).toEqual([
+      screen.getByTestId("dj-desktop-hero"),
+      screen.getByTestId("dj-desktop-actions"),
+    ]);
+    expect(StyleSheet.flatten(screen.getByTestId("dj-desktop-top").props.style)).toEqual(
+      expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }),
+    );
     expect(screen.getByTestId("dj-desktop-tracks")).toBeTruthy();
     expect(screen.getByTestId("track-grid")).toBeTruthy();
+    expect(screen.getByTestId("track-card").props.variant).toBe("adaptive");
     expect(screen.getByLabelText("Prepare a new track")).toBeDisabled();
     expect(screen.getByText("Private")).toBeTruthy();
     expect(screen.getByTestId("generating-track-card")).toBeTruthy();

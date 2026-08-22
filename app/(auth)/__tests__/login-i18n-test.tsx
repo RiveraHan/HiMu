@@ -9,6 +9,13 @@ import { darkTheme, lightTheme } from "@/src/theme/theme";
 const mockToastError = jest.fn();
 let mockWindowWidth = 390;
 
+function resolveAtWidth<T>(value: T | { xs?: T; xl?: T }, width: number): T | undefined {
+  if (value && typeof value === "object" && ("xs" in value || "xl" in value)) {
+    return width >= 1024 ? value.xl : value.xs;
+  }
+  return value as T;
+}
+
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
   default: () => ({
@@ -118,6 +125,29 @@ describe("Login translations", () => {
     expect(screen.getByRole("link", { name: "Privacidad" })).toBeTruthy();
     expect(screen.queryByText("Iniciar sesión con correo")).toBeNull();
     expect(screen.queryByText(/Invitado|Guest/)).toBeNull();
+  });
+
+  it("resolves a capped, footer-anchored compact panel at 700px", async () => {
+    mockWindowWidth = 700;
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+
+    const heroStyle = RNStyleSheet.flatten(
+      screen.getByTestId("login-hero-desktop").props.style,
+    );
+    const signInStyle = RNStyleSheet.flatten(
+      screen.getByTestId("login-hero-sign-in").props.style,
+    );
+    const legalFooter = screen.getByRole("link", { name: "Términos" }).parent?.parent;
+
+    expect(resolveAtWidth(heroStyle.flexDirection, 700)).toBe("column");
+    expect(resolveAtWidth(heroStyle.maxWidth, 700)).toBe(520);
+    expect(heroStyle).toEqual(expect.objectContaining({ width: "100%", alignSelf: "center" }));
+    expect(resolveAtWidth(signInStyle.flex, 700)).toBe(1);
+    expect(RNStyleSheet.flatten(legalFooter?.props.style)).toEqual(
+      expect.objectContaining({ marginTop: "auto" }),
+    );
   });
 
   it("allows only one Google sign-in request while an attempt is pending", async () => {

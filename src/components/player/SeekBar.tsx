@@ -14,6 +14,7 @@ import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { scheduleOnRN } from "react-native-worklets";
 import { formatTime } from "@/src/utils/format-time";
 import { useTranslation } from "react-i18next";
+import { SeekBarKeyboardControl } from "./SeekBarKeyboardControl";
 
 const KNOB = 16;
 // Screen-reader adjustable actions seek in a predictable fixed interval.
@@ -34,6 +35,11 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
   // reported position catches up to it — see the derived value below.
   const settling = useSharedValue(false);
   const settleTarget = useSharedValue(0);
+  const accessibilityLabel = t("playback.player.seek.label");
+  const accessibilityValueText = t("playback.player.seek.value", {
+    position: formatTime(positionSec),
+    duration: formatTime(durationSec),
+  });
 
   const pct = useDerivedValue(() => {
     if (scrubbing.value) return scrubPosition.value;
@@ -104,7 +110,7 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel={t("playback.player.seek.label")}
+        accessibilityLabel={accessibilityLabel}
         accessibilityHint={t("playback.player.seek.hint")}
         accessibilityActions={[
           {
@@ -131,16 +137,20 @@ export function SeekBar({ positionSec, durationSec, onSeek }: Props) {
           min: 0,
           max: Math.max(durationSec, 0),
           now: Math.min(Math.max(positionSec, 0), Math.max(durationSec, 0)),
-          text: t("playback.player.seek.value", {
-            position: formatTime(positionSec),
-            duration: formatTime(durationSec),
-          }),
+          text: accessibilityValueText,
         }}
       >
         <View style={styles.track}>
           <Animated.View style={[styles.fill, fillStyle]} />
         </View>
         <Animated.View style={[styles.knob, knobStyle]} />
+        <SeekBarKeyboardControl
+          label={accessibilityLabel}
+          valueText={accessibilityValueText}
+          positionSec={positionSec}
+          durationSec={durationSec}
+          onSeek={onSeek}
+        />
       </View>
     </GestureDetector>
   );

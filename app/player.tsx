@@ -38,7 +38,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
@@ -144,14 +144,17 @@ export default function PlayerScreen() {
       />
 
       {/* Content */}
-      <View
-        style={[
+      <ScrollView
+        testID="player-content-scroll"
+        style={styles.contentScroll}
+        contentContainerStyle={[
           styles.content,
           {
             paddingTop: insets.top + theme.spacing.stackSm,
             paddingBottom: insets.bottom + theme.spacing.stackLg,
           },
         ]}
+        showsVerticalScrollIndicator
       >
         {/* Top Bar */}
         <View style={styles.topBar}>
@@ -429,7 +432,7 @@ export default function PlayerScreen() {
             </View>
           </PlayerDesktopLayoutSlot>
         </PlayerDesktopLayout>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -500,8 +503,11 @@ const styles = StyleSheet.create((theme) => ({
     backgroundColor: theme.colors.surface,
     opacity: 0.7,
   },
-  content: {
+  contentScroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: theme.spacing.pageMargin,
     justifyContent: "space-between",
   },

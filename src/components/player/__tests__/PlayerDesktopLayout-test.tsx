@@ -134,4 +134,24 @@ describe("Player desktop stage", () => {
     expect(screen.getByTestId("player-artwork-loading")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Retry artwork" })).toBeNull();
   });
+
+  it("stays in the fallback after the one retry is exhausted", async () => {
+    const onRetry = jest.fn();
+    const screen = await render(
+      <PlayerArtwork
+        source="https://media.overinn.com/covers/signal-bloom.webp"
+        accessibilityLabel="Artwork for Signal Bloom"
+        onRetry={onRetry}
+      />,
+    );
+
+    await fireEvent(screen.getByTestId("himu-image-native"), "error");
+    await fireEvent.press(screen.getByRole("button", { name: "Retry artwork" }));
+    await fireEvent(screen.getByTestId("himu-image-native"), "error");
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("player-artwork-fallback")).toBeTruthy();
+    expect(screen.queryByTestId("player-artwork-loading")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry artwork" })).toBeNull();
+  });
 });

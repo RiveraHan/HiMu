@@ -15,6 +15,14 @@ type SlotProps = {
   children: ReactNode;
 };
 
+export function DjDesktopTopRegion({ children }: Props) {
+  return (
+    <View testID="dj-desktop-top" style={styles.top}>
+      {children}
+    </View>
+  );
+}
+
 /** The shared grid's wide-desktop six-card minimum on the 1280px DJ canvas. */
 export const DJ_TRACK_MIN_CARD_WIDTH = 185;
 
@@ -45,10 +53,19 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
   },
   hero: {
+    flex: { xs: 0, xl: 3 },
     gap: theme.spacing.stackLg,
     minWidth: 0,
   },
   actions: {
+    flex: { xs: 0, xl: 2 },
+    gap: theme.spacing.stackLg,
+    minWidth: 0,
+    justifyContent: { xs: "flex-start", xl: "center" },
+  },
+  top: {
+    flexDirection: { xs: "column", xl: "row" },
+    alignItems: { xs: "stretch", xl: "center" },
     gap: theme.spacing.stackLg,
     minWidth: 0,
   },

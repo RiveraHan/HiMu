@@ -32,6 +32,7 @@ export function PlayerArtwork({
   const { theme } = useUnistyles();
   const { t } = useTranslation();
   const [retryKey, setRetryKey] = useState(0);
+  const [retryState, setRetryState] = useState({ source, attempted: false });
   const [imageState, setImageState] = useState<{
     source: string | null;
     retryKey: number;
@@ -47,8 +48,11 @@ export function PlayerArtwork({
       : source
         ? "loading"
         : "idle";
+  const retryAttempted =
+    retryState.source === source && retryState.attempted;
 
   const retry = () => {
+    setRetryState({ source, attempted: true });
     setRetryKey((key) => key + 1);
   };
 
@@ -94,7 +98,7 @@ export function PlayerArtwork({
           </Text>
         </View>
       ) : null}
-      {source && status === "error" ? (
+      {source && status === "error" && !retryAttempted ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("playback.player.artwork.retry")}

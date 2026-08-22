@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { HimuImage } from "./media/HimuImage";
 import { Text } from "./Text";
@@ -8,6 +8,7 @@ const SIZES = { xs: 24, sm: 32, md: 48, lg: 64, xl: 96, "2xl": 128 } as const;
 type Props = {
   src?: string | null;
   size?: keyof typeof SIZES;
+  desktopSize?: keyof typeof SIZES;
   fallback: string;
   testID?: string;
   eager?: boolean;
@@ -16,17 +17,27 @@ type Props = {
 export function Avatar({
   src,
   size = "md",
+  desktopSize,
   fallback,
   testID,
   eager = false,
 }: Props) {
   const dimension = SIZES[size];
+  const frameStyle = styles.frame(
+    dimension,
+    desktopSize ? SIZES[desktopSize] : undefined,
+  ) as StyleProp<ViewStyle>;
 
   return (
     <HimuImage
       source={src}
       fallback={
-        <View style={[styles.fallback, { width: dimension, height: dimension }]}>
+        <View
+          style={[
+            styles.fallback,
+            frameStyle,
+          ]}
+        >
           <Text
             variant={
               size === "2xl" || size === "xl"
@@ -41,7 +52,10 @@ export function Avatar({
           </Text>
         </View>
       }
-      style={[styles.img, { width: dimension, height: dimension }]}
+      style={[
+        styles.img,
+        frameStyle,
+      ]}
       contentFit="cover"
       transition={200}
       eager={eager}
@@ -52,6 +66,10 @@ export function Avatar({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  frame: (size: number, desktopSize?: number) => ({
+    width: desktopSize ? { xs: size, xl: desktopSize } : size,
+    height: desktopSize ? { xs: size, xl: desktopSize } : size,
+  }),
   img: {
     borderRadius: theme.borderRadius.full,
   },

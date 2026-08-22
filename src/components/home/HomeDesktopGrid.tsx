@@ -1,5 +1,12 @@
-import type { ReactNode } from "react";
-import { View } from "react-native";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { View, type LayoutChangeEvent } from "react-native";
 import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
@@ -14,6 +21,13 @@ type SlotProps = {
   children: ReactNode;
 };
 
+type OffsetTargetProps = {
+  children: (onLayout: (event: LayoutChangeEvent) => void) => ReactNode;
+  onOffset: (offset: number) => void;
+};
+
+const HomeDesktopGridOffsetContext = createContext<number | null>(null);
+
 /**
  * Keeps Home's content in its reading order while CSS breakpoints compose the
  * wide canvas. Data, playback, tour targets, and failure states remain owned
@@ -23,22 +37,61 @@ export function HomeDesktopGrid({
   children,
 }: Props) {
   useWebCorePresentation("himu-web-core-presentation/home-grid");
+  const [localOffset, setLocalOffset] = useState<number | null>(null);
   return (
-    <View testID="home-desktop-grid" style={styles.root}>
-      {children}
+    <View
+      testID="home-desktop-grid"
+      style={styles.root}
+      onLayout={(event) => setLocalOffset(event.nativeEvent.layout.y)}
+    >
+      <HomeDesktopGridOffsetContext value={localOffset}>
+        {children}
+      </HomeDesktopGridOffsetContext>
     </View>
   );
 }
 
 export function HomeDesktopGridSlot({ slot, children }: SlotProps) {
+  const parentOffset = useContext(HomeDesktopGridOffsetContext);
+  const [localOffset, setLocalOffset] = useState<number | null>(null);
+  const contentOffset =
+    parentOffset === null || localOffset === null
+      ? null
+      : parentOffset + localOffset;
+
   return (
     <View
       testID={slot === "hero" ? "home-daily-hero" : `home-desktop-${slot}`}
       style={styles[slot]}
+      onLayout={(event) => setLocalOffset(event.nativeEvent.layout.y)}
     >
-      {children}
+      <HomeDesktopGridOffsetContext value={contentOffset}>
+        {children}
+      </HomeDesktopGridOffsetContext>
     </View>
   );
+}
+
+/** Converts local target layout into a vertical offset within scroll content. */
+export function HomeDesktopGridOffsetTarget({
+  children,
+  onOffset,
+}: OffsetTargetProps) {
+  const parentOffset = useContext(HomeDesktopGridOffsetContext);
+  const [localOffset, setLocalOffset] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (parentOffset !== null && localOffset !== null) {
+      onOffset(parentOffset + localOffset);
+    }
+  }, [localOffset, onOffset, parentOffset]);
+
+  const onLayout = useCallback(
+    (event: LayoutChangeEvent) => setLocalOffset(event.nativeEvent.layout.y),
+    [],
+  );
+
+  return children(onLayout);
 }
 
 const styles = StyleSheet.create((theme) => ({

@@ -32,6 +32,7 @@ import { TrackGrid } from "@/src/components/content/TrackGrid";
 import {
   DjDesktopLayout,
   DjDesktopLayoutSlot,
+  DjDesktopTopRegion,
   DJ_TRACK_MIN_CARD_WIDTH,
 } from "@/src/components/dj/DjDesktopLayout";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
@@ -275,6 +276,7 @@ export default function DJProfileScreen() {
           ]}
         >
           <DjDesktopLayout>
+            <DjDesktopTopRegion>
             <DjDesktopLayoutSlot slot="hero">
               {header}
 
@@ -383,6 +385,7 @@ export default function DJProfileScreen() {
             </Pressable>
               ) : null}
             </DjDesktopLayoutSlot>
+            </DjDesktopTopRegion>
 
             <DjDesktopLayoutSlot slot="details">
               {/* Sonic Philosophy */}
@@ -475,7 +478,7 @@ export default function DJProfileScreen() {
                         }
                         privateLabel={t("dj.visibility.privateLabel")}
                         cover={track.album_art_url}
-                        variant="row"
+                        variant="adaptive"
                         isPlaying={currentId === track.id}
                         onPress={() => load(track, queue, index)}
                       />

@@ -1,10 +1,15 @@
-import { Pressable, View } from "react-native";
+import {
+  Pressable,
+  View,
+  type StyleProp,
+  type TextStyle,
+} from "react-native";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { Avatar } from "./Avatar";
 import { Text } from "./Text";
 import { Lock } from "lucide-react-native";
 
-const LABEL_WIDTH = { md: 80, lg: 104 } as const;
+const LABEL_WIDTH = { md: 80, lg: 104, xl: 120 } as const;
 
 type Props = {
   src?: string | null;
@@ -13,6 +18,7 @@ type Props = {
   subtitle?: string;
   isLive?: boolean;
   size?: keyof typeof LABEL_WIDTH;
+  desktopSize?: keyof typeof LABEL_WIDTH;
   onPress?: () => void;
   testID?: string;
   isPrivate?: boolean;
@@ -26,12 +32,17 @@ export function DJAvatar({
   subtitle,
   isLive = false,
   size = "md",
+  desktopSize,
   onPress,
   testID,
   isPrivate = false,
   privateLabel,
 }: Props) {
   const { theme } = useUnistyles();
+  const labelWidth = styles.labelWidth(
+    LABEL_WIDTH[size],
+    desktopSize ? LABEL_WIDTH[desktopSize] : undefined,
+  ) as StyleProp<TextStyle>;
   const accessibilityLabel = [
     name,
     isLive ? "live" : null,
@@ -42,13 +53,18 @@ export function DJAvatar({
   const content = (
     <>
       <View>
-        <Avatar src={src} fallback={fallback} size={size} />
+        <Avatar
+          src={src}
+          fallback={fallback}
+          size={size}
+          desktopSize={desktopSize}
+        />
         {isLive && <View style={styles.liveBadge} />}
       </View>
       <Text
         variant="bodyMd"
         numberOfLines={1}
-        style={[styles.name, { width: LABEL_WIDTH[size] }]}
+        style={[styles.name, labelWidth]}
       >
         {name}
       </Text>
@@ -59,7 +75,7 @@ export function DJAvatar({
           color="onSurfaceVariant"
           opacity={0.6}
           numberOfLines={1}
-          style={[styles.subtitle, { width: LABEL_WIDTH[size] }]}
+          style={[styles.subtitle, labelWidth]}
         >
           {subtitle}
         </Text>
@@ -102,6 +118,9 @@ export function DJAvatar({
 }
 
 const styles = StyleSheet.create((theme) => ({
+  labelWidth: (width: number, desktopWidth?: number) => ({
+    width: desktopWidth ? { xs: width, xl: desktopWidth } : width,
+  }),
   root: {
     minWidth: 44,
     minHeight: 44,

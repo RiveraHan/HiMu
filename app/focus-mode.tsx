@@ -15,7 +15,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
 import { Check, Pause, Play, SkipBack, SkipForward, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn, FadeOut, useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -131,11 +131,14 @@ export default function FocusModeScreen() {
     <View style={styles.root}>
       <FocusAtmosphere />
 
-      <View
-        style={[
+      <ScrollView
+        testID="focus-content-scroll"
+        style={styles.contentScroll}
+        contentContainerStyle={[
           styles.content,
           { paddingTop: insets.top + theme.spacing.stackMd },
         ]}
+        showsVerticalScrollIndicator
       >
         {/* Header */}
         <View style={styles.header}>
@@ -329,15 +332,16 @@ export default function FocusModeScreen() {
             </Pressable>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   root: { flex: 1, backgroundColor: theme.colors.background },
+  contentScroll: { flex: 1 },
   content: {
-    flex: 1,
+    flexGrow: 1,
     width: "100%",
     maxWidth: { xs: undefined, xl: 1120 },
     alignSelf: "center",

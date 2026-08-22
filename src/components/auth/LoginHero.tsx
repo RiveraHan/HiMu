@@ -92,6 +92,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   hero: {
     flex: 1,
+    width: "100%",
+    maxWidth: { xs: 520, xl: undefined },
+    alignSelf: "center",
     flexDirection: { xs: "column", xl: "row" },
     alignItems: "stretch",
     gap: { xs: theme.spacing.stackLg, xl: theme.spacing.stackLg * 2 },
@@ -107,7 +110,7 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackLg,
   },
   signInPanel: {
-    flex: { xs: 0, xl: 4 },
+    flex: { xs: 1, xl: 4 },
     justifyContent: { xs: "flex-start", xl: "center" },
     gap: theme.spacing.stackLg,
     alignSelf: { xs: "stretch", xl: "center" },

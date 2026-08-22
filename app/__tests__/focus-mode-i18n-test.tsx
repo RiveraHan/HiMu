@@ -264,6 +264,26 @@ describe("FocusModeScreen data states", () => {
     expect(screen.getByRole("button", { name: "Start focus session" })).toBeTruthy();
   });
 
+  it("keeps session actions reachable by vertical scroll at an effective 720x450 viewport", async () => {
+    const { View } = require("react-native");
+    const screen = await render(
+      <View style={{ width: 720, height: 450 }}>
+        <FocusModeScreen />
+      </View>,
+    );
+
+    const scroll = screen.getByTestId("focus-content-scroll");
+    let ancestor = screen.getByRole("button", { name: "Start focus session" }).parent;
+    while (ancestor && ancestor !== scroll) ancestor = ancestor.parent;
+
+    expect(ancestor).toBe(scroll);
+    expect(scroll.props.horizontal).not.toBe(true);
+    expect(scroll.props.scrollEnabled).not.toBe(false);
+    expect(RNStyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual(
+      expect.objectContaining({ flexGrow: 1 }),
+    );
+  });
+
   it("replaces Home when a deep link has no back history", async () => {
     mockCanGoBack = false;
     const screen = await render(<FocusModeScreen />);

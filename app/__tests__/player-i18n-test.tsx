@@ -5,6 +5,8 @@ import { StyleSheet, View as mockNativeView } from "react-native";
 import PlayerScreen from "@/app/player";
 import i18n from "@/src/i18n";
 
+const Viewport = mockNativeView;
+
 const track = {
   id: "track-one",
   title: "Signal Bloom",
@@ -188,6 +190,26 @@ describe("PlayerScreen localization", () => {
     ]);
     expect(screen.getAllByRole("button", { name: "Pause" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Next" })).toHaveLength(1);
+  });
+
+  test("keeps transport reachable by vertical scroll at an effective 720x450 viewport", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(
+      <Viewport style={{ width: 720, height: 450 }}>
+        <PlayerScreen />
+      </Viewport>,
+    );
+
+    const scroll = screen.getByTestId("player-content-scroll");
+    let ancestor = screen.getByRole("button", { name: "Pause" }).parent;
+    while (ancestor && ancestor !== scroll) ancestor = ancestor.parent;
+
+    expect(ancestor).toBe(scroll);
+    expect(scroll.props.horizontal).not.toBe(true);
+    expect(scroll.props.scrollEnabled).not.toBe(false);
+    expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual(
+      expect.objectContaining({ flexGrow: 1 }),
+    );
   });
 
   test("uses source attribution rather than an unconditional audio-quality claim", async () => {

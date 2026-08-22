@@ -4,6 +4,7 @@ import HomeScreen from "@/app/(app)/index";
 import i18n from "@/src/i18n";
 import { HOME_TOUR_STEPS } from "@/src/onboarding/constants";
 import type { HomeTourRegistration } from "@/src/onboarding";
+import { StyleSheet } from "react-native";
 
 type MockQuery = {
   data: unknown;
@@ -90,10 +91,18 @@ jest.mock("@/src/components", () => {
           : null,
       ),
     ContentShelfSkeleton: placeholder("content-shelf-skeleton"),
-    DJAvatar: ({ subtitle, isPrivate }: { subtitle?: string; isPrivate?: boolean }) =>
+    DJAvatar: ({
+      subtitle,
+      isPrivate,
+      desktopSize,
+    }: {
+      subtitle?: string;
+      isPrivate?: boolean;
+      desktopSize?: string;
+    }) =>
       React.createElement(
         View,
-        { testID: "dj-avatar" },
+        { testID: "dj-avatar", desktopSize },
         React.createElement(NativeText, null, subtitle),
         isPrivate ? React.createElement(NativeText, null, "Private") : null,
       ),
@@ -682,6 +691,37 @@ describe("HomeScreen", () => {
     });
   });
 
+  it("resolves the Home DJ shelf to wrapping 96px desktop avatars", async () => {
+    mockDjsQuery = settledQuery([
+      {
+        id: "dj-one",
+        owner_id: "user",
+        name: "DJ One",
+        avatar_url: null,
+        genre_specialties: ["House"],
+      },
+    ]);
+    mockDrop = { status: "failed" };
+
+    const screen = await render(<HomeScreen />);
+    const listStyle = StyleSheet.flatten(
+      screen.getByTestId("home-dj-list").props.contentContainerStyle,
+    );
+    const newDjCircleStyle = StyleSheet.flatten(
+      screen.getByTestId("new-dj-circle").props.style,
+    );
+
+    expect(listStyle).toEqual(expect.objectContaining({
+      flexWrap: { xs: "nowrap", xl: "wrap" },
+      width: { xs: undefined, xl: "100%" },
+    }));
+    expect(screen.getByTestId("dj-avatar").props.desktopSize).toBe("xl");
+    expect(newDjCircleStyle).toEqual(expect.objectContaining({
+      width: { xs: 48, xl: 96 },
+      height: { xs: 48, xl: 96 },
+    }));
+  });
+
   it("does not create targets or readiness for settled empty content", async () => {
     mockDjsQuery = settledQuery([]);
     mockRecentQuery = settledQuery([]);
@@ -747,12 +787,46 @@ describe("HomeScreen", () => {
       dj: { name: "DJ One", avatar_url: null, genre: "House" },
     };
     const screen = await render(<HomeScreen />);
-    await fireEvent(screen.getByTestId("tour-target-home.djs"), "layout", {
+    await fireEvent(screen.getByTestId("home-desktop-grid"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 0, width: 320, height: 920 } },
+    });
+    await fireEvent(screen.getByTestId("home-desktop-djs"), "layout", {
       nativeEvent: { layout: { x: 0, y: 620, width: 320, height: 120 } },
+    });
+    await fireEvent(screen.getByTestId("tour-target-home.djs"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 0, width: 320, height: 120 } },
     });
     const registration = mockRegisterHome.mock.calls.at(-1)?.[0] as HomeTourRegistration;
     await registration.ensureStepVisible("home.djs");
     expect(mockScrollTo).toHaveBeenCalledWith({ y: 604, animated: true });
+  });
+
+  it("accumulates nested Home wrapper offsets before scrolling a tour target", async () => {
+    mockDjsQuery = settledQuery([{
+      id: "dj-one", owner_id: "user", name: "DJ One", avatar_url: null,
+      genre_specialties: ["House"],
+    }]);
+    mockDrop = {
+      status: "ready",
+      track: { id: "drop", title: "Drop", audio_url: "drop.mp3" },
+      dj: { name: "DJ One", avatar_url: null, genre: "House" },
+    };
+    const screen = await render(<HomeScreen />);
+
+    await fireEvent(screen.getByTestId("home-desktop-grid"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 180, width: 1184, height: 1200 } },
+    });
+    await fireEvent(screen.getByTestId("home-desktop-djs"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 320, width: 1184, height: 180 } },
+    });
+    await fireEvent(screen.getByTestId("tour-target-home.djs"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 24, width: 1184, height: 120 } },
+    });
+
+    const registration = mockRegisterHome.mock.calls.at(-1)?.[0] as HomeTourRegistration;
+    await registration.ensureStepVisible("home.djs");
+
+    expect(mockScrollTo).toHaveBeenCalledWith({ y: 508, animated: true });
   });
 
   it("shows continuation only when interrupted and wires both actions", async () => {
