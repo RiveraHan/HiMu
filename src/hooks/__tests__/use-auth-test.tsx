@@ -123,6 +123,92 @@ describe("useAuthInit", () => {
     expect(useAuthStore.getState().session).toEqual(signedIn);
   });
 
+  it("ignores a resolved initialization and callback after its owner unmounts", async () => {
+    const oldLookup = deferred<Session | null>();
+    const currentLookup = deferred<Session | null>();
+    const currentSession = session("user-current", "token-current");
+    const staleSession = session("user-stale", "token-stale");
+    jest
+      .mocked(authApi.getSession)
+      .mockReturnValueOnce(oldLookup.promise)
+      .mockReturnValueOnce(currentLookup.promise);
+
+    const oldOwner = await renderHook(() => useAuthInit());
+    const oldAuthCallback = mockAuthCallback;
+    await oldOwner.unmount();
+
+    const currentOwner = await renderHook(() => useAuthInit());
+    const currentAuthCallback = mockAuthCallback;
+    await act(async () => {
+      currentAuthCallback?.("SIGNED_IN", currentSession);
+      oldAuthCallback?.("SIGNED_OUT", null);
+      oldLookup.resolve(staleSession);
+      await oldLookup.promise;
+    });
+
+    expect(useAuthStore.getState()).toMatchObject({
+      session: currentSession,
+      isLoading: true,
+    });
+
+    await act(async () => {
+      currentLookup.resolve(null);
+      await currentLookup.promise;
+    });
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        session: currentSession,
+        isLoading: false,
+      });
+    });
+    await currentOwner.unmount();
+  });
+
+  it("ignores a rejected initialization after its owner unmounts", async () => {
+    const oldLookup = deferred<Session | null>();
+    const currentLookup = deferred<Session | null>();
+    const currentSession = session("user-current", "token-current");
+    const staleError = new Error("stale storage failure");
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    jest
+      .mocked(authApi.getSession)
+      .mockReturnValueOnce(oldLookup.promise)
+      .mockReturnValueOnce(currentLookup.promise);
+
+    const oldOwner = await renderHook(() => useAuthInit());
+    await oldOwner.unmount();
+
+    const currentOwner = await renderHook(() => useAuthInit());
+    const currentAuthCallback = mockAuthCallback;
+    await act(async () => {
+      currentAuthCallback?.("SIGNED_IN", currentSession);
+      oldLookup.reject(staleError);
+      await oldLookup.promise.catch(() => undefined);
+    });
+
+    expect(useAuthStore.getState()).toMatchObject({
+      session: currentSession,
+      isLoading: true,
+    });
+    expect(consoleError).not.toHaveBeenCalledWith(
+      "[useAuthInit] Failed to initialize auth:",
+      staleError,
+    );
+
+    await act(async () => {
+      currentLookup.resolve(null);
+      await currentLookup.promise;
+    });
+    await waitFor(() => {
+      expect(useAuthStore.getState()).toMatchObject({
+        session: currentSession,
+        isLoading: false,
+      });
+    });
+    await currentOwner.unmount();
+    consoleError.mockRestore();
+  });
+
   it("unsubscribes from auth events when the owner unmounts", async () => {
     jest.mocked(authApi.getSession).mockResolvedValue(null);
     const hook = await renderHook(() => useAuthInit());
