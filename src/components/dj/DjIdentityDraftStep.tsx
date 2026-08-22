@@ -63,15 +63,22 @@ export function DjIdentityDraftStep({
   const [isStale, setIsStale] = useState(false);
   const fingerprint = useMemo(() => traitsFingerprint(traits), [traits]);
   const previousFingerprint = useRef(fingerprint);
+  const previousDraftEligible = useRef(canDraft(traits) && !disabled);
   const requestedFingerprint = useRef<string | null>(null);
+  const requestGeneration = useRef(0);
+  const currentFingerprint = useRef(fingerprint);
+  const currentDraftEligible = useRef(canDraft(traits) && !disabled);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
+  currentFingerprint.current = fingerprint;
+  currentDraftEligible.current = canDraft(traits) && !disabled;
   valueRef.current = value;
   onChangeRef.current = onChange;
 
   async function requestDrafts() {
     if (!canDraft(traits) || disabled) return;
     const requestFingerprint = fingerprint;
+    const requestToken = ++requestGeneration.current;
     requestedFingerprint.current = requestFingerprint;
     setDraftFailed(false);
     try {
@@ -81,16 +88,32 @@ export function DjIdentityDraftStep({
         exclude: candidates.map((candidate) => candidate.name),
       });
       if (response.kind !== "dj-identity") throw new Error("invalid identity draft");
-      if (requestedFingerprint.current !== requestFingerprint) return;
+      if (
+        requestGeneration.current !== requestToken ||
+        currentFingerprint.current !== requestFingerprint ||
+        !currentDraftEligible.current
+      ) return;
       setCandidates(response.draft.candidates);
       setSelectedName(null);
     } catch {
-      if (requestedFingerprint.current !== requestFingerprint) return;
+      if (
+        requestGeneration.current !== requestToken ||
+        currentFingerprint.current !== requestFingerprint ||
+        !currentDraftEligible.current
+      ) return;
       setDraftFailed(true);
     }
   }
 
   useEffect(() => {
+    const draftEligible = canDraft(traits) && !disabled;
+    if (
+      previousFingerprint.current !== fingerprint ||
+      previousDraftEligible.current !== draftEligible
+    ) {
+      requestGeneration.current += 1;
+      requestedFingerprint.current = null;
+    }
     if (previousFingerprint.current !== fingerprint) {
       previousFingerprint.current = fingerprint;
       const current = valueRef.current;
@@ -99,9 +122,9 @@ export function DjIdentityDraftStep({
       }
       if (current.name || current.identityConcept) setIsStale(true);
     }
+    previousDraftEligible.current = draftEligible;
     if (
-      canDraft(traits) &&
-      !disabled &&
+      draftEligible &&
       requestedFingerprint.current !== fingerprint
     ) {
       void requestDrafts();

@@ -220,3 +220,135 @@ test("ignores identity candidates that resolve after a newer trait request", asy
   expect(screen.getByText("New Static Bloom")).toBeTruthy();
   expect(screen.queryByText("Static Bloom")).toBeNull();
 });
+
+test("keeps the latest candidates when same-trait requests resolve out of order", async () => {
+  let resolveFirst!: (value: unknown) => void;
+  let resolveSecond!: (value: unknown) => void;
+  mockDraft
+    .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+    .mockImplementationOnce(() => new Promise((resolve) => (resolveSecond = resolve)));
+  const latestCandidates = candidates.map((candidate) => ({
+    ...candidate,
+    name: `Latest ${candidate.name}`,
+  }));
+  const screen = await render(<Harness />);
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await fireEvent.press(screen.getByRole("button", { name: "Try new suggestions" }));
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(2));
+
+  await act(async () => {
+    resolveSecond({
+      version: 1,
+      kind: "dj-identity",
+      draft: { candidates: latestCandidates },
+    });
+  });
+  await waitFor(() => expect(screen.getByText("Latest Static Bloom")).toBeTruthy());
+
+  await act(async () => {
+    resolveFirst({
+      version: 1,
+      kind: "dj-identity",
+      draft: { candidates },
+    });
+  });
+  expect(screen.getByText("Latest Static Bloom")).toBeTruthy();
+  expect(screen.queryByText("Static Bloom")).toBeNull();
+});
+
+test("keeps the newest A candidates across an A to B to A request cycle", async () => {
+  const resolvers: ((value: unknown) => void)[] = [];
+  mockDraft.mockImplementation(
+    () => new Promise((resolve) => resolvers.push(resolve)),
+  );
+
+  function CycleHarness() {
+    const [value, setValue] = useState<DjIdentityDraftValue>({
+      name: "",
+      identityConcept: "",
+      provenance: "custom",
+      confirmed: false,
+    });
+    const [energy, setEnergy] = useState(6);
+    return (
+      <>
+        <DjIdentityDraftStep
+          traits={{ ...traits, energy }}
+          value={value}
+          onChange={setValue}
+        />
+        <Pressable testID="traits-b" onPress={() => setEnergy(7)}>
+          <Text>Traits B</Text>
+        </Pressable>
+        <Pressable testID="traits-a" onPress={() => setEnergy(6)}>
+          <Text>Traits A</Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  const currentCandidates = candidates.map((candidate) => ({
+    ...candidate,
+    name: `Current ${candidate.name}`,
+  }));
+  const screen = await render(<CycleHarness />);
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await fireEvent.press(screen.getByTestId("traits-b"));
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(2));
+  await fireEvent.press(screen.getByTestId("traits-a"));
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(3));
+
+  await act(async () => {
+    resolvers[2]({
+      version: 1,
+      kind: "dj-identity",
+      draft: { candidates: currentCandidates },
+    });
+  });
+  await waitFor(() => expect(screen.getByText("Current Static Bloom")).toBeTruthy());
+  await act(async () => {
+    resolvers[1]({ version: 1, kind: "dj-identity", draft: { candidates } });
+    resolvers[0]({ version: 1, kind: "dj-identity", draft: { candidates } });
+  });
+
+  expect(screen.getByText("Current Static Bloom")).toBeTruthy();
+  expect(screen.queryByText("Static Bloom")).toBeNull();
+});
+
+test("does not commit a late candidate response after traits become invalid", async () => {
+  let resolveDraft!: (value: unknown) => void;
+  mockDraft.mockImplementationOnce(
+    () => new Promise((resolve) => (resolveDraft = resolve)),
+  );
+
+  function InvalidHarness() {
+    const [value, setValue] = useState<DjIdentityDraftValue>({
+      name: "",
+      identityConcept: "",
+      provenance: "custom",
+      confirmed: false,
+    });
+    const [moods, setMoods] = useState(traits.moods);
+    return (
+      <>
+        <DjIdentityDraftStep
+          traits={{ ...traits, moods }}
+          value={value}
+          onChange={setValue}
+        />
+        <Pressable testID="invalidate-traits" onPress={() => setMoods([])}>
+          <Text>Invalidate traits</Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  const screen = await render(<InvalidHarness />);
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await fireEvent.press(screen.getByTestId("invalidate-traits"));
+  await act(async () => {
+    resolveDraft({ version: 1, kind: "dj-identity", draft: { candidates } });
+  });
+
+  expect(screen.queryAllByRole("radio")).toHaveLength(0);
+});
