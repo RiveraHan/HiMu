@@ -2,7 +2,7 @@ import { useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DESKTOP_RAIL_WIDTH } from "@/src/components/bottom-chrome-metrics";
-import { DesktopRail } from "@/src/components/navigation/DesktopRail";
+import { ConnectedDesktopRail } from "@/src/components/navigation/ConnectedDesktopRail";
 import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { resolveLayoutMode } from "@/src/theme/layout";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
@@ -32,7 +32,7 @@ export function ResponsiveAppShell({
 
   return (
     <View style={styles.root} testID="responsive-app-shell">
-      {hasDesktopRail ? <DesktopRail /> : null}
+      {hasDesktopRail ? <ConnectedDesktopRail /> : null}
       <View
         style={[
           styles.content,

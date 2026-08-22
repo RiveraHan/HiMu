@@ -36,6 +36,18 @@ describe("HomeDesktopGrid", () => {
     expect(screen.getByTestId("home-desktop-grid")).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId("library").parent?.parent?.props.style))
       .toEqual(expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }));
+    expect(StyleSheet.flatten(screen.getByTestId("home-desktop-library").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 3 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
+    expect(StyleSheet.flatten(screen.getByTestId("home-desktop-supporting").props.style))
+      .toEqual(expect.objectContaining({
+        flexBasis: { xs: "auto", xl: 0 },
+        flexGrow: { xs: 0, xl: 2 },
+        flexShrink: { xs: 0, xl: 1 },
+      }));
     expect(screen.getByTestId("hero")).toBeTruthy();
     expect(screen.getByTestId("supporting")).toBeTruthy();
   });

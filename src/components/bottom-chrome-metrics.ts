@@ -17,16 +17,21 @@ export function bottomChromeCanvasGeometry({
   safeStart,
   safeEnd,
   hasDesktopRail,
+  horizontalMargin,
+  maxCanvasWidth,
 }: {
   windowWidth: number;
   safeStart: number;
   safeEnd: number;
   hasDesktopRail: boolean;
+  horizontalMargin: number;
+  maxCanvasWidth: number;
 }): { left: number; width: number } {
-  const left = hasDesktopRail ? safeStart + DESKTOP_RAIL_WIDTH : 0;
-  const width = hasDesktopRail
-    ? Math.max(0, windowWidth - left - safeEnd)
-    : windowWidth;
+  const availableLeft = safeStart + (hasDesktopRail ? DESKTOP_RAIL_WIDTH : 0);
+  const availableWidth = Math.max(0, windowWidth - availableLeft - safeEnd);
+  const canvasWidth = Math.min(availableWidth, maxCanvasWidth);
+  const left = availableLeft + (availableWidth - canvasWidth) / 2 + horizontalMargin;
+  const width = Math.max(0, canvasWidth - horizontalMargin * 2);
 
   return { left, width };
 }

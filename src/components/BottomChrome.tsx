@@ -14,7 +14,7 @@ import {
   TAB_BAR_HEIGHT,
 } from "./bottom-chrome-metrics";
 import { MiniPlayer } from "./MiniPlayer";
-import { resolveLayoutMode } from "@/src/theme/layout";
+import { canvasMaxWidth, resolveLayoutMode } from "@/src/theme/layout";
 
 export function BottomChrome() {
   const segments = useSegments();
@@ -54,6 +54,8 @@ export function BottomChrome() {
     safeStart: insets.left,
     safeEnd: insets.right,
     hasDesktopRail: isDesktop,
+    horizontalMargin: theme.spacing.pageMargin,
+    maxCanvasWidth: canvasMaxWidth.max,
   });
 
   return (
@@ -62,10 +64,7 @@ export function BottomChrome() {
       style={[styles.root, { bottom, left: canvas.left, width: canvas.width }]}
       testID="bottom-chrome"
     >
-      <View
-        style={[styles.stack, isDesktop && styles.desktopStack]}
-        testID="bottom-chrome-stack"
-      >
+      <View style={styles.stack} testID="bottom-chrome-stack">
         {hasActivityTrigger ? (
           <ActivityPill
             activity={primary}
@@ -87,14 +86,9 @@ const styles = StyleSheet.create((theme) => ({
     zIndex: 20,
   },
   stack: {
-    width: "88%",
-    maxWidth: 720,
+    width: "100%",
     alignSelf: "center",
     alignItems: "center",
     gap: theme.spacing.stackSm,
-  },
-  desktopStack: {
-    width: "100%",
-    maxWidth: undefined,
   },
 }));

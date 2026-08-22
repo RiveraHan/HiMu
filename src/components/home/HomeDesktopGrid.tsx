@@ -114,12 +114,16 @@ const styles = StyleSheet.create((theme) => ({
     gap: theme.spacing.stackLg,
   },
   library: {
-    flex: { xs: 0, xl: 3 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 3 },
+    flexShrink: { xs: 0, xl: 1 },
     gap: theme.spacing.stackMd,
     minWidth: 0,
   },
   supporting: {
-    flex: { xs: 0, xl: 2 },
+    flexBasis: { xs: "auto", xl: 0 },
+    flexGrow: { xs: 0, xl: 2 },
+    flexShrink: { xs: 0, xl: 1 },
     gap: theme.spacing.stackLg,
     minWidth: 0,
   },

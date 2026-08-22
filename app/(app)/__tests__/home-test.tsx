@@ -440,7 +440,7 @@ describe("HomeScreen", () => {
     expect(screen.queryByTestId("library-AI Mixes")).toBeNull();
   });
 
-  it("blocks a second owned DJ and interpolates the one-DJ warning", async () => {
+  it("replaces the unavailable second-DJ action with track creation for the owned DJ", async () => {
     mockDjsQuery = settledQuery([{
       id: "dj-one",
       owner_id: "user",
@@ -450,13 +450,13 @@ describe("HomeScreen", () => {
     }]);
     const screen = await render(<HomeScreen />);
 
-    await fireEvent.press(screen.getByRole("button", { name: "New DJ" }));
+    expect(screen.queryByRole("button", { name: "New DJ" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Create track" }));
 
-    expect(mockRouterPush).not.toHaveBeenCalledWith("/create-dj");
-    expect(mockToastWarning).toHaveBeenCalledWith(
-      "DJ limit reached",
-      "You already have 1 DJ. Delete it to create another.",
-    );
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: "/create-track",
+      params: { djId: "dj-one" },
+    });
   });
 
   it("renders cached short and empty refetch failures as retryable errors", async () => {
@@ -707,8 +707,8 @@ describe("HomeScreen", () => {
     const listStyle = StyleSheet.flatten(
       screen.getByTestId("home-dj-list").props.contentContainerStyle,
     );
-    const newDjCircleStyle = StyleSheet.flatten(
-      screen.getByTestId("new-dj-circle").props.style,
+    const creationCircleStyle = StyleSheet.flatten(
+      screen.getByTestId("home-create-circle").props.style,
     );
 
     expect(listStyle).toEqual(expect.objectContaining({
@@ -716,7 +716,7 @@ describe("HomeScreen", () => {
       width: { xs: undefined, xl: "100%" },
     }));
     expect(screen.getByTestId("dj-avatar").props.desktopSize).toBe("xl");
-    expect(newDjCircleStyle).toEqual(expect.objectContaining({
+    expect(creationCircleStyle).toEqual(expect.objectContaining({
       width: { xs: 48, xl: 96 },
       height: { xs: 48, xl: 96 },
     }));

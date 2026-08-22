@@ -235,32 +235,43 @@ describe("BottomChrome", () => {
     expect(screen.queryByTestId("bottom-chrome")).toBeNull();
   });
 
-  it("spans the medium canvas and centers a stack capped at 720", async () => {
+  it("aligns medium chrome to the same page margins as route content", async () => {
     mockWindowWidth = 1023;
     const screen = await render(<BottomChrome />);
 
     expect(screen.getByTestId("bottom-chrome")).toHaveStyle({
-      width: 1023,
+      left: 24,
+      width: 975,
       alignItems: "center",
     });
     expect(screen.getByTestId("bottom-chrome-stack")).toHaveStyle({
-      width: "88%",
-      maxWidth: 720,
+      width: "100%",
       alignSelf: "center",
     });
   });
 
-  it("uses only the canvas beside the desktop rail so docked chrome cannot cover route content", async () => {
+  it("uses the page content beside the desktop rail instead of the full canvas", async () => {
     mockWindowWidth = 1280;
     mockInsets = { top: 0, right: 10, bottom: 20, left: 20 };
     const screen = await render(<BottomChrome />);
 
     expect(screen.getByTestId("bottom-chrome")).toHaveStyle({
-      left: 20 + DESKTOP_RAIL_WIDTH,
-      width: 1280 - 20 - DESKTOP_RAIL_WIDTH - 10,
+      left: 20 + DESKTOP_RAIL_WIDTH + 24,
+      width: 1280 - 20 - DESKTOP_RAIL_WIDTH - 10 - 48,
     });
     expect(screen.getByTestId("bottom-chrome-stack")).toHaveStyle({
       width: "100%",
+    });
+  });
+
+  it("caps wide desktop chrome to the same 1232px usable content width", async () => {
+    mockWindowWidth = 1916;
+    mockInsets = { top: 0, right: 0, bottom: 20, left: 0 };
+    const screen = await render(<BottomChrome />);
+
+    expect(screen.getByTestId("bottom-chrome")).toHaveStyle({
+      left: 386,
+      width: 1232,
     });
   });
 

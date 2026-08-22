@@ -1,4 +1,4 @@
-import { Link, usePathname } from "expo-router";
+import { Link, usePathname, type Href } from "expo-router";
 import {
   Compass,
   Heart,
@@ -18,11 +18,12 @@ import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 
 type RailItem = {
-  href: "/(app)" | "/(app)/discover" | "/create-dj" | "/favorites" | "/(app)/profile";
+  href?: Href;
   icon: LucideIcon;
   label: string;
   area: DesktopRailArea;
   primary?: boolean;
+  disabled?: boolean;
 };
 
 type DesktopRailArea = "home" | "discover" | "create" | "favorites" | "profile";
@@ -59,15 +60,15 @@ export function resolveDesktopRailArea(pathname: string): DesktopRailArea | null
   return null;
 }
 
-export function DesktopRail() {
+export function DesktopRail({ ownedDjId }: { ownedDjId?: string | null }) {
   useWebCorePresentation("himu-web-core-presentation/desktop-rail");
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const activeArea = resolveDesktopRailArea(pathname);
-  const [tooltipHref, setTooltipHref] = useState<string | null>(null);
-  const items: RailItem[] = [
+  const [tooltipArea, setTooltipArea] = useState<DesktopRailArea | null>(null);
+  const primaryItems: RailItem[] = [
     {
       href: "/(app)",
       icon: Home,
@@ -80,13 +81,31 @@ export function DesktopRail() {
       label: t("common.navigation.discover"),
       area: "discover",
     },
-    {
-      href: "/create-dj",
-      icon: Sparkles,
-      label: t("dj.create.title"),
-      area: "create",
-      primary: true,
-    },
+  ];
+  const createItem: RailItem = ownedDjId === undefined
+    ? {
+        icon: Sparkles,
+        label: t("common.navigation.create"),
+        area: "create",
+        primary: true,
+        disabled: true,
+      }
+    : ownedDjId
+      ? {
+        href: { pathname: "/create-track", params: { djId: ownedDjId } },
+        icon: Sparkles,
+        label: t("common.navigation.createTrack"),
+        area: "create",
+        primary: true,
+        }
+      : {
+        href: "/create-dj",
+        icon: Sparkles,
+        label: t("dj.create.title"),
+        area: "create",
+        primary: true,
+        };
+  const utilityItems: RailItem[] = [
     {
       href: "/favorites",
       icon: Heart,
@@ -101,6 +120,57 @@ export function DesktopRail() {
     },
   ];
 
+  const renderItem = ({ href, icon: Icon, label, area, primary, disabled }: RailItem) => {
+    const active = activeArea === area;
+    const tooltipVisible = tooltipArea === area;
+    const control = (
+      <Pressable
+        accessibilityHint={label}
+        accessibilityLabel={label}
+        accessibilityRole={disabled ? "button" : "link"}
+        accessibilityState={disabled ? { disabled: true } : undefined}
+        aria-current={!disabled && active ? "page" : undefined}
+        disabled={disabled}
+        onBlur={() => setTooltipArea(null)}
+        onFocus={() => setTooltipArea(area)}
+        onHoverIn={() => setTooltipArea(area)}
+        onHoverOut={() => setTooltipArea(null)}
+        style={({ pressed }) => [
+          styles.item,
+          primary && styles.primaryItem,
+          active && styles.itemActive,
+          tooltipVisible && styles.itemFocused,
+          disabled && styles.itemDisabled,
+          pressed && styles.itemPressed,
+        ]}
+      >
+        <Icon
+          color={
+            primary || active
+              ? theme.colors.primary
+              : theme.colors.onSurfaceVariant
+          }
+          size={22}
+        />
+      </Pressable>
+    );
+
+    return (
+      <View key={area} style={styles.itemWrap}>
+        {href ? <Link href={href} asChild>{control}</Link> : control}
+        {tooltipVisible ? (
+          <View
+            pointerEvents="none"
+            style={styles.tooltip}
+            testID={`desktop-rail-tooltip-${area}`}
+          >
+            <Text variant="labelCaps" numberOfLines={1}>{label}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
   return (
     <View
       accessibilityLabel="Main navigation"
@@ -110,57 +180,21 @@ export function DesktopRail() {
           width: insets.left + DESKTOP_RAIL_WIDTH,
           paddingLeft: insets.left + theme.spacing.stackMd,
           paddingTop: insets.top + theme.spacing.stackLg,
+          paddingBottom: insets.bottom + theme.spacing.stackLg,
         },
       ]}
       testID="desktop-rail"
     >
-      <View style={styles.items}>
-        {items.map(({ href, icon: Icon, label, area, primary }) => {
-          const active = activeArea === area;
-          const tooltipVisible = tooltipHref === href;
-
-          return (
-            <View key={href} style={styles.itemWrap}>
-              <Link href={href} asChild>
-                <Pressable
-                  accessibilityHint={label}
-                  accessibilityLabel={label}
-                  accessibilityRole="link"
-                  aria-current={active ? "page" : undefined}
-                  onBlur={() => setTooltipHref(null)}
-                  onFocus={() => setTooltipHref(href)}
-                  onHoverIn={() => setTooltipHref(href)}
-                  onHoverOut={() => setTooltipHref(null)}
-                  style={({ pressed }) => [
-                    styles.item,
-                    primary && styles.primaryItem,
-                    active && styles.itemActive,
-                    tooltipVisible && styles.itemFocused,
-                    pressed && styles.itemPressed,
-                  ]}
-                >
-                  <Icon
-                    color={
-                      primary || active
-                        ? theme.colors.primary
-                        : theme.colors.onSurfaceVariant
-                    }
-                    size={22}
-                  />
-                </Pressable>
-              </Link>
-              {tooltipVisible ? (
-                <View
-                  pointerEvents="none"
-                  style={styles.tooltip}
-                  testID={`desktop-rail-tooltip-${href}`}
-                >
-                  <Text variant="labelCaps" numberOfLines={1}>{label}</Text>
-                </View>
-              ) : null}
-            </View>
-          );
-        })}
+      <View style={styles.topGroups}>
+        <View style={styles.items} testID="desktop-rail-primary-links">
+          {primaryItems.map(renderItem)}
+        </View>
+        <View testID="desktop-rail-create-action">
+          {renderItem(createItem)}
+        </View>
+      </View>
+      <View style={styles.items} testID="desktop-rail-utility-links">
+        {utilityItems.map(renderItem)}
       </View>
     </View>
   );
@@ -174,12 +208,16 @@ const styles = StyleSheet.create((theme) => ({
     bottom: 0,
     left: 0,
     paddingRight: theme.spacing.stackMd,
+    justifyContent: "space-between",
     backgroundColor: theme.colors.background,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: theme.colors.glassBorder,
   },
   items: {
     gap: theme.spacing.stackSm,
+  },
+  topGroups: {
+    gap: theme.spacing.stackLg,
   },
   item: {
     width: 56,
@@ -203,6 +241,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   itemPressed: {
     opacity: 0.78,
+  },
+  itemDisabled: {
+    opacity: 0.45,
   },
   itemWrap: {
     position: "relative",

@@ -36,7 +36,6 @@ import {
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
-import { useToast } from "@/src/hooks/use-toast";
 import { useVibeCheck } from "@/src/hooks/use-vibe-check";
 import { catalogLabel } from "@/src/i18n/catalog-labels";
 import {
@@ -56,14 +55,12 @@ import { formatHours } from "@/src/utils/format-stats";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
-import { ChevronRight, Play, Plus } from "lucide-react-native";
+import { ChevronRight, Music2, Play, Plus } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
-
-const MAX_OWNED_DJS = 1;
 
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
@@ -71,7 +68,6 @@ export default function HomeScreen() {
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
-  const toast = useToast();
   const online = useOnlineStatus();
   const djsQuery = useDJs();
   const liveQuery = useLiveDJIds();
@@ -108,7 +104,7 @@ export default function HomeScreen() {
   const favorites = favoritesQuery.data;
   const vibe = vibeQuery.data;
 
-  const ownCount = djs?.filter((d) => d.owner_id === user?.id).length ?? 0;
+  const ownedDj = djs?.find((dj) => dj.owner_id === user?.id);
 
   const djsLoading = isInitialQueryLoading(djsQuery);
   const recentLoading = isInitialQueryLoading(recentQuery);
@@ -327,23 +323,28 @@ export default function HomeScreen() {
           ))}
           <Pressable
             onPress={() => {
-              if (ownCount >= MAX_OWNED_DJS) {
-                toast.warning(t("home.djLimit.title"), t("home.djLimit.message", {
-                  limit: MAX_OWNED_DJS,
-                }));
+              if (ownedDj) {
+                router.push({
+                  pathname: "/create-track",
+                  params: { djId: ownedDj.id },
+                });
                 return;
               }
               router.push("/create-dj");
             }}
             style={({ pressed }) => [styles.newDJSlot, pressed && styles.pressed]}
             accessibilityRole="button"
-            accessibilityLabel={t("home.newDj")}
+            accessibilityLabel={ownedDj ? t("home.createTrack") : t("home.newDj")}
           >
-            <View testID="new-dj-circle" style={styles.newDJCircle}>
-              <Plus size={24} color={theme.colors.onSurfaceVariant} />
+            <View testID="home-create-circle" style={styles.newDJCircle}>
+              {ownedDj ? (
+                <Music2 size={24} color={theme.colors.primary} />
+              ) : (
+                <Plus size={24} color={theme.colors.onSurfaceVariant} />
+              )}
             </View>
             <Text variant="bodyMd" numberOfLines={1} style={styles.newDJLabel}>
-              {t("home.newDj")}
+              {ownedDj ? t("home.createTrack") : t("home.newDj")}
             </Text>
             <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.6} style={styles.newDJLabel}>
               {t("home.create")}

@@ -21,6 +21,7 @@ export const home = {
   djsUnavailable: "Tus DJs no están disponibles",
   liveDjsUnavailable: "No se pudo actualizar el estado en vivo",
   newDj: "Nuevo DJ",
+  createTrack: "Crear track",
   create: "Crear",
   djLimit: {
     title: "Límite de DJs alcanzado",

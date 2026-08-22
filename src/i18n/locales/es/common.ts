@@ -33,6 +33,8 @@ export const common = {
   navigation: {
     home: "Inicio",
     discover: "Descubrir",
+    create: "Crear",
+    createTrack: "Crear track",
     profile: "Perfil",
   },
   player: {

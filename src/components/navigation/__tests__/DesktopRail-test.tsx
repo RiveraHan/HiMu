@@ -11,7 +11,7 @@ jest.mock("expo-router", () => {
   const React = require("react");
 
   return {
-    Link: ({ children, href }: { children: React.ReactElement; href: string }) =>
+    Link: ({ children, href }: { children: React.ReactElement; href: unknown }) =>
       React.cloneElement(children, { testID: `desktop-rail-link-${href}`, href }),
     usePathname: () => mockPathname,
   };
@@ -29,7 +29,7 @@ describe("DesktopRail", () => {
   });
 
   it("marks the current navigation link and keeps Community out of desktop navigation", async () => {
-    const screen = await render(<DesktopRail />);
+    const screen = await render(<DesktopRail ownedDjId="owned-dj" />);
 
     expect(screen.getByRole("link", { name: "Discover" }).props["aria-current"])
       .toBe("page");
@@ -39,14 +39,14 @@ describe("DesktopRail", () => {
   });
 
   it.each([
-    ["/create-track", "Create your DJ"],
-    ["/train-dj/dj-7", "Create your DJ"],
+    ["/create-track", "Create track"],
+    ["/train-dj/dj-7", "Create track"],
     ["/account-settings", "Profile"],
     ["/preferences", "Profile"],
     ["/vibe-check", "Profile"],
   ])("maps %s to its navigation area", async (pathname, currentLabel) => {
     mockPathname = pathname;
-    const screen = await render(<DesktopRail />);
+    const screen = await render(<DesktopRail ownedDjId="owned-dj" />);
 
     expect(screen.getByRole("link", { name: currentLabel }).props["aria-current"])
       .toBe("page");
@@ -54,25 +54,56 @@ describe("DesktopRail", () => {
 
   it("does not assign unrelated DJ detail routes to a navigation area", async () => {
     mockPathname = "/dj/dj-7";
-    const screen = await render(<DesktopRail />);
+    const screen = await render(<DesktopRail ownedDjId="owned-dj" />);
 
     expect(screen.getAllByRole("link").every((link) => link.props["aria-current"] === undefined))
       .toBe(true);
   });
 
-  it("uses an 88-point rail with 44-point links, safe-area geometry, and keyboard-visible labels", async () => {
+  it("separates primary, creation, and utility navigation instead of clustering every icon", async () => {
+    const screen = await render(<DesktopRail ownedDjId="owned-dj" />);
+
+    expect(screen.getByTestId("desktop-rail-primary-links").children).toHaveLength(2);
+    expect(screen.getByTestId("desktop-rail-create-action").children).toHaveLength(1);
+    expect(screen.getByTestId("desktop-rail-utility-links").children).toHaveLength(2);
+    expect(screen.getByTestId("desktop-rail")).toHaveStyle({
+      justifyContent: "space-between",
+    });
+  });
+
+  it("uses an 88-point rail with 44-point links and sends owners to track creation", async () => {
     mockInsets = { top: 12, right: 0, bottom: 0, left: 20 };
-    const screen = await render(<DesktopRail />);
-    const create = screen.getByRole("link", { name: "Create your DJ" });
+    const screen = await render(<DesktopRail ownedDjId="owned-dj" />);
+    const create = screen.getByRole("link", { name: "Create track" });
 
     expect(screen.getByTestId("desktop-rail")).toHaveStyle({ width: 108 });
     expect(create).toHaveStyle({ minWidth: 44, minHeight: 44 });
-    expect(screen.queryByTestId("desktop-rail-tooltip-/create-dj")).toBeNull();
+    expect(screen.queryByTestId("desktop-rail-tooltip-create")).toBeNull();
     await fireEvent(create, "focus");
 
-    expect(screen.getByTestId("desktop-rail-tooltip-/create-dj")).toHaveTextContent(
-      "Create your DJ",
+    expect(screen.getByTestId("desktop-rail-tooltip-create")).toHaveTextContent(
+      "Create track",
     );
-    expect(screen.getByTestId("desktop-rail-link-/create-dj").props.href).toBe("/create-dj");
+    expect(create.props.href).toEqual({
+      pathname: "/create-track",
+      params: { djId: "owned-dj" },
+    });
+  });
+
+  it("keeps DJ creation as the primary action until the account owns a DJ", async () => {
+    const screen = await render(<DesktopRail ownedDjId={null} />);
+
+    expect(screen.getByRole("link", { name: "Create your DJ" }).props.href)
+      .toBe("/create-dj");
+  });
+
+  it("keeps creation neutral and disabled until DJ ownership is known", async () => {
+    const screen = await render(<DesktopRail ownedDjId={undefined} />);
+
+    const create = screen.getByRole("button", { name: "Create" });
+    expect(create).toBeDisabled();
+    expect(create.props.accessibilityState).toEqual({ disabled: true });
+    expect(screen.queryByRole("link", { name: "Create your DJ" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Create track" })).toBeNull();
   });
 });
