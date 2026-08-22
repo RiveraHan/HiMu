@@ -6,7 +6,11 @@ import { ScreenHeader } from "@/src/components/ScreenHeader";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 import { FormStepRail, type FormStep } from "./FormStepRail";
-import { formLayoutContract, responsiveFormStyle } from "./form-layout";
+import {
+  formLayoutContract,
+  formScrollViewProps,
+  responsiveFormStyle,
+} from "./form-layout";
 import { StickyReviewPanel } from "./StickyReviewPanel";
 
 type Props = {
@@ -35,10 +39,8 @@ export function ResponsiveFormShell({
 }: Props) {
   return (
     <ScrollView
+      {...formScrollViewProps}
       testID="responsive-form-scroll-view"
-      style={styles.scrollView}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
     >
       <ScreenCanvas variant="wide" testID="responsive-form-shell" style={styles.shell}>
         <ScreenHeader title={title} subtitle={description} />
@@ -58,8 +60,6 @@ export function ResponsiveFormShell({
 }
 
 const styles = StyleSheet.create((theme) => ({
-  scrollView: formLayoutContract.scrollStyle,
-  scrollContent: formLayoutContract.scrollContentStyle,
   shell: {
     gap: theme.spacing.stackLg,
     paddingTop: theme.spacing.stackMd,

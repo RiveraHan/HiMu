@@ -59,10 +59,17 @@ export const formLayoutContract = {
     desktopFormLayout.reviewPosition,
   ),
   editorFlex: responsiveFormStyle(0, 1),
-  scrollStyle: { flex: 1 },
+  scrollStyle: { flex: 1, overflow: "scroll" },
   scrollContentStyle: { flexGrow: 1 },
   footerStyle: {
     position: compactFormLayout.footerPosition,
     flexShrink: 0,
   },
 } as const;
+
+/** Exact ScrollView props used by the form shell and exercised in the web test. */
+export const formScrollViewProps = {
+  style: formLayoutContract.scrollStyle,
+  contentContainerStyle: formLayoutContract.scrollContentStyle,
+  keyboardShouldPersistTaps: "handled" as const,
+};
