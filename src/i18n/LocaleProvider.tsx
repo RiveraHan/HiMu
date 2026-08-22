@@ -40,6 +40,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
   const [localState, setLocalState] = useState<StoredLanguageState | null>(null);
   const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [retryVersion, setRetryVersion] = useState(0);
   const syncInFlightRef = useRef(false);
   const syncGenerationRef = useRef(0);
@@ -107,6 +108,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     pendingAttemptRef.current = null;
     appliedRemoteRef.current = null;
     setIsSaving(false);
+    setSaveError(false);
 
     if (!userId) {
       setHydratedUserId(null);
@@ -162,6 +164,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
             await updateSettings({ language: localState.preference });
           } catch {
             if (scopeIsCurrent(syncGeneration, userId)) {
+              setSaveError(true);
               showPersistenceError();
             }
             return;
@@ -176,6 +179,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
             });
           } catch {
             if (scopeIsCurrent(syncGeneration, userId)) {
+              setSaveError(true);
               showPersistenceError();
             }
             return;
@@ -184,6 +188,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
           if (!scopeIsCurrent(syncGeneration, userId)) return;
 
           appliedRemoteRef.current = `${userId}:${settings.language}`;
+          setSaveError(false);
           setLocalState({
             preference: localState.preference,
             pendingSync: false,
@@ -215,6 +220,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
         await writeLanguageState(userId, cleanState);
       } catch {
         if (scopeIsCurrent(cleanWriteGeneration, userId)) {
+          setSaveError(true);
           showPersistenceError();
         }
       }
@@ -233,6 +239,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
 
   const setPreference = useCallback(
     (next: LanguagePreference): Promise<void> => {
+      setSaveError(false);
       applyPreference(next);
       if (!userId) return Promise.resolve();
 
@@ -252,6 +259,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
           await writeLanguageState(userId, pendingState);
         } catch {
           if (scopeIsCurrent(syncGeneration, userId)) {
+            setSaveError(true);
             showPersistenceError();
           }
         }
@@ -271,6 +279,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
             await updateSettings({ language: next });
           } catch {
             if (scopeIsCurrent(syncGeneration, userId)) {
+              setSaveError(true);
               showPersistenceError();
             }
             return;
@@ -286,6 +295,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
             await writeLanguageState(userId, cleanState);
           } catch {
             if (scopeIsCurrent(syncGeneration, userId)) {
+              setSaveError(true);
               showPersistenceError();
             }
             return;
@@ -294,6 +304,7 @@ export function LocaleProvider({ children }: PropsWithChildren) {
           if (!scopeIsCurrent(syncGeneration, userId)) return;
 
           appliedRemoteRef.current = `${userId}:${settings.language}`;
+          setSaveError(false);
           setLocalState(cleanState);
         } finally {
           if (scopeIsCurrent(syncGeneration, userId)) {
@@ -313,14 +324,30 @@ export function LocaleProvider({ children }: PropsWithChildren) {
     ],
   );
 
+  const retryPreference = useCallback(() => {
+    pendingAttemptRef.current = null;
+    appliedRemoteRef.current = null;
+    setSaveError(false);
+    setRetryVersion((version) => version + 1);
+  }, []);
+
   const value = useMemo(
     () => ({
       preference,
       resolvedLanguage: resolveLanguage(preference, deviceLanguageCode),
       setPreference,
       isSaving,
+      saveError,
+      retryPreference,
     }),
-    [deviceLanguageCode, isSaving, preference, setPreference],
+    [
+      deviceLanguageCode,
+      isSaving,
+      preference,
+      retryPreference,
+      saveError,
+      setPreference,
+    ],
   );
 
   if (userId && hydratedUserId !== userId) return null;

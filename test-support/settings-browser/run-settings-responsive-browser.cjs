@@ -1,6 +1,7 @@
 const { spawn } = require("node:child_process");
 const { Buffer } = require("node:buffer");
 const fs = require("node:fs");
+const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 
@@ -8,7 +9,7 @@ const { getDefaultConfig } = require("@expo/metro-config");
 const { runBuild } = require("@expo/metro/metro");
 
 const harnessDirectory = path.dirname(path.resolve(process.argv[1]));
-const projectRoot = path.resolve(harnessDirectory, "../../..");
+const projectRoot = path.resolve(harnessDirectory, "../..");
 const fixtureEntry = path.join(
   harnessDirectory,
   "SettingsWorkflow-browser-fixture.tsx",
@@ -21,6 +22,14 @@ const authStub = path.join(
 const routerStub = path.join(
   harnessDirectory,
   "settings-expo-router-browser-stub.ts",
+);
+const authScopeStub = path.join(
+  harnessDirectory,
+  "settings-auth-scope-browser-stub.ts",
+);
+const secureStorageStub = path.join(
+  harnessDirectory,
+  "settings-secure-storage-browser-stub.ts",
 );
 const evidenceDirectory = path.join(
   projectRoot,
@@ -113,6 +122,21 @@ async function resize(cdp, width, height) {
   );
 }
 
+async function navigate(cdp, url, route, direction) {
+  await cdp.send("Page.navigate", { url });
+  await waitFor(async () => {
+    try {
+      return await evaluate(
+        cdp,
+        `window.location.pathname === ${JSON.stringify(route)} && document.readyState === 'complete'`,
+      );
+    } catch {
+      return false;
+    }
+  }, `Browser did not navigate to ${route}`);
+  return readSettings(cdp, route, direction);
+}
+
 async function readSettings(cdp, route, direction) {
   let lastState;
   try {
@@ -153,6 +177,56 @@ async function clickLabel(cdp, label, index = 0) {
   );
 }
 
+async function chooseNextSelectOptionByKeyboard(cdp, testID) {
+  const point = await evaluate(
+    cdp,
+    `(() => {
+      const target = document.querySelector('[data-testid=${JSON.stringify(testID)}]');
+      if (!target) throw new Error('Missing production select: ${testID}');
+      const rect = target.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`,
+  );
+  await cdp.send("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    button: "left",
+    clickCount: 1,
+    x: point.x,
+    y: point.y,
+  });
+  await cdp.send("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    button: "left",
+    clickCount: 1,
+    x: point.x,
+    y: point.y,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "ArrowDown",
+    code: "ArrowDown",
+    windowsVirtualKeyCode: 40,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "ArrowDown",
+    code: "ArrowDown",
+    windowsVirtualKeyCode: 40,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+  });
+}
+
 async function capture(cdp, route, width, height) {
   const capture = await cdp.send("Page.captureScreenshot", {
     format: "png",
@@ -180,10 +254,10 @@ async function main() {
   );
   let browser;
   let cdp;
+  let server;
 
   try {
     const bundlePath = path.join(outputDirectory, "fixture.js");
-    const htmlPath = path.join(outputDirectory, "fixture.html");
     const profileDirectory = path.join(outputDirectory, "chrome-profile");
     const metroConfig = getDefaultConfig(projectRoot);
     const hookModules = new Set([
@@ -192,6 +266,7 @@ async function main() {
       "@/src/hooks/use-music-preferences",
       "@/src/hooks/use-online-status",
       "@/src/hooks/use-profile",
+      "@/src/hooks/use-settings",
       "@/src/hooks/use-tab-bar-padding",
       "@/src/hooks/use-toast",
     ]);
@@ -212,11 +287,15 @@ async function main() {
         ? hookStub
         : moduleName === "@/src/api/auth"
           ? authStub
-          : moduleName === "expo-router"
-            ? routerStub
-            : moduleName.startsWith("@/")
-              ? path.join(projectRoot, moduleName.slice(2))
-              : moduleName;
+          : moduleName === "@/src/api/auth-scope"
+            ? authScopeStub
+            : moduleName === "@/src/lib/secure-storage"
+              ? secureStorageStub
+              : moduleName === "expo-router"
+                ? routerStub
+                : moduleName.startsWith("@/")
+                  ? path.join(projectRoot, moduleName.slice(2))
+                  : moduleName;
       return context.resolveRequest(webContext, target, platform);
     };
 
@@ -227,9 +306,7 @@ async function main() {
       minify: false,
       out: bundlePath,
     });
-    fs.writeFileSync(
-      htmlPath,
-      `<!doctype html><html><head><meta charset="utf-8"><style>
+    const fixtureHtml = `<!doctype html><html><head><meta charset="utf-8"><style>
         html, body, #root { display: flex; margin: 0; width: 100%; height: 100%; overflow: hidden; }
       </style></head><body><div id="root"></div><script>
         globalThis.process = { env: {
@@ -246,8 +323,31 @@ async function main() {
         window.addEventListener("unhandledrejection", (event) => {
           window.__HIMU_BROWSER_ERROR__ = String(event.reason);
         });
-      </script><script src="${path.basename(bundlePath)}"></script></body></html>`,
-    );
+      </script><script src="/fixture.js"></script></body></html>`;
+    const bundle = fs.readFileSync(bundlePath);
+    server = http.createServer((request, response) => {
+      if (request.url === "/fixture.js") {
+        response.writeHead(200, { "content-type": "text/javascript" });
+        response.end(bundle);
+        return;
+      }
+      if (request.url === "/preferences" || request.url === "/account-settings") {
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+        response.end(fixtureHtml);
+        return;
+      }
+      response.writeHead(404);
+      response.end("Not found");
+    });
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const serverAddress = server.address();
+    if (!serverAddress || typeof serverAddress === "string") {
+      throw new Error("Settings HTTP harness did not publish a port");
+    }
+    const origin = `http://127.0.0.1:${serverAddress.port}`;
 
     browser = spawn(
       chrome,
@@ -256,10 +356,9 @@ async function main() {
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
-        "--allow-file-access-from-files",
         "--remote-debugging-port=0",
         `--user-data-dir=${profileDirectory}`,
-        `file://${htmlPath}`,
+        `${origin}/preferences`,
       ],
       { stdio: "ignore" },
     );
@@ -280,10 +379,18 @@ async function main() {
     cdp = await connectCdp(pages[0].webSocketDebuggerUrl);
     await cdp.send("Runtime.enable");
     await cdp.send("Page.enable");
+    await waitFor(async () => {
+      try {
+        return await evaluate(
+          cdp,
+          `window.location.pathname === '/preferences' && document.readyState === 'complete'`,
+        );
+      } catch {
+        return false;
+      }
+    }, "Initial preferences route did not finish loading");
     await resize(cdp, 390, 844);
-    await cdp.send("Page.reload", { ignoreCache: true });
-
-    await readSettings(cdp, "preferences", "column");
+    await readSettings(cdp, "/preferences", "column");
     await clickLabel(cdp, "Chill & Ambient");
     await waitFor(
       async () =>
@@ -297,7 +404,7 @@ async function main() {
     );
     await clickLabel(cdp, "Ambient");
     const compactPreferences = await waitFor(async () => {
-      const state = await readSettings(cdp, "preferences", "column");
+      const state = await readSettings(cdp, "/preferences", "column");
       return state.preferenceGenres.includes("Ambient") ? state : null;
     }, "Preference save did not settle");
     const compactPreferencesScreenshot = await capture(
@@ -308,7 +415,7 @@ async function main() {
     );
 
     await resize(cdp, 1440, 900);
-    const desktopPreferences = await readSettings(cdp, "preferences", "row");
+    const desktopPreferences = await readSettings(cdp, "/preferences", "row");
     const desktopPreferencesScreenshot = await capture(
       cdp,
       "preferences",
@@ -316,26 +423,67 @@ async function main() {
       900,
     );
 
-    await evaluate(cdp, `window.__HIMU_SETTINGS_ROUTE__('account')`);
-    const desktopAccount = await readSettings(cdp, "account", "row");
+    const desktopAccount = await navigate(
+      cdp,
+      `${origin}/account-settings`,
+      "/account-settings",
+      "row",
+    );
     const desktopAccountScreenshot = await capture(cdp, "account", 1440, 900);
 
+    await evaluate(
+      cdp,
+      `window.localStorage.setItem('himu.browser.fail-language-once', 'true')`,
+    );
+    await chooseNextSelectOptionByKeyboard(cdp, "language-preference-select");
+    const failedLanguageAccount = await waitFor(async () => {
+      const state = await readSettings(cdp, "/account-settings", "row");
+      return state.languagePreference === "en" &&
+        state.languageSaveErrorVisible &&
+        state.counters.languageFailures === 1
+        ? state
+        : null;
+    }, "Language failure state did not expose owner-backed recovery");
+    await clickLabel(cdp, "Retry");
+    const savedLanguageAccount = await waitFor(async () => {
+      const state = await readSettings(cdp, "/account-settings", "row");
+      const stored = state.storedLanguageState
+        ? JSON.parse(state.storedLanguageState)
+        : null;
+      return state.languagePreference === "en" &&
+        !state.languageDisabled &&
+        !state.languageSaveErrorVisible &&
+        state.remoteLanguagePreference === "en" &&
+        stored?.preference === "en" &&
+        stored?.pendingSync === false
+        ? state
+        : null;
+    }, "Language retry did not persist through the actual locale owner");
+
     await resize(cdp, 390, 844);
-    const compactAccount = await readSettings(cdp, "account", "column");
+    const compactAccount = await readSettings(cdp, "/account-settings", "column");
     const compactAccountScreenshot = await capture(cdp, "account", 390, 844);
 
-    await evaluate(cdp, `window.__HIMU_SETTINGS_SET_LOCALE_SAVING__(true)`);
-    const savingAccount = await waitFor(async () => {
-      const state = await readSettings(cdp, "account", "column");
-      return state.languageDisabled ? state : null;
-    }, "Language save state did not disable the production row");
-    await evaluate(cdp, `window.__HIMU_SETTINGS_SET_LOCALE_SAVING__(false)`);
-    await waitFor(async () => {
-      const state = await readSettings(cdp, "account", "column");
-      return !state.languageDisabled ? state : null;
-    }, "Language row did not recover from save state");
+    const remountedPreferences = await navigate(
+      cdp,
+      `${origin}/preferences`,
+      "/preferences",
+      "column",
+    );
+    if (!remountedPreferences.preferenceGenres.includes("Ambient")) {
+      throw new Error("Music preference did not survive pathname navigation");
+    }
+    const remountedAccount = await navigate(
+      cdp,
+      `${origin}/account-settings`,
+      "/account-settings",
+      "column",
+    );
+    if (remountedAccount.languagePreference !== "en") {
+      throw new Error("Language preference did not survive route remount");
+    }
 
-    const beforeSession = compactAccount.counters;
+    const beforeSession = remountedAccount.counters;
     await clickLabel(cdp, "Sign Out");
     await waitFor(
       async () =>
@@ -348,7 +496,7 @@ async function main() {
       "Sign-out confirmation did not render",
     );
     await clickLabel(cdp, "Cancel");
-    const afterCancel = await readSettings(cdp, "account", "column");
+    const afterCancel = await readSettings(cdp, "/account-settings", "column");
     await clickLabel(cdp, "Sign Out");
     await waitFor(
       async () =>
@@ -362,14 +510,14 @@ async function main() {
     );
     await clickLabel(cdp, "Sign Out", 1);
     const afterConfirm = await waitFor(async () => {
-      const state = await readSettings(cdp, "account", "column");
+      const state = await readSettings(cdp, "/account-settings", "column");
       return state.counters.signOuts === 1 && state.counters.redirects === 1
         ? state
         : null;
     }, "Confirmed sign out did not flush and redirect");
 
     await resize(cdp, 720, 422);
-    await readSettings(cdp, "account", "column");
+    await readSettings(cdp, "/account-settings", "column");
     const zoomReachability = await evaluate(
       cdp,
       `(async () => {
@@ -404,7 +552,10 @@ async function main() {
           desktopPreferences,
           desktopAccount,
           compactAccount,
-          savingAccount,
+          failedLanguageAccount,
+          savedLanguageAccount,
+          remountedPreferences,
+          remountedAccount,
         },
         session: { beforeSession, afterCancel: afterCancel.counters, afterConfirm: afterConfirm.counters },
         zoomReachability,
@@ -437,6 +588,9 @@ async function main() {
           new Promise((resolve) => setTimeout(resolve, 2000)),
         ]);
       }
+    }
+    if (server) {
+      await new Promise((resolve) => server.close(resolve));
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
     fs.rmSync(outputDirectory, {

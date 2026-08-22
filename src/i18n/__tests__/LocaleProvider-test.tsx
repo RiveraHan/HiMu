@@ -261,6 +261,45 @@ test("a remote failure keeps Spanish pending and shows feedback", async () => {
   );
 });
 
+test("exposes a failed pending sync and retries it explicitly", async () => {
+  mockUser = { id: "user-1" };
+  mockSettings = preferences("en");
+  mockMutateAsync
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce(undefined);
+
+  await renderProvider();
+  await waitFor(() => expect(currentLocale?.preference).toBe("en"));
+  await act(async () => currentLocale!.setPreference("es"));
+
+  expect(currentLocale?.saveError).toBe(true);
+  expect(currentLocale?.isSaving).toBe(false);
+
+  await act(async () => currentLocale!.retryPreference!());
+  await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(currentLocale?.saveError).toBe(false));
+  expect(writeLanguageState).toHaveBeenCalledWith("user-1", {
+    preference: "es",
+    pendingSync: false,
+  });
+});
+
+test("retries a failed clean local persistence write explicitly", async () => {
+  mockUser = { id: "user-1" };
+  mockSettings = preferences("en");
+  jest.mocked(writeLanguageState)
+    .mockRejectedValueOnce(new Error("disk full"))
+    .mockResolvedValueOnce(undefined);
+
+  await renderProvider();
+  await waitFor(() => expect(currentLocale?.saveError).toBe(true));
+  expect(writeLanguageState).toHaveBeenCalledTimes(1);
+
+  await act(async () => currentLocale!.retryPreference!());
+  await waitFor(() => expect(writeLanguageState).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(currentLocale?.saveError).toBe(false));
+});
+
 test("retries a failed pending sync on foreground without concurrent duplicates", async () => {
   const retry = deferred<void>();
   let appStateListener: ((state: AppStateStatus) => void) | null = null;

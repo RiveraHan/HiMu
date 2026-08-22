@@ -1,23 +1,23 @@
-import "../../../src/theme";
-import "../../../src/i18n";
+import "../../src/theme";
+import "../../src/i18n";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect } from "react";
 // @ts-expect-error React DOM is an installed runtime dependency without local type declarations.
 import { createRoot } from "react-dom/client";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import AccountSettingsScreen from "../../account-settings";
-import MusicPreferencesScreen from "../../preferences";
-import { ConfirmDialogHost } from "../../../src/components/ConfirmDialog";
-import { LocaleContext } from "../../../src/i18n/use-locale";
-import type { LanguagePreference } from "../../../src/i18n/types";
+import AccountSettingsScreen from "../../app/account-settings";
+import MusicPreferencesScreen from "../../app/preferences";
+import { ConfirmDialogHost } from "../../src/components/ConfirmDialog";
+import { LocaleProvider } from "../../src/i18n/LocaleProvider";
 import {
   readPersistedPreferences,
+  readRemoteLanguagePreference,
   readSettingsCounters,
 } from "./settings-browser-hooks";
 
-type RouteName = "preferences" | "account";
+type RouteName = "/preferences" | "/account-settings";
 
 type SettingsSnapshot = {
   route: RouteName;
@@ -34,6 +34,11 @@ type SettingsSnapshot = {
   languageDisabled: boolean;
   legalLabels: string[];
   legalMissingVisible: boolean;
+  languagePreference: string | null;
+  languageSaveErrorVisible: boolean;
+  remoteLanguagePreference: string;
+  storedLanguageState: string | null;
+  hasRouteTitle: boolean;
   counters: Record<string, number>;
 };
 
@@ -41,8 +46,6 @@ declare global {
   interface Window {
     __HIMU_BROWSER_ERROR__?: string;
     __HIMU_SETTINGS_READY__?: boolean;
-    __HIMU_SETTINGS_ROUTE__?: (route: RouteName) => void;
-    __HIMU_SETTINGS_SET_LOCALE_SAVING__?: (saving: boolean) => void;
     __HIMU_SETTINGS_READ__?: () => SettingsSnapshot;
     __HIMU_SETTINGS_COUNTERS__?: Record<string, number>;
   }
@@ -64,7 +67,7 @@ function elementsByLabel(label: string): HTMLElement[] {
 function focusLabels() {
   return Array.from(
     document.querySelectorAll<HTMLElement>(
-      'input, textarea, [role="button"], [role="link"], [role="slider"]',
+      'input, select, textarea, [role="button"], [role="link"], [role="slider"]',
     ),
   )
     .filter(
@@ -80,41 +83,25 @@ const queryClient = new QueryClient({
 });
 
 function SettingsBrowserApp() {
-  const [route, setRoute] = useState<RouteName>("preferences");
-  const [preference, setPreference] = useState<LanguagePreference>("system");
-  const [localeSaving, setLocaleSaving] = useState(false);
-  const locale = useMemo(
-    () => ({
-      preference,
-      resolvedLanguage: "en" as const,
-      setPreference: async (next: LanguagePreference) => {
-        setLocaleSaving(true);
-        setPreference(next);
-        await Promise.resolve();
-        setLocaleSaving(false);
-      },
-      isSaving: localeSaving,
-    }),
-    [localeSaving, preference],
-  );
+  const route = window.location.pathname as RouteName;
+  if (route !== "/preferences" && route !== "/account-settings") {
+    throw new Error(`Unsupported settings browser route: ${route}`);
+  }
 
   useEffect(() => {
-    window.__HIMU_SETTINGS_ROUTE__ = setRoute;
-    window.__HIMU_SETTINGS_SET_LOCALE_SAVING__ = setLocaleSaving;
     window.__HIMU_SETTINGS_READ__ = () => {
-      const activeRoute: RouteName = document.querySelector(
-        '[data-testid="preferences-settings-grid"]',
-      )
-        ? "preferences"
-        : "account";
+      const activeRoute = window.location.pathname as RouteName;
       const grid = testElement(
-        activeRoute === "preferences"
+        activeRoute === "/preferences"
           ? "preferences-settings-grid"
           : "account-settings-grid",
       );
       const firstItem = grid.firstElementChild as HTMLElement | null;
       if (!firstItem) throw new Error("Settings grid has no production zones");
       const language = elementsByLabel("Language")[0];
+      const languageSelect = document.querySelector<HTMLSelectElement>(
+        '[data-testid="language-preference-select"]',
+      );
       const ambient = elementsByLabel("Ambient")[0];
       const legalLabels = Array.from(
         document.querySelectorAll<HTMLElement>('[role="link"][aria-label]'),
@@ -135,11 +122,29 @@ function SettingsBrowserApp() {
         ambientSelected:
           ambient?.getAttribute("aria-selected") === "true" ||
           ambient?.querySelector("svg") !== null,
-        languageValue: language?.textContent?.replace(/\s+/g, " ").trim() ?? null,
-        languageDisabled: language?.getAttribute("aria-disabled") === "true",
+        languageValue:
+          languageSelect?.selectedOptions[0]?.textContent?.trim() ??
+          language?.textContent?.replace(/\s+/g, " ").trim() ??
+          null,
+        languageDisabled:
+          languageSelect?.disabled ??
+          language?.getAttribute("aria-disabled") === "true",
         legalLabels,
         legalMissingVisible:
           document.body.textContent?.includes("Legal links are unavailable") ?? false,
+        languagePreference: languageSelect?.value ?? null,
+        languageSaveErrorVisible:
+          document.querySelector('[role="alert"]')?.textContent?.includes(
+            "couldn't sync your preference",
+          ) ?? false,
+        remoteLanguagePreference: readRemoteLanguagePreference(),
+        storedLanguageState: window.localStorage.getItem(
+          "himu.language.browser-listener",
+        ),
+        hasRouteTitle:
+          activeRoute === "/preferences"
+            ? document.body.textContent?.includes("Music Preferences") ?? false
+            : document.body.textContent?.includes("Settings") ?? false,
         counters: readSettingsCounters(),
       };
     };
@@ -147,14 +152,14 @@ function SettingsBrowserApp() {
   }, []);
 
   return (
-    <LocaleContext.Provider value={locale}>
-      {route === "preferences" ? (
+    <LocaleProvider>
+      {route === "/preferences" ? (
         <MusicPreferencesScreen />
       ) : (
         <AccountSettingsScreen />
       )}
       <ConfirmDialogHost />
-    </LocaleContext.Provider>
+    </LocaleProvider>
   );
 }
 

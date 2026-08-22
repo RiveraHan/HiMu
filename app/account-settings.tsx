@@ -3,6 +3,7 @@ import { usePlayer } from "@/src/audio/use-player";
 import {
   ScreenHeader,
   ScreenScrollView,
+  LanguagePreferencePicker,
   SettingsDesktopGrid,
   SettingsDesktopGridItem,
   SettingsInfoRow,
@@ -16,21 +17,18 @@ import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useProfile } from "@/src/hooks/use-profile";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useToast } from "@/src/hooks/use-toast";
-import { useLocale } from "@/src/i18n/use-locale";
 import { publicHttpsUrl } from "@/src/utils/public-url";
 import * as Device from "expo-device";
 import { router } from "expo-router";
 import {
-  ChevronDown,
   FileText,
   Gem,
-  Languages,
   LogOut,
   Mail,
   Smartphone,
   ShieldCheck,
 } from "lucide-react-native";
-import { Alert, Linking, Pressable } from "react-native";
+import { Linking, Pressable } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -47,7 +45,6 @@ export default function AccountSettingsScreen() {
   const { flushListeningStats } = usePlayer();
   const confirm = useConfirm();
   const toast = useToast();
-  const { preference, resolvedLanguage, setPreference, isSaving } = useLocale();
   const profileOfflineWithoutData =
     !online &&
     profile === undefined &&
@@ -83,24 +80,6 @@ export default function AccountSettingsScreen() {
     } catch {
       toast.error(t("common.errors.generic"));
     }
-  };
-
-  const pickLanguage = () => {
-    Alert.alert(t("settings.sections.language"), undefined, [
-      {
-        text: t("settings.language.system"),
-        onPress: () => void setPreference("system"),
-      },
-      {
-        text: t("settings.language.en"),
-        onPress: () => void setPreference("en"),
-      },
-      {
-        text: t("settings.language.es"),
-        onPress: () => void setPreference("es"),
-      },
-      { text: t("common.actions.cancel"), style: "cancel" },
-    ]);
   };
 
   const onSignOut = async () => {
@@ -180,20 +159,7 @@ export default function AccountSettingsScreen() {
 
         <SettingsDesktopGridItem testID="account-language-zone">
           <SettingsSection title={t("settings.sections.language")}>
-            <SettingsInfoRow
-              icon={<Languages size={20} color={theme.colors.onSurfaceVariant} />}
-              label={t("settings.language.label")}
-              value={
-                preference === "system"
-                  ? t("settings.language.systemResolved", {
-                      language: t(`settings.language.${resolvedLanguage}`),
-                    })
-                  : t(`settings.language.${preference}`)
-              }
-              onPress={pickLanguage}
-              disabled={isSaving}
-              accessory={<ChevronDown size={20} color={theme.colors.outline} />}
-            />
+            <LanguagePreferencePicker />
           </SettingsSection>
         </SettingsDesktopGridItem>
 

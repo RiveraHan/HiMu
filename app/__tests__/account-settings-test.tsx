@@ -95,9 +95,38 @@ jest.mock("react-i18next", () => ({
 
 jest.mock("@/src/components", () => {
   const React = require("react");
-  const { Pressable, Text: NativeText, View } = require("react-native");
+  const {
+    Alert: NativeAlert,
+    Pressable,
+    Text: NativeText,
+    View,
+  } = require("react-native");
 
   return {
+    LanguagePreferencePicker: () => {
+      const value = "Device language (English)";
+      return React.createElement(
+        Pressable,
+        {
+          accessibilityLabel: "Language",
+          accessibilityRole: "button",
+          accessibilityState: { disabled: mockIsSaving },
+          accessibilityValue: { text: value },
+          disabled: mockIsSaving,
+          onPress: () =>
+            NativeAlert.alert("Language", undefined, [
+              { text: "Use device language", onPress: () => void mockSetPreference("system") },
+              { text: "English", onPress: () => void mockSetPreference("en") },
+              { text: "Español", onPress: () => void mockSetPreference("es") },
+              { text: "Cancel", style: "cancel" },
+            ]),
+        },
+        [
+          React.createElement(NativeText, { key: "label" }, "Language"),
+          React.createElement(NativeText, { key: "value" }, value),
+        ],
+      );
+    },
     SettingsDesktopGrid: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
       React.createElement(View, { testID }, children),
     SettingsDesktopGridItem: ({ children, testID }: { children: React.ReactNode; testID?: string }) =>
