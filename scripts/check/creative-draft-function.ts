@@ -17,16 +17,16 @@ const trackOutput = JSON.stringify({ title: "Glass Antennas" });
 function dependencies(overrides: Partial<CreativeDraftDependencies> = {}) {
   const calls = {
     generated: [] as { endpoint: string; body: object }[],
-    inserted: [] as { userId: string; kind: string }[],
-    cleaned: [] as { userId: string; before: string }[],
+    reserved: [] as { userId: string; kind: string; requestId: string }[],
   };
   const outputs = [identityOutput];
   const deps: CreativeDraftDependencies = {
     endpoint: "https://provider.invalid/llama",
-    now: () => new Date("2026-08-14T12:00:00.000Z"),
-    countRecentEvents: async () => 0,
-    insertEvent: async (userId, kind) => void calls.inserted.push({ userId, kind }),
-    deleteOldEvents: async (userId, before) => void calls.cleaned.push({ userId, before }),
+    randomId: () => "11111111-1111-4111-8111-111111111111",
+    reserveDraft: async (userId: string, kind: string, requestId: string) => {
+      calls.reserved.push({ userId, kind, requestId });
+      return { outcome: "created" as const, limit: 30 };
+    },
     listExistingDjNames: async () => ["Quiet Metric"],
     loadDjContext: async () => ({
       ownerId: "user-1",
@@ -67,7 +67,11 @@ async function main() {
   assert.equal(result.status, 200);
   assert.equal(result.body.kind, "dj-identity");
   assert.equal((result.body.draft as { candidates: unknown[] }).candidates.length, 3);
-  assert.deepEqual(calls.inserted, [{ userId: "user-1", kind: "dj-identity" }]);
+  assert.deepEqual(calls.reserved, [{
+    userId: "user-1",
+    kind: "dj-identity",
+    requestId: "11111111-1111-4111-8111-111111111111",
+  }]);
   assert.equal(calls.generated.length, 1);
   assert.equal(calls.generated[0].endpoint, deps.endpoint);
   assert.doesNotMatch(JSON.stringify(calls.generated[0].body), /base_prompt|service_role/i);
@@ -111,14 +115,34 @@ async function main() {
 }
 
 {
-  const { deps, calls } = dependencies({ countRecentEvents: async () => 30 });
+  const { deps, calls } = dependencies({
+    reserveDraft: async () => ({ outcome: "quota" as const, limit: 30 }),
+  });
   const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
   assert.deepEqual(result, {
     status: 429,
     body: { error: "draft_rate_limited", code: "draft_rate_limited" },
   });
   assert.equal(calls.generated.length, 0);
-  assert.equal(calls.inserted.length, 0);
+  assert.equal(calls.reserved.length, 0);
+}
+
+{
+  const repeatsVisibleName = JSON.stringify({
+    candidates: [
+      { name: "Quiet Metric", identityConcept: "A patient selector tracing city lights through warm analog haze." },
+      { name: "Velvet Index", identityConcept: "A curious archivist reshaping forgotten dance floors into intimate rituals." },
+      { name: "Orbit Mercy", identityConcept: "A celestial night guide balancing kinetic rhythm with quiet gravity." },
+    ],
+  });
+  const { deps, outputs, calls } = dependencies();
+  outputs.splice(0, outputs.length, repeatsVisibleName, repeatsVisibleName);
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.deepEqual(result, {
+    status: 502,
+    body: { error: "malformed_draft", code: "malformed_draft" },
+  });
+  assert.match(JSON.stringify(calls.generated[0].body), /Quiet Metric/);
 }
 
 {
