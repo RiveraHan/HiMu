@@ -1,4 +1,8 @@
 import { usePlayer } from "@/src/audio/use-player";
+import { resolveCaptionPlaybackUrl } from "@/src/audio/private-media";
+import { captureAuthScope } from "@/src/api/auth-scope";
+import { supabase } from "@/src/api/supabase";
+import { useAuthStore } from "@/src/stores/auth-store";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Loader, Square, Volume2 } from "lucide-react-native";
@@ -8,22 +12,44 @@ import { useTranslation } from "react-i18next";
 
 // Plays the DJ's spoken caption in its own audio player, isolated from the
 // main player. Ducks the music (pauses it) while speaking.
-export function CaptionVoiceButton({ audioUrl }: { audioUrl: string }) {
+export function CaptionVoiceButton({
+  audioRef,
+  jobId,
+}: {
+  audioRef: string;
+  jobId: string;
+}) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
-  const voice = useAudioPlayer({ uri: audioUrl });
+  const voice = useAudioPlayer();
   const status = useAudioPlayerStatus(voice);
   const { toggle } = usePlayer();
 
   const speaking = status.playing;
 
-  const onPress = () => {
+  const onPress = async () => {
     if (speaking) {
       voice.pause();
       return;
     }
+    const userId = useAuthStore.getState().session?.user.id;
+    if (!userId) return;
+
+    let playbackUrl: string;
+    try {
+      playbackUrl = await resolveCaptionPlaybackUrl(
+        audioRef,
+        jobId,
+        captureAuthScope(userId),
+        supabase.functions,
+      );
+    } catch {
+      return;
+    }
+
     // Duck the main music so the voice is clear.
     if (usePlayerStore.getState().isPlaying) toggle();
+    voice.replace({ uri: playbackUrl });
     voice.seekTo(0);
     voice.play();
   };
@@ -42,7 +68,7 @@ export function CaptionVoiceButton({ audioUrl }: { audioUrl: string }) {
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => void onPress()}
       accessibilityRole="button"
       accessibilityLabel={
         speaking ? t("home.captionVoice.stop") : t("home.captionVoice.hear")

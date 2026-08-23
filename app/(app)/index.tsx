@@ -461,8 +461,11 @@ export default function HomeScreen() {
                   isLive={false}
                   onPlay={playDrop}
                   voiceSlot={
-                    drop.captionAudioUrl ? (
-                      <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
+                    drop.captionAudioUrl && drop.captionJobId ? (
+                      <CaptionVoiceButton
+                        audioRef={drop.captionAudioUrl}
+                        jobId={drop.captionJobId}
+                      />
                     ) : undefined
                   }
                 />

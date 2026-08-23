@@ -176,6 +176,7 @@ describe("useDailyDrop", () => {
       data: {
         status: "ready",
         dj_id: "dj-1",
+        caption_audio_url: "r2-private://captions/generated/job-1/attempt.mp3",
         djs: djOne,
         tracks: { id: "track", title: "Track", audio_url: "track.mp3" },
       },
@@ -183,6 +184,7 @@ describe("useDailyDrop", () => {
     };
     const hook = await renderHook(() => useDailyDrop(), { wrapper: wrapper(client()) });
     await waitFor(() => expect(hook.result.current.status).toBe("ready"));
+    expect(hook.result.current.captionJobId).toBe("job-1");
 
     djs = [djTwo];
     await hook.rerender({});

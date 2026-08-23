@@ -11,6 +11,8 @@ type FunctionsLike = {
 
 const PRIVATE_TRACK_REFERENCE =
   /^r2-private:\/\/tracks\/generated\/[A-Za-z0-9._%:-]+\/[A-Za-z0-9._%:-]+\.mp3$/;
+const PRIVATE_CAPTION_REFERENCE =
+  /^r2-private:\/\/captions\/generated\/[A-Za-z0-9._%:-]+\/[A-Za-z0-9._%:-]+\.mp3$/;
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -43,6 +45,30 @@ export async function resolveTrackPlaybackUrl(
     expiresIn: number;
   }>(functions, scope, "private-media-url", {
     body: { kind: "track", trackId: track.id },
+  });
+  if (error) throw error;
+  assertCurrentMutationUser(scope.userId);
+  const url = validSignedResponse(data);
+  if (!url) throw new Error("invalid private media response");
+  return url;
+}
+
+export async function resolveCaptionPlaybackUrl(
+  audioRef: string,
+  jobId: string,
+  scope: AuthScope,
+  functions: FunctionsLike,
+): Promise<string> {
+  if (!audioRef.startsWith("r2-private://")) return audioRef;
+  if (!PRIVATE_CAPTION_REFERENCE.test(audioRef) || !UUID.test(jobId)) {
+    throw new Error("invalid private media reference");
+  }
+
+  const { data, error } = await invokeWithAuthScope<{
+    url: string;
+    expiresIn: number;
+  }>(functions, scope, "private-media-url", {
+    body: { kind: "caption", jobId },
   });
   if (error) throw error;
   assertCurrentMutationUser(scope.userId);

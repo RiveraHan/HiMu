@@ -40,6 +40,7 @@ export type DailyDrop = {
   track: PlayerTrack | null;
   caption: string | null;
   captionAudioUrl: string | null;
+  captionJobId: string | null;
   stale: boolean;
   retry: () => void;
 };
@@ -191,6 +192,7 @@ export function useDailyDrop(): DailyDrop {
       track: null,
       caption: null,
       captionAudioUrl: null,
+      captionJobId: null,
       stale: false,
       retry,
     };
@@ -220,6 +222,7 @@ export function useDailyDrop(): DailyDrop {
         track: toPlayerTrack(data.tracks),
         caption: data.caption ?? null,
         captionAudioUrl: data.caption_audio_url ?? null,
+        captionJobId: data.caption_audio_url ? jobId : null,
         stale,
         retry,
       };
