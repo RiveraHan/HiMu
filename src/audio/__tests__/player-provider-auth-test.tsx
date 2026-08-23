@@ -13,6 +13,7 @@ let mockStatus = audioStatus(0, false);
 const committed: string[] = [];
 const mockRpc = jest.fn();
 const mockFrom = jest.fn();
+const mockInvoke = jest.fn();
 const mockPlayer = {
   playing: false,
   pause: jest.fn(),
@@ -28,6 +29,7 @@ jest.mock("@/src/api/supabase", () => ({
   supabase: {
     from: (...args: unknown[]) => mockFrom(...args),
     rpc: (...args: unknown[]) => mockRpc(...args),
+    functions: { invoke: (...args: unknown[]) => mockInvoke(...args) },
   },
 }));
 jest.mock("@react-native-community/netinfo", () => ({
@@ -115,6 +117,7 @@ beforeEach(() => {
   mockControls = null;
   mockRpc.mockReset();
   mockFrom.mockReset();
+  mockInvoke.mockReset();
   usePlayerStore.getState().reset();
   usePlayerStore.getState().setNowPlaying(
     track("track-a"),
@@ -124,6 +127,43 @@ beforeEach(() => {
   useToastStore.getState().dismiss();
   useConfirmStore.getState().resolve(false);
   jest.clearAllMocks();
+});
+
+test("discards a deferred private URL when auth changes before playback", async () => {
+  let resolve!: (value: unknown) => void;
+  mockInvoke.mockReturnValue(new Promise((next) => { resolve = next; }));
+  await render(
+    <PlayerProvider>
+      <QueryProvider>
+        <CaptureControls />
+      </QueryProvider>
+    </PlayerProvider>,
+  );
+  mockPlayer.replace.mockClear();
+  mockPlayer.play.mockClear();
+
+  const privateTrack = {
+    ...track("11111111-1111-4111-8111-111111111111"),
+    audio_url: "r2-private://tracks/generated/job-1/attempt.mp3",
+  };
+  const pending = mockControls!.load(privateTrack, [privateTrack], 0);
+
+  await act(() =>
+    useAuthStore.setState({ session: authSession("B", "token-b") as never })
+  );
+  await act(async () => {
+    resolve({
+      data: { url: "https://signed.example/private.mp3", expiresIn: 300 },
+      error: null,
+    });
+    await pending;
+  });
+
+  expect(mockPlayer.replace).not.toHaveBeenCalledWith({
+    uri: "https://signed.example/private.mp3",
+  });
+  expect(mockPlayer.play).not.toHaveBeenCalled();
+  expect(usePlayerStore.getState().currentTrack).toBeNull();
 });
 test("direct A to B hides A playback and transient UI before B children render", async () => {
   useToastStore.getState().show("error", "A toast");
@@ -233,7 +273,10 @@ test("pins deferred DJ-listen and completed/skipped events to A headers", async 
       </PlayerProvider>,
     );
   }
-  mockControls!.load(track("track-b"), [track("track-b")], 0);
+  void mockControls!.load(track("track-b"), [track("track-b")], 0);
+  await act(async () => {
+    await Promise.resolve();
+  });
   expect(skippedInsert.builder.insert).toHaveBeenCalledWith({
     user_id: "A",
     track_id: "track-a",

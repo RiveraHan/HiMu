@@ -26,6 +26,7 @@ import {
 } from "react";
 import { AppState } from "react-native";
 import { PlaybackConfirmation } from "./playback-confirmation";
+import { resolveTrackPlaybackUrl } from "./private-media";
 
 // Audius (and any future external-catalog) track ids are namespaced
 // "audius:<id>" and never correspond to a row in `tracks` — skip DB-backed
@@ -299,7 +300,31 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const load: PlayerControls["load"] = useCallback(
-    (track, queue, index) => {
+    async (track, queue, index) => {
+      const ownerUserId = ownerUserIdRef.current;
+      const ownerGeneration = ownerGenerationRef.current;
+      if (!ownerUserId) return false;
+
+      let playbackUrl: string;
+      try {
+        const scope = captureAuthScope(ownerUserId);
+        playbackUrl = await resolveTrackPlaybackUrl(
+          track,
+          scope,
+          supabase.functions,
+        );
+      } catch {
+        return false;
+      }
+
+      if (
+        ownerGenerationRef.current !== ownerGeneration ||
+        ownerUserIdRef.current !== ownerUserId ||
+        useAuthStore.getState().session?.user.id !== ownerUserId
+      ) {
+        return false;
+      }
+
       settleOutgoingTrack(false); // user-initiated unless didJustFinish settled it
       countTrackIfPlayed();
       outgoingSettledRef.current = false; // the new track is now evaluable
@@ -312,7 +337,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         track.id,
         statusSequenceRef.current,
       );
-      player.replace({ uri: track.audio_url });
+      player.replace({ uri: playbackUrl });
       player.play();
 
       // Activate the lock-screen / media notification. The first activation
