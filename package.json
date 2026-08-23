@@ -21,6 +21,7 @@
     "check:creative-generation": "node --import tsx scripts/check/creative-generation-contracts.ts",
     "check:creative-generation-migration": "node --import tsx scripts/check/creative-generation-migration.ts",
     "check:creative-draft-function": "node --import tsx scripts/check/creative-draft-function.ts",
+    "check:security-remediation-migration": "node --import tsx scripts/check/security-remediation-migration.ts",
     "check:web-foundation": "node --import tsx scripts/check/web-foundation.ts",
     "check:web-core-routes": "node --import tsx scripts/check/web-core-routes.ts",
     "check:web-route-matrix": "node --import tsx scripts/check/web-route-matrix.ts"
