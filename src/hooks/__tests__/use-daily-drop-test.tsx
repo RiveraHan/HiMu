@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 
@@ -111,6 +112,26 @@ describe("useDailyDrop", () => {
     await waitFor(() => expect(hook.result.current.status).toBe("failed"));
     await act(async () => hook.result.current.retry());
     await waitFor(() => expect(supabase.functions.invoke).toHaveBeenCalledTimes(2));
+    await hook.unmount();
+  });
+
+  it("treats a server daily quota as bounded and does not resubmit on retry", async () => {
+    const quotaError = new FunctionsHttpError({
+      json: jest.fn(async () => ({
+        code: "daily_quota_reached",
+        dailyLimit: 1,
+      })),
+    } as never);
+    jest.mocked(supabase.functions.invoke).mockResolvedValue({
+      data: null,
+      error: quotaError,
+    } as never);
+
+    const hook = await renderHook(() => useDailyDrop(), { wrapper: wrapper(client()) });
+    await waitFor(() => expect(hook.result.current.status).toBe("failed"));
+
+    await act(async () => hook.result.current.retry());
+    expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
     await hook.unmount();
   });
 

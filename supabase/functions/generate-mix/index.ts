@@ -17,6 +17,7 @@ import { admin } from "../_shared/supabase.ts";
 import { pickAudiusDrop } from "./audius-drop.ts";
 import {
   handleGenerateMixRequest,
+  mapDailyJobReservation,
   mapFinalizedGeneratedMix,
   mapManualJobReservation,
   mapUpdatedRow,
@@ -260,23 +261,15 @@ serveAuthed(async (req, user) => {
       return data;
     },
     buildSeasoning,
-    findDailyJob: async (userId, dropDate) => {
+    reserveDailyJob: async ({ userId, djId, dropDate }) => {
       const { data, error } = await admin
-        .from("generation_jobs")
-        .select("id, status, dj_id, updated_at, is_public")
-        .eq("user_id", userId)
-        .eq("drop_date", dropDate)
+        .rpc("reserve_daily_generation_job", {
+          p_user_id: userId,
+          p_dj_id: djId,
+          p_drop_date: dropDate,
+        })
         .maybeSingle();
-      if (error) throw error;
-      return data
-        ? {
-          id: data.id,
-          status: data.status,
-          djId: data.dj_id,
-          updatedAt: data.updated_at,
-          isPublic: data.is_public,
-        }
-        : null;
+      return mapDailyJobReservation(data, error);
     },
     requeueDailyJob: async (
       jobId,
@@ -297,31 +290,6 @@ serveAuthed(async (req, user) => {
         .select("id")
         .maybeSingle();
       return mapUpdatedRow(data, error);
-    },
-    createDailyJob: async ({ userId, djId, dropDate }) => {
-      const { data, error } = await admin
-        .from("generation_jobs")
-        .insert({
-          user_id: userId,
-          dj_id: djId,
-          status: "queued",
-          drop_date: dropDate,
-          is_public: false,
-        })
-        .select("id, status, dj_id, updated_at, is_public")
-        .single();
-      return {
-        job: data
-          ? {
-            id: data.id,
-            status: data.status,
-            djId: data.dj_id,
-            updatedAt: data.updated_at,
-            isPublic: data.is_public,
-          }
-          : null,
-        error,
-      };
     },
     findActiveManualJob: async (userId, djId) => {
       const { data, error } = await admin
