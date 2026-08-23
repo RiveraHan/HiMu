@@ -815,3 +815,97 @@ revoke all on function public.reserve_daily_generation_job(uuid, uuid, date)
   from public, anon, authenticated;
 grant execute on function public.reserve_daily_generation_job(uuid, uuid, date)
   to service_role;
+
+create function public.reserve_avatar_generation(
+  p_user_id uuid,
+  p_operation text,
+  p_request_id uuid
+)
+returns table (
+  outcome text,
+  event_id uuid,
+  daily_limit integer,
+  resource_id uuid
+)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  if p_operation not in ('initial_avatar', 'avatar_regen')
+    or p_request_id is null
+  then
+    raise exception using
+      errcode = '22023',
+      message = 'invalid_avatar_generation_reservation';
+  end if;
+
+  return query
+  select
+    reservation.outcome,
+    reservation.event_id,
+    reservation.daily_limit,
+    reservation.resource_id
+  from public.reserve_provider_usage_event(
+    p_user_id,
+    'avatar',
+    p_operation,
+    p_operation || ':' || p_request_id,
+    p_request_id
+  ) as reservation;
+end;
+$$;
+
+revoke all on function public.reserve_avatar_generation(uuid, text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.reserve_avatar_generation(uuid, text, uuid)
+  to service_role;
+
+create function public.reserve_creative_draft(
+  p_user_id uuid,
+  p_kind text,
+  p_request_id uuid
+)
+returns table (
+  outcome text,
+  event_id uuid,
+  daily_limit integer,
+  resource_id uuid
+)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  if p_kind not in (
+    'dj-identity',
+    'track-brief',
+    'track-title',
+    'lyrics',
+    'creative-direction'
+  ) or p_request_id is null then
+    raise exception using
+      errcode = '22023',
+      message = 'invalid_creative_draft_reservation';
+  end if;
+
+  return query
+  select
+    reservation.outcome,
+    reservation.event_id,
+    reservation.daily_limit,
+    reservation.resource_id
+  from public.reserve_provider_usage_event(
+    p_user_id,
+    'creative_draft',
+    'creative_draft',
+    'draft:' || p_kind || ':' || p_request_id,
+    p_request_id
+  ) as reservation;
+end;
+$$;
+
+revoke all on function public.reserve_creative_draft(uuid, text, uuid)
+  from public, anon, authenticated;
+grant execute on function public.reserve_creative_draft(uuid, text, uuid)
+  to service_role;

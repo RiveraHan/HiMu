@@ -68,5 +68,21 @@ requires(
   /reserve_daily_generation_job[\s\S]*'daily_drop'[\s\S]*insert into public\.generation_jobs/i,
   "daily jobs reserve atomically",
 );
+requires(
+  /create (or replace )?function public\.reserve_avatar_generation/i,
+  "avatar reservation wrapper exists",
+);
+requires(
+  /reserve_avatar_generation[\s\S]*reserve_provider_usage_event[\s\S]*'avatar'/i,
+  "avatar wrapper uses shared admission",
+);
+requires(
+  /create (or replace )?function public\.reserve_creative_draft/i,
+  "draft reservation wrapper exists",
+);
+requires(
+  /reserve_creative_draft[\s\S]*reserve_provider_usage_event[\s\S]*'creative_draft'/i,
+  "draft wrapper uses shared admission",
+);
 
 console.log(`security remediation migration checks passed (${migrationNames[0]})`);
