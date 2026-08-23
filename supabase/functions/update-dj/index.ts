@@ -9,12 +9,12 @@ import {
   validateDjTraitsInput,
 } from "../_shared/dj-input.ts";
 import { invalid, json } from "../_shared/http.ts";
+import { mapProviderReservation } from "../_shared/provider-usage.ts";
 import { keyFromPublicUrl, r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
-
-const DAILY_AVATAR_REGENS = 3;
+import { runAvatarGeneration } from "./avatar-reservation.ts";
 
 // e.g avatars/generated/{djId}.jpg → 0 · avatars/generated/{djId}-{n}.jpg → n
 function avatarVersion(url: string | null, djId: string): number {
@@ -45,26 +45,6 @@ serveAuthed(async (req, user) => {
 
   const { name, genres, moods, energy, isInstrumental, vibe } = v.data;
   const regen = body.regenerateAvatar === true;
-
-  if (regen) {
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-    const { count } = await admin
-      .from("avatar_regens")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gt("created_at", dayAgo);
-
-    if ((count ?? 0) >= DAILY_AVATAR_REGENS) {
-      return json(
-        {
-          error: `daily limit of ${DAILY_AVATAR_REGENS} portraits reached`,
-          code: "avatar_quota_reached",
-        },
-        429,
-      );
-    }
-  }
 
   // Save traits (slug untouched: stable identity and URLs).
   const { error: djErr } = await admin
@@ -102,34 +82,63 @@ serveAuthed(async (req, user) => {
     const newKey = `avatars/generated/${djId}-${next}.jpg`;
 
     try {
-      const tmp = await replicateRun(
-        "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
-        {
-          input: {
-            prompt: buildAvatarPrompt(genres, moods, dj.identity_concept),
-            aspect_ratio: "1:1",
-            output_format: "jpg",
-            safety_tolerance: 5,
-          },
+      const avatar = await runAvatarGeneration({
+        userId: user.id,
+        operation: "avatar_regen",
+        requestId: crypto.randomUUID(),
+      }, {
+        reserve: async ({ userId, operation, requestId }) => {
+          const { data, error } = await admin.rpc("reserve_avatar_generation", {
+            p_user_id: userId,
+            p_operation: operation,
+            p_request_id: requestId,
+          });
+          return mapProviderReservation(data, error);
         },
-      );
+        generate: async () => {
+          const tmp = await replicateRun(
+            "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
+            {
+              input: {
+                prompt: buildAvatarPrompt(genres, moods, dj.identity_concept),
+                aspect_ratio: "1:1",
+                output_format: "jpg",
+                safety_tolerance: 5,
+              },
+            },
+          );
 
-      const bytes = new Uint8Array(await (await fetch(tmp)).arrayBuffer());
-      avatarUrl = await r2Put(newKey, bytes, "image/jpeg");
+          const bytes = new Uint8Array(await (await fetch(tmp)).arrayBuffer());
+          const nextAvatarUrl = await r2Put(newKey, bytes, "image/jpeg");
 
-      const { error: avErr } = await admin
-        .from("djs")
-        .update({ avatar_url: avatarUrl })
-        .eq("id", djId);
-      if (avErr) throw avErr;
+          const { error: avErr } = await admin
+            .from("djs")
+            .update({ avatar_url: nextAvatarUrl })
+            .eq("id", djId);
+          if (avErr) throw avErr;
 
-      // Exactly one live portrait per DJ: drop the previous one.
-      const oldKey = dj.avatar_url ? keyFromPublicUrl(dj.avatar_url) : null;
-      if (oldKey) await r2Delete([oldKey]);
+          // Exactly one live portrait per DJ: drop the previous one.
+          const oldKey = dj.avatar_url ? keyFromPublicUrl(dj.avatar_url) : null;
+          if (oldKey) await r2Delete([oldKey]);
 
-      await admin
-        .from("avatar_regens")
-        .insert({ user_id: user.id, dj_id: djId });
+          await admin
+            .from("avatar_regens")
+            .insert({ user_id: user.id, dj_id: djId });
+
+          return nextAvatarUrl;
+        },
+      });
+
+      if (avatar.outcome === "quota") {
+        return json(
+          {
+            error: `daily limit of ${avatar.limit} portraits reached`,
+            code: "avatar_quota_reached",
+          },
+          429,
+        );
+      }
+      avatarUrl = avatar.value;
     } catch (e) {
       console.error("[update-dj] portrait regen failed:", e);
       await r2Delete([newKey]); // no orphans if we uploaded before failing
