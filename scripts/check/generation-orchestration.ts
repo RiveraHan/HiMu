@@ -1273,9 +1273,15 @@ async function main() {
       failedAt: string;
       fence?: { queuedAt?: string; generatingAt: string };
     }> = [];
-    const puts: Array<{ key: string; bytes: number[]; contentType: string }> = [];
+    const puts: Array<{
+      key: string;
+      bytes: number[];
+      contentType: string;
+      access: "public" | "private";
+    }> = [];
     const coverInputs: string[] = [];
     const deletes: string[][] = [];
+    const deleteAccesses: Array<"public" | "private"> = [];
     const modelEvents: ModelEvent[] = [];
     const errorEvents: unknown[][] = [];
     const replicateInputs: Array<{ endpoint: string; body: any }> = [];
@@ -1326,12 +1332,18 @@ async function main() {
         "[CAPTION_START]\nTurn it up [scream], then [laugh].\n[CAPTION_END]",
       fetchMedia: async (url: string) =>
         mediaResponse(200, url.endsWith("/music") ? [1, 2, 3] : [4, 5]),
-      r2Put: async (key: string, bytes: Uint8Array, contentType: string) => {
-        puts.push({ key, bytes: [...bytes], contentType });
+      r2Put: async (
+        key: string,
+        bytes: Uint8Array,
+        contentType: string,
+        access: "public" | "private",
+      ) => {
+        puts.push({ key, bytes: [...bytes], contentType, access });
         return `https://r2.test/${key}`;
       },
-      r2Delete: async (keys: string[]) => {
+      r2Delete: async (keys: string[], access: "public" | "private") => {
         deletes.push(keys);
+        deleteAccesses.push(access);
       },
       generateCover: async (objectKey: string) => {
         coverInputs.push(objectKey);
@@ -1347,6 +1359,7 @@ async function main() {
     };
     return {
       coverInputs,
+      deleteAccesses,
       deletes,
       deps,
       errorEvents,
@@ -1470,6 +1483,72 @@ async function main() {
   }
 
   {
+    const privateState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-private-audio",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+        isPublic: false,
+      },
+      privateState.deps,
+    );
+    assert.deepEqual(
+      privateState.puts.map(({ key, access }) => [key, access]),
+      [[
+        "tracks/generated/job-private-audio/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "private",
+      ]],
+    );
+
+    const publicState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-public-audio",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+        isPublic: true,
+      },
+      publicState.deps,
+    );
+    assert.equal(publicState.puts[0]?.access, "public");
+
+    const dropState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-private-drop-audio",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+        isPublic: false,
+        drop: { localHour: 12 },
+      },
+      dropState.deps,
+    );
+    assert.deepEqual(
+      dropState.puts.map(({ key, access }) => [key, access]),
+      [
+        [
+          "tracks/generated/job-private-drop-audio/2026-07-22T12%3A00%3A00.000Z.mp3",
+          "private",
+        ],
+        [
+          "captions/generated/job-private-drop-audio/2026-07-22T12%3A00%3A00.000Z.mp3",
+          "private",
+        ],
+      ],
+    );
+  }
+
+  {
     const firstStartedAt = "2026-07-22T12:00:00.000Z";
     const secondStartedAt = "2026-07-22T12:16:00.000Z";
     const first = runDeps({ now: () => firstStartedAt });
@@ -1588,11 +1667,14 @@ async function main() {
       state.failures[0]?.fence,
       { generatingAt: "2026-07-22T12:00:00.000Z" },
     );
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
+    assert.deepEqual(state.deleteAccesses, ["private", "public"]);
   }
 
   for (const failJobIfActive of [
@@ -1726,11 +1808,13 @@ async function main() {
     assert.deepEqual(state.replicateInputs, []);
     assert.deepEqual(state.puts, []);
     assert.deepEqual(state.finalizations, []);
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
   }
 
   {
@@ -1783,11 +1867,13 @@ async function main() {
     });
     assert.deepEqual(state.modelEvents, []);
     assert.deepEqual(state.replicateInputs, []);
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
   }
 
   {
@@ -1835,11 +1921,13 @@ async function main() {
       state.deps,
     );
     assert.equal(state.failures.length, 1);
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
     assert.equal(state.puts.length, 0);
   }
 

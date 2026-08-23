@@ -77,7 +77,7 @@ serveAuthed(async (req, user) => {
       return mapCoverReservationFailure(data, error);
     },
     keyFromPublicUrl,
-    r2Delete,
+    r2Delete: (keys) => r2Delete(keys, "public"),
     now: () => new Date().toISOString(),
     logError: (event) => {
       console.error("[regenerate-cover] orchestration", event);

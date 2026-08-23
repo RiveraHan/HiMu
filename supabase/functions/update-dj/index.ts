@@ -109,7 +109,7 @@ serveAuthed(async (req, user) => {
           );
 
           const bytes = new Uint8Array(await (await fetch(tmp)).arrayBuffer());
-          const nextAvatarUrl = await r2Put(newKey, bytes, "image/jpeg");
+          const nextAvatarUrl = await r2Put(newKey, bytes, "image/jpeg", "public");
 
           const { error: avErr } = await admin
             .from("djs")
@@ -119,7 +119,7 @@ serveAuthed(async (req, user) => {
 
           // Exactly one live portrait per DJ: drop the previous one.
           const oldKey = dj.avatar_url ? keyFromPublicUrl(dj.avatar_url) : null;
-          if (oldKey) await r2Delete([oldKey]);
+          if (oldKey) await r2Delete([oldKey], "public");
 
           await admin
             .from("avatar_regens")
@@ -141,7 +141,7 @@ serveAuthed(async (req, user) => {
       avatarUrl = avatar.value;
     } catch (e) {
       console.error("[update-dj] portrait regen failed:", e);
-      await r2Delete([newKey]); // no orphans if we uploaded before failing
+      await r2Delete([newKey], "public"); // no orphans if we uploaded before failing
       avatarUrl = null;
     }
   }

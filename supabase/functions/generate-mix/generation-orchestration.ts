@@ -13,6 +13,7 @@ import {
   type AuthoritativeDjTraits,
   type ConfirmedGenerationBriefV1,
 } from "../_shared/creative-generation.ts";
+import type { R2Access } from "../_shared/r2-contract.ts";
 
 type JobSummary = { id: string; status: string; isPublic: boolean };
 type ManualJobSummary = JobSummary & {
@@ -215,6 +216,7 @@ export function mapFinalizedGeneratedMix(
 export type RunGenerationInput = {
   jobId: string;
   queuedAt: string;
+  isPublic: boolean;
   cfg: any;
   lyrics: string | null;
   brief?: ConfirmedGenerationBriefV1 | null;
@@ -437,6 +439,7 @@ export async function handleGenerateMixRequest(
         deps.runGeneration({
           jobId: existing.id,
           queuedAt: requeuedAt,
+          isPublic: existing.isPublic,
           cfg,
           lyrics: null,
           seasoning,
@@ -451,6 +454,7 @@ export async function handleGenerateMixRequest(
       deps.runGeneration({
         jobId: existing.id,
         queuedAt: existing.updatedAt,
+        isPublic: existing.isPublic,
         cfg,
         lyrics: null,
         seasoning,
@@ -533,6 +537,7 @@ export async function handleGenerateMixRequest(
       deps.runGeneration({
         jobId: legacy.jobId,
         queuedAt: legacy.queuedAt,
+        isPublic: legacy.isPublic,
         cfg,
         lyrics: legacy.lyrics,
         brief: null,
@@ -610,6 +615,7 @@ export async function handleGenerateMixRequest(
     deps.runGeneration({
       jobId: reservation.jobId,
       queuedAt: reservation.queuedAt,
+      isPublic: reservation.isPublic,
       cfg,
       lyrics: brief.lyrics,
       brief,
@@ -706,8 +712,9 @@ export type RunDependencies = {
     key: string,
     bytes: Uint8Array,
     contentType: string,
+    access: R2Access,
   ) => Promise<string>;
-  r2Delete: (keys: string[]) => Promise<void>;
+  r2Delete: (keys: string[], access: R2Access) => Promise<void>;
   generateCover: (
     objectKey: string,
     dj: any,
@@ -781,6 +788,7 @@ async function buildCaptionAudio(
     objectKey,
     bytes,
     "audio/mpeg",
+    input.isPublic ? "public" : "private",
   );
 }
 
@@ -862,6 +870,7 @@ export async function runGeneration(
 ): Promise<void> {
   const attemptStartedAt = deps.now();
   const objectKeys = generationAttemptKeys(input.jobId, attemptStartedAt);
+  const audioAccess: R2Access = input.isPublic ? "public" : "private";
   let claimed = false;
   try {
     const started = await deps.markJobGenerating(
@@ -901,10 +910,11 @@ export async function runGeneration(
       musicUrl,
       deps.fetchMedia,
     );
-    const publicUrl = await deps.r2Put(
+    const audioReference = await deps.r2Put(
       objectKeys.track,
       musicBytes,
       "audio/mpeg",
+      audioAccess,
     );
 
     const dj = input.cfg.djs;
@@ -955,7 +965,7 @@ export async function runGeneration(
       trackId,
       title,
       artist: dj.name,
-      audioUrl: publicUrl,
+      audioUrl: audioReference,
       albumArtUrl: cover,
       genre: dj.genre_specialties?.[0] ?? null,
       moodTags: dj.mood_tags ?? null,
@@ -990,10 +1000,7 @@ export async function runGeneration(
       return;
     }
 
-    await deps.r2Delete([
-      objectKeys.track,
-      objectKeys.cover,
-      objectKeys.caption,
-    ]);
+    await deps.r2Delete([objectKeys.track, objectKeys.caption], audioAccess);
+    await deps.r2Delete([objectKeys.cover], "public");
   }
 }

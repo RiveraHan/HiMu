@@ -160,6 +160,7 @@ serveAuthed(async (req, user) => {
             `avatars/generated/${dj.id}.jpg`,
             bytes,
             "image/jpeg",
+            "public",
           );
 
           await admin.from("djs").update({ avatar_url: publicUrl }).eq("id", dj.id);
@@ -175,7 +176,7 @@ serveAuthed(async (req, user) => {
     return json({ djId: dj.id, avatarReady });
   } catch (e) {
     // Rollback: no orphaned rows or files on failure.
-    await r2Delete([`avatars/generated/${dj.id}.jpg`]);
+    await r2Delete([`avatars/generated/${dj.id}.jpg`], "public");
     await admin.from("djs").delete().eq("id", dj.id); // cascade removes config
     throw e;
   }
