@@ -48,5 +48,25 @@ requires(
   /insert into public\.provider_usage_events[\s\S]*generation_jobs/i,
   "history is backfilled",
 );
+requires(
+  /generation_quota_usage[\s\S]*from public\.provider_usage_events[\s\S]*quota_bucket = 'generation'/i,
+  "generation usage is durable",
+);
+requires(
+  /reserve_manual_generation_job[\s\S]*reserve_provider_usage_event[\s\S]*'manual_mix'/i,
+  "manual reservations use ledger",
+);
+requires(
+  /retry_legacy_manual_generation_job[\s\S]*reserve_provider_usage_event[\s\S]*'manual_mix'/i,
+  "legacy retries use ledger",
+);
+requires(
+  /reserve_cover_generation[\s\S]*reserve_provider_usage_event[\s\S]*'cover'/i,
+  "cover reservations use ledger",
+);
+requires(
+  /reserve_daily_generation_job[\s\S]*'daily_drop'[\s\S]*insert into public\.generation_jobs/i,
+  "daily jobs reserve atomically",
+);
 
 console.log(`security remediation migration checks passed (${migrationNames[0]})`);
