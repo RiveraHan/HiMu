@@ -1,7 +1,6 @@
 import { usePlayer } from "@/src/audio/use-player";
 import {
   Avatar,
-  CaptionVoiceButton,
   ContentShelf,
   ContentShelfSkeleton,
   DJAvatar,
@@ -12,6 +11,7 @@ import {
   Text,
   VibeSpotlightCard,
 } from "@/src/components";
+import { CaptionVoiceButton } from "@/src/components/home/CaptionVoiceButton";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import {
   HomeDjsSkeleton,
