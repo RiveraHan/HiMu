@@ -299,6 +299,40 @@ async function main() {
       identityConcept: "A sunrise selector shaping hopeful nocturnal pop.",
     },
   };
+  const validBriefV2 = {
+    ...validBrief,
+    version: 2 as const,
+    productionPlan: {
+      bpm: 118,
+      key: "F# minor",
+      meter: "4/4" as const,
+      sections: [
+        { name: "intro" as const, startSeconds: 0, endSeconds: 16, direction: "Reveal one glass motif over filtered percussion." },
+        { name: "verse" as const, startSeconds: 16, endSeconds: 54, direction: "Keep the vocal close above restrained bass." },
+        { name: "chorus" as const, startSeconds: 54, endSeconds: 94, direction: "Widen harmony and answer the hook with bright mallets." },
+        { name: "outro" as const, startSeconds: 94, endSeconds: 120, direction: "Dissolve the motif into rain-like delay." },
+      ],
+      leadInstruments: ["glass mallets", "breathy alto voice"],
+      rhythmInstruments: ["round sub bass", "dry rim clicks"],
+      textureInstruments: ["tape hiss", "rain-like delay"],
+      energyArc: "Rise from close-mic restraint to a luminous final chorus.",
+      productionCharacter: ["warm analog saturation", "precise transient detail"],
+      vocalDirection: "Natural contemporary English with intimate verses and a sustained chorus hook.",
+      visual: {
+        concept: "A fragile signal becomes a shared constellation in rain.",
+        subject: "Translucent antenna forms above a wet rooftop",
+        medium: "Layered paper sculpture photographed on film",
+        composition: "Asymmetric square frame rising from the lower third",
+        palette: ["smoked indigo", "warm amber", "frosted cyan"],
+        lighting: "Low amber side light with cyan reflections",
+        texture: "Visible paper fibers, fine rain grain, restrained halation",
+      },
+      novelty: {
+        coreMotifs: ["glass antenna response", "ascending three-note signal"],
+        avoidRecentMotifs: ["neon tunnel", "piano house hook"],
+      },
+    },
+  };
   const manualRequest = (
     brief = validBrief,
     overrides: Record<string, unknown> = {},
@@ -1496,7 +1530,7 @@ async function main() {
         queuedAt: defaultQueuedAt,
         cfg,
         lyrics: validBrief.lyrics,
-        brief: validBrief,
+        brief: validBriefV2,
         seasoning: ["late night atmosphere"],
         language: "en",
       },
@@ -1506,6 +1540,31 @@ async function main() {
     const prompt = String(state.replicateInputs[0]?.body?.input?.prompt ?? "");
     assert.ok(prompt.includes(validBrief.creativeDirection));
     assert.ok(prompt.includes(validBrief.lyrics));
+    assert.match(prompt, /Tempo: 118 BPM/);
+    assert.match(prompt, /Key: F# minor/);
+    assert.match(prompt, /glass mallets/);
+    assert.match(prompt, /ARRANGEMENT TIMELINE/);
+    const firstSeed = state.replicateInputs[0]?.body?.input?.seed;
+    assert.equal(typeof firstSeed, "number");
+
+    const otherState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-confirmed-brief-other",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: validBrief.lyrics,
+        brief: validBriefV2,
+        seasoning: ["late night atmosphere"],
+        language: "en",
+      },
+      otherState.deps,
+    );
+    assert.notEqual(
+      otherState.replicateInputs[0]?.body?.input?.seed,
+      firstSeed,
+      "different generation jobs must receive different stable music seeds",
+    );
     assert.equal(
       state.modelEvents.some(({ role }) => role === "caption"),
       false,

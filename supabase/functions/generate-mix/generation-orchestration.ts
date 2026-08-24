@@ -13,6 +13,11 @@ import {
   type AuthoritativeDjTraits,
   type ConfirmedGenerationBrief,
 } from "../_shared/creative-generation.ts";
+import {
+  assertWithinModelBudget,
+  estimateModelCost,
+  resolveCreativeModel,
+} from "../_shared/creative-models.ts";
 import type { R2Access } from "../_shared/r2-contract.ts";
 
 type JobSummary = { id: string; status: string; isPublic: boolean };
@@ -907,7 +912,28 @@ export async function runGeneration(
       language: input.language,
       lyrics: input.brief?.lyrics ?? input.lyrics ??
         boundedDefaultLyrics(input.cfg.default_lyrics),
+      productionPlan: input.brief?.version === 2
+        ? input.brief.productionPlan
+        : null,
+      seed: `${input.jobId}:${attemptStartedAt}:music-v2`,
+      genres: Array.isArray(input.cfg.djs?.genre_specialties)
+        ? input.cfg.djs.genre_specialties
+        : [],
+      moods: Array.isArray(input.cfg.djs?.mood_tags)
+        ? input.cfg.djs.mood_tags
+        : [],
+      energy: Number.isInteger(input.cfg.djs?.personality_traits?.energy)
+        ? input.cfg.djs.personality_traits.energy
+        : undefined,
     });
+    const musicModel = resolveCreativeModel("music_full");
+    assertWithinModelBudget(
+      "music_full",
+      estimateModelCost(musicModel, {
+        input: musicRequest.body.input.prompt.length,
+        output: 1,
+      }),
+    );
     observe(deps, "music", input.language);
     const musicUrl = await deps.replicateRun(
       musicRequest.endpoint,

@@ -41,7 +41,13 @@ function musicInput(
 
 const vocal = musicInput("es", false, lyrics);
 assert.equal(vocal.endpoint, LYRIA_ENDPOINT);
-assert.deepEqual(Object.keys(vocal.body.input).sort(), ["prompt"]);
+assert.deepEqual(Object.keys(vocal.body.input).sort(), ["prompt", "seed"]);
+assert.match(vocal.body.input.prompt, /CREATIVE INTENT/);
+assert.match(vocal.body.input.prompt, /MUSICAL SPECIFICATION/);
+assert.match(vocal.body.input.prompt, /ARRANGEMENT TIMELINE/);
+assert.match(vocal.body.input.prompt, /PERFORMANCE AND PRODUCTION/);
+assert.match(vocal.body.input.prompt, /ORIGINALITY/);
+assert.equal(typeof vocal.body.input.seed, "number");
 assert.match(vocal.body.input.prompt, /español latinoamericano neutro/i);
 assert.ok(vocal.body.input.prompt.includes(lyrics));
 
@@ -92,7 +98,7 @@ for (const language of ["en", "es"] as const) {
         lyrics: hostileLyrics,
       }).body.input.prompt;
       const framed = supplied.match(
-        /<<<(HIMU_LYRICS_\d+)_START>>>\n([\s\S]*)\n<<<\1_END>>>$/,
+        /<<<(HIMU_LYRICS_\d+)_START>>>\n([\s\S]*?)\n<<<\1_END>>>/,
       );
       const boundary = framed?.[1];
       const boundaryIsAbsentFromUntrustedSections = boundary != null &&

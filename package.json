@@ -25,6 +25,7 @@
     "check:creative-provider-adapters": "node --import tsx scripts/check/creative-provider-adapters.ts",
     "check:creative-telemetry": "node --import tsx scripts/check/creative-telemetry.ts",
     "check:generation-brief-v2-migration": "node --import tsx scripts/check/generation-brief-v2-migration.ts",
+    "check:music-production": "node --import tsx scripts/check/music-production.ts",
     "check:security-remediation-migration": "node --import tsx scripts/check/security-remediation-migration.ts",
     "check:security-quota-invariants": "node --import tsx scripts/check/security-quota-invariants.ts",
     "check:private-media-e2e": "node --import tsx scripts/check/private-media-e2e.ts",
