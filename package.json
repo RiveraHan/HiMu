@@ -23,6 +23,7 @@
     "check:creative-draft-function": "node --import tsx scripts/check/creative-draft-function.ts",
     "check:security-remediation-migration": "node --import tsx scripts/check/security-remediation-migration.ts",
     "check:security-quota-invariants": "node --import tsx scripts/check/security-quota-invariants.ts",
+    "check:private-media-e2e": "node --import tsx scripts/check/private-media-e2e.ts",
     "migrate:private-media": "node --env-file=.env --import tsx scripts/migrate/private-media-runner.ts",
     "check:web-foundation": "node --import tsx scripts/check/web-foundation.ts",
     "check:web-core-routes": "node --import tsx scripts/check/web-core-routes.ts",
