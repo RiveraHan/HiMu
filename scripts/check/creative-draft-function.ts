@@ -8,6 +8,8 @@ import {
   resolveCreativeModel,
   type ModelDefinition,
 } from "../../supabase/functions/_shared/creative-models.ts";
+import type { CreativeUsageEvent } from "../../supabase/functions/_shared/creative-telemetry.ts";
+import type { NormalizedPrediction } from "../../supabase/functions/_shared/replicate.ts";
 
 const identityOutput = JSON.stringify({
   candidates: [
@@ -305,6 +307,285 @@ async function main() {
   assert.equal(result.status, 400);
   assert.deepEqual(result.body, { error: "invalid_input", code: "invalid_input" });
   assert.equal(calls.generated.length, 0);
+}
+
+{
+  const { deps, outputs } = dependencies();
+  outputs.splice(0, outputs.length, trackBriefOutput);
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [1_000, 1_250];
+  const observedDeps = {
+    ...deps,
+    now: () => timestamps.shift() ?? 1_250,
+    recordUsage: (event: CreativeUsageEvent) => usage.push(event),
+  } as CreativeDraftDependencies & {
+    now: () => number;
+    recordUsage: (event: CreativeUsageEvent) => void;
+  };
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    observedDeps,
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(usage, [{
+    role: "creative_longform",
+    modelId: "meta/llama-4-scout-instruct",
+    status: "succeeded",
+    promptVersion: "creative-brief-v2.en",
+    briefVersion: 2,
+    language: "en",
+    outcome: "accepted",
+    repaired: false,
+    latencyMs: 250,
+    estimatedCostUsd: 0.000967,
+    inputUnits: null,
+    outputUnits: null,
+  }]);
+}
+
+{
+  const prediction: NormalizedPrediction<string> = {
+    output: trackBriefOutput,
+    predictionId: "prediction-1",
+    modelId: "meta/llama-4-scout-instruct",
+    startedAt: "2026-08-24T08:00:00.000Z",
+    completedAt: "2026-08-24T08:00:00.420Z",
+    metrics: {
+      inputTokens: 400,
+      outputTokens: 500,
+      inputCharacters: null,
+      outputSeconds: null,
+      predictSeconds: 0.42,
+    },
+  };
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [2_000, 2_600];
+  const { deps } = dependencies({
+    generateText: async () => prediction as never,
+    now: () => timestamps.shift() ?? 2_600,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    deps,
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(usage, [{
+    role: "creative_longform",
+    modelId: "meta/llama-4-scout-instruct",
+    status: "succeeded",
+    promptVersion: "creative-brief-v2.en",
+    briefVersion: 2,
+    language: "en",
+    outcome: "accepted",
+    repaired: false,
+    latencyMs: 600,
+    estimatedCostUsd: 0.000393,
+    inputUnits: 400,
+    outputUnits: 500,
+  }]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [3_000, 3_200, 3_200, 3_550];
+  const { deps, outputs } = dependencies({
+    now: () => timestamps.shift() ?? 3_550,
+    recordUsage: (event) => usage.push(event),
+  });
+  outputs.splice(0, outputs.length, "not json", identityOutput);
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 200);
+  assert.deepEqual(usage, [
+    {
+      role: "creative_shortform",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: false,
+      latencyMs: 200,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+    {
+      role: "format_repair",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "succeeded",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "accepted",
+      repaired: true,
+      latencyMs: 350,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+  ]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [4_000, 4_100];
+  const { deps } = dependencies({
+    generateText: async () => {
+      throw new Error("private upstream diagnostics");
+    },
+    now: () => timestamps.shift() ?? 4_100,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 503);
+  assert.deepEqual(usage, [{
+    role: "creative_shortform",
+    modelId: "meta/llama-4-scout-instruct",
+    status: "failed",
+    promptVersion: "creative-dj-identity-v2.en",
+    briefVersion: 0,
+    language: "en",
+    outcome: "provider_error",
+    repaired: false,
+    latencyMs: 100,
+    estimatedCostUsd: 0.000413,
+    inputUnits: null,
+    outputUnits: null,
+  }]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [5_000, 5_007];
+  const { deps } = dependencies({
+    generateText: async () => await new Promise<string>(() => undefined),
+    timeoutMs: 5,
+    now: () => timestamps.shift() ?? 5_007,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 504);
+  assert.deepEqual(usage, [{
+    role: "creative_shortform",
+    modelId: "meta/llama-4-scout-instruct",
+    status: "failed",
+    promptVersion: "creative-dj-identity-v2.en",
+    briefVersion: 0,
+    language: "en",
+    outcome: "timeout",
+    repaired: false,
+    latencyMs: 7,
+    estimatedCostUsd: 0.000413,
+    inputUnits: null,
+    outputUnits: null,
+  }]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [6_000, 6_100, 6_100, 6_300];
+  const { deps, outputs } = dependencies({
+    now: () => timestamps.shift() ?? 6_300,
+    recordUsage: (event) => usage.push(event),
+  });
+  outputs.splice(0, outputs.length, "not json", "still not json");
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 502);
+  assert.deepEqual(usage, [
+    {
+      role: "creative_shortform",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: false,
+      latencyMs: 100,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+    {
+      role: "format_repair",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: true,
+      latencyMs: 200,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+  ]);
+}
+
+{
+  let attempt = 0;
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [7_000, 7_100, 7_100, 7_250];
+  const { deps } = dependencies({
+    generateText: async () => {
+      attempt += 1;
+      if (attempt === 1) return "not json";
+      throw new Error("private repair diagnostics");
+    },
+    now: () => timestamps.shift() ?? 7_250,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 503);
+  assert.deepEqual(usage, [
+    {
+      role: "creative_shortform",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: false,
+      latencyMs: 100,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+    {
+      role: "format_repair",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "failed",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "provider_error",
+      repaired: true,
+      latencyMs: 150,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+  ]);
 }
 
 console.log("creative draft function checks passed");

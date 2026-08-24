@@ -3,9 +3,11 @@ import {
   createCreativeUsageEvent,
   estimatePredictionCost,
   logCreativeUsageEvent,
+  type CreativeUsageEvent,
 } from "../../supabase/functions/_shared/creative-telemetry.ts";
 import { resolveCreativeModel } from "../../supabase/functions/_shared/creative-models.ts";
 import type { NormalizedPrediction } from "../../supabase/functions/_shared/replicate.ts";
+import * as telemetryModule from "../../supabase/functions/_shared/creative-telemetry.ts";
 
 const eventInput = {
   role: "creative_longform",
@@ -117,4 +119,100 @@ assert.deepEqual(
   eventInput,
 );
 
-console.log("creative telemetry checks passed");
+async function checkObservedPrediction() {
+  const events: CreativeUsageEvent[] = [];
+  const timestamps = [10_000, 10_750];
+  const runObserved = (telemetryModule as unknown as {
+    runObservedCreativePrediction?: <T>(
+      context: Record<string, unknown>,
+      run: () => Promise<NormalizedPrediction<T>>,
+      recordUsage: (event: CreativeUsageEvent) => void,
+      now: () => number,
+    ) => Promise<T>;
+  }).runObservedCreativePrediction;
+  const result = runObserved
+    ? await runObserved(
+      {
+        model: resolveCreativeModel("music_full"),
+        promptVersion: "music-production-v2.es",
+        briefVersion: 2,
+        language: "es",
+        outcome: "generated",
+        repaired: false,
+        fallbackUnits: { input: 2_400, output: 1 },
+      },
+      async () => prediction({
+        ...emptyMetrics,
+        outputSeconds: 150.25,
+        predictSeconds: 42.8,
+      }),
+      (event) => events.push(event),
+      () => timestamps.shift() ?? 10_750,
+    )
+    : null;
+
+  assert.equal(result, "not inspected by telemetry");
+  assert.deepEqual(events, [{
+    role: "music_full",
+    modelId: "google/lyria-3-pro",
+    status: "succeeded",
+    promptVersion: "music-production-v2.es",
+    briefVersion: 2,
+    language: "es",
+    outcome: "generated",
+    repaired: false,
+    latencyMs: 750,
+    estimatedCostUsd: 0.08,
+    inputUnits: null,
+    outputUnits: 1,
+  }]);
+  assert.doesNotMatch(JSON.stringify(events), /not inspected by telemetry/);
+
+  const failedEvents: CreativeUsageEvent[] = [];
+  const failedTimestamps = [20_000, 20_250];
+  let failure: unknown;
+  try {
+    if (!runObserved) throw new Error("observer unavailable");
+    await runObserved(
+      {
+        model: resolveCreativeModel("music_full"),
+        promptVersion: "music-production-v2.en",
+        briefVersion: 0,
+        language: "en",
+        outcome: "generated",
+        repaired: false,
+        fallbackUnits: { output: 1 },
+      },
+      async () => {
+        throw new Error("private provider failure");
+      },
+      (event) => failedEvents.push(event),
+      () => failedTimestamps.shift() ?? 20_250,
+    );
+  } catch (error) {
+    failure = error;
+  }
+  assert.match(String(failure), /private provider failure/);
+  assert.deepEqual(failedEvents, [{
+    role: "music_full",
+    modelId: "google/lyria-3-pro",
+    status: "failed",
+    promptVersion: "music-production-v2.en",
+    briefVersion: 0,
+    language: "en",
+    outcome: "provider_error",
+    repaired: false,
+    latencyMs: 250,
+    estimatedCostUsd: 0.08,
+    inputUnits: null,
+    outputUnits: null,
+  }]);
+  assert.doesNotMatch(JSON.stringify(failedEvents), /private provider failure/);
+}
+
+checkObservedPrediction()
+  .then(() => console.log("creative telemetry checks passed"))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

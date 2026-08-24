@@ -16,6 +16,7 @@ import {
   assertWithinModelBudget,
   estimateModelCost,
   resolveCreativeModel,
+  type CreativeModelRole,
 } from "../_shared/creative-models.ts";
 import { deterministicCreativeTitle } from "../_shared/creative-titles.ts";
 import type { VisualPlan } from "../_shared/visual-direction.ts";
@@ -676,6 +677,16 @@ type GenerationErrorStage =
   | "terminal_ambiguous"
   | "job_failure_persist";
 
+export type PredictionObservation = {
+  role: CreativeModelRole;
+  promptVersion: string;
+  briefVersion: 0 | 1 | 2;
+  language: GenerationLanguage;
+  outcome: string;
+  repaired: boolean;
+  fallbackUnits?: { input?: number; output?: number };
+};
+
 export type RunDependencies = {
   updateJob: (
     jobId: string,
@@ -718,8 +729,16 @@ export type RunDependencies = {
     localHour: unknown,
     language: GenerationLanguage,
   ) => Promise<{ pick: any; caption: string } | null>;
-  replicateRun: (endpoint: string, body: object) => Promise<string>;
-  replicateText: (endpoint: string, body: object) => Promise<string>;
+  replicateRun: (
+    endpoint: string,
+    body: object,
+    observation: PredictionObservation,
+  ) => Promise<string>;
+  replicateText: (
+    endpoint: string,
+    body: object,
+    observation: PredictionObservation,
+  ) => Promise<string>;
   fetchMedia: (url: string) => Promise<MediaResponse>;
   r2Put: (
     key: string,
@@ -732,7 +751,12 @@ export type RunDependencies = {
     objectKey: string,
     dj: any,
     instrumental: boolean,
-    context?: { seed: string; visualPlan: VisualPlan | null },
+    context?: {
+      seed: string;
+      visualPlan: VisualPlan | null;
+      language: GenerationLanguage;
+      briefVersion: 0 | 1 | 2;
+    },
   ) => Promise<string | null>;
   streamUrl: (trackId: string) => string;
   logModel: (event: ModelEvent) => void;
@@ -796,7 +820,15 @@ async function buildCaptionAudio(
     caption.slice(0, 140),
   );
   observe(deps, "tts", input.language);
-  const tempUrl = await deps.replicateRun(request.endpoint, request.body);
+  const tempUrl = await deps.replicateRun(request.endpoint, request.body, {
+    role: "voice_caption",
+    promptVersion: `caption-tts-v2.${input.language}`,
+    briefVersion: input.brief?.version ?? 0,
+    language: input.language,
+    outcome: "generated",
+    repaired: false,
+    fallbackUnits: { input: request.body.input.text.length },
+  });
   const bytes = await downloadProviderMedia(tempUrl, deps.fetchMedia);
   return await deps.r2Put(
     objectKey,
@@ -942,6 +974,15 @@ export async function runGeneration(
     const audioPromise = deps.replicateRun(
       musicRequest.endpoint,
       musicRequest.body,
+      {
+        role: "music_full",
+        promptVersion: `music-production-v2.${input.language}`,
+        briefVersion: input.brief?.version ?? 0,
+        language: input.language,
+        outcome: "generated",
+        repaired: false,
+        fallbackUnits: { output: 1 },
+      },
     ).then((musicUrl) => downloadProviderMedia(musicUrl, deps.fetchMedia))
       .then((musicBytes) =>
         deps.r2Put(
@@ -960,6 +1001,8 @@ export async function runGeneration(
         visualPlan: input.brief?.version === 2
           ? input.brief.productionPlan.visual
           : null,
+        language: input.language,
+        briefVersion: input.brief?.version ?? 0,
       },
     );
     const [audioReference, cover] = await Promise.all([
@@ -986,9 +1029,22 @@ export async function runGeneration(
           language: input.language,
         });
         observe(deps, "caption", input.language);
+        const captionModel = resolveCreativeModel("creative_shortform");
         const raw = await deps.replicateText(
           captionRequest.endpoint,
           captionRequest.body,
+          {
+            role: "creative_shortform",
+            promptVersion: `caption-v2.${input.language}`,
+            briefVersion: input.brief?.version ?? 0,
+            language: input.language,
+            outcome: "generated",
+            repaired: false,
+            fallbackUnits: {
+              input: captionModel.limits.input,
+              output: 60,
+            },
+          },
         );
         caption = parseCaption(raw);
         if (caption) {

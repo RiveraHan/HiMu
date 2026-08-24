@@ -1350,7 +1350,11 @@ async function main() {
     const deleteAccesses: Array<"public" | "private"> = [];
     const modelEvents: ModelEvent[] = [];
     const errorEvents: unknown[][] = [];
-    const replicateInputs: Array<{ endpoint: string; body: any }> = [];
+    const replicateInputs: Array<{
+      endpoint: string;
+      body: any;
+      observation?: unknown;
+    }> = [];
     const insertedAudius: Array<Record<string, unknown>> = [];
     const deps = {
       updateJob: async (
@@ -1388,14 +1392,20 @@ async function main() {
         return { id: "audius-track" };
       },
       pickAudiusDrop: async () => null,
-      replicateRun: async (endpoint: string, body: any) => {
-        replicateInputs.push({ endpoint, body });
+      replicateRun: async (endpoint: string, body: any, observation?: unknown) => {
+        replicateInputs.push({ endpoint, body, observation });
         return endpoint === LYRIA_ENDPOINT
           ? "https://media.test/music"
           : "https://media.test/tts";
       },
-      replicateText: async () =>
-        "[CAPTION_START]\nTurn it up [scream], then [laugh].\n[CAPTION_END]",
+      replicateText: async (
+        endpoint: string,
+        body: any,
+        observation?: unknown,
+      ) => {
+        replicateInputs.push({ endpoint, body, observation });
+        return "[CAPTION_START]\nTurn it up [scream], then [laugh].\n[CAPTION_END]";
+      },
       fetchMedia: async (url: string) =>
         mediaResponse(200, url.endsWith("/music") ? [1, 2, 3] : [4, 5]),
       r2Put: async (
@@ -1588,9 +1598,20 @@ async function main() {
     assert.match(prompt, /Key: F# minor/);
     assert.match(prompt, /glass mallets/);
     assert.match(prompt, /ARRANGEMENT TIMELINE/);
+    assert.deepEqual(state.replicateInputs[0]?.observation, {
+      role: "music_full",
+      promptVersion: "music-production-v2.en",
+      briefVersion: 2,
+      language: "en",
+      outcome: "generated",
+      repaired: false,
+      fallbackUnits: { output: 1 },
+    });
     assert.deepEqual(state.coverContexts[0], {
       seed: "job-confirmed-brief:2026-07-22T12:00:00.000Z:cover-v2",
       visualPlan: validBriefV2.productionPlan.visual,
+      language: "en",
+      briefVersion: 2,
     });
     const firstSeed = state.replicateInputs[0]?.body?.input?.seed;
     assert.equal(typeof firstSeed, "number");
@@ -2101,8 +2122,31 @@ async function main() {
     const tts = state.replicateInputs.find(
       (input) => input.endpoint === INWORLD_TTS_ENDPOINT,
     );
+    const captionText = state.replicateInputs.find(
+      (input) =>
+        (input.observation as { role?: string } | undefined)?.role ===
+          "creative_shortform",
+    );
+    assert.deepEqual(captionText?.observation, {
+      role: "creative_shortform",
+      promptVersion: "caption-v2.es",
+      briefVersion: 0,
+      language: "es",
+      outcome: "generated",
+      repaired: false,
+      fallbackUnits: { input: 900, output: 60 },
+    });
     assert.ok(tts);
     assert.doesNotMatch(tts.body.input.text, /\[(?:scream|laugh)\]/i);
+    assert.deepEqual(tts.observation, {
+      role: "voice_caption",
+      promptVersion: "caption-tts-v2.es",
+      briefVersion: 0,
+      language: "es",
+      outcome: "generated",
+      repaired: false,
+      fallbackUnits: { input: 82 },
+    });
   }
 
   {

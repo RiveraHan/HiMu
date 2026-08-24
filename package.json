@@ -22,6 +22,7 @@
     "check:creative-benchmark": "node --import tsx scripts/check/creative-benchmark.ts",
     "benchmark:creative": "node --env-file-if-exists=.env --import tsx scripts/check/run-creative-benchmark.ts",
     "check:creative-generation-migration": "node --import tsx scripts/check/creative-generation-migration.ts",
+    "check:creative-media-telemetry": "node --import tsx scripts/check/creative-media-telemetry.ts",
     "check:creative-draft-function": "node --import tsx scripts/check/creative-draft-function.ts",
     "check:creative-model-catalog": "node --import tsx scripts/check/creative-model-catalog.ts",
     "check:creative-provider-adapters": "node --import tsx scripts/check/creative-provider-adapters.ts",

@@ -21,6 +21,16 @@ export type CreativeUsageEvent = {
   outputUnits: number | null;
 };
 
+export type CreativePredictionContext = {
+  model: ModelDefinition;
+  promptVersion: string;
+  briefVersion: 0 | 1 | 2;
+  language: "en" | "es";
+  outcome: string;
+  repaired: boolean;
+  fallbackUnits?: { input?: number; output?: number };
+};
+
 const EVENT_KEYS = [
   "role",
   "modelId",
@@ -120,4 +130,93 @@ export function logCreativeUsageEvent(
 ): void {
   const event = createCreativeUsageEvent(value);
   logger(`[creative_usage] ${JSON.stringify(event)}`);
+}
+
+function predictionUnits(
+  model: ModelDefinition,
+  prediction: NormalizedPrediction<unknown>,
+  fallback: { input?: number; output?: number },
+): { inputUnits: number | null; outputUnits: number | null } {
+  switch (model.price.unit) {
+    case "tokens":
+      return {
+        inputUnits: prediction.metrics.inputTokens,
+        outputUnits: prediction.metrics.outputTokens,
+      };
+    case "characters":
+      return {
+        inputUnits: prediction.metrics.inputCharacters ?? fallback.input ?? null,
+        outputUnits: null,
+      };
+    case "output":
+    case "megapixels":
+      return { inputUnits: null, outputUnits: fallback.output ?? 1 };
+    case "seconds":
+      return { inputUnits: null, outputUnits: null };
+  }
+}
+
+function safelyRecordUsage(
+  recordUsage: (event: CreativeUsageEvent) => void,
+  event: CreativeUsageEvent,
+): void {
+  try {
+    recordUsage(createCreativeUsageEvent(event));
+  } catch {
+    console.error("[creative-telemetry] usage recording failed");
+  }
+}
+
+export async function runObservedCreativePrediction<T>(
+  context: CreativePredictionContext,
+  run: () => Promise<NormalizedPrediction<T>>,
+  recordUsage: (event: CreativeUsageEvent) => void = logCreativeUsageEvent,
+  now: () => number = Date.now,
+): Promise<T> {
+  const startedAt = now();
+  let prediction: NormalizedPrediction<T>;
+  try {
+    prediction = await run();
+  } catch (error) {
+    const fallback = context.fallbackUnits ?? {};
+    safelyRecordUsage(recordUsage, {
+      role: context.model.role,
+      modelId: context.model.id,
+      status: "failed",
+      promptVersion: context.promptVersion,
+      briefVersion: context.briefVersion,
+      language: context.language,
+      outcome: "provider_error",
+      repaired: context.repaired,
+      latencyMs: Math.max(0, Math.round(now() - startedAt)),
+      estimatedCostUsd: estimateModelCost(context.model, {
+        input: fallback.input ?? context.model.limits.input,
+        output: fallback.output ?? context.model.limits.output,
+      }),
+      inputUnits: null,
+      outputUnits: null,
+    });
+    throw error;
+  }
+
+  const fallback = context.fallbackUnits ?? {};
+  const units = predictionUnits(context.model, prediction, fallback);
+  safelyRecordUsage(recordUsage, {
+    role: context.model.role,
+    modelId: context.model.id,
+    status: "succeeded",
+    promptVersion: context.promptVersion,
+    briefVersion: context.briefVersion,
+    language: context.language,
+    outcome: context.outcome,
+    repaired: context.repaired,
+    latencyMs: Math.max(0, Math.round(now() - startedAt)),
+    estimatedCostUsd: estimatePredictionCost(
+      context.model,
+      prediction,
+      fallback,
+    ),
+    ...units,
+  });
+  return prediction.output;
 }

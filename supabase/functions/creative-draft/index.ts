@@ -1,8 +1,9 @@
 import { json } from "../_shared/http.ts";
 import { mapProviderReservation } from "../_shared/provider-usage.ts";
-import { replicateText } from "../_shared/replicate.ts";
+import { replicateTextPrediction } from "../_shared/replicate.ts";
 import { resolveCreativeModel } from "../_shared/creative-models.ts";
 import { extractRecentCreativeMemory } from "../_shared/creative-generation.ts";
+import { logCreativeUsageEvent } from "../_shared/creative-telemetry.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import {
@@ -99,7 +100,12 @@ const dependencies: CreativeDraftDependencies = {
       (tracks ?? []).map((row) => row.title),
     );
   },
-  generateText: (model, body) => replicateText(model.endpoint, body),
+  generateText: (model, body) =>
+    replicateTextPrediction(model.endpoint, body, {
+      pollIntervalMs: 1_500,
+      maxPolls: 40,
+    }),
+  recordUsage: logCreativeUsageEvent,
 };
 
 serveAuthed(async (req, user) => {

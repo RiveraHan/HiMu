@@ -4,20 +4,13 @@
  */
 
 import {
-  buildAvatarImageRequest,
   buildBasePrompt,
   validateDjTraitsInput,
 } from "../_shared/dj-input.ts";
-import { buildImageProviderBody } from "../_shared/creative-provider-adapters.ts";
-import {
-  assertWithinModelBudget,
-  estimateModelCost,
-  resolveCreativeModel,
-} from "../_shared/creative-models.ts";
+import { generateAvatarImage } from "../_shared/avatar.ts";
 import { invalid, json } from "../_shared/http.ts";
 import { mapProviderReservation } from "../_shared/provider-usage.ts";
-import { keyFromPublicUrl, r2Delete, r2Put } from "../_shared/r2.ts";
-import { replicateRun } from "../_shared/replicate.ts";
+import { keyFromPublicUrl, r2Delete } from "../_shared/r2.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import { runAvatarGeneration } from "./avatar-reservation.ts";
@@ -102,29 +95,12 @@ serveAuthed(async (req, user) => {
           return mapProviderReservation(data, error);
         },
         generate: async () => {
-          const model = resolveCreativeModel("image_avatar");
-          const image = buildAvatarImageRequest(
+          const nextAvatarUrl = await generateAvatarImage(newKey, {
             genres,
             moods,
-            dj.identity_concept,
-            `${djId}:${next}:avatar-v2`,
-          );
-          assertWithinModelBudget(
-            "image_avatar",
-            estimateModelCost(model, { input: 0, output: 1 }),
-          );
-          const tmp = await replicateRun(
-            model.endpoint,
-            buildImageProviderBody(model, {
-              prompt: image.prompt,
-              aspectRatio: "1:1",
-              outputFormat: "jpg",
-              seed: image.seed,
-            }),
-          );
-
-          const bytes = new Uint8Array(await (await fetch(tmp)).arrayBuffer());
-          const nextAvatarUrl = await r2Put(newKey, bytes, "image/jpeg", "public");
+            identityConcept: dj.identity_concept,
+            seed: `${djId}:${next}:avatar-v2`,
+          });
 
           const { error: avErr } = await admin
             .from("djs")

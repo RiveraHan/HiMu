@@ -9,9 +9,14 @@
 
 import { streamUrl } from "../_shared/audius.ts";
 import { generateCoverImage, type CoverContext } from "../_shared/cover.ts";
+import { resolveCreativeModel } from "../_shared/creative-models.ts";
+import { runObservedCreativePrediction } from "../_shared/creative-telemetry.ts";
 import { json } from "../_shared/http.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
-import { replicateRun, replicateText } from "../_shared/replicate.ts";
+import {
+  replicateMediaPrediction,
+  replicateTextPrediction,
+} from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import { pickAudiusDrop } from "./audius-drop.ts";
@@ -30,7 +35,10 @@ async function generateCover(
   objectKey: string,
   dj: any,
   instrumental: boolean,
-  context?: Pick<CoverContext, "seed" | "visualPlan">,
+  context?: Pick<
+    CoverContext,
+    "seed" | "visualPlan" | "language" | "briefVersion"
+  >,
 ): Promise<string | null> {
   try {
     return await generateCoverImage(objectKey, {
@@ -39,6 +47,8 @@ async function generateCover(
       instrumental,
       seed: context?.seed,
       visualPlan: context?.visualPlan ?? null,
+      language: context?.language,
+      briefVersion: context?.briefVersion,
     });
   } catch (_error) {
     return dj.avatar_url ?? null;
@@ -233,8 +243,30 @@ const generationDependencies = {
     return data;
   },
   pickAudiusDrop,
-  replicateRun,
-  replicateText,
+  replicateRun: async (endpoint, body, observation) => {
+    const model = resolveCreativeModel(observation.role);
+    if (model.endpoint !== endpoint) throw new Error("creative_model_endpoint_mismatch");
+    return await runObservedCreativePrediction(
+      { model, ...observation },
+      () =>
+        replicateMediaPrediction(endpoint, body, {
+          pollIntervalMs: 3_000,
+          maxPolls: 80,
+        }),
+    );
+  },
+  replicateText: async (endpoint, body, observation) => {
+    const model = resolveCreativeModel(observation.role);
+    if (model.endpoint !== endpoint) throw new Error("creative_model_endpoint_mismatch");
+    return await runObservedCreativePrediction(
+      { model, ...observation },
+      () =>
+        replicateTextPrediction(endpoint, body, {
+          pollIntervalMs: 1_500,
+          maxPolls: 40,
+        }),
+    );
+  },
   fetchMedia: (url: string) => fetch(url),
   r2Put,
   r2Delete,

@@ -16,7 +16,16 @@ import {
   estimateModelCost,
   resolveCreativeModel,
 } from "../_shared/creative-models.ts";
+import {
+  logCreativeUsageEvent,
+  runObservedCreativePrediction,
+  type CreativeUsageEvent,
+} from "../_shared/creative-telemetry.ts";
 import { compileDjPerformance } from "../_shared/dj-performance.ts";
+import {
+  replicateTextPrediction,
+  type NormalizedPrediction,
+} from "../_shared/replicate.ts";
 
 const CANDIDATE_LIMIT = 12;
 
@@ -26,6 +35,18 @@ function shortlistField(value: unknown, fallback: string, limit: number): string
 }
 
 export type AudiusPick = { pick: AudiusTrack; caption: string };
+export type AudiusDropDependencies = {
+  fetchCandidates: (
+    genre: string | null,
+    limit: number,
+  ) => Promise<AudiusTrack[]>;
+  predict: (
+    endpoint: string,
+    body: object,
+  ) => Promise<NormalizedPrediction<string>>;
+  recordUsage: (event: CreativeUsageEvent) => void;
+  now: () => number;
+};
 
 export function fallbackAudiusPickCaption(
   language: GenerationLanguage = "en",
@@ -111,20 +132,34 @@ export function buildAudiusPickInput(
 // it. Returns null when no playable candidate exists (caller falls back to
 // generation). Never throws for an empty shortlist; a failed LLM call degrades
 // to the parse fallback (candidate 0 + templated caption).
-export async function pickAudiusDrop(
+export async function pickAudiusDropWithDependencies(
   dj: any,
   localHour: unknown,
-  language: GenerationLanguage = "en",
+  language: GenerationLanguage,
+  deps: AudiusDropDependencies,
 ): Promise<AudiusPick | null> {
   const genre = mapDjGenre(dj?.genre_specialties);
-  const candidates = await fetchTrending(genre, CANDIDATE_LIMIT);
+  const candidates = await deps.fetchCandidates(genre, CANDIDATE_LIMIT);
   if (candidates.length === 0) return null;
   const input = buildAudiusPickInput(dj, localHour, candidates, language);
+  const model = resolveCreativeModel("creative_shortform");
 
   let raw = "";
   try {
-    const { replicateText } = await import("../_shared/replicate.ts");
-    raw = await replicateText(input.endpoint, input.body);
+    raw = await runObservedCreativePrediction(
+      {
+        model,
+        promptVersion: `audius-pick-v2.${language}`,
+        briefVersion: 0,
+        language,
+        outcome: "generated",
+        repaired: false,
+        fallbackUnits: { input: model.limits.input, output: 80 },
+      },
+      () => deps.predict(input.endpoint, input.body),
+      deps.recordUsage,
+      deps.now,
+    );
   } catch (_e) {
     raw = ""; // fall through to the parse fallback
   }
@@ -136,4 +171,21 @@ export async function pickAudiusDrop(
     fallbackAudiusPickCaption(language, pick.title, pick.user?.name);
 
   return { pick, caption: finalCaption };
+}
+
+export async function pickAudiusDrop(
+  dj: any,
+  localHour: unknown,
+  language: GenerationLanguage = "en",
+): Promise<AudiusPick | null> {
+  return await pickAudiusDropWithDependencies(dj, localHour, language, {
+    fetchCandidates: fetchTrending,
+    predict: (endpoint, body) =>
+      replicateTextPrediction(endpoint, body, {
+        pollIntervalMs: 1_500,
+        maxPolls: 40,
+      }),
+    recordUsage: logCreativeUsageEvent,
+    now: Date.now,
+  });
 }

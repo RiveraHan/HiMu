@@ -11,27 +11,21 @@ import {
   runObservedCreativePrediction,
   type CreativeUsageEvent,
 } from "./creative-telemetry.ts";
-import {
-  compileVisualDirection,
-  renderVisualPrompt,
-  type VisualPlan,
-} from "./visual-direction.ts";
+import { buildAvatarImageRequest } from "./dj-input.ts";
 import {
   replicateMediaPrediction,
   type NormalizedPrediction,
 } from "./replicate.ts";
 
-export type CoverContext = {
-  genre: string;
+export type AvatarContext = {
+  genres: string[];
   moods: string[];
-  instrumental: boolean;
-  seed?: string;
-  visualPlan?: VisualPlan | null;
+  identityConcept?: string | null;
+  seed: string;
   language?: "en" | "es";
-  briefVersion?: 0 | 1 | 2;
 };
 
-export type CoverGenerationDependencies = {
+export type AvatarGenerationDependencies = {
   resolveModel: (role: CreativeModelRole) => ModelDefinition;
   predict: (
     endpoint: string,
@@ -48,54 +42,34 @@ export type CoverGenerationDependencies = {
   now: () => number;
 };
 
-export function coverPrompt(ctx: CoverContext): string {
-  return renderVisualPrompt(compileVisualDirection({
-    purpose: "cover",
-    seed: ctx.seed ?? JSON.stringify([
-      ctx.genre,
-      ctx.moods,
-      ctx.instrumental,
-      ctx.visualPlan,
-    ]),
-    genres: ctx.genre.trim() ? [ctx.genre] : [],
-    moods: ctx.moods,
-    instrumental: ctx.instrumental,
-    identityConcept: null,
-    visualPlan: ctx.visualPlan ?? null,
-  }));
-}
-
-export async function generateCoverAsset(
+export async function generateAvatarAsset(
   key: string,
-  ctx: CoverContext,
-  deps: CoverGenerationDependencies,
+  context: AvatarContext,
+  deps: AvatarGenerationDependencies,
 ): Promise<string> {
-  const model = deps.resolveModel("image_cover");
-  const direction = compileVisualDirection({
-    purpose: "cover",
-    seed: ctx.seed ?? key,
-    genres: ctx.genre.trim() ? [ctx.genre] : [],
-    moods: ctx.moods,
-    instrumental: ctx.instrumental,
-    identityConcept: null,
-    visualPlan: ctx.visualPlan ?? null,
-  });
+  const model = deps.resolveModel("image_avatar");
+  const image = buildAvatarImageRequest(
+    context.genres,
+    context.moods,
+    context.identityConcept,
+    context.seed,
+  );
   assertWithinModelBudget(
-    "image_cover",
+    "image_avatar",
     estimateModelCost(model, { input: 0, output: 1 }),
   );
   const body = buildImageProviderBody(model, {
-      prompt: renderVisualPrompt(direction),
-      aspectRatio: "1:1",
-      outputFormat: "jpg",
-      seed: direction.seed,
-    });
-  const language = ctx.language ?? "en";
+    prompt: image.prompt,
+    aspectRatio: "1:1",
+    outputFormat: "jpg",
+    seed: image.seed,
+  });
+  const language = context.language ?? "en";
   const url = await runObservedCreativePrediction(
     {
       model,
-      promptVersion: `cover-v2.${language}`,
-      briefVersion: ctx.briefVersion ?? 0,
+      promptVersion: `avatar-v2.${language}`,
+      briefVersion: 0,
       language,
       outcome: "generated",
       repaired: false,
@@ -106,18 +80,18 @@ export async function generateCoverAsset(
     deps.now,
   );
   const response = await deps.fetchMedia(url);
-  if (!response.ok) throw new Error(`cover download failed (${response.status})`);
+  if (!response.ok) throw new Error(`avatar download failed (${response.status})`);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength === 0) throw new Error("cover download returned empty bytes");
+  if (bytes.byteLength === 0) throw new Error("avatar download returned empty bytes");
   return await deps.put(key, bytes, "image/jpeg", "public");
 }
 
-export async function generateCoverImage(
+export async function generateAvatarImage(
   key: string,
-  ctx: CoverContext,
+  context: AvatarContext,
 ): Promise<string> {
   const { r2Put } = await import("./r2.ts");
-  return await generateCoverAsset(key, ctx, {
+  return await generateAvatarAsset(key, context, {
     resolveModel: resolveCreativeModel,
     predict: (endpoint, body) =>
       replicateMediaPrediction(endpoint, body, {
