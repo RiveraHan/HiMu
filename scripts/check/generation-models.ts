@@ -198,7 +198,7 @@ const spanishTitles = spanishTitleRandomValues.map((value) =>
   creativeTitle("es", () => value)
 );
 const reviewFailures: string[] = [];
-if (!/neutral Latin American Spanish/i.test(caption.body.input.system_prompt)) {
+if (!/español latinoamericano neutro/i.test(caption.body.input.system_prompt)) {
   reviewFailures.push("Spanish captions must require neutral Latin American Spanish");
 }
 if (new Set(spanishTitles).size !== spanishTitles.length) {
@@ -215,7 +215,8 @@ assert.equal(tts.body.input.language, "es");
 assert.equal(tts.body.input.audio_format, "mp3");
 assert.equal(tts.body.input.sample_rate, 48000);
 assert.equal(tts.body.input.voice_id, "Ashley");
-assert.match(tts.body.input.text, /^\[say with upbeat radio energy\]/);
+assert.match(tts.body.input.text, /^\[di con energía luminosa y una sonrisa audible\]/);
+assert.ok(tts.body.input.text.length <= 200);
 
 const hostileCaption =
   "Subimos [scream] Luz [laugh] con [whisper] Mara; esto queda visible.";

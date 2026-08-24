@@ -793,7 +793,7 @@ async function buildCaptionAudio(
     input.language,
     dj?.voice_style,
     dj?.mood_tags,
-    caption.slice(0, 300),
+    caption.slice(0, 140),
   );
   observe(deps, "tts", input.language);
   const tempUrl = await deps.replicateRun(request.endpoint, request.body);

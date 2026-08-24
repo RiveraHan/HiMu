@@ -25,6 +25,7 @@
     "check:creative-provider-adapters": "node --import tsx scripts/check/creative-provider-adapters.ts",
     "check:creative-telemetry": "node --import tsx scripts/check/creative-telemetry.ts",
     "check:creative-titles": "node --import tsx scripts/check/creative-titles.ts",
+    "check:dj-performance": "node --import tsx scripts/check/dj-performance.ts",
     "check:generation-brief-v2-migration": "node --import tsx scripts/check/generation-brief-v2-migration.ts",
     "check:music-production": "node --import tsx scripts/check/music-production.ts",
     "check:visual-direction": "node --import tsx scripts/check/visual-direction.ts",
