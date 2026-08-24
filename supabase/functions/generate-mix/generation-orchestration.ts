@@ -11,13 +11,13 @@ import {
 import {
   validateConfirmedBrief,
   type AuthoritativeDjTraits,
-  type ConfirmedGenerationBriefV1,
+  type ConfirmedGenerationBrief,
 } from "../_shared/creative-generation.ts";
 import type { R2Access } from "../_shared/r2-contract.ts";
 
 type JobSummary = { id: string; status: string; isPublic: boolean };
 type ManualJobSummary = JobSummary & {
-  brief: ConfirmedGenerationBriefV1 | null;
+  brief: ConfirmedGenerationBrief | null;
   sourceTrackId: string | null;
 };
 type DailyJobSummary = JobSummary & { djId: string; updatedAt: string };
@@ -42,7 +42,7 @@ export type ManualJobReservation =
     dailyLimit: number;
     queuedAt: string;
     isPublic: boolean;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     sourceTrackId: string | null;
   }
   | {
@@ -50,7 +50,7 @@ export type ManualJobReservation =
     jobId: string;
     dailyLimit: number;
     isPublic: boolean;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     sourceTrackId: string | null;
   }
   | { outcome: "quota"; jobId: null; dailyLimit: number };
@@ -162,14 +162,21 @@ export function mapDailyJobReservation(
   throw new Error("invalid daily job reservation result");
 }
 
-function reservationBrief(value: unknown): ConfirmedGenerationBriefV1 {
+function reservationBrief(value: unknown): ConfirmedGenerationBrief {
+  const version = value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>).version
+    : null;
   if (
     value == null || typeof value !== "object" || Array.isArray(value) ||
-    (value as Record<string, unknown>).version !== 1
+    (version !== 1 && version !== 2) ||
+    (version === 2 &&
+      (typeof (value as Record<string, unknown>).productionPlan !== "object" ||
+        (value as Record<string, unknown>).productionPlan == null ||
+        Array.isArray((value as Record<string, unknown>).productionPlan)))
   ) {
     throw new Error("invalid manual job reservation result");
   }
-  return value as ConfirmedGenerationBriefV1;
+  return value as ConfirmedGenerationBrief;
 }
 
 function reservationSourceTrackId(value: unknown): string | null {
@@ -219,7 +226,7 @@ export type RunGenerationInput = {
   isPublic: boolean;
   cfg: any;
   lyrics: string | null;
-  brief?: ConfirmedGenerationBriefV1 | null;
+  brief?: ConfirmedGenerationBrief | null;
   seasoning: string[];
   language: GenerationLanguage;
   drop?: { localHour: unknown };
@@ -255,7 +262,7 @@ export type RequestDependencies = {
   reserveManualJob: (input: {
     userId: string;
     djId: unknown;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     isPublic: boolean;
     sourceTrackId: string | null;
   }) => Promise<ManualJobReservation>;
@@ -551,7 +558,7 @@ export async function handleGenerateMixRequest(
     });
   }
 
-  let brief: ConfirmedGenerationBriefV1;
+  let brief: ConfirmedGenerationBrief;
   try {
     brief = validateConfirmedBrief(
       rawBrief,

@@ -87,6 +87,37 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+const productionPlan = {
+  bpm: 112,
+  key: "D major",
+  meter: "4/4" as const,
+  sections: [
+    { name: "intro" as const, startSeconds: 0, endSeconds: 16, direction: "Open with a muted guitar figure and close room tone." },
+    { name: "verse" as const, startSeconds: 16, endSeconds: 54, direction: "Keep the lead voice intimate above restrained drums." },
+    { name: "chorus" as const, startSeconds: 54, endSeconds: 94, direction: "Widen the harmony and lift the central hook." },
+    { name: "outro" as const, startSeconds: 94, endSeconds: 120, direction: "Let the guitar figure resolve in warm tape bloom." },
+  ],
+  leadInstruments: ["muted guitar", "lead voice"],
+  rhythmInstruments: ["soft kick", "brushed snare"],
+  textureInstruments: ["room tone", "tape bloom"],
+  energyArc: "Move from a private dawn confession to an open luminous chorus.",
+  productionCharacter: ["close foreground", "warm tape saturation"],
+  vocalDirection: "Natural contemporary English with intimate verses and an open chorus hook.",
+  visual: {
+    concept: "A folded letter catches the first line of sunrise.",
+    subject: "A translucent letter resting on a rain-dark windowsill",
+    medium: "Hand-built paper sculpture photographed on film",
+    composition: "Square frame with the letter low and sunrise entering from the upper edge",
+    palette: ["dawn peach", "rain blue", "paper ivory"],
+    lighting: "Low sunrise grazing wet glass",
+    texture: "Paper fibers, condensation, and restrained film grain",
+  },
+  novelty: {
+    coreMotifs: ["folded sunrise letter", "rising two-note answer"],
+    avoidRecentMotifs: ["neon tunnel", "chrome portrait"],
+  },
+};
+
 describe("CreateTrackScreen", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("en");
@@ -106,6 +137,7 @@ describe("CreateTrackScreen", () => {
         creativeDirection: "Open gently, then bloom into a wide luminous chorus.",
         lyricTheme: "finding courage at sunrise",
         lyrics: "[Verse]\nA spark remains\n[Chorus]\nWe rise again",
+        productionPlan,
       },
     });
     mockRegenerateTitle.mockReset().mockResolvedValue({
@@ -133,9 +165,10 @@ describe("CreateTrackScreen", () => {
     await waitFor(() => expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({
       djId: "dj-one",
       brief: expect.objectContaining({
-        version: 1,
+        version: 2,
         title: "Afterglow Letters",
         lyrics: "[Verse]\nA spark remains\n[Chorus]\nWe rise again",
+        productionPlan,
       }),
       sourceTrackId: null,
     })));

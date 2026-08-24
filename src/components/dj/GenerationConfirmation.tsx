@@ -5,13 +5,13 @@ import { Button } from "@/src/components/Button";
 import { GlassCard } from "@/src/components/GlassCard";
 import { Text } from "@/src/components/Text";
 import type {
-  ConfirmedGenerationBriefV1,
+  ConfirmedGenerationBrief,
   GenerationBriefDraft,
 } from "@/src/types/creative-generation";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
-  brief: ConfirmedGenerationBriefV1;
+  brief: ConfirmedGenerationBrief;
   disabled: boolean;
   isSubmitting: boolean;
   onBack: () => void;

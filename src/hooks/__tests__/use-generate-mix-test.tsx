@@ -56,6 +56,11 @@ const brief: ConfirmedGenerationBriefV1 = {
   },
 };
 const generateInput = { djId: "dj-one", brief, sourceTrackId: null };
+const briefV2 = {
+  ...brief,
+  version: 2 as const,
+  productionPlan: { marker: "validated-server-plan" } as never,
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -174,6 +179,37 @@ test("seeds the persisted confirmed brief before activity invalidation settles",
   });
 
   await act(async () => finishInvalidation());
+});
+
+test("accepts a persisted V2 brief and keeps it intact in activity recovery", async () => {
+  jest.mocked(supabase.functions.invoke).mockResolvedValue({
+    data: {
+      jobId: "job-v2",
+      isPublic: false,
+      brief: briefV2,
+      sourceTrackId: null,
+    },
+    error: null,
+  } as never);
+  const queryClient = client();
+  jest.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+  const { result } = await renderHook(() => useGenerateMix(), {
+    wrapper: wrapper(queryClient),
+  });
+
+  await act(async () => {
+    await result.current.generateAsync({
+      djId: "dj-one",
+      brief: briefV2,
+      sourceTrackId: null,
+    });
+  });
+
+  expect(
+    queryClient.getQueryData<ActivityItem[]>(
+      queryKeys.generationJobs.activity("listener"),
+    )?.[0]?.retryBrief,
+  ).toEqual(briefV2);
 });
 
 test("does not downgrade a running cache item when the start response races activity polling", async () => {

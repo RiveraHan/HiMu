@@ -4,7 +4,7 @@ import type {
   GenerationJobRow,
 } from "@/src/activity/types";
 import type { Visibility } from "@/src/types/content-visibility";
-import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
+import type { ConfirmedGenerationBrief } from "@/src/types/creative-generation";
 
 const MIX_SLOW_MS = 90_000;
 const MANUAL_JOB_RECOVERY_MS = 15 * 60_000;
@@ -27,17 +27,20 @@ function validTimestamp(value: string, fallback: string): string {
   return Number.isFinite(Date.parse(value)) ? value : fallback;
 }
 
-function confirmedBrief(value: unknown): ConfirmedGenerationBriefV1 | null {
+function confirmedBrief(value: unknown): ConfirmedGenerationBrief | null {
   if (value == null || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
   const brief = value as Record<string, unknown>;
-  return brief.version === 1 && typeof brief.title === "string" &&
+  return (brief.version === 1 ||
+      (brief.version === 2 && typeof brief.productionPlan === "object" &&
+        brief.productionPlan != null && !Array.isArray(brief.productionPlan))) &&
+      typeof brief.title === "string" &&
       typeof brief.creativeDirection === "string" &&
       (brief.mode === "instrumental" || brief.mode === "vocal") &&
       (brief.visibility === "private" || brief.visibility === "public") &&
       typeof brief.traitSnapshot === "object" && brief.traitSnapshot != null
-    ? value as ConfirmedGenerationBriefV1
+    ? value as ConfirmedGenerationBrief
     : null;
 }
 
@@ -105,7 +108,7 @@ export function upsertQueuedGenerationActivity(
     djId: string;
     title: string;
     retryLyrics: string | null;
-    retryBrief: ConfirmedGenerationBriefV1 | null;
+    retryBrief: ConfirmedGenerationBrief | null;
     sourceTrackId: string | null;
     visibility: Visibility;
     nowMs: number;

@@ -1,5 +1,5 @@
 import type { Visibility } from "@/src/types/content-visibility";
-import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
+import type { ConfirmedGenerationBrief } from "@/src/types/creative-generation";
 
 export type ActivityKind = "mix" | "create-dj" | "update-dj" | "cover";
 
@@ -31,7 +31,7 @@ export type ActivityItem = {
   failureReason: ActivityFailureReason | null;
   recoveryAvailable: boolean;
   retryLyrics: string | null;
-  retryBrief: ConfirmedGenerationBriefV1 | null;
+  retryBrief: ConfirmedGenerationBrief | null;
   sourceTrackId: string | null;
   visibility?: Visibility | null;
   detail: ActivityDetail;

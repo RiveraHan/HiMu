@@ -555,7 +555,8 @@ export function ActivityProvider({ children }: PropsWithChildren) {
           data.jobId.trim().length === 0 ||
           typeof data.isPublic !== "boolean" ||
           (activity.retryBrief &&
-            (!data.brief || data.brief.version !== 1 ||
+            (!data.brief ||
+              (data.brief.version !== 1 && data.brief.version !== 2) ||
               (data.sourceTrackId !== null &&
                 typeof data.sourceTrackId !== "string")))
         ) {

@@ -6,27 +6,30 @@ import { useLocale } from "@/src/i18n/use-locale";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
 import { authMutationKey, captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
-import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
+import type { ConfirmedGenerationBrief } from "@/src/types/creative-generation";
 
 type GenerateMixInput = {
   djId: string;
-  brief: ConfirmedGenerationBriefV1;
+  brief: ConfirmedGenerationBrief;
   sourceTrackId?: string | null;
 };
 
 type GenerateMixResponse = {
   jobId: string;
   isPublic: boolean;
-  brief: ConfirmedGenerationBriefV1;
+  brief: ConfirmedGenerationBrief;
   sourceTrackId: string | null;
 };
 
-function isConfirmedBrief(value: unknown): value is ConfirmedGenerationBriefV1 {
+function isConfirmedBrief(value: unknown): value is ConfirmedGenerationBrief {
   if (value == null || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
   const brief = value as Record<string, unknown>;
-  return brief.version === 1 && typeof brief.title === "string" &&
+  return (brief.version === 1 ||
+      (brief.version === 2 && typeof brief.productionPlan === "object" &&
+        brief.productionPlan != null && !Array.isArray(brief.productionPlan))) &&
+    typeof brief.title === "string" &&
     typeof brief.creativeDirection === "string" &&
     (brief.mode === "instrumental" || brief.mode === "vocal") &&
     (brief.visibility === "private" || brief.visibility === "public") &&

@@ -126,7 +126,7 @@ export type TrackBriefDraftResponse = {
   draft: Pick<
     GenerationBriefDraft,
     "title" | "creativeDirection" | "lyricTheme" | "lyrics"
-  >;
+  > & { productionPlan: CreativeProductionPlanV1 };
 };
 
 export type TrackTitleDraftResponse = {

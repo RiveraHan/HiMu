@@ -102,6 +102,34 @@ async function main() {
       sourceTrackId: null,
     },
   );
+  const persistedReservationBriefV2 = {
+    version: 2,
+    title: "Persisted V2 brief",
+    productionPlan: { bpm: 118 },
+  };
+  assert.deepEqual(
+    mapManualJobReservation(
+      [{
+        outcome: "created",
+        job_id: "job-v2",
+        daily_limit: 10,
+        queued_at: "2026-07-29T12:00:00.000Z",
+        is_public: false,
+        generation_brief: persistedReservationBriefV2,
+        source_track_id: null,
+      }],
+      null,
+    ),
+    {
+      outcome: "created",
+      jobId: "job-v2",
+      dailyLimit: 10,
+      queuedAt: "2026-07-29T12:00:00.000Z",
+      isPublic: false,
+      brief: persistedReservationBriefV2,
+      sourceTrackId: null,
+    },
+  );
   assert.deepEqual(
     mapManualJobReservation(
       [{
