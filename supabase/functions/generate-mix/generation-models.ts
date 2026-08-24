@@ -5,6 +5,7 @@ import {
   renderLyriaPrompt,
 } from "../_shared/music-production.ts";
 import { resolveCreativeModel } from "../_shared/creative-models.ts";
+import { deterministicCreativeTitle } from "../_shared/creative-titles.ts";
 
 export type GenerationLanguage = "en" | "es";
 
@@ -17,9 +18,6 @@ export const MAX_LYRIA_PROMPT_CHARS = MAX_MUSIC_PROMPT_CHARS;
 
 type LocalizedCopy = {
   timePhrases: [string, string, string, string];
-  titleAdjectives: string[];
-  titleNouns: string[];
-  titlePairs?: string[];
   defaultDjName: string;
   defaultArtistName: string;
   vocalLanguage: string;
@@ -33,8 +31,6 @@ type LocalizedCopy = {
 const COPY: Record<GenerationLanguage, LocalizedCopy> = {
   en: {
     timePhrases: ["this morning", "this afternoon", "tonight", "in the late hours"],
-    titleAdjectives: ["Neon", "Midnight", "Velvet", "Electric", "Golden", "Lunar"],
-    titleNouns: ["Pulse", "Drift", "Haze", "Echo", "Horizon", "Glow"],
     defaultDjName: "Your DJ",
     defaultArtistName: "unknown artist",
     vocalLanguage: "English",
@@ -49,16 +45,6 @@ const COPY: Record<GenerationLanguage, LocalizedCopy> = {
   },
   es: {
     timePhrases: ["esta mañana", "esta tarde", "esta noche", "en la madrugada"],
-    titleAdjectives: [],
-    titleNouns: [],
-    titlePairs: [
-      "Neón Pulsante",
-      "Medianoche Dorada",
-      "Bruma Eléctrica",
-      "Deriva Lunar",
-      "Eco de Terciopelo",
-      "Horizonte Luminoso",
-    ],
     defaultDjName: "Tu DJ",
     defaultArtistName: "artista desconocido",
     vocalLanguage: "español latinoamericano neutro",
@@ -163,11 +149,13 @@ export function creativeTitle(
   language: GenerationLanguage,
   random: () => number = Math.random,
 ): string {
-  const copy = COPY[language];
-  const pick = (words: string[]) =>
-    words[Math.min(words.length - 1, Math.max(0, Math.floor(random() * words.length)))];
-  if (copy.titlePairs) return pick(copy.titlePairs);
-  return `${pick(copy.titleAdjectives)} ${pick(copy.titleNouns)}`;
+  return deterministicCreativeTitle({
+    language,
+    seed: `legacy-title:${random()}`,
+    genres: [],
+    moods: [],
+    recentTitles: [],
+  });
 }
 
 function normalizedHour(localHour: unknown): number {

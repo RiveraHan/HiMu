@@ -3,7 +3,6 @@ import {
   buildCaptionInput,
   buildCaptionTtsInput,
   buildMusicInput,
-  creativeTitle,
   type GenerationLanguage,
   parseGenerationLanguage,
   persistedAudiusArtistName,
@@ -18,6 +17,7 @@ import {
   estimateModelCost,
   resolveCreativeModel,
 } from "../_shared/creative-models.ts";
+import { deterministicCreativeTitle } from "../_shared/creative-titles.ts";
 import type { R2Access } from "../_shared/r2-contract.ts";
 
 type JobSummary = { id: string; status: string; isPublic: boolean };
@@ -958,7 +958,13 @@ export async function runGeneration(
       input.cfg.is_instrumental ?? true,
     );
     const trackId = deps.randomId();
-    const title = input.brief?.title ?? creativeTitle(input.language, deps.random);
+    const title = input.brief?.title ?? deterministicCreativeTitle({
+      language: input.language,
+      seed: `${input.jobId}:${attemptStartedAt}:title-v1`,
+      genres: Array.isArray(dj?.genre_specialties) ? dj.genre_specialties : [],
+      moods: Array.isArray(dj?.mood_tags) ? dj.mood_tags : [],
+      recentTitles: [],
+    });
 
     let caption: string | null = null;
     let captionAudioUrl: string | null = null;

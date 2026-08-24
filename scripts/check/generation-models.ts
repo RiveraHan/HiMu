@@ -201,15 +201,11 @@ const reviewFailures: string[] = [];
 if (!/neutral Latin American Spanish/i.test(caption.body.input.system_prompt)) {
   reviewFailures.push("Spanish captions must require neutral Latin American Spanish");
 }
-if (JSON.stringify(spanishTitles) !== JSON.stringify([
-  "Neón Pulsante",
-  "Medianoche Dorada",
-  "Bruma Eléctrica",
-  "Deriva Lunar",
-  "Eco de Terciopelo",
-  "Horizonte Luminoso",
-])) {
-  reviewFailures.push("Spanish titles must use fixed grammatically compatible pairs");
+if (new Set(spanishTitles).size !== spanishTitles.length) {
+  reviewFailures.push("Spanish title fallbacks must provide broad deterministic variety");
+}
+if (spanishTitles.some((title) => /^(Neón Pulsante|Eco de Terciopelo)$/.test(title))) {
+  reviewFailures.push("Spanish title fallbacks must avoid the retired generic title pool");
 }
 assert.deepEqual(reviewFailures, []);
 
