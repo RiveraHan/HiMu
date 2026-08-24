@@ -62,7 +62,6 @@ export function buildTextProviderBody(
       input: {
         ...common,
         max_completion_tokens: request.maxOutputTokens,
-        temperature: request.temperature,
         reasoning_effort: "none",
         verbosity: "low",
       },
@@ -131,7 +130,7 @@ export function buildImageProviderBody(
         output_format: "jpg",
         output_quality: 92,
         ...(klein
-          ? { output_megapixels: "1", disable_safety_checker: false }
+          ? { megapixels: "1", disable_safety_checker: false }
           : { safety_tolerance: 2, prompt_upsampling: false }),
         ...(request.seed == null ? {} : { seed: request.seed }),
       },

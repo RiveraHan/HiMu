@@ -95,7 +95,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     adapter: "llama",
     lifecycle: "baseline",
     price: tokens(0.17, 0.65),
-    limits: { input: 900, output: 1_200, timeoutMs: 30_000, maxCostUsd: 0.001 },
+    limits: { input: 1_100, output: 1_200, timeoutMs: 30_000, maxCostUsd: 0.000967 },
   }),
   model({
     id: SONNET_ID,
@@ -103,7 +103,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     adapter: "anthropic",
     lifecycle: "candidate",
     price: tokens(2, 10),
-    limits: { input: 900, output: 1_200, timeoutMs: 45_000, maxCostUsd: 0.0138 },
+    limits: { input: 1_100, output: 1_200, timeoutMs: 45_000, maxCostUsd: 0.0142 },
   }),
   model({
     id: LUNA_ID,
@@ -111,7 +111,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     adapter: "openai",
     lifecycle: "candidate",
     price: tokens(1, 6),
-    limits: { input: 900, output: 1_200, timeoutMs: 40_000, maxCostUsd: 0.0081 },
+    limits: { input: 1_100, output: 1_200, timeoutMs: 40_000, maxCostUsd: 0.0083 },
   }),
   model({
     id: GEMINI_ID,
@@ -119,7 +119,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     adapter: "gemini",
     lifecycle: "candidate",
     price: tokens(0.5, 3),
-    limits: { input: 900, output: 1_200, timeoutMs: 40_000, maxCostUsd: 0.00405 },
+    limits: { input: 1_100, output: 1_200, timeoutMs: 40_000, maxCostUsd: 0.00415 },
   }),
   model({
     id: LLAMA_ID,
@@ -173,7 +173,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     id: "openai/gpt-image-2",
     role: "image_cover",
     adapter: "gpt_image",
-    lifecycle: "candidate",
+    lifecycle: "promoted",
     price: output(0.012),
     limits: { input: 4_000, output: 1, timeoutMs: 120_000, maxCostUsd: 0.012 },
   }),
@@ -205,7 +205,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     id: "openai/gpt-image-2",
     role: "image_avatar",
     adapter: "gpt_image",
-    lifecycle: "candidate",
+    lifecycle: "promoted",
     price: output(0.012),
     limits: { input: 4_000, output: 1, timeoutMs: 120_000, maxCostUsd: 0.012 },
   }),

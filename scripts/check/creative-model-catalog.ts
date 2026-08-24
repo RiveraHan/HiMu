@@ -56,6 +56,16 @@ assert.deepEqual(CREATIVE_ROLE_BUDGETS_USD, {
 
 assert.equal(resolveCreativeModel("music_full").id, "google/lyria-3-pro");
 assert.equal(resolveCreativeModel("voice_caption").id, "inworld/realtime-tts-2");
+assert.equal(resolveCreativeModel("image_cover").id, "openai/gpt-image-2");
+assert.equal(resolveCreativeModel("image_avatar").id, "openai/gpt-image-2");
+assert.equal(resolveCreativeModel("image_cover").lifecycle, "promoted");
+assert.equal(resolveCreativeModel("image_avatar").lifecycle, "promoted");
+assert.doesNotThrow(() =>
+  assertWithinModelBudget(
+    "image_cover",
+    estimateModelCost(resolveCreativeModel("image_cover"), { input: 0, output: 1 }),
+  )
+);
 assert.equal(
   resolveCreativeModel("creative_longform", {
     candidateId: "anthropic/claude-sonnet-5",

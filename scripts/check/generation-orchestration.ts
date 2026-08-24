@@ -1531,6 +1531,42 @@ async function main() {
   }
 
   {
+    let releaseMusic!: (url: string) => void;
+    const music = new Promise<string>((resolve) => {
+      releaseMusic = resolve;
+    });
+    let coverStarted = false;
+    const state = runDeps({
+      replicateRun: async (endpoint: string) =>
+        endpoint === LYRIA_ENDPOINT ? music : "https://media.test/tts",
+      generateCover: async () => {
+        coverStarted = true;
+        return "https://r2.test/covers/generated/parallel.jpg";
+      },
+    });
+    const pending = runGeneration(
+      {
+        jobId: "job-parallel-media",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(
+      coverStarted,
+      true,
+      "cover generation must overlap music generation so the promoted image model stays off the critical path",
+    );
+    releaseMusic("https://media.test/music");
+    await pending;
+  }
+
+  {
     const state = runDeps();
     await runGeneration(
       {

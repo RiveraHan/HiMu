@@ -9,7 +9,11 @@ import {
   validateDjTraitsInput,
 } from "../_shared/dj-input.ts";
 import { buildImageProviderBody } from "../_shared/creative-provider-adapters.ts";
-import { resolveCreativeModel } from "../_shared/creative-models.ts";
+import {
+  assertWithinModelBudget,
+  estimateModelCost,
+  resolveCreativeModel,
+} from "../_shared/creative-models.ts";
 import { invalid, json } from "../_shared/http.ts";
 import { mapProviderReservation } from "../_shared/provider-usage.ts";
 import { keyFromPublicUrl, r2Delete, r2Put } from "../_shared/r2.ts";
@@ -104,6 +108,10 @@ serveAuthed(async (req, user) => {
             moods,
             dj.identity_concept,
             `${djId}:${next}:avatar-v2`,
+          );
+          assertWithinModelBudget(
+            "image_avatar",
+            estimateModelCost(model, { input: 0, output: 1 }),
           );
           const tmp = await replicateRun(
             model.endpoint,

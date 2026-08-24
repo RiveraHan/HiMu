@@ -936,25 +936,22 @@ export async function runGeneration(
         output: 1,
       }),
     );
+    const dj = input.cfg.djs;
     observe(deps, "music", input.language);
-    const musicUrl = await deps.replicateRun(
+    observe(deps, "cover", input.language);
+    const audioPromise = deps.replicateRun(
       musicRequest.endpoint,
       musicRequest.body,
-    );
-    const musicBytes = await downloadProviderMedia(
-      musicUrl,
-      deps.fetchMedia,
-    );
-    const audioReference = await deps.r2Put(
-      objectKeys.track,
-      musicBytes,
-      "audio/mpeg",
-      audioAccess,
-    );
-
-    const dj = input.cfg.djs;
-    observe(deps, "cover", input.language);
-    const cover = await deps.generateCover(
+    ).then((musicUrl) => downloadProviderMedia(musicUrl, deps.fetchMedia))
+      .then((musicBytes) =>
+        deps.r2Put(
+          objectKeys.track,
+          musicBytes,
+          "audio/mpeg",
+          audioAccess,
+        )
+      );
+    const coverPromise = deps.generateCover(
       objectKeys.cover,
       dj,
       input.cfg.is_instrumental ?? true,
@@ -965,6 +962,10 @@ export async function runGeneration(
           : null,
       },
     );
+    const [audioReference, cover] = await Promise.all([
+      audioPromise,
+      coverPromise,
+    ]);
     const trackId = deps.randomId();
     const title = input.brief?.title ?? deterministicCreativeTitle({
       language: input.language,

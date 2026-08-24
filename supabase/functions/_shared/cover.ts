@@ -1,5 +1,9 @@
 import { buildImageProviderBody } from "./creative-provider-adapters.ts";
-import { resolveCreativeModel } from "./creative-models.ts";
+import {
+  assertWithinModelBudget,
+  estimateModelCost,
+  resolveCreativeModel,
+} from "./creative-models.ts";
 import {
   compileVisualDirection,
   renderVisualPrompt,
@@ -47,6 +51,10 @@ export async function generateCoverImage(
     identityConcept: null,
     visualPlan: ctx.visualPlan ?? null,
   });
+  assertWithinModelBudget(
+    "image_cover",
+    estimateModelCost(model, { input: 0, output: 1 }),
+  );
   const url = await replicateRun(
     model.endpoint,
     buildImageProviderBody(model, {
