@@ -28,7 +28,6 @@ export * from "./skeleton/Skeleton";
 export * from "./skeleton/ContentSkeletons";
 
 // Home
-export * from "./home/CaptionVoiceButton";
 export * from "./home/ContentShelf";
 export * from "./home/OnAirHero";
 export * from "./home/VibeSpotlightCard";

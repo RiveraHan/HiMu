@@ -12,6 +12,7 @@ import {
   validateDjInput,
 } from "../_shared/dj-input.ts";
 import { invalid, json } from "../_shared/http.ts";
+import { mapProviderReservation } from "../_shared/provider-usage.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
@@ -20,6 +21,7 @@ import {
   isDjQuotaError,
   MAX_OWNED_DJS,
 } from "./create-dj-contract.ts";
+import { runAvatarGeneration } from "../update-dj/avatar-reservation.ts";
 
 function slugify(name: string): string {
   return name
@@ -126,29 +128,47 @@ serveAuthed(async (req, user) => {
     let avatarReady = false;
 
     try {
-      const url = await replicateRun(
-        "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
-        {
-          input: {
-            prompt: buildAvatarPrompt(genres, moods, identityConcept),
-            aspect_ratio: "1:1",
-            output_format: "jpg",
-            safety_tolerance: 5,
-          },
+      const avatar = await runAvatarGeneration({
+        userId: user.id,
+        operation: "initial_avatar",
+        requestId: crypto.randomUUID(),
+      }, {
+        reserve: async ({ userId, operation, requestId }) => {
+          const { data, error } = await admin.rpc("reserve_avatar_generation", {
+            p_user_id: userId,
+            p_operation: operation,
+            p_request_id: requestId,
+          });
+          return mapProviderReservation(data, error);
         },
-      );
+        generate: async () => {
+          const url = await replicateRun(
+            "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
+            {
+              input: {
+                prompt: buildAvatarPrompt(genres, moods, identityConcept),
+                aspect_ratio: "1:1",
+                output_format: "jpg",
+                safety_tolerance: 5,
+              },
+            },
+          );
 
-      const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+          const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
 
-      const publicUrl = await r2Put(
-        `avatars/generated/${dj.id}.jpg`,
-        bytes,
-        "image/jpeg",
-      );
+          const publicUrl = await r2Put(
+            `avatars/generated/${dj.id}.jpg`,
+            bytes,
+            "image/jpeg",
+            "public",
+          );
 
-      await admin.from("djs").update({ avatar_url: publicUrl }).eq("id", dj.id);
+          await admin.from("djs").update({ avatar_url: publicUrl }).eq("id", dj.id);
+          return publicUrl;
+        },
+      });
 
-      avatarReady = true;
+      avatarReady = avatar.outcome === "generated";
     } catch (e) {
       console.error("[create-dj] avatar failed:", e);
     }
@@ -156,7 +176,7 @@ serveAuthed(async (req, user) => {
     return json({ djId: dj.id, avatarReady });
   } catch (e) {
     // Rollback: no orphaned rows or files on failure.
-    await r2Delete([`avatars/generated/${dj.id}.jpg`]);
+    await r2Delete([`avatars/generated/${dj.id}.jpg`], "public");
     await admin.from("djs").delete().eq("id", dj.id); // cascade removes config
     throw e;
   }

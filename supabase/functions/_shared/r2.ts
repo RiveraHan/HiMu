@@ -1,7 +1,20 @@
 import { AwsClient } from "npm:aws4fetch";
+import {
+  parsePrivateMediaReference,
+} from "./media-reference.ts";
+import {
+  storageTarget,
+  type R2Access,
+  type R2Environment,
+} from "./r2-contract.ts";
 
 const ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
 const R2_BUCKET = Deno.env.get("R2_BUCKET")!;
+// Supabase's connector can deploy functions but cannot provision project
+// secrets. Keep production available with a distinct, private-by-convention
+// bucket while still allowing an explicit deployment override.
+const R2_PRIVATE_BUCKET =
+  Deno.env.get("R2_PRIVATE_BUCKET")?.trim() || `${R2_BUCKET}-private`;
 
 export const R2_PUBLIC_BASE = (Deno.env.get("R2_PUBLIC_BASE") ?? "").replace(
   /\/+$/,
@@ -15,29 +28,40 @@ const r2 = new AwsClient({
   region: "auto",
 });
 
-const objectUrl = (key: string) =>
-  `https://${ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}/${key}`;
+const environment: R2Environment = {
+  accountId: ACCOUNT_ID,
+  publicBucket: R2_BUCKET,
+  privateBucket: R2_PRIVATE_BUCKET,
+  publicBase: R2_PUBLIC_BASE,
+};
 
 export async function r2Put(
   key: string,
   bytes: Uint8Array,
   contentType: string,
+  access: R2Access,
 ): Promise<string> {
-  const r = await r2.fetch(objectUrl(key), {
+  const target = storageTarget(access, key, environment);
+  const response = await r2.fetch(target.objectUrl, {
     method: "PUT",
     body: bytes,
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "public, max-age=300",
+      "Cache-Control": access === "private"
+        ? "private, no-store"
+        : "public, max-age=300",
     },
   });
-  if (!r.ok) throw new Error(`R2 PUT (${r.status})`);
-  return `${R2_PUBLIC_BASE}/${key}`;
+  if (!response.ok) throw new Error(`R2 PUT (${response.status})`);
+  return target.reference;
 }
 
-export async function r2Delete(keys: string[]): Promise<void> {
+export async function r2Delete(
+  keys: string[],
+  access: R2Access,
+): Promise<void> {
   const del = (key: string) =>
-    r2.fetch(objectUrl(key), {
+    r2.fetch(storageTarget(access, key, environment).objectUrl, {
       method: "DELETE",
     });
 
@@ -56,10 +80,38 @@ export async function r2Delete(keys: string[]): Promise<void> {
 }
 
 // Only our own generated assets are ever deletable.
-const GENERATED_KEY_RE = /^(tracks|covers|avatars)\/generated\//;
+const GENERATED_KEY_RE = /^(tracks|captions|covers|avatars)\/generated\//;
 
 export function keyFromPublicUrl(url: string): string | null {
   if (!R2_PUBLIC_BASE || !url.startsWith(`${R2_PUBLIC_BASE}/`)) return null;
   const key = url.slice(R2_PUBLIC_BASE.length + 1);
   return GENERATED_KEY_RE.test(key) ? key : null;
 }
+
+export function keyFromStoredMedia(
+  value: string,
+): { key: string; access: R2Access } | null {
+  const privateTrack = parsePrivateMediaReference(value, "track");
+  if (privateTrack) return { key: privateTrack.key, access: "private" };
+  const privateCaption = parsePrivateMediaReference(value, "caption");
+  if (privateCaption) return { key: privateCaption.key, access: "private" };
+  const publicKey = keyFromPublicUrl(value);
+  return publicKey ? { key: publicKey, access: "public" } : null;
+}
+
+export async function r2PresignPrivateGet(
+  key: string,
+  expiresSeconds = 300,
+): Promise<string> {
+  const expires = Math.min(300, Math.max(60, Math.trunc(expiresSeconds)));
+  const target = storageTarget("private", key, environment);
+  const url = new URL(target.objectUrl);
+  url.searchParams.set("X-Amz-Expires", String(expires));
+  const signed = await r2.sign(url.toString(), {
+    method: "GET",
+    aws: { signQuery: true },
+  });
+  return signed.url.toString();
+}
+
+export type { R2Access } from "./r2-contract.ts";

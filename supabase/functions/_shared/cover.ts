@@ -69,5 +69,5 @@ export async function generateCoverImage(
     },
   );
   const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-  return await r2Put(key, bytes, "image/jpeg");
+  return await r2Put(key, bytes, "image/jpeg", "public");
 }

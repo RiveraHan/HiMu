@@ -1,7 +1,6 @@
 import { usePlayer } from "@/src/audio/use-player";
 import {
   Avatar,
-  CaptionVoiceButton,
   ContentShelf,
   ContentShelfSkeleton,
   DJAvatar,
@@ -12,6 +11,7 @@ import {
   Text,
   VibeSpotlightCard,
 } from "@/src/components";
+import { CaptionVoiceButton } from "@/src/components/home/CaptionVoiceButton";
 import { FocusOrb } from "@/src/components/focus/FocusOrb";
 import {
   HomeDjsSkeleton,
@@ -461,8 +461,11 @@ export default function HomeScreen() {
                   isLive={false}
                   onPlay={playDrop}
                   voiceSlot={
-                    drop.captionAudioUrl ? (
-                      <CaptionVoiceButton audioUrl={drop.captionAudioUrl} />
+                    drop.captionAudioUrl && drop.captionJobId ? (
+                      <CaptionVoiceButton
+                        audioRef={drop.captionAudioUrl}
+                        jobId={drop.captionJobId}
+                      />
                     ) : undefined
                   }
                 />

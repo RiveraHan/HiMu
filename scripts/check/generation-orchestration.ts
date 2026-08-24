@@ -15,6 +15,7 @@ async function main() {
   const {
     downloadProviderMedia,
     handleGenerateMixRequest,
+    mapDailyJobReservation,
     mapFinalizedGeneratedMix,
     mapManualJobReservation,
     mapUpdatedRow,
@@ -22,10 +23,56 @@ async function main() {
   } = module;
   assert.equal(typeof downloadProviderMedia, "function");
   assert.equal(typeof handleGenerateMixRequest, "function");
+  assert.equal(typeof mapDailyJobReservation, "function");
   assert.equal(typeof mapFinalizedGeneratedMix, "function");
   assert.equal(typeof mapManualJobReservation, "function");
   assert.equal(typeof mapUpdatedRow, "function");
   assert.equal(typeof runGeneration, "function");
+
+  assert.deepEqual(
+    mapDailyJobReservation({
+      outcome: "created",
+      job_id: "daily-1",
+      daily_limit: 1,
+      queued_at: "2026-08-23T12:00:00.000Z",
+      status: "queued",
+      updated_at: "2026-08-23T12:00:00.000Z",
+      dj_id: "dj-1",
+      is_public: false,
+    }, null),
+    {
+      outcome: "created",
+      dailyLimit: 1,
+      job: {
+        id: "daily-1",
+        status: "queued",
+        updatedAt: "2026-08-23T12:00:00.000Z",
+        djId: "dj-1",
+        isPublic: false,
+      },
+    },
+  );
+  assert.deepEqual(
+    mapDailyJobReservation({
+      outcome: "quota",
+      job_id: null,
+      daily_limit: 1,
+      queued_at: null,
+      status: null,
+      updated_at: null,
+      dj_id: null,
+      is_public: null,
+    }, null),
+    { outcome: "quota", dailyLimit: 1, job: null },
+  );
+  for (const malformed of [
+    null,
+    { outcome: "quota", job_id: null, daily_limit: 2 },
+    { outcome: "created", job_id: null, daily_limit: 1 },
+    { outcome: "allow", job_id: "daily-1", daily_limit: 1 },
+  ]) {
+    assert.throws(() => mapDailyJobReservation(malformed, null), /reservation/i);
+  }
 
   const databaseError = new Error("database failed");
   assert.throws(
@@ -240,6 +287,43 @@ async function main() {
 
   function requestDeps(overrides: Record<string, unknown> = {}) {
     const calls: Array<{ name: string; value?: unknown }> = [];
+    const findDailyJob = (overrides.findDailyJob as (() => Promise<any>) | undefined) ??
+      (async () => {
+        calls.push({ name: "findDailyJob" });
+        return null;
+      });
+    const createDailyJob = (overrides.createDailyJob as (() => Promise<any>) | undefined) ??
+      (async () => {
+        calls.push({ name: "createDailyJob" });
+        return {
+          job: {
+            id: "daily-new",
+            status: "queued",
+            djId: "dj-1",
+            updatedAt: "2026-07-29T12:00:00.000Z",
+            isPublic: false,
+          },
+          error: null,
+        };
+      });
+    const reserveDailyJob =
+      (overrides.reserveDailyJob as (() => Promise<any>) | undefined) ??
+      (async () => {
+        calls.push({ name: "reserveDailyJob" });
+        const existing = await findDailyJob();
+        if (existing) {
+          return { outcome: "existing" as const, dailyLimit: 1, job: existing };
+        }
+        const created = await createDailyJob();
+        if (created.job) {
+          return { outcome: "created" as const, dailyLimit: 1, job: created.job };
+        }
+        const raced = await findDailyJob();
+        if (raced) {
+          return { outcome: "existing" as const, dailyLimit: 1, job: raced };
+        }
+        throw created.error ?? new Error("could not reserve daily job");
+      });
     const deps = {
       getDjConfig: async (djId: string) => {
         calls.push({ name: "getDjConfig", value: djId });
@@ -249,10 +333,7 @@ async function main() {
         calls.push({ name: "buildSeasoning" });
         return ["evening warmth"];
       },
-      findDailyJob: async () => {
-        calls.push({ name: "findDailyJob" });
-        return null;
-      },
+      findDailyJob,
       requeueDailyJob: async (
         jobId: string,
         observedStatus: string,
@@ -265,19 +346,8 @@ async function main() {
         });
         return true;
       },
-      createDailyJob: async () => {
-        calls.push({ name: "createDailyJob" });
-        return {
-          job: {
-            id: "daily-new",
-            status: "queued",
-            djId: "dj-1",
-            updatedAt: "2026-07-29T12:00:00.000Z",
-            isPublic: false,
-          },
-          error: null,
-        };
-      },
+      createDailyJob,
+      reserveDailyJob,
       findActiveManualJob: async () => {
         calls.push({ name: "findActiveManualJob" });
         return null;
@@ -852,6 +922,36 @@ async function main() {
 
   {
     const { calls, deps } = requestDeps({
+      reserveDailyJob: async () => ({
+        outcome: "quota" as const,
+        dailyLimit: 1,
+        job: null,
+      }),
+    });
+    const response = await handleGenerateMixRequest(
+      {
+        djId: "dj-1",
+        language: "en",
+        dropDate: "2099-12-31",
+        localHour: 12,
+      },
+      "user-1",
+      deps,
+    );
+    assert.deepEqual(response, {
+      status: 429,
+      body: {
+        error: "daily drop already reserved",
+        code: "daily_quota_reached",
+        dailyLimit: 1,
+      },
+    });
+    assert.equal(calls.some(({ name }) => name === "runGeneration"), false);
+    assert.equal(calls.some(({ name }) => name === "buildSeasoning"), false);
+  }
+
+  {
+    const { calls, deps } = requestDeps({
       findDailyJob: async () => {
         calls.push({ name: "findDailyJob" });
         return {
@@ -1039,7 +1139,7 @@ async function main() {
     });
     assert.deepEqual(
       calls.filter(({ name }) => name === "getDjConfig").map(({ value }) => value),
-      ["dj-persisted"],
+      ["dj-request", "dj-persisted"],
     );
     assert.equal(
       calls.find(({ name }) => name === "buildSeasoning")?.value,
@@ -1173,9 +1273,15 @@ async function main() {
       failedAt: string;
       fence?: { queuedAt?: string; generatingAt: string };
     }> = [];
-    const puts: Array<{ key: string; bytes: number[]; contentType: string }> = [];
+    const puts: Array<{
+      key: string;
+      bytes: number[];
+      contentType: string;
+      access: "public" | "private";
+    }> = [];
     const coverInputs: string[] = [];
     const deletes: string[][] = [];
+    const deleteAccesses: Array<"public" | "private"> = [];
     const modelEvents: ModelEvent[] = [];
     const errorEvents: unknown[][] = [];
     const replicateInputs: Array<{ endpoint: string; body: any }> = [];
@@ -1226,12 +1332,18 @@ async function main() {
         "[CAPTION_START]\nTurn it up [scream], then [laugh].\n[CAPTION_END]",
       fetchMedia: async (url: string) =>
         mediaResponse(200, url.endsWith("/music") ? [1, 2, 3] : [4, 5]),
-      r2Put: async (key: string, bytes: Uint8Array, contentType: string) => {
-        puts.push({ key, bytes: [...bytes], contentType });
+      r2Put: async (
+        key: string,
+        bytes: Uint8Array,
+        contentType: string,
+        access: "public" | "private",
+      ) => {
+        puts.push({ key, bytes: [...bytes], contentType, access });
         return `https://r2.test/${key}`;
       },
-      r2Delete: async (keys: string[]) => {
+      r2Delete: async (keys: string[], access: "public" | "private") => {
         deletes.push(keys);
+        deleteAccesses.push(access);
       },
       generateCover: async (objectKey: string) => {
         coverInputs.push(objectKey);
@@ -1247,6 +1359,7 @@ async function main() {
     };
     return {
       coverInputs,
+      deleteAccesses,
       deletes,
       deps,
       errorEvents,
@@ -1370,6 +1483,72 @@ async function main() {
   }
 
   {
+    const privateState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-private-audio",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+        isPublic: false,
+      },
+      privateState.deps,
+    );
+    assert.deepEqual(
+      privateState.puts.map(({ key, access }) => [key, access]),
+      [[
+        "tracks/generated/job-private-audio/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "private",
+      ]],
+    );
+
+    const publicState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-public-audio",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+        isPublic: true,
+      },
+      publicState.deps,
+    );
+    assert.equal(publicState.puts[0]?.access, "public");
+
+    const dropState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-private-drop-audio",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+        isPublic: false,
+        drop: { localHour: 12 },
+      },
+      dropState.deps,
+    );
+    assert.deepEqual(
+      dropState.puts.map(({ key, access }) => [key, access]),
+      [
+        [
+          "tracks/generated/job-private-drop-audio/2026-07-22T12%3A00%3A00.000Z.mp3",
+          "private",
+        ],
+        [
+          "captions/generated/job-private-drop-audio/2026-07-22T12%3A00%3A00.000Z.mp3",
+          "private",
+        ],
+      ],
+    );
+  }
+
+  {
     const firstStartedAt = "2026-07-22T12:00:00.000Z";
     const secondStartedAt = "2026-07-22T12:16:00.000Z";
     const first = runDeps({ now: () => firstStartedAt });
@@ -1488,11 +1667,14 @@ async function main() {
       state.failures[0]?.fence,
       { generatingAt: "2026-07-22T12:00:00.000Z" },
     );
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-finalize-failure/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
+    assert.deepEqual(state.deleteAccesses, ["private", "public"]);
   }
 
   for (const failJobIfActive of [
@@ -1626,11 +1808,13 @@ async function main() {
     assert.deepEqual(state.replicateInputs, []);
     assert.deepEqual(state.puts, []);
     assert.deepEqual(state.finalizations, []);
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-generating-error/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
   }
 
   {
@@ -1683,11 +1867,13 @@ async function main() {
     });
     assert.deepEqual(state.modelEvents, []);
     assert.deepEqual(state.replicateInputs, []);
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-ambiguous-generating/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
   }
 
   {
@@ -1735,11 +1921,13 @@ async function main() {
       state.deps,
     );
     assert.equal(state.failures.length, 1);
-    assert.deepEqual(state.deletes, [[
-      "tracks/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-      "covers/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.jpg",
-      "captions/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
-    ]]);
+    assert.deepEqual(state.deletes, [
+      [
+        "tracks/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+        "captions/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.mp3",
+      ],
+      ["covers/generated/job-music-failure/2026-07-22T12%3A00%3A00.000Z.jpg"],
+    ]);
     assert.equal(state.puts.length, 0);
   }
 

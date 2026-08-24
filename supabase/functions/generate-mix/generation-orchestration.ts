@@ -13,6 +13,7 @@ import {
   type AuthoritativeDjTraits,
   type ConfirmedGenerationBriefV1,
 } from "../_shared/creative-generation.ts";
+import type { R2Access } from "../_shared/r2-contract.ts";
 
 type JobSummary = { id: string; status: string; isPublic: boolean };
 type ManualJobSummary = JobSummary & {
@@ -20,6 +21,14 @@ type ManualJobSummary = JobSummary & {
   sourceTrackId: string | null;
 };
 type DailyJobSummary = JobSummary & { djId: string; updatedAt: string };
+
+export type DailyJobReservation =
+  | {
+    outcome: "created" | "existing";
+    job: DailyJobSummary;
+    dailyLimit: number;
+  }
+  | { outcome: "quota"; job: null; dailyLimit: number };
 
 export const GENERATION_JOB_LEASE_MS = 15 * 60 * 1000;
 export const MANUAL_JOB_LEASE_MS = GENERATION_JOB_LEASE_MS;
@@ -110,6 +119,49 @@ export function mapManualJobReservation(
   throw new Error("invalid manual job reservation result");
 }
 
+export function mapDailyJobReservation(
+  data: unknown,
+  error: unknown,
+): DailyJobReservation {
+  if (error) throw error;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("invalid daily job reservation result");
+  }
+
+  const row = data as Record<string, unknown>;
+  if (!Number.isInteger(row.daily_limit) || (row.daily_limit as number) !== 1) {
+    throw new Error("invalid daily job reservation result");
+  }
+  if (
+    row.outcome === "quota" && row.job_id === null && row.queued_at === null &&
+    row.status === null && row.updated_at === null && row.dj_id === null &&
+    row.is_public === null
+  ) {
+    return { outcome: "quota", job: null, dailyLimit: 1 };
+  }
+  if (
+    (row.outcome === "created" || row.outcome === "existing") &&
+    typeof row.job_id === "string" && row.job_id.length > 0 &&
+    typeof row.status === "string" && row.status.length > 0 &&
+    typeof row.updated_at === "string" && row.updated_at.length > 0 &&
+    typeof row.dj_id === "string" && row.dj_id.length > 0 &&
+    typeof row.is_public === "boolean"
+  ) {
+    return {
+      outcome: row.outcome,
+      dailyLimit: 1,
+      job: {
+        id: row.job_id,
+        status: row.status,
+        updatedAt: row.updated_at,
+        djId: row.dj_id,
+        isPublic: row.is_public,
+      },
+    };
+  }
+  throw new Error("invalid daily job reservation result");
+}
+
 function reservationBrief(value: unknown): ConfirmedGenerationBriefV1 {
   if (
     value == null || typeof value !== "object" || Array.isArray(value) ||
@@ -164,6 +216,7 @@ export function mapFinalizedGeneratedMix(
 export type RunGenerationInput = {
   jobId: string;
   queuedAt: string;
+  isPublic: boolean;
   cfg: any;
   lyrics: string | null;
   brief?: ConfirmedGenerationBriefV1 | null;
@@ -179,21 +232,17 @@ export type RequestDependencies = {
     dj: any,
     localHour: unknown,
   ) => Promise<string[]>;
-  findDailyJob: (
-    userId: string,
-    dropDate: unknown,
-  ) => Promise<DailyJobSummary | null>;
+  reserveDailyJob: (input: {
+    userId: string;
+    djId: unknown;
+    dropDate: string;
+  }) => Promise<DailyJobReservation>;
   requeueDailyJob: (
     jobId: string,
     observedStatus: string,
     observedUpdatedAt: string,
     requeuedAt: string,
   ) => Promise<boolean>;
-  createDailyJob: (input: {
-    userId: string;
-    djId: unknown;
-    dropDate: unknown;
-  }) => Promise<{ job: DailyJobSummary | null; error: unknown }>;
   findActiveManualJob: (
     userId: string,
     djId: unknown,
@@ -314,14 +363,10 @@ export async function handleGenerateMixRequest(
     return invalid("dropDate must be YYYY-MM-DD");
   }
 
-  const dailyJob = isDrop
-    ? await deps.findDailyJob(userId, dropDate)
-    : null;
-  const effectiveDjId = dailyJob?.djId ?? djId;
-  const cfg = await deps.getDjConfig(effectiveDjId);
+  let cfg = await deps.getDjConfig(djId);
   if (!cfg) return result(404, { error: "DJ config not found" });
 
-  const owner: string | null = cfg.djs?.owner_id ?? null;
+  let owner: string | null = cfg.djs?.owner_id ?? null;
   if ((isDrop && owner !== null && owner !== userId) || (!isDrop && owner !== userId)) {
     return result(403, {
       error: "you can't generate with this DJ",
@@ -330,9 +375,35 @@ export async function handleGenerateMixRequest(
   }
 
   if (isDrop) {
+    const reserveInput = {
+      userId,
+      djId,
+      dropDate: String(dropDate),
+    };
+    const reservation = await deps.reserveDailyJob(reserveInput);
+    if (reservation.outcome === "quota") {
+      return result(429, {
+        error: "daily drop already reserved",
+        code: "daily_quota_reached",
+        dailyLimit: reservation.dailyLimit,
+      });
+    }
+
+    const existing = reservation.job;
+    if (existing.djId !== djId) {
+      cfg = await deps.getDjConfig(existing.djId);
+      if (!cfg) return result(404, { error: "DJ config not found" });
+      owner = cfg.djs?.owner_id ?? null;
+      if (owner !== null && owner !== userId) {
+        return result(403, {
+          error: "you can't generate with this DJ",
+          code: "dj_not_allowed",
+        });
+      }
+    }
+
     const seasoning = await deps.buildSeasoning(userId, cfg.djs, localHour);
-    const existing = dailyJob;
-    if (existing) {
+    if (reservation.outcome === "existing") {
       const active = existing.status === "queued" ||
         existing.status === "generating";
       const requeuedAt = deps.now();
@@ -351,16 +422,24 @@ export async function handleGenerateMixRequest(
         requeuedAt,
       );
       if (!requeued) {
-        const refreshed = await deps.findDailyJob(userId, dropDate);
-        if (refreshed) {
-          return result(200, { jobId: refreshed.id, isPublic: refreshed.isPublic });
+        const refreshed = await deps.reserveDailyJob(reserveInput);
+        if (refreshed.outcome !== "quota") {
+          return result(200, {
+            jobId: refreshed.job.id,
+            isPublic: refreshed.job.isPublic,
+          });
         }
-        throw new Error("daily job disappeared during requeue");
+        return result(429, {
+          error: "daily drop already reserved",
+          code: "daily_quota_reached",
+          dailyLimit: refreshed.dailyLimit,
+        });
       }
       deps.waitUntil(
         deps.runGeneration({
           jobId: existing.id,
           queuedAt: requeuedAt,
+          isPublic: existing.isPublic,
           cfg,
           lyrics: null,
           seasoning,
@@ -371,17 +450,11 @@ export async function handleGenerateMixRequest(
       return result(200, { jobId: existing.id, isPublic: existing.isPublic });
     }
 
-    const created = await deps.createDailyJob({ userId, djId, dropDate });
-    if (!created.job) {
-      const raced = await deps.findDailyJob(userId, dropDate);
-      if (raced) return result(200, { jobId: raced.id, isPublic: raced.isPublic });
-      throw created.error ?? new Error("could not create drop job");
-    }
-
     deps.waitUntil(
       deps.runGeneration({
-        jobId: created.job.id,
-        queuedAt: created.job.updatedAt,
+        jobId: existing.id,
+        queuedAt: existing.updatedAt,
+        isPublic: existing.isPublic,
         cfg,
         lyrics: null,
         seasoning,
@@ -389,7 +462,7 @@ export async function handleGenerateMixRequest(
         drop: { localHour },
       }),
     );
-    return result(200, { jobId: created.job.id, isPublic: created.job.isPublic });
+    return result(200, { jobId: existing.id, isPublic: existing.isPublic });
   }
 
   const active = await deps.findActiveManualJob(userId, djId);
@@ -464,6 +537,7 @@ export async function handleGenerateMixRequest(
       deps.runGeneration({
         jobId: legacy.jobId,
         queuedAt: legacy.queuedAt,
+        isPublic: legacy.isPublic,
         cfg,
         lyrics: legacy.lyrics,
         brief: null,
@@ -541,6 +615,7 @@ export async function handleGenerateMixRequest(
     deps.runGeneration({
       jobId: reservation.jobId,
       queuedAt: reservation.queuedAt,
+      isPublic: reservation.isPublic,
       cfg,
       lyrics: brief.lyrics,
       brief,
@@ -637,8 +712,9 @@ export type RunDependencies = {
     key: string,
     bytes: Uint8Array,
     contentType: string,
+    access: R2Access,
   ) => Promise<string>;
-  r2Delete: (keys: string[]) => Promise<void>;
+  r2Delete: (keys: string[], access: R2Access) => Promise<void>;
   generateCover: (
     objectKey: string,
     dj: any,
@@ -712,6 +788,7 @@ async function buildCaptionAudio(
     objectKey,
     bytes,
     "audio/mpeg",
+    input.isPublic ? "public" : "private",
   );
 }
 
@@ -793,6 +870,7 @@ export async function runGeneration(
 ): Promise<void> {
   const attemptStartedAt = deps.now();
   const objectKeys = generationAttemptKeys(input.jobId, attemptStartedAt);
+  const audioAccess: R2Access = input.isPublic ? "public" : "private";
   let claimed = false;
   try {
     const started = await deps.markJobGenerating(
@@ -832,10 +910,11 @@ export async function runGeneration(
       musicUrl,
       deps.fetchMedia,
     );
-    const publicUrl = await deps.r2Put(
+    const audioReference = await deps.r2Put(
       objectKeys.track,
       musicBytes,
       "audio/mpeg",
+      audioAccess,
     );
 
     const dj = input.cfg.djs;
@@ -886,7 +965,7 @@ export async function runGeneration(
       trackId,
       title,
       artist: dj.name,
-      audioUrl: publicUrl,
+      audioUrl: audioReference,
       albumArtUrl: cover,
       genre: dj.genre_specialties?.[0] ?? null,
       moodTags: dj.mood_tags ?? null,
@@ -921,10 +1000,7 @@ export async function runGeneration(
       return;
     }
 
-    await deps.r2Delete([
-      objectKeys.track,
-      objectKeys.cover,
-      objectKeys.caption,
-    ]);
+    await deps.r2Delete([objectKeys.track, objectKeys.caption], audioAccess);
+    await deps.r2Delete([objectKeys.cover], "public");
   }
 }

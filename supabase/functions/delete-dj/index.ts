@@ -5,7 +5,7 @@
  */
 
 import { invalid, json } from "../_shared/http.ts";
-import { keyFromPublicUrl, r2Delete } from "../_shared/r2.ts";
+import { keyFromStoredMedia, r2Delete } from "../_shared/r2.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 
@@ -24,32 +24,42 @@ serveAuthed(async (req, user) => {
     return json({ error: "not your DJ", code: "not_owner" }, 403);
   }
 
-  // Collect R2 keys BEFORE the rows disappear. keyFromPublicUrl filters to
-  // our own */generated/ assets and returns null for anything else, and the
-  // Set dedupes (a cover can be the avatar fallback).
+  // Collect R2 keys BEFORE the rows disappear. Stored-media parsing accepts
+  // only our generated public URLs or validated private references, and each
+  // Set dedupes repeated assets.
   const { data: tracks } = await admin
     .from("tracks")
     .select("audio_url, album_art_url")
     .eq("dj_id", djId);
 
-  const keys = new Set<string>();
+  const { data: jobs } = await admin
+    .from("generation_jobs")
+    .select("caption_audio_url")
+    .eq("dj_id", djId);
+
+  const publicKeys = new Set<string>();
+  const privateKeys = new Set<string>();
 
   const urls = [
     dj.avatar_url,
     ...(tracks ?? []).flatMap((t) => [t.audio_url, t.album_art_url]),
+    ...(jobs ?? []).map((job) => job.caption_audio_url),
   ];
 
   for (const url of urls) {
-    const key = url ? keyFromPublicUrl(url) : null;
-
-    if (key) keys.add(key);
+    const stored = url ? keyFromStoredMedia(url) : null;
+    if (stored?.access === "private") privateKeys.add(stored.key);
+    if (stored?.access === "public") publicKeys.add(stored.key);
   }
 
   // DB first (cascade), then storage.
   const { error: delErr } = await admin.from("djs").delete().eq("id", djId);
   if (delErr) throw delErr;
 
-  await r2Delete([...keys]);
+  await Promise.all([
+    r2Delete([...publicKeys], "public"),
+    r2Delete([...privateKeys], "private"),
+  ]);
 
   return json({ ok: true });
 });

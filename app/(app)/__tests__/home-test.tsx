@@ -155,6 +155,9 @@ jest.mock("@/src/components", () => {
     VibeSpotlightCard: placeholder("vibe-spotlight"),
   };
 });
+jest.mock("@/src/components/home/CaptionVoiceButton", () => ({
+  CaptionVoiceButton: () => null,
+}));
 
 jest.mock("@/src/components/focus/FocusOrb", () => ({ FocusOrb: () => null }));
 jest.mock("@/src/components/home/HomeSkeletons", () => {

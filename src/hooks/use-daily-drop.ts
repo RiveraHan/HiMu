@@ -1,5 +1,6 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { getEdgeErrorCode } from "@/src/api/edge-errors";
 import {
   authMutationKey,
   captureAuthScope,
@@ -27,7 +28,11 @@ type EnsureVariables = {
   dropDate: string;
 };
 
-type JobState = { identityKey: string; jobId: string | null };
+type JobState = {
+  identityKey: string;
+  jobId: string | null;
+  quotaReached: boolean;
+};
 
 export type DailyDrop = {
   status: "pending" | "ready" | "failed" | "idle";
@@ -35,6 +40,7 @@ export type DailyDrop = {
   track: PlayerTrack | null;
   caption: string | null;
   captionAudioUrl: string | null;
+  captionJobId: string | null;
   stale: boolean;
   retry: () => void;
 };
@@ -59,6 +65,7 @@ export function useDailyDrop(): DailyDrop {
   const [jobState, setJobState] = useState<JobState>(() => ({
     identityKey,
     jobId: null,
+    quotaReached: false,
   }));
   const lastTriggeredIdentity = useRef<string | null>(null);
 
@@ -89,22 +96,28 @@ export function useDailyDrop(): DailyDrop {
           },
         },
       );
-      if (error) throw error;
+      if (error) {
+        if (await getEdgeErrorCode(error) === "daily_quota_reached") {
+          return { jobId: null, quotaReached: true };
+        }
+        throw error;
+      }
       if (!data?.jobId) throw new Error("generate-mix did not return a jobId");
-      return data.jobId;
+      return { jobId: data.jobId, quotaReached: false };
     },
-    onSuccess: (nextJobId, variables) => {
+    onSuccess: (reservation, variables) => {
       if (currentIdentityKey.current !== variables.identityKey) return;
-      setJobState({ identityKey: variables.identityKey, jobId: nextJobId });
+      setJobState({ identityKey: variables.identityKey, ...reservation });
+      if (!reservation.jobId) return;
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.generationJobs.detail(userId, nextJobId),
+        queryKey: queryKeys.generationJobs.detail(userId, reservation.jobId),
       });
     },
   });
 
   const resetEnsure = ensure.reset;
   useEffect(() => {
-    setJobState({ identityKey, jobId: null });
+    setJobState({ identityKey, jobId: null, quotaReached: false });
     resetEnsure();
   }, [identityKey, resetEnsure]);
 
@@ -120,6 +133,8 @@ export function useDailyDrop(): DailyDrop {
   }, [ensureDrop, identity, proposedDj]);
 
   const jobId = jobState.identityKey === identity?.key ? jobState.jobId : null;
+  const quotaReached = jobState.identityKey === identity?.key &&
+    jobState.quotaReached;
   const job = useQuery({
     queryKey: queryKeys.generationJobs.detail(userId, jobId),
     enabled: !!identity && !!jobId,
@@ -147,6 +162,7 @@ export function useDailyDrop(): DailyDrop {
   const retry = useCallback(() => {
     const retryDjId = job.data?.dj_id ?? proposedDj?.id;
     if (!identity || !retryDjId) return;
+    if (quotaReached) return;
     if (job.data?.status === "failed" || ensure.isError) {
       resetEnsure();
       ensureDrop({
@@ -165,6 +181,7 @@ export function useDailyDrop(): DailyDrop {
     jobId,
     jobReadFailed,
     proposedDj,
+    quotaReached,
     refetchJob,
     resetEnsure,
   ]);
@@ -175,6 +192,7 @@ export function useDailyDrop(): DailyDrop {
       track: null,
       caption: null,
       captionAudioUrl: null,
+      captionJobId: null,
       stale: false,
       retry,
     };
@@ -204,13 +222,16 @@ export function useDailyDrop(): DailyDrop {
         track: toPlayerTrack(data.tracks),
         caption: data.caption ?? null,
         captionAudioUrl: data.caption_audio_url ?? null,
+        captionJobId: data.caption_audio_url ? jobId : null,
         stale,
         retry,
       };
     }
     if (data?.status === "failed") return { ...empty, status: "failed", dj, stale };
     if (data) return { ...empty, status: "pending", dj, stale };
-    if (ensure.isError || job.isError) return { ...empty, status: "failed" };
+    if (quotaReached || ensure.isError || job.isError) {
+      return { ...empty, status: "failed" };
+    }
     return { ...empty, status: "pending" };
   }, [
     ensure.isError,
@@ -220,6 +241,7 @@ export function useDailyDrop(): DailyDrop {
     job.isError,
     jobId,
     proposedDj,
+    quotaReached,
     retry,
   ]);
 }

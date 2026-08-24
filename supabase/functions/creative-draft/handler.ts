@@ -9,11 +9,16 @@ import {
 
 export type CreativeDraftDependencies = {
   endpoint: string;
-  now: () => Date;
+  randomId: () => string;
   timeoutMs?: number;
-  countRecentEvents: (userId: string, since: string) => Promise<number>;
-  insertEvent: (userId: string, kind: CreativeDraftKind) => Promise<void>;
-  deleteOldEvents: (userId: string, before: string) => Promise<void>;
+  reserveDraft: (
+    userId: string,
+    kind: CreativeDraftKind,
+    requestId: string,
+  ) => Promise<
+    | { outcome: "created" | "existing"; limit: number }
+    | { outcome: "quota"; limit: number }
+  >;
   listExistingDjNames: (userId: string) => Promise<string[]>;
   loadDjContext: (djId: string) => Promise<AuthoritativeDjTraits & { ownerId: string } | null>;
   generateText: (endpoint: string, body: object) => Promise<string>;
@@ -61,10 +66,13 @@ function parse(
   request: CreativeDraftRequest,
   raw: string,
   context: AuthoritativeDjTraits | null,
+  existingDjNames: string[],
 ) {
   return parseCreativeDraftOutput(request.kind, raw, {
     language: request.language,
-    exclude: request.exclude,
+    exclude: request.kind === "dj-identity"
+      ? [...request.exclude, ...existingDjNames]
+      : request.exclude,
     djName: context?.djName,
     mode: context?.isInstrumental ? "instrumental" : "vocal",
   });
@@ -93,13 +101,14 @@ export async function handleCreativeDraftRequest(
       context = loaded;
     }
 
-    const now = deps.now();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1_000).toISOString();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1_000).toISOString();
-    await deps.deleteOldEvents(userId, oneDayAgo);
-    const recent = await deps.countRecentEvents(userId, oneHourAgo);
-    if (recent >= 30) return error(429, "draft_rate_limited");
-    await deps.insertEvent(userId, request.kind);
+    const reservation = await deps.reserveDraft(
+      userId,
+      request.kind,
+      deps.randomId(),
+    );
+    if (reservation.outcome === "quota") {
+      return error(429, "draft_rate_limited");
+    }
   } catch {
     console.error("[creative-draft] context/rate check failed");
     return error(503, "provider_unavailable");
@@ -128,7 +137,11 @@ export async function handleCreativeDraftRequest(
   try {
     return {
       status: 200,
-      body: { version: 1, kind: request.kind, draft: parse(request, firstOutput, context) },
+      body: {
+        version: 1,
+        kind: request.kind,
+        draft: parse(request, firstOutput, context, existingDjNames),
+      },
     };
   } catch {
     // One caller-managed repair pass; the shared parser itself never repairs.
@@ -149,7 +162,11 @@ export async function handleCreativeDraftRequest(
   try {
     return {
       status: 200,
-      body: { version: 1, kind: request.kind, draft: parse(request, repaired, context) },
+      body: {
+        version: 1,
+        kind: request.kind,
+        draft: parse(request, repaired, context, existingDjNames),
+      },
     };
   } catch {
     return error(502, "malformed_draft");

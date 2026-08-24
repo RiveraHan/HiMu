@@ -1,4 +1,5 @@
 import { json } from "../_shared/http.ts";
+import { mapProviderReservation } from "../_shared/provider-usage.ts";
 import { replicateText } from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
@@ -10,32 +11,24 @@ import {
 
 const dependencies: CreativeDraftDependencies = {
   endpoint: LLAMA_ENDPOINT,
-  now: () => new Date(),
-  countRecentEvents: async (userId, since) => {
-    const { count, error } = await admin
-      .from("creative_draft_events")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .gte("created_at", since);
-    if (error) throw error;
-    return count ?? 0;
+  randomId: () => crypto.randomUUID(),
+  reserveDraft: async (userId, kind, requestId) => {
+    const { data, error } = await admin.rpc("reserve_creative_draft", {
+      p_user_id: userId,
+      p_kind: kind,
+      p_request_id: requestId,
+    });
+    const reservation = mapProviderReservation(data, error);
+    return reservation.outcome === "quota"
+      ? { outcome: "quota" as const, limit: reservation.limit }
+      : { outcome: reservation.outcome, limit: reservation.limit };
   },
-  insertEvent: async (userId, kind) => {
-    const { error } = await admin
-      .from("creative_draft_events")
-      .insert({ user_id: userId, kind });
-    if (error) throw error;
-  },
-  deleteOldEvents: async (userId, before) => {
-    const { error } = await admin
-      .from("creative_draft_events")
-      .delete()
-      .eq("user_id", userId)
-      .lt("created_at", before);
-    if (error) throw error;
-  },
-  listExistingDjNames: async () => {
-    const { data, error } = await admin.from("djs").select("name").limit(500);
+  listExistingDjNames: async (userId) => {
+    const { data, error } = await admin
+      .from("djs")
+      .select("name")
+      .or(`owner_id.is.null,is_public.eq.true,owner_id.eq.${userId}`)
+      .limit(500);
     if (error) throw error;
     return (data ?? []).flatMap((row) =>
       typeof row.name === "string" ? [row.name] : [],
