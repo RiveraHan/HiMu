@@ -80,6 +80,7 @@
   "devDependencies": {
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "29.5.14",
+    "@types/node": "^25.8.0",
     "@types/react": "~19.1.0",
     "aws4fetch": "^1.0.20",
     "eslint": "^9.25.0",
@@ -92,9 +93,15 @@
   },
   "jest": {
     "preset": "jest-expo",
-    "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
-    "testPathIgnorePatterns": ["<rootDir>/.worktrees/"],
-    "modulePathIgnorePatterns": ["<rootDir>/.worktrees/"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.js"
+    ],
+    "testPathIgnorePatterns": [
+      "<rootDir>/.worktrees/"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/.worktrees/"
+    ],
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1"
     },
