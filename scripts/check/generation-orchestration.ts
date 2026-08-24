@@ -1345,6 +1345,7 @@ async function main() {
       access: "public" | "private";
     }> = [];
     const coverInputs: string[] = [];
+    const coverContexts: unknown[] = [];
     const deletes: string[][] = [];
     const deleteAccesses: Array<"public" | "private"> = [];
     const modelEvents: ModelEvent[] = [];
@@ -1410,8 +1411,14 @@ async function main() {
         deletes.push(keys);
         deleteAccesses.push(access);
       },
-      generateCover: async (objectKey: string) => {
+      generateCover: async (
+        objectKey: string,
+        _dj: unknown,
+        _instrumental: boolean,
+        context?: unknown,
+      ) => {
         coverInputs.push(objectKey);
+        coverContexts.push(context);
         return `https://r2.test/${objectKey}`;
       },
       streamUrl: (trackId: string) => `https://stream.test/${trackId}`,
@@ -1423,6 +1430,7 @@ async function main() {
       ...overrides,
     };
     return {
+      coverContexts,
       coverInputs,
       deleteAccesses,
       deletes,
@@ -1544,6 +1552,10 @@ async function main() {
     assert.match(prompt, /Key: F# minor/);
     assert.match(prompt, /glass mallets/);
     assert.match(prompt, /ARRANGEMENT TIMELINE/);
+    assert.deepEqual(state.coverContexts[0], {
+      seed: "job-confirmed-brief:2026-07-22T12:00:00.000Z:cover-v2",
+      visualPlan: validBriefV2.productionPlan.visual,
+    });
     const firstSeed = state.replicateInputs[0]?.body?.input?.seed;
     assert.equal(typeof firstSeed, "number");
 

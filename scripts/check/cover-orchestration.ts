@@ -244,6 +244,19 @@ async function main() {
       "logError",
     ]);
     assert.deepEqual(
+      calls.find(({ name }) => name === "generateCover")?.value,
+      {
+        key: "covers/generated/track-1-reservation-1.jpg",
+        input: {
+          genre: "Pop",
+          moods: ["bright"],
+          instrumental: false,
+          seed: "track-1:reservation-1:cover-v2",
+          visualPlan: null,
+        },
+      },
+    );
+    assert.deepEqual(
       calls.find(({ name }) => name === "r2Delete")?.value,
       ["covers/generated/old.jpg"],
     );

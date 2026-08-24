@@ -18,6 +18,7 @@ import {
   resolveCreativeModel,
 } from "../_shared/creative-models.ts";
 import { deterministicCreativeTitle } from "../_shared/creative-titles.ts";
+import type { VisualPlan } from "../_shared/visual-direction.ts";
 import type { R2Access } from "../_shared/r2-contract.ts";
 
 type JobSummary = { id: string; status: string; isPublic: boolean };
@@ -731,6 +732,7 @@ export type RunDependencies = {
     objectKey: string,
     dj: any,
     instrumental: boolean,
+    context?: { seed: string; visualPlan: VisualPlan | null },
   ) => Promise<string | null>;
   streamUrl: (trackId: string) => string;
   logModel: (event: ModelEvent) => void;
@@ -956,6 +958,12 @@ export async function runGeneration(
       objectKeys.cover,
       dj,
       input.cfg.is_instrumental ?? true,
+      {
+        seed: `${input.jobId}:${attemptStartedAt}:cover-v2`,
+        visualPlan: input.brief?.version === 2
+          ? input.brief.productionPlan.visual
+          : null,
+      },
     );
     const trackId = deps.randomId();
     const title = input.brief?.title ?? deterministicCreativeTitle({

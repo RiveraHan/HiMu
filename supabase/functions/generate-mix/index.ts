@@ -8,7 +8,7 @@
  */
 
 import { streamUrl } from "../_shared/audius.ts";
-import { generateCoverImage } from "../_shared/cover.ts";
+import { generateCoverImage, type CoverContext } from "../_shared/cover.ts";
 import { json } from "../_shared/http.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
 import { replicateRun, replicateText } from "../_shared/replicate.ts";
@@ -30,12 +30,15 @@ async function generateCover(
   objectKey: string,
   dj: any,
   instrumental: boolean,
+  context?: Pick<CoverContext, "seed" | "visualPlan">,
 ): Promise<string | null> {
   try {
     return await generateCoverImage(objectKey, {
       genre: dj.genre_specialties?.[0] ?? "",
       moods: dj.mood_tags ?? [],
       instrumental,
+      seed: context?.seed,
+      visualPlan: context?.visualPlan ?? null,
     });
   } catch (_error) {
     return dj.avatar_url ?? null;

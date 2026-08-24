@@ -129,14 +129,16 @@ assert.deepEqual(buildDjIdentityFields(confirmedDj.data), {
   identity_concept:
     "A patient selector tracing city lights through warm analog haze.",
 });
-assert.match(
-  buildAvatarPrompt(
-    confirmedDj.data.genres,
-    confirmedDj.data.moods,
-    confirmedDj.data.identityConcept,
-  ),
-  /patient selector/i,
+const avatarPrompt = buildAvatarPrompt(
+  confirmedDj.data.genres,
+  confirmedDj.data.moods,
+  confirmedDj.data.identityConcept,
+  "dj-static-bloom:avatar-v2",
 );
+assert.match(avatarPrompt, /patient selector/i);
+assert.match(avatarPrompt, /fictional adult DJ persona/i);
+assert.match(avatarPrompt, /no celebrity likeness/i);
+assert.match(avatarPrompt, /no text, no typography/i);
 assert.equal(validateDjInput({ name: "Static Bloom", ...traits }).ok, false);
 assert.equal(
   validateDjInput({

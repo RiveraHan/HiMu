@@ -5,12 +5,14 @@
  */
 
 import {
-  buildAvatarPrompt,
+  buildAvatarImageRequest,
   buildBasePrompt,
   buildDjIdentityFields,
   parseIsPublic,
   validateDjInput,
 } from "../_shared/dj-input.ts";
+import { buildImageProviderBody } from "../_shared/creative-provider-adapters.ts";
+import { resolveCreativeModel } from "../_shared/creative-models.ts";
 import { invalid, json } from "../_shared/http.ts";
 import { mapProviderReservation } from "../_shared/provider-usage.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
@@ -142,16 +144,21 @@ serveAuthed(async (req, user) => {
           return mapProviderReservation(data, error);
         },
         generate: async () => {
+          const model = resolveCreativeModel("image_avatar");
+          const image = buildAvatarImageRequest(
+            genres,
+            moods,
+            identityConcept,
+            `${dj.id}:initial-avatar-v2`,
+          );
           const url = await replicateRun(
-            "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
-            {
-              input: {
-                prompt: buildAvatarPrompt(genres, moods, identityConcept),
-                aspect_ratio: "1:1",
-                output_format: "jpg",
-                safety_tolerance: 5,
-              },
-            },
+            model.endpoint,
+            buildImageProviderBody(model, {
+              prompt: image.prompt,
+              aspectRatio: "1:1",
+              outputFormat: "jpg",
+              seed: image.seed,
+            }),
           );
 
           const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());

@@ -5,7 +5,10 @@ import type { PropsWithChildren } from "react";
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import type { ActivityItem } from "@/src/activity/types";
-import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
+import type {
+  ConfirmedGenerationBrief,
+  ConfirmedGenerationBriefV1,
+} from "@/src/types/creative-generation";
 import { LocaleContext, type LocaleContextValue } from "@/src/i18n/use-locale";
 import { useCurrentUser } from "../use-auth";
 import { useDeleteDJ } from "../use-delete-dj";
@@ -271,7 +274,7 @@ test("a generate completion after rerendering A as B has no B callback effects",
   let pending!: Promise<{
     jobId: string;
     isPublic: boolean;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     sourceTrackId: string | null;
   }>;
   await act(async () => {
