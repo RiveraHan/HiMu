@@ -6,6 +6,7 @@ import {
   sameTraitSnapshot,
   validateConfirmedBrief,
   validateCreativeDraftRequest,
+  validateProductionPlan,
 } from "../../supabase/functions/_shared/creative-generation.ts";
 import {
   buildAvatarPrompt,
@@ -50,6 +51,64 @@ const validBrief = {
     identityConcept:
       "A patient selector tracing city lights through warm analog haze.",
   },
+};
+
+const validProductionPlan = {
+  bpm: 118,
+  key: "F# minor",
+  meter: "4/4" as const,
+  sections: [
+    {
+      name: "intro" as const,
+      startSeconds: 0,
+      endSeconds: 18,
+      direction: "Filtered percussion reveals the glass motif one layer at a time.",
+    },
+    {
+      name: "verse" as const,
+      startSeconds: 18,
+      endSeconds: 58,
+      direction: "Intimate lead vocal over restrained bass and dry rim clicks.",
+    },
+    {
+      name: "chorus" as const,
+      startSeconds: 58,
+      endSeconds: 96,
+      direction: "Open the stereo field and answer the hook with bright mallets.",
+    },
+    {
+      name: "outro" as const,
+      startSeconds: 96,
+      endSeconds: 120,
+      direction: "Let the motif dissolve into rain-like delays without a hard stop.",
+    },
+  ],
+  leadInstruments: ["glass mallets", "breathy alto voice"],
+  rhythmInstruments: ["round sub bass", "dry rim clicks"],
+  textureInstruments: ["tape hiss", "rain-like delays"],
+  energyArc: "Patient ascent from close-mic restraint to a luminous, wide final chorus.",
+  productionCharacter: ["warm analog saturation", "precise transient detail"],
+  vocalDirection:
+    "Neutral Latin American Spanish, intimate verses and a clear, sustained chorus hook.",
+  visual: {
+    concept: "A fragile signal becoming a shared constellation in the rain.",
+    subject: "Translucent antenna forms suspended above a wet rooftop",
+    medium: "Layered paper sculpture photographed on medium-format film",
+    composition: "Asymmetric square frame with the main form rising from the lower third",
+    palette: ["smoked indigo", "warm amber", "frosted cyan"],
+    lighting: "Low amber side light with soft cyan reflections",
+    texture: "Visible paper fibers, fine rain grain, and restrained halation",
+  },
+  novelty: {
+    coreMotifs: ["glass antenna call-and-response", "ascending three-note signal"],
+    avoidRecentMotifs: ["neon tunnel", "four-on-the-floor piano hook"],
+  },
+};
+
+const validBriefV2 = {
+  ...validBrief,
+  version: 2 as const,
+  productionPlan: validProductionPlan,
 };
 
 const confirmedDj = validateDjInput({
@@ -235,6 +294,123 @@ assert.throws(
 
 // Confirmation rejects stale traits and incompatible vocal/instrumental data.
 assert.equal(validateConfirmedBrief(validBrief, authoritative).version, 1);
+const confirmedV2 = validateConfirmedBrief(validBriefV2, authoritative, "en", 120);
+assert.equal(confirmedV2.version, 2);
+if (confirmedV2.version !== 2) throw new Error("expected V2 brief");
+assert.deepEqual(confirmedV2.productionPlan, validProductionPlan);
+assert.equal(confirmedV2.title, validBriefV2.title);
+assert.equal(confirmedV2.creativeDirection, validBriefV2.creativeDirection);
+assert.equal(confirmedV2.lyricTheme, validBriefV2.lyricTheme);
+assert.equal(confirmedV2.lyrics, validBriefV2.lyrics);
+
+assert.deepEqual(
+  validateProductionPlan(validProductionPlan, {
+    mode: "vocal",
+    durationSeconds: 120,
+  }),
+  validProductionPlan,
+);
+for (const bpm of [44, 191, 118.5]) {
+  assert.throws(
+    () => validateProductionPlan(
+      { ...validProductionPlan, bpm },
+      { mode: "vocal", durationSeconds: 120 },
+    ),
+    /production_bpm/,
+  );
+}
+assert.throws(
+  () => validateProductionPlan(
+    { ...validProductionPlan, key: "F sharp minor" },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /production_key/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    { ...validProductionPlan, meter: "5/4" },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /production_meter/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    {
+      ...validProductionPlan,
+      sections: [
+        validProductionPlan.sections[0],
+        { ...validProductionPlan.sections[1], startSeconds: 17 },
+      ],
+    },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /production_sections_order/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    {
+      ...validProductionPlan,
+      sections: validProductionPlan.sections.map((section, index) =>
+        index === validProductionPlan.sections.length - 1
+          ? { ...section, endSeconds: 121 }
+          : section
+      ),
+    },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /production_sections_duration/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    { ...validProductionPlan, leadInstruments: [] },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /lead_instruments_limit/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    {
+      ...validProductionPlan,
+      visual: { ...validProductionPlan.visual, palette: ["indigo"] },
+    },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /visual_palette_limit/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    {
+      ...validProductionPlan,
+      novelty: {
+        ...validProductionPlan.novelty,
+        avoidRecentMotifs: Array.from({ length: 11 }, (_, index) => `motif ${index}`),
+      },
+    },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /avoid_recent_motifs_limit/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    { ...validProductionPlan, vocalDirection: null },
+    { mode: "vocal", durationSeconds: 120 },
+  ),
+  /vocal_direction/,
+);
+assert.throws(
+  () => validateProductionPlan(
+    validProductionPlan,
+    { mode: "instrumental", durationSeconds: 120 },
+  ),
+  /instrumental_vocal_direction/,
+);
+assert.equal(
+  validateProductionPlan(
+    { ...validProductionPlan, vocalDirection: null },
+    { mode: "instrumental", durationSeconds: 120 },
+  ).vocalDirection,
+  null,
+);
 assert.throws(
   () => validateConfirmedBrief({ ...validBrief, title: "Neon Pulse" }, authoritative),
   /generic_title/,

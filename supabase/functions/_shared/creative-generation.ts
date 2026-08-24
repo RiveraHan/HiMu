@@ -41,6 +41,59 @@ export type GenerationBriefDraft = {
 
 export type ConfirmedGenerationBriefV1 = GenerationBriefDraft & { version: 1 };
 
+export type ProductionSection = {
+  name:
+    | "intro"
+    | "verse"
+    | "pre_chorus"
+    | "chorus"
+    | "bridge"
+    | "break"
+    | "solo"
+    | "outro";
+  startSeconds: number;
+  endSeconds: number;
+  direction: string;
+};
+
+export type CreativeProductionPlanV1 = {
+  bpm: number;
+  key: string;
+  meter: "4/4" | "3/4" | "6/8";
+  sections: ProductionSection[];
+  leadInstruments: string[];
+  rhythmInstruments: string[];
+  textureInstruments: string[];
+  energyArc: string;
+  productionCharacter: string[];
+  vocalDirection: string | null;
+  visual: {
+    concept: string;
+    subject: string;
+    medium: string;
+    composition: string;
+    palette: string[];
+    lighting: string;
+    texture: string;
+  };
+  novelty: {
+    coreMotifs: string[];
+    avoidRecentMotifs: string[];
+  };
+};
+
+export type ConfirmedGenerationBriefV2 = Omit<
+  ConfirmedGenerationBriefV1,
+  "version"
+> & {
+  version: 2;
+  productionPlan: CreativeProductionPlanV1;
+};
+
+export type ConfirmedGenerationBrief =
+  | ConfirmedGenerationBriefV1
+  | ConfirmedGenerationBriefV2;
+
 export type CreativeDraftRequest =
   | {
       version: 1;
@@ -162,6 +215,138 @@ function list(
   });
   if (new Set(result).size !== result.length) throw new Error(`${field}_duplicate`);
   return result;
+}
+
+function productionList(
+  value: unknown,
+  field: string,
+  min: number,
+  max: number,
+): string[] {
+  if (!Array.isArray(value)) throw new Error(`${field}_type`);
+  if (value.length < min || value.length > max) {
+    throw new Error(`${field}_limit`);
+  }
+  const result = value.map((item) => text(item, field, 1, 100));
+  const normalized = result.map(normalize);
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error(`${field}_duplicate`);
+  }
+  return result;
+}
+
+const PRODUCTION_SECTION_NAMES = new Set<ProductionSection["name"]>([
+  "intro",
+  "verse",
+  "pre_chorus",
+  "chorus",
+  "bridge",
+  "break",
+  "solo",
+  "outro",
+]);
+const NORMALIZED_MUSICAL_KEY = /^[A-G](?:#|b)? (?:major|minor)$/;
+
+export function validateProductionPlan(
+  value: unknown,
+  context: {
+    mode: "instrumental" | "vocal";
+    durationSeconds: number;
+  },
+): CreativeProductionPlanV1 {
+  const input = record(value, "production_plan_type");
+  if (
+    !Number.isInteger(context.durationSeconds) || context.durationSeconds < 1 ||
+    context.durationSeconds > 180
+  ) {
+    throw new Error("production_duration");
+  }
+  if (!Number.isInteger(input.bpm) || Number(input.bpm) < 45 || Number(input.bpm) > 190) {
+    throw new Error("production_bpm");
+  }
+  if (typeof input.key !== "string" || !NORMALIZED_MUSICAL_KEY.test(input.key)) {
+    throw new Error("production_key");
+  }
+  if (input.meter !== "4/4" && input.meter !== "3/4" && input.meter !== "6/8") {
+    throw new Error("production_meter");
+  }
+  if (!Array.isArray(input.sections)) throw new Error("production_sections_type");
+  if (input.sections.length < 1 || input.sections.length > 8) {
+    throw new Error("production_sections_limit");
+  }
+  let previousEnd = 0;
+  const sections = input.sections.map((value, index): ProductionSection => {
+    const section = record(value, "production_section_type");
+    if (!PRODUCTION_SECTION_NAMES.has(section.name as ProductionSection["name"])) {
+      throw new Error("production_section_name");
+    }
+    if (
+      !Number.isInteger(section.startSeconds) ||
+      !Number.isInteger(section.endSeconds) ||
+      Number(section.startSeconds) < 0 ||
+      Number(section.endSeconds) <= Number(section.startSeconds)
+    ) {
+      throw new Error("production_section_time");
+    }
+    if ((index === 0 && section.startSeconds !== 0) || Number(section.startSeconds) < previousEnd) {
+      throw new Error("production_sections_order");
+    }
+    if (Number(section.endSeconds) > context.durationSeconds) {
+      throw new Error("production_sections_duration");
+    }
+    previousEnd = Number(section.endSeconds);
+    return {
+      name: section.name as ProductionSection["name"],
+      startSeconds: Number(section.startSeconds),
+      endSeconds: Number(section.endSeconds),
+      direction: text(section.direction, "production_section_direction", 5, 180),
+    };
+  });
+  const vocalDirection = context.mode === "instrumental"
+    ? input.vocalDirection === null
+      ? null
+      : (() => {
+        throw new Error("instrumental_vocal_direction");
+      })()
+    : text(input.vocalDirection, "vocal_direction", 10, 240);
+  const visualInput = record(input.visual, "visual_type");
+  const noveltyInput = record(input.novelty, "novelty_type");
+
+  return {
+    bpm: Number(input.bpm),
+    key: input.key,
+    meter: input.meter,
+    sections,
+    leadInstruments: productionList(input.leadInstruments, "lead_instruments", 1, 5),
+    rhythmInstruments: productionList(input.rhythmInstruments, "rhythm_instruments", 1, 5),
+    textureInstruments: productionList(input.textureInstruments, "texture_instruments", 1, 5),
+    energyArc: text(input.energyArc, "energy_arc", 10, 300),
+    productionCharacter: productionList(
+      input.productionCharacter,
+      "production_character",
+      1,
+      5,
+    ),
+    vocalDirection,
+    visual: {
+      concept: text(visualInput.concept, "visual_concept", 5, 240),
+      subject: text(visualInput.subject, "visual_subject", 2, 160),
+      medium: text(visualInput.medium, "visual_medium", 2, 120),
+      composition: text(visualInput.composition, "visual_composition", 5, 180),
+      palette: productionList(visualInput.palette, "visual_palette", 2, 5),
+      lighting: text(visualInput.lighting, "visual_lighting", 2, 160),
+      texture: text(visualInput.texture, "visual_texture", 2, 160),
+    },
+    novelty: {
+      coreMotifs: productionList(noveltyInput.coreMotifs, "core_motifs", 1, 5),
+      avoidRecentMotifs: productionList(
+        noveltyInput.avoidRecentMotifs,
+        "avoid_recent_motifs",
+        0,
+        10,
+      ),
+    },
+  };
 }
 
 function exclusions(value: unknown): string[] {
@@ -290,9 +475,10 @@ export function validateConfirmedBrief(
   value: unknown,
   authoritative: AuthoritativeDjTraits,
   locale: CreativeLanguage = "en",
-): ConfirmedGenerationBriefV1 {
+  durationSeconds = 180,
+): ConfirmedGenerationBrief {
   const input = record(value, "brief_type");
-  if (input.version !== 1) throw new Error("version");
+  if (input.version !== 1 && input.version !== 2) throw new Error("version");
   const expectedMode = authoritative.isInstrumental ? "instrumental" : "vocal";
   if (input.mode !== expectedMode) throw new Error("brief_mode");
   const visibility = input.visibility;
@@ -321,8 +507,7 @@ export function validateConfirmedBrief(
     lyrics = validateLyrics(input.lyrics, locale);
   }
 
-  return {
-    version: 1,
+  const base = {
     title,
     creativeDirection,
     mode: expectedMode,
@@ -330,6 +515,15 @@ export function validateConfirmedBrief(
     lyrics,
     visibility,
     traitSnapshot: expectedSnapshot,
+  };
+  if (input.version === 1) return { version: 1, ...base };
+  return {
+    version: 2,
+    ...base,
+    productionPlan: validateProductionPlan(input.productionPlan, {
+      mode: expectedMode,
+      durationSeconds,
+    }),
   };
 }
 

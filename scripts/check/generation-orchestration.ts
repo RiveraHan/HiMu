@@ -733,7 +733,12 @@ async function main() {
     );
   }
 
-  for (const malformedBrief of [undefined, null, "brief", { version: 2 }]) {
+  for (const [malformedBrief, expectedError] of [
+    [undefined, "brief_type"],
+    [null, "brief_type"],
+    ["brief", "brief_type"],
+    [{ version: 2 }, "brief_mode"],
+  ] as const) {
     const { calls, deps } = requestDeps();
     const response = await handleGenerateMixRequest(
       { djId: "dj-1", brief: malformedBrief, language: "en" },
@@ -743,9 +748,7 @@ async function main() {
     assert.deepEqual(response, {
       status: 400,
       body: {
-        error: malformedBrief && typeof malformedBrief === "object"
-          ? "version"
-          : "brief_type",
+        error: expectedError,
         code: "invalid_input",
       },
     });
