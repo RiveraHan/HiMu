@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   buildCreativeDraftModelInput,
+  extractRecentCreativeMemory,
   parseCreativeDraftOutput,
   sameTraitSnapshot,
   validateConfirmedBrief,
@@ -458,5 +459,105 @@ assert.match(modelInput.systemPrompt, /named artist/i);
 assert.match(modelInput.prompt, /"language":"es"/);
 assert.match(modelInput.prompt, /"genres":\["House"\]/);
 assert.doesNotMatch(modelInput.prompt, /service_role|oauth.*secret/i);
+
+const trackModelInput = buildCreativeDraftModelInput(
+  {
+    version: 1,
+    kind: "track-brief",
+    language: "es",
+    djId: "dj-1",
+    current: {
+      title: "",
+      creativeDirection: "",
+      mode: "vocal",
+      lyricTheme: "elegir la esperanza sin negar el miedo",
+      lyrics: "",
+    },
+    exclude: ["Luz de Medianoche"],
+  },
+  {
+    djContext: authoritative,
+    durationSeconds: 120,
+    recentMemory: {
+      titles: ["Cables Bajo la Lluvia"],
+      identityNames: ["Static Bloom"],
+      visualMotifs: ["túnel de neón"],
+      hooks: ["subida de tres notas"],
+      productionFingerprints: ["piano house a cuatro pulsos"],
+    },
+  },
+);
+assert.equal(trackModelInput.promptVersion, "creative-brief-v2.es");
+assert.equal(trackModelInput.role, "creative_longform");
+assert.equal(trackModelInput.maxOutputTokens, 1_200);
+assert.match(trackModelInput.systemPrompt, /concrete imagery/i);
+assert.match(trackModelInput.systemPrompt, /point of view/i);
+assert.match(trackModelInput.systemPrompt, /singable/i);
+assert.match(trackModelInput.systemPrompt, /section contrast/i);
+assert.match(trackModelInput.systemPrompt, /clich/i);
+assert.match(trackModelInput.systemPrompt, /neutral Latin American Spanish/i);
+assert.match(trackModelInput.prompt, /Cables Bajo la Lluvia/);
+assert.match(trackModelInput.prompt, /túnel de neón/);
+assert.match(trackModelInput.prompt, /piano house a cuatro pulsos/);
+assert.match(trackModelInput.prompt, /"durationSeconds":120/);
+
+const parsedV2Draft = parseCreativeDraftOutput(
+  "track-brief",
+  JSON.stringify({
+    title: validBrief.title,
+    creativeDirection: validBrief.creativeDirection,
+    lyricTheme: validBrief.lyricTheme,
+    lyrics: validBrief.lyrics,
+    productionPlan: validProductionPlan,
+  }),
+  {
+    language: "en",
+    exclude: [],
+    djName: authoritative.djName,
+    mode: "vocal",
+    durationSeconds: 120,
+  },
+);
+assert.deepEqual(parsedV2Draft.productionPlan, validProductionPlan);
+
+const derivedMemory = extractRecentCreativeMemory(
+  [
+    {
+      ...validBriefV2,
+      lyrics: "PRIVATE RAW LYRICS MUST NEVER ENTER MEMORY",
+    },
+  ],
+  ["Older Track"],
+);
+assert.deepEqual(derivedMemory.titles, ["Older Track", "Glass Antennas"]);
+assert.deepEqual(
+  derivedMemory.visualMotifs,
+  [validProductionPlan.visual.concept],
+);
+assert.deepEqual(
+  derivedMemory.hooks,
+  validProductionPlan.novelty.coreMotifs,
+);
+assert.equal(derivedMemory.productionFingerprints.length, 1);
+assert.doesNotMatch(JSON.stringify(derivedMemory), /PRIVATE RAW LYRICS/);
+assert.throws(
+  () => parseCreativeDraftOutput(
+    "track-brief",
+    JSON.stringify({
+      title: validBrief.title,
+      creativeDirection: validBrief.creativeDirection,
+      lyricTheme: validBrief.lyricTheme,
+      lyrics: validBrief.lyrics,
+    }),
+    {
+      language: "en",
+      exclude: [],
+      djName: authoritative.djName,
+      mode: "vocal",
+      durationSeconds: 120,
+    },
+  ),
+  /production_plan_type/,
+);
 
 console.log("creative generation contract checks passed");

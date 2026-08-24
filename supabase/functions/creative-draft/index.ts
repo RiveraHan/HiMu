@@ -1,16 +1,17 @@
 import { json } from "../_shared/http.ts";
 import { mapProviderReservation } from "../_shared/provider-usage.ts";
 import { replicateText } from "../_shared/replicate.ts";
+import { resolveCreativeModel } from "../_shared/creative-models.ts";
+import { extractRecentCreativeMemory } from "../_shared/creative-generation.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
-import { LLAMA_ENDPOINT } from "../generate-mix/generation-models.ts";
 import {
   handleCreativeDraftRequest,
   type CreativeDraftDependencies,
 } from "./handler.ts";
 
 const dependencies: CreativeDraftDependencies = {
-  endpoint: LLAMA_ENDPOINT,
+  resolveModel: resolveCreativeModel,
   randomId: () => crypto.randomUUID(),
   reserveDraft: async (userId, kind, requestId) => {
     const { data, error } = await admin.rpc("reserve_creative_draft", {
@@ -47,7 +48,7 @@ const dependencies: CreativeDraftDependencies = {
 
     const { data: config, error: configError } = await admin
       .from("dj_generation_configs")
-      .select("is_instrumental")
+      .select("is_instrumental,max_duration")
       .eq("dj_id", djId)
       .maybeSingle();
     if (configError) throw configError;
@@ -71,9 +72,34 @@ const dependencies: CreativeDraftDependencies = {
       isInstrumental: config.is_instrumental,
       vibe: dj.character,
       identityConcept: dj.identity_concept,
+      durationSeconds: Math.min(Number(config.max_duration) || 150, 180),
     };
   },
-  generateText: replicateText,
+  loadRecentMemory: async (djId) => {
+    const [{ data: jobs, error: jobsError }, { data: tracks, error: tracksError }] =
+      await Promise.all([
+        admin
+          .from("generation_jobs")
+          .select("generation_brief")
+          .eq("dj_id", djId)
+          .not("generation_brief", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(10),
+        admin
+          .from("tracks")
+          .select("title")
+          .eq("dj_id", djId)
+          .order("created_at", { ascending: false })
+          .limit(10),
+      ]);
+    if (jobsError) throw jobsError;
+    if (tracksError) throw tracksError;
+    return extractRecentCreativeMemory(
+      (jobs ?? []).map((row) => row.generation_brief),
+      (tracks ?? []).map((row) => row.title),
+    );
+  },
+  generateText: (model, body) => replicateText(model.endpoint, body),
 };
 
 serveAuthed(async (req, user) => {

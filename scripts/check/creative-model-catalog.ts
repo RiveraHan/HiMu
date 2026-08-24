@@ -81,6 +81,15 @@ assert.equal(estimateModelCost(lyria, { input: 1, output: 1 }), 0.08);
 const inworld = resolveCreativeModel("voice_caption");
 assert.equal(estimateModelCost(inworld, { input: 160, output: 0 }), 0.004);
 
+const repair = resolveCreativeModel("format_repair");
+assert.equal(repair.limits.output, 1_200);
+assert.ok(
+  estimateModelCost(repair, {
+    input: repair.limits.input,
+    output: repair.limits.output,
+  }) <= CREATIVE_ROLE_BUDGETS_USD.format_repair,
+);
+
 const fluxKlein = resolveCreativeModel("image_cover", {
   candidateId: "black-forest-labs/flux-2-klein-9b",
 });

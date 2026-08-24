@@ -151,15 +151,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     adapter: "llama",
     lifecycle: "baseline",
     price: tokens(0.17, 0.65),
-    limits: { input: 1_000, output: 100, timeoutMs: 20_000, maxCostUsd: 0.000235 },
-  }),
-  model({
-    id: GEMINI_ID,
-    role: "format_repair",
-    adapter: "gemini",
-    lifecycle: "candidate",
-    price: tokens(0.5, 3),
-    limits: { input: 1_000, output: 100, timeoutMs: 25_000, maxCostUsd: 0.0008 },
+    limits: { input: 900, output: 1_200, timeoutMs: 25_000, maxCostUsd: 0.000933 },
   }),
   model({
     id: "google/lyria-3-pro",

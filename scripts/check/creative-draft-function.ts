@@ -4,6 +4,10 @@ import {
   handleCreativeDraftRequest,
   type CreativeDraftDependencies,
 } from "../../supabase/functions/creative-draft/handler.ts";
+import {
+  resolveCreativeModel,
+  type ModelDefinition,
+} from "../../supabase/functions/_shared/creative-models.ts";
 
 const identityOutput = JSON.stringify({
   candidates: [
@@ -13,15 +17,54 @@ const identityOutput = JSON.stringify({
   ],
 });
 const trackOutput = JSON.stringify({ title: "Glass Antennas" });
+const trackBriefOutput = JSON.stringify({
+  title: "Glass Antennas",
+  creativeDirection:
+    "A restrained nocturnal verse opens into a wide chorus led by glass mallets.",
+  lyricTheme: "Choosing wonder over certainty",
+  lyrics:
+    "[Verse 1]\nStreetlights draw a map across the rain\n[Chorus]\nWe choose the glow and start again",
+  productionPlan: {
+    bpm: 118,
+    key: "F# minor",
+    meter: "4/4",
+    sections: [
+      { name: "intro", startSeconds: 0, endSeconds: 16, direction: "Reveal one glass motif over filtered percussion." },
+      { name: "verse", startSeconds: 16, endSeconds: 54, direction: "Keep the vocal close over restrained bass and dry rim clicks." },
+      { name: "chorus", startSeconds: 54, endSeconds: 94, direction: "Widen harmony and answer the hook with bright mallets." },
+      { name: "outro", startSeconds: 94, endSeconds: 120, direction: "Dissolve the motif into rain-like delay without a hard stop." },
+    ],
+    leadInstruments: ["glass mallets", "breathy alto voice"],
+    rhythmInstruments: ["round sub bass", "dry rim clicks"],
+    textureInstruments: ["tape hiss", "rain-like delay"],
+    energyArc: "Rise from close-mic restraint to a luminous final chorus.",
+    productionCharacter: ["warm analog saturation", "precise transient detail"],
+    vocalDirection: "Natural contemporary English with intimate verses and a sustained chorus hook.",
+    visual: {
+      concept: "A fragile signal becomes a shared constellation in rain.",
+      subject: "Translucent antenna forms above a wet rooftop",
+      medium: "Layered paper sculpture photographed on film",
+      composition: "Asymmetric square frame rising from the lower third",
+      palette: ["smoked indigo", "warm amber", "frosted cyan"],
+      lighting: "Low amber side light with cyan reflections",
+      texture: "Visible paper fibers, fine rain grain, restrained halation",
+    },
+    novelty: {
+      coreMotifs: ["glass antenna response", "ascending three-note signal"],
+      avoidRecentMotifs: ["neon tunnel", "piano house hook"],
+    },
+  },
+});
 
 function dependencies(overrides: Partial<CreativeDraftDependencies> = {}) {
   const calls = {
-    generated: [] as { endpoint: string; body: object }[],
+    generated: [] as { model: ModelDefinition; body: object }[],
     reserved: [] as { userId: string; kind: string; requestId: string }[],
+    memoryLoaded: [] as string[],
   };
   const outputs = [identityOutput];
   const deps: CreativeDraftDependencies = {
-    endpoint: "https://provider.invalid/llama",
+    resolveModel: (role) => resolveCreativeModel(role),
     randomId: () => "11111111-1111-4111-8111-111111111111",
     reserveDraft: async (userId: string, kind: string, requestId: string) => {
       calls.reserved.push({ userId, kind, requestId });
@@ -37,9 +80,20 @@ function dependencies(overrides: Partial<CreativeDraftDependencies> = {}) {
       isInstrumental: false,
       vibe: "Rain-lit rooftop after midnight",
       identityConcept: "A patient selector tracing city lights through warm analog haze.",
+      durationSeconds: 120,
     }),
-    generateText: async (endpoint, body) => {
-      calls.generated.push({ endpoint, body });
+    loadRecentMemory: async (djId: string) => {
+      calls.memoryLoaded.push(djId);
+      return {
+        titles: ["Cables Beneath Rain"],
+        identityNames: [],
+        visualMotifs: ["generic neon tunnel"],
+        hooks: ["descending glass signal"],
+        productionFingerprints: ["118 BPM | F# minor | piano house"],
+      };
+    },
+    generateText: async (model, body) => {
+      calls.generated.push({ model, body });
       return outputs.shift() ?? identityOutput;
     },
     ...overrides,
@@ -73,7 +127,8 @@ async function main() {
     requestId: "11111111-1111-4111-8111-111111111111",
   }]);
   assert.equal(calls.generated.length, 1);
-  assert.equal(calls.generated[0].endpoint, deps.endpoint);
+  assert.equal(calls.generated[0].model.role, "creative_shortform");
+  assert.equal(calls.generated[0].model.id, "meta/llama-4-scout-instruct");
   assert.doesNotMatch(JSON.stringify(calls.generated[0].body), /base_prompt|service_role/i);
 }
 
@@ -91,6 +146,39 @@ async function main() {
   });
   assert.match(JSON.stringify(calls.generated[0].body), /House/);
   assert.match(JSON.stringify(calls.generated[0].body), /Static Bloom/);
+}
+
+{
+  const { deps, outputs, calls } = dependencies();
+  outputs.splice(0, outputs.length, trackBriefOutput);
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    deps,
+  );
+  assert.equal(result.status, 200);
+  assert.equal(
+    ((result.body.draft as Record<string, unknown>).productionPlan as {
+      bpm: number;
+    }).bpm,
+    118,
+  );
+  assert.equal(
+    ((calls.generated[0].body as { input: { max_tokens: number } }).input)
+      .max_tokens,
+    1_200,
+  );
+  assert.match(JSON.stringify(calls.generated[0].body), /creative-brief-v2/);
+  assert.match(JSON.stringify(calls.generated[0].body), /Cables Beneath Rain/);
+  assert.match(JSON.stringify(calls.generated[0].body), /generic neon tunnel/);
+  assert.deepEqual(calls.memoryLoaded, ["dj-1"]);
 }
 
 {
