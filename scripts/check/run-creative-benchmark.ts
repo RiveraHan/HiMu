@@ -126,6 +126,56 @@ const textFixtures: Array<{
       durationSeconds: 120,
     },
   },
+  {
+    id: "en-instrumental",
+    locale: "en",
+    request: {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "synthetic-en-instrumental",
+      current: {
+        creativeDirection:
+          "A dry mechanical pulse inside an empty observatory gradually reveals a weightless three-note signal.",
+      },
+      exclude: ["Chrome Horizon", "Digital Dreams", "Stellar Drift"],
+    },
+    context: {
+      djName: "Quiet Vector",
+      identityConcept: "A restrained architect of negative space, tactile rhythm, and slowly shifting perspective.",
+      genres: ["Minimal Techno", "Ambient Electronic"],
+      moods: ["focused", "spacious", "quietly tense"],
+      energy: 4,
+      isInstrumental: true,
+      vibe: "precise and contemplative",
+      durationSeconds: 120,
+    },
+  },
+  {
+    id: "es-instrumental",
+    locale: "es",
+    request: {
+      version: 1,
+      kind: "track-brief",
+      language: "es",
+      djId: "synthetic-es-instrumental",
+      current: {
+        creativeDirection:
+          "Percusión de madera cruza un patio vacío al mediodía y termina convertida en una arquitectura rítmica expansiva.",
+      },
+      exclude: ["Ritual Solar", "Fuego Ancestral", "Raíz Infinita"],
+    },
+    context: {
+      djName: "Trama Solar",
+      identityConcept: "Una constructora rítmica que transforma materiales cotidianos en movimiento colectivo inesperado.",
+      genres: ["Folktrónica", "Percusión Latina"],
+      moods: ["terrenal", "cinético", "expansivo"],
+      energy: 8,
+      isInstrumental: true,
+      vibe: "audaz y artesanal",
+      durationSeconds: 120,
+    },
+  },
 ];
 
 const visualFixtures = [
@@ -219,31 +269,77 @@ const voiceFixtures = [
   },
 ];
 
-function textScore(raw: string, fixture: typeof textFixtures[number]): Record<string, number> {
+const LANGUAGE_MARKERS: Readonly<Record<"en" | "es", ReadonlySet<string>>> = {
+  en: new Set([
+    "the", "and", "with", "into", "until", "through", "between", "from",
+    "without", "over", "inside", "opens", "only", "then",
+  ]),
+  es: new Set([
+    "el", "la", "los", "las", "y", "con", "hasta", "entre", "desde", "sin",
+    "por", "dentro", "abre", "que", "una", "un", "de", "del", "al", "solo",
+    "entonces",
+  ]),
+};
+
+export function scoreBenchmarkLocalization(
+  text: string,
+  locale: "en" | "es",
+): number {
+  const words = text.toLocaleLowerCase(locale).match(/\p{L}+/gu) ?? [];
+  const opposite = locale === "en" ? "es" : "en";
+  const targetHits = words.filter((word) => LANGUAGE_MARKERS[locale].has(word)).length;
+  const oppositeHits = words.filter((word) => LANGUAGE_MARKERS[opposite].has(word)).length;
+  if (targetHits >= 2 && targetHits > oppositeHits) return 1;
+  if (oppositeHits >= 2 && oppositeHits > targetHits) return 0.4;
+  return 0.6;
+}
+
+export function scoreTextBenchmarkSample(
+  raw: string,
+  fixture: typeof textFixtures[number],
+): Record<string, number> {
   try {
     const parsed = parseCreativeDraftOutput("track-brief", raw, {
       language: fixture.locale,
       exclude: fixture.request.exclude,
       djName: fixture.context.djName,
-      mode: "vocal",
+      mode: fixture.context.isInstrumental ? "instrumental" : "vocal",
       durationSeconds: fixture.context.durationSeconds,
     }) as any;
     const plan = parsed.productionPlan;
     const lyrics = String(parsed.lyrics ?? "");
     const lines = lyrics.split("\n").filter((line) => line.trim() && !line.startsWith("["));
     const uniqueLines = new Set(lines.map((line) => line.toLocaleLowerCase())).size;
+    const coreMotifs = Array.isArray(plan.novelty?.coreMotifs)
+      ? plan.novelty.coreMotifs.map((motif: unknown) => String(motif).trim().toLocaleLowerCase())
+      : [];
+    const distinctMotifs = new Set(coreMotifs.filter(Boolean)).size;
     const schema = 1;
     const craft = Math.min(1, (
       (Array.isArray(plan.sections) ? plan.sections.length : 0) / 5 +
       (Array.isArray(plan.leadInstruments) ? plan.leadInstruments.length : 0) / 3 +
       (Array.isArray(plan.visual?.palette) ? plan.visual.palette.length : 0) / 3
     ) / 3);
-    const originality = /neon pulse|midnight glow|pulso lunar|bruma dorada/i.test(parsed.title)
+    const genericTitle = /neon pulse|midnight glow|pulso lunar|bruma dorada/i.test(parsed.title);
+    const productionOriginality = distinctMotifs >= 2 ? 0.85 : distinctMotifs === 1 ? 0.7 : 0.5;
+    const lyricOriginality = Math.min(
+      1,
+      0.5 + uniqueLines / Math.max(12, lines.length * 2),
+    );
+    const originality = genericTitle
       ? 0
-      : Math.min(1, 0.5 + uniqueLines / Math.max(12, lines.length * 2));
-    const localization = fixture.locale === "es"
-      ? (/\b(quiero|calle|luz|amanecer|decir|respirar|guard)/i.test(lyrics) ? 1 : 0.6)
-      : (/\b(the|my|we|you|I)\b/i.test(lyrics) ? 1 : 0.6);
+      : fixture.context.isInstrumental
+        ? productionOriginality
+        : (productionOriginality + lyricOriginality) / 2;
+    const localizedProse = [
+      parsed.creativeDirection,
+      plan.energyArc,
+      ...(Array.isArray(plan.sections)
+        ? plan.sections.map((section: { direction?: unknown }) => String(section.direction ?? ""))
+        : []),
+      lyrics,
+    ].join(" ");
+    const localization = scoreBenchmarkLocalization(localizedProse, fixture.locale);
     const quality = (schema + craft + originality + localization) / 4;
     return { schema, craft, originality, localization, quality };
   } catch {
@@ -279,7 +375,7 @@ function imageModels(): ModelDefinition[] {
   return MODEL_CATALOG.filter((model) => model.role === "image_cover");
 }
 
-function planTasks(): PlannedTask[] {
+export function planTasks(): PlannedTask[] {
   const tasks: PlannedTask[] = [];
   for (const fixture of textFixtures) {
     const input = buildCreativeDraftModelInput(fixture.request, {
@@ -494,7 +590,9 @@ async function main() {
         latencySeconds: prediction.metrics.predictSeconds,
         metrics: prediction.metrics,
         sampleFile: relativeFile,
-        ...(fixture ? { automaticScores: textScore(prediction.output, fixture) } : {}),
+        ...(fixture
+          ? { automaticScores: scoreTextBenchmarkSample(prediction.output, fixture) }
+          : {}),
       });
       blindMap[sampleId] = { taskId: task.id, modelId: task.model.id, variant: task.variant };
       console.log("ok");
@@ -531,7 +629,9 @@ async function main() {
   console.log(JSON.stringify({ artifactRoot: root, spend: ledger.summary() }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : "creative benchmark failed");
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : "creative benchmark failed");
+    process.exitCode = 1;
+  });
+}

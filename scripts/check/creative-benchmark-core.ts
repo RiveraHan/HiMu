@@ -65,7 +65,10 @@ export class BenchmarkSpendLedger {
 }
 
 function mean(values: number[]): number {
-  if (values.length === 0 || values.some((value) => !Number.isFinite(value))) {
+  if (
+    values.length === 0 ||
+    values.some((value) => !Number.isFinite(value) || value < 0 || value > 1)
+  ) {
     throw new Error("benchmark_scores_invalid");
   }
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -75,16 +78,40 @@ export function evaluatePromotion(input: {
   baseline: BenchmarkScorecard;
   candidate: BenchmarkScorecard;
 }): { promote: boolean; reasons: string[] } {
+  for (const scorecard of [input.baseline, input.candidate]) {
+    if (
+      Object.values(scorecard.categoryScores).some((score) =>
+        !Number.isFinite(score) || score < 0 || score > 1
+      )
+    ) {
+      throw new Error("benchmark_scores_invalid");
+    }
+  }
   const reasons: string[] = [];
   for (const locale of ["en", "es"] as const) {
-    const baseline = mean(input.baseline.qualityByLocale[locale]);
-    const candidate = mean(input.candidate.qualityByLocale[locale]);
+    const baselineScores = input.baseline.qualityByLocale[locale];
+    const candidateScores = input.candidate.qualityByLocale[locale];
+    if (
+      baselineScores.length < 2 || candidateScores.length < 2 ||
+      baselineScores.length !== candidateScores.length
+    ) {
+      reasons.push(`locale_${locale}_samples`);
+    }
+    const baseline = mean(baselineScores);
+    const candidate = mean(candidateScores);
+    if (candidate < 0.7) reasons.push(`locale_${locale}_floor`);
+    if (candidateScores.some((score) => score < 0.6)) {
+      reasons.push(`locale_${locale}_consistency`);
+    }
     if (baseline <= 0 || (candidate - baseline) / baseline < 0.15) {
       reasons.push(`locale_${locale}_quality`);
     }
   }
   for (const [category, baseline] of Object.entries(input.baseline.categoryScores)) {
     const candidate = input.candidate.categoryScores[category];
+    if (Number.isFinite(candidate) && candidate < 0.65) {
+      reasons.push(`category_${category}_floor`);
+    }
     if (!Number.isFinite(candidate) || candidate < baseline - 0.05) {
       reasons.push(`category_${category}_regression`);
     }

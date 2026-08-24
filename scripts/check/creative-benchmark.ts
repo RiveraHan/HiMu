@@ -3,6 +3,11 @@ import {
   BenchmarkSpendLedger,
   evaluatePromotion,
 } from "./creative-benchmark-core.ts";
+import {
+  planTasks,
+  scoreBenchmarkLocalization,
+  scoreTextBenchmarkSample,
+} from "./run-creative-benchmark.ts";
 
 const ledger = new BenchmarkSpendLedger(3);
 ledger.reserve("text-a", 0.25);
@@ -60,5 +65,218 @@ assert.ok(rejected.reasons.includes("category_coherence_regression"));
 assert.ok(rejected.reasons.includes("cost"));
 assert.ok(rejected.reasons.includes("latency"));
 assert.ok(rejected.reasons.includes("failures"));
+
+const oneShot = evaluatePromotion({
+  baseline: {
+    qualityByLocale: { en: [0.6], es: [0.6] },
+    categoryScores: { originality: 0.6, coherence: 0.6, localization: 0.6 },
+    costUsd: 0.04,
+    latencySeconds: 10,
+    failures: 0,
+  },
+  candidate: {
+    qualityByLocale: { en: [0.76], es: [0.75] },
+    categoryScores: { originality: 0.75, coherence: 0.75, localization: 0.75 },
+    costUsd: 0.03,
+    latencySeconds: 10,
+    failures: 0,
+  },
+});
+assert.equal(oneShot.promote, false);
+assert.ok(oneShot.reasons.includes("locale_en_samples"));
+assert.ok(oneShot.reasons.includes("locale_es_samples"));
+
+const relativelyBetterButMediocre = evaluatePromotion({
+  baseline: {
+    qualityByLocale: { en: [0.4, 0.4], es: [0.4, 0.4] },
+    categoryScores: { originality: 0.45, coherence: 0.45, localization: 0.45 },
+    costUsd: 0.04,
+    latencySeconds: 10,
+    failures: 0,
+  },
+  candidate: {
+    qualityByLocale: { en: [0.5, 0.5], es: [0.51, 0.5] },
+    categoryScores: { originality: 0.75, coherence: 0.75, localization: 0.75 },
+    costUsd: 0.03,
+    latencySeconds: 10,
+    failures: 0,
+  },
+});
+assert.equal(relativelyBetterButMediocre.promote, false);
+assert.ok(relativelyBetterButMediocre.reasons.includes("locale_en_floor"));
+assert.ok(relativelyBetterButMediocre.reasons.includes("locale_es_floor"));
+
+const unstableCandidate = evaluatePromotion({
+  baseline: {
+    qualityByLocale: { en: [0.6, 0.6], es: [0.6, 0.6] },
+    categoryScores: { originality: 0.6, coherence: 0.6, localization: 0.6 },
+    costUsd: 0.04,
+    latencySeconds: 10,
+    failures: 0,
+  },
+  candidate: {
+    qualityByLocale: { en: [0.9, 0.55], es: [0.73, 0.73] },
+    categoryScores: { originality: 0.75, coherence: 0.75, localization: 0.75 },
+    costUsd: 0.03,
+    latencySeconds: 10,
+    failures: 0,
+  },
+});
+assert.equal(unstableCandidate.promote, false);
+assert.ok(unstableCandidate.reasons.includes("locale_en_consistency"));
+assert.equal(unstableCandidate.reasons.includes("locale_es_consistency"), false);
+
+const weakCreativeDimension = evaluatePromotion({
+  baseline: {
+    qualityByLocale: { en: [0.65, 0.65], es: [0.64, 0.65] },
+    categoryScores: { originality: 0.55, coherence: 0.68, localization: 0.68 },
+    costUsd: 0.04,
+    latencySeconds: 10,
+    failures: 0,
+  },
+  candidate: {
+    qualityByLocale: { en: [0.78, 0.78], es: [0.76, 0.76] },
+    categoryScores: { originality: 0.6, coherence: 0.76, localization: 0.76 },
+    costUsd: 0.03,
+    latencySeconds: 10,
+    failures: 0,
+  },
+});
+assert.equal(weakCreativeDimension.promote, false);
+assert.ok(weakCreativeDimension.reasons.includes("category_originality_floor"));
+
+const textTasks = planTasks().filter(({ kind }) => kind === "text");
+const textLedger = new BenchmarkSpendLedger(3);
+for (const task of textTasks) textLedger.reserve(task.id, task.maximumUsd);
+assert.equal(textTasks.length, 16);
+assert.equal(textLedger.summary().reservedUsd, 0.110468);
+assert.ok(textLedger.summary().reservedUsd < 3);
+
+assert.equal(
+  scoreBenchmarkLocalization(
+    "La percusión cruza el patio hasta que una luz abre el espacio entre las paredes.",
+    "en",
+  ),
+  0.4,
+);
+assert.equal(
+  scoreBenchmarkLocalization(
+    "The percussion crosses the courtyard until a narrow light opens the space between walls.",
+    "en",
+  ),
+  1,
+);
+const instrumentalScores = scoreTextBenchmarkSample(
+    JSON.stringify({
+      title: "Clockwork Dust Garden",
+      creativeDirection:
+        "A dry pulse grows through shifting negative space until a three-note glass signal opens the final section.",
+      lyricTheme: null,
+      lyrics: null,
+      productionPlan: {
+        bpm: 112,
+        key: "D minor",
+        meter: "4/4",
+        sections: [
+          { name: "intro", startSeconds: 0, endSeconds: 18, direction: "Expose a single dry wooden pulse against near silence." },
+          { name: "verse", startSeconds: 18, endSeconds: 52, direction: "Interlock brushed metal and low tom figures without filling the spectrum." },
+          { name: "chorus", startSeconds: 52, endSeconds: 94, direction: "Open the harmony around a weightless three-note glass response." },
+          { name: "outro", startSeconds: 94, endSeconds: 120, direction: "Remove layers until only the transformed wooden pulse remains." },
+        ],
+        leadInstruments: ["glass marimba", "bowed vibraphone"],
+        rhythmInstruments: ["dry wooden pulse", "low floor tom"],
+        textureInstruments: ["observatory room tone", "brushed metal resonance"],
+        energyArc: "Controlled mechanical tension gives way to a spacious, weightless release.",
+        productionCharacter: ["tactile transients", "deep negative space"],
+        vocalDirection: null,
+        visual: {
+          concept: "Mechanical dust reorganizes itself into a fragile garden.",
+          subject: "A clockwork seed opening inside an abandoned observatory",
+          medium: "Hand-built wood and glass sculpture photographed on film",
+          composition: "Asymmetric square frame with the seed low and open sky above",
+          palette: ["charcoal blue", "weathered brass", "clouded glass"],
+          lighting: "Narrow dawn side light through suspended dust",
+          texture: "Dry wood grain, oxidized metal, restrained film halation",
+        },
+        novelty: {
+          coreMotifs: ["wooden pulse transformation", "three-note glass response"],
+          avoidRecentMotifs: ["generic neon tunnel", "piano house hook"],
+        },
+      },
+    }),
+    {
+      id: "en-instrumental",
+      locale: "en",
+      request: { exclude: ["Chrome Horizon", "Digital Dreams"] },
+      context: {
+        djName: "Quiet Vector",
+        isInstrumental: true,
+        durationSeconds: 120,
+      },
+    },
+  );
+assert.equal(instrumentalScores?.schema, 1);
+assert.equal(instrumentalScores?.localization, 1);
+assert.ok((instrumentalScores?.originality ?? 0) >= 0.75);
+assert.ok((instrumentalScores?.quality ?? 0) >= 0.7);
+
+const unequalCoverage = evaluatePromotion({
+  baseline: {
+    qualityByLocale: { en: [0.62, 0.62, 0.62], es: [0.62, 0.62] },
+    categoryScores: { originality: 0.66, coherence: 0.66, localization: 0.66 },
+    costUsd: 0.04,
+    latencySeconds: 10,
+    failures: 0,
+  },
+  candidate: {
+    qualityByLocale: { en: [0.76, 0.76], es: [0.76, 0.76] },
+    categoryScores: { originality: 0.76, coherence: 0.76, localization: 0.76 },
+    costUsd: 0.03,
+    latencySeconds: 10,
+    failures: 0,
+  },
+});
+assert.equal(unequalCoverage.promote, false);
+assert.ok(unequalCoverage.reasons.includes("locale_en_samples"));
+
+assert.throws(
+  () => evaluatePromotion({
+    baseline: {
+      qualityByLocale: { en: [0.65, 0.65], es: [0.65, 0.65] },
+      categoryScores: { originality: 0.7, coherence: 0.7, localization: 0.7 },
+      costUsd: 0.04,
+      latencySeconds: 10,
+      failures: 0,
+    },
+    candidate: {
+      qualityByLocale: { en: [7.6, 0.76], es: [0.76, 0.76] },
+      categoryScores: { originality: 0.76, coherence: 0.76, localization: 0.76 },
+      costUsd: 0.03,
+      latencySeconds: 10,
+      failures: 0,
+    },
+  }),
+  /benchmark_scores_invalid/,
+);
+
+assert.throws(
+  () => evaluatePromotion({
+    baseline: {
+      qualityByLocale: { en: [0.65, 0.65], es: [0.65, 0.65] },
+      categoryScores: { originality: 0.7, coherence: 0.7, localization: 0.7 },
+      costUsd: 0.04,
+      latencySeconds: 10,
+      failures: 0,
+    },
+    candidate: {
+      qualityByLocale: { en: [0.76, 0.76], es: [0.76, 0.76] },
+      categoryScores: { originality: 1.5, coherence: 0.76, localization: 0.76 },
+      costUsd: 0.03,
+      latencySeconds: 10,
+      failures: 0,
+    },
+  }),
+  /benchmark_scores_invalid/,
+);
 
 console.log("creative benchmark checks passed");
