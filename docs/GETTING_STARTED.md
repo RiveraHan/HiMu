@@ -5,6 +5,9 @@
 HiMu stores public covers and avatars in `R2_BUCKET`. Private generated tracks
 and captions must use a separate `R2_PRIVATE_BUCKET` with neither a public
 custom domain nor an `r2.dev` development URL.
+When the Supabase deployment cannot provision secrets, the runtime safely
+defaults this value to `<R2_BUCKET>-private`; create that exact private bucket
+before deployment. An explicit value remains recommended.
 
 Set these server-only values for Supabase Edge Functions and for the migration
 runner:

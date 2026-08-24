@@ -10,7 +10,11 @@ import {
 
 const ACCOUNT_ID = Deno.env.get("CLOUDFLARE_ACCOUNT_ID")!;
 const R2_BUCKET = Deno.env.get("R2_BUCKET")!;
-const R2_PRIVATE_BUCKET = Deno.env.get("R2_PRIVATE_BUCKET") ?? "";
+// Supabase's connector can deploy functions but cannot provision project
+// secrets. Keep production available with a distinct, private-by-convention
+// bucket while still allowing an explicit deployment override.
+const R2_PRIVATE_BUCKET =
+  Deno.env.get("R2_PRIVATE_BUCKET")?.trim() || `${R2_BUCKET}-private`;
 
 export const R2_PUBLIC_BASE = (Deno.env.get("R2_PUBLIC_BASE") ?? "").replace(
   /\/+$/,
