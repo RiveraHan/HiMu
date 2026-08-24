@@ -5,6 +5,7 @@ import {
   type ObjectMetadata,
   type PrivateMediaRow,
 } from "./private-media";
+import { withTransientRetry } from "./retry";
 
 type Options = {
   dryRun: boolean;
@@ -124,9 +125,9 @@ async function main() {
   }
 
   async function head(endpoint: string, key: string): Promise<Response> {
-    const response = await r2.fetch(`${endpoint}/${encodedKey(key)}`, {
-      method: "HEAD",
-    });
+    const response = await withTransientRetry(() =>
+      r2.fetch(`${endpoint}/${encodedKey(key)}`, { method: "HEAD" })
+    );
     if (!response.ok) throw new Error(`R2 HEAD failed (${response.status})`);
     return response;
   }
@@ -147,10 +148,12 @@ async function main() {
         };
         const contentType = source.headers.get("content-type");
         if (contentType) headers["Content-Type"] = contentType;
-        const copied = await r2.fetch(`${privateEndpoint}/${encodedKey(key)}`, {
-          method: "PUT",
-          headers,
-        });
+        const copied = await withTransientRetry(() =>
+          r2.fetch(`${privateEndpoint}/${encodedKey(key)}`, {
+            method: "PUT",
+            headers,
+          })
+        );
         if (!copied.ok) throw new Error(`R2 copy failed (${copied.status})`);
         return metadata(source);
       },
@@ -170,12 +173,19 @@ async function main() {
         return data?.id === row.id;
       },
       deletePublic: async (key) => {
-        const response = await r2.fetch(`${publicEndpoint}/${encodedKey(key)}`, {
-          method: "DELETE",
-        });
+        const response = await withTransientRetry(() =>
+          r2.fetch(`${publicEndpoint}/${encodedKey(key)}`, { method: "DELETE" })
+        );
         if (!response.ok && response.status !== 404) {
           throw new Error(`R2 DELETE failed (${response.status})`);
         }
+      },
+      onError: (row, error) => {
+        console.error(JSON.stringify({
+          kind: row.kind,
+          id: row.id,
+          error: error instanceof Error ? error.message : "unknown migration error",
+        }));
       },
     }, { publicBase, dryRun: options.dryRun });
 

@@ -23,6 +23,7 @@ export type PrivateMediaMigrationDependencies = {
     reference: string,
   ) => Promise<boolean>;
   deletePublic: (key: string) => Promise<void>;
+  onError?: (row: PrivateMediaRow, error: unknown) => void;
 };
 
 export type PrivateMediaMigrationResult = {
@@ -102,7 +103,8 @@ export async function migratePrivateMediaRows(
 
       await dependencies.deletePublic(parsed.key);
       result.migrated += 1;
-    } catch {
+    } catch (error) {
+      dependencies.onError?.(row, error);
       result.failed += 1;
       result.remaining += 1;
     }
