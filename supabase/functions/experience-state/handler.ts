@@ -1,8 +1,6 @@
-export type ExperienceAction =
-  | { action: "sync_intro"; version: number }
-  | { action: "claim_nudge"; trackId: string }
-  | { action: "dismiss_nudge"; trackId: string }
-  | { action: "complete_nudge" };
+import type { ExperienceAction } from "../../../shared/experience-action.ts";
+
+export type { ExperienceAction } from "../../../shared/experience-action.ts";
 
 export type ExperienceStateDependencies = {
   transition(

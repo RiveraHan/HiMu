@@ -7,6 +7,7 @@ import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { useCurrentUser } from "@/src/hooks/use-auth";
+import { experienceActions } from "@/shared/experience-action";
 import {
   useClaimPreferenceNudge,
   useExperienceState,
@@ -135,7 +136,7 @@ test("claims a nudge through the captured user's Edge authorization", async () =
   await act(async () => { await view.result.current.mutateAsync(trackId); });
 
   expect(supabase.functions.invoke).toHaveBeenCalledWith("experience-state", {
-    body: { action: "claim_nudge", trackId },
+    body: experienceActions.claimNudge(trackId),
     headers: { Authorization: `Bearer token-${userA}` },
   });
   expect(queryClient.getQueryData(queryKeys.experienceState.me(userA))).toEqual({

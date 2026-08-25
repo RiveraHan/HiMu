@@ -1,8 +1,8 @@
 import {
   ExperienceStateConflictError,
   handleExperienceStateRequest,
-  type ExperienceAction,
 } from "./handler.ts";
+import type { ExperienceAction } from "../../../shared/experience-action.ts";
 
 type RpcError = { code?: string | null };
 

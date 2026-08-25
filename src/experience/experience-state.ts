@@ -9,6 +9,10 @@ import {
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useCurrentUser } from "@/src/hooks/use-auth";
+import {
+  experienceActions,
+  type ExperienceAction,
+} from "@/shared/experience-action";
 
 export type ExperienceState = {
   introVersionSeen: number;
@@ -22,12 +26,6 @@ export type ExperienceState = {
     | "completed";
   preferenceNudgeTrackId: string | null;
 };
-
-type ExperienceAction =
-  | { action: "sync_intro"; version: number }
-  | { action: "claim_nudge"; trackId: string }
-  | { action: "dismiss_nudge"; trackId: string }
-  | { action: "complete_nudge" };
 
 const EXPERIENCE_STATE_COLUMNS = [
   "intro_version_seen",
@@ -129,28 +127,17 @@ function useExperienceMutation<T>(operation: string, toAction: (value: T) => Exp
 }
 
 export function useSyncIntroVersion() {
-  return useExperienceMutation("sync-experience-intro", (version: number) => ({
-    action: "sync_intro",
-    version,
-  }));
+  return useExperienceMutation("sync-experience-intro", experienceActions.syncIntro);
 }
 
 export function useClaimPreferenceNudge() {
-  return useExperienceMutation("claim-experience-nudge", (trackId: string) => ({
-    action: "claim_nudge",
-    trackId,
-  }));
+  return useExperienceMutation("claim-experience-nudge", experienceActions.claimNudge);
 }
 
 export function useDismissPreferenceNudge() {
-  return useExperienceMutation("dismiss-experience-nudge", (trackId: string) => ({
-    action: "dismiss_nudge",
-    trackId,
-  }));
+  return useExperienceMutation("dismiss-experience-nudge", experienceActions.dismissNudge);
 }
 
 export function useCompletePreferenceNudge() {
-  return useExperienceMutation("complete-experience-nudge", () => ({
-    action: "complete_nudge",
-  }));
+  return useExperienceMutation("complete-experience-nudge", experienceActions.completeNudge);
 }

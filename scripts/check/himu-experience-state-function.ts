@@ -4,6 +4,10 @@ import {
   handleExperienceStateRequest,
 } from "../../supabase/functions/experience-state/handler";
 import { handleExperienceStateHttpRequest } from "../../supabase/functions/experience-state/adapter";
+import {
+  experienceActions,
+  type ExperienceAction,
+} from "../../shared/experience-action";
 
 const USER_ID = "00000000-0000-4000-8000-000000000101";
 const TRACK_ID = "00000000-0000-4000-8000-000000000201";
@@ -95,6 +99,13 @@ async function main() {
     body: { error: "state_unavailable", code: "state_unavailable" },
   });
   assert.doesNotMatch(JSON.stringify(unavailable), /secret/i);
+
+  const sharedClaim: ExperienceAction = experienceActions.claimNudge(TRACK_ID);
+  assert.deepEqual(
+    await handleExperienceStateRequest(sharedClaim, USER_ID, deps),
+    { status: 200, body: expectedState },
+  );
+  assert.deepEqual(transitionCalls[4], [USER_ID, "claim_nudge", null, TRACK_ID]);
 
   const databaseState = {
     intro_version_seen: 2,
