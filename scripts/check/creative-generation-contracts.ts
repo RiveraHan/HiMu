@@ -254,8 +254,20 @@ assert.throws(
     ),
   /duplicate_identity/,
 );
+assert.deepEqual(
+  parseCreativeDraftOutput(
+    "track-title",
+    "```json\n{\"title\":\"Blue Static\"}\n```",
+    { language: "en", exclude: [] },
+  ),
+  { title: "Blue Static" },
+);
 assert.throws(
-  () => parseCreativeDraftOutput("track-title", "```json\n{\"title\":\"Blue Static\"}\n```", { language: "en", exclude: [] }),
+  () => parseCreativeDraftOutput(
+    "track-title",
+    "Here is the result:\n```json\n{\"title\":\"Blue Static\"}\n```",
+    { language: "en", exclude: [] },
+  ),
   /invalid_json/,
 );
 assert.throws(
@@ -526,6 +538,31 @@ const parsedV2Draft = parseCreativeDraftOutput(
   },
 );
 assert.deepEqual(parsedV2Draft.productionPlan, validProductionPlan);
+
+const normalizedModelDraft = parseCreativeDraftOutput(
+  "track-brief",
+  JSON.stringify({
+    title: validBrief.title,
+    creativeDirection: validBrief.creativeDirection,
+    lyricTheme: validBrief.lyricTheme,
+    lyrics: validBrief.lyrics,
+    productionPlan: {
+      ...validProductionPlan,
+      key: "F# Minor",
+      sections: validProductionPlan.sections.map(({ endSeconds: _endSeconds, ...section }) =>
+        section
+      ),
+    },
+  }),
+  {
+    language: "en",
+    exclude: [],
+    djName: authoritative.djName,
+    mode: "vocal",
+    durationSeconds: 120,
+  },
+);
+assert.deepEqual(normalizedModelDraft.productionPlan, validProductionPlan);
 
 const derivedMemory = extractRecentCreativeMemory(
   [

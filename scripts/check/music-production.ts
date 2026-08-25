@@ -93,7 +93,8 @@ const directionFrame = prompt.match(
   /<<<(HIMU_DIRECTION_\d+)_START>>>\n([\s\S]*?)\n<<<\1_END>>>/,
 );
 assert.equal(directionFrame?.[2], args.creativeDirection);
-assert.match(prompt, /Do not reproduce or closely imitate any existing copyrighted song/i);
+assert.match(prompt, /Build a distinct composition from the specification above/i);
+assert.doesNotMatch(prompt, /copyrighted/i);
 
 const instrumental = compileMusicProduction({
   ...args,

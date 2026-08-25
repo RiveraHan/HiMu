@@ -9,6 +9,7 @@ import {
 import {
   buildImageProviderBody,
   buildTextProviderBody,
+  effectiveTextOutputLimit,
 } from "../../supabase/functions/_shared/creative-provider-adapters.ts";
 import {
   estimateModelCost,
@@ -33,7 +34,11 @@ import {
   compileDjPerformance,
   renderTtsText,
 } from "../../supabase/functions/_shared/dj-performance.ts";
-import { BenchmarkSpendLedger } from "./creative-benchmark-core.ts";
+import {
+  BenchmarkSpendLedger,
+  buildBlindRatingTemplate,
+  type BenchmarkKind,
+} from "./creative-benchmark-core.ts";
 
 const LIMIT_USD = 3;
 const LIVE = process.argv.includes("--live");
@@ -41,7 +46,7 @@ const ONLY = process.argv.find((argument) => argument.startsWith("--only="))
   ?.slice("--only=".length) as TaskKind | undefined;
 const token = process.env.REPLICATE_API_TOKEN ?? "";
 
-type TaskKind = "text" | "image" | "music" | "voice";
+type TaskKind = BenchmarkKind;
 type PlannedTask = {
   id: string;
   kind: TaskKind;
@@ -211,6 +216,38 @@ const visualFixtures = [
       texture: "Bordes cortados a mano, vidrio empañado y grano analógico fino",
     },
   },
+  {
+    id: "archive-tide",
+    locale: "en" as const,
+    genres: ["Ambient Jazz", "Experimental Electronic"],
+    moods: ["curious", "tranquil"],
+    instrumental: true,
+    visualPlan: {
+      concept: "A silent archive learns to breathe with the tide.",
+      subject: "Translucent catalog cards folding into a suspended wave above a black listening table",
+      medium: "Cyanotype, smoked glass, and hand-cut vellum photographed as a practical tabletop set",
+      composition: "An off-center spiral enters from the upper left and nearly touches a small table in the lower right",
+      palette: ["deep ultramarine", "bone white", "oxidized copper"],
+      lighting: "A narrow underwater-blue beam with one warm reflection under the paper wave",
+      texture: "Deckled vellum edges, salt bloom, scratched glass, and dense photographic grain",
+    },
+  },
+  {
+    id: "toldo-de-lluvia",
+    locale: "es" as const,
+    genres: ["Folktrónica", "Percusión Latina"],
+    moods: ["terrenal", "juguetón"],
+    instrumental: true,
+    visualPlan: {
+      concept: "La lluvia convierte un mercado cerrado en una partitura tejida.",
+      subject: "Tiras de tela y alambre de cobre tensadas entre toldos de un mercado en miniatura",
+      medium: "Diorama textil construido a mano y fotografiado con exposición múltiple",
+      composition: "Vista cenital asimétrica con diagonales que se cruzan y un pequeño claro circular",
+      palette: ["verde aguacate", "terracota", "azul tormenta"],
+      lighting: "Destellos fríos de lluvia y un único foco cálido reflejado en cobre",
+      texture: "Fibras húmedas, costuras visibles, metal oxidado y grano documental",
+    },
+  },
 ];
 
 const musicFixtures = [
@@ -248,6 +285,40 @@ const musicFixtures = [
       energy: 7,
     },
   },
+  {
+    id: "en-vocal",
+    locale: "en" as const,
+    args: {
+      basePrompt: "percussive art pop with tactile soul detail",
+      seasoning: ["late afternoon resolve", "human microtiming"],
+      creativeDirection: "A close clay-drum pattern and muted guitar circle each other; the chorus opens into brass breath and handclaps without becoming glossy.",
+      instrumental: false,
+      durationSeconds: 120,
+      language: "en" as const,
+      lyrics: "[Verse]\nI counted every doorway twice\nkept my answer in the frame\n\n[Chorus]\nTurn the room toward morning\nlet the hinges learn my name",
+      seed: "benchmark-en-vocal",
+      genres: ["Art Pop", "Alternative Soul"],
+      moods: ["restless", "warm", "resolved"],
+      energy: 6,
+    },
+  },
+  {
+    id: "es-instrumental",
+    locale: "es" as const,
+    args: {
+      basePrompt: "folktrónica electroacústica de pulso artesanal",
+      seasoning: ["patio después de la lluvia", "microtiming humano"],
+      creativeDirection: "Empieza con semillas rodando dentro de barro cocido; marimba grave y cuerdas preparadas construyen una polirritmia que se abre y vuelve al sonido inicial transformado.",
+      instrumental: true,
+      durationSeconds: 120,
+      language: "es" as const,
+      lyrics: null,
+      seed: "benchmark-es-instrumental",
+      genres: ["Folktrónica", "Electroacústica"],
+      moods: ["terrenal", "cinético", "contemplativo"],
+      energy: 5,
+    },
+  },
 ];
 
 const voiceFixtures = [
@@ -266,6 +337,22 @@ const voiceFixtures = [
     moods: ["energetic", "uplifting"],
     character: "Cálida y curiosa",
     caption: "Yo sigo ese bajo redondo hasta el coro, donde las palmas abren toda la mañana.",
+  },
+  {
+    id: "en-energetic",
+    locale: "en" as const,
+    voiceStyle: "masculine, bright, and kinetic",
+    moods: ["energetic", "playful"],
+    character: "Quick-witted and generous",
+    caption: "That crooked handclap pulls the brass forward, and suddenly the whole room has somewhere to go.",
+  },
+  {
+    id: "es-calm",
+    locale: "es" as const,
+    voiceStyle: "andrógina, serena y cercana",
+    moods: ["calm", "reflective"],
+    character: "Atenta y precisa",
+    caption: "Escucha cómo la madera deja espacio entre cada golpe; ahí es donde la melodía empieza a respirar.",
   },
 ];
 
@@ -391,7 +478,7 @@ export function planTasks(): PlannedTask[] {
     for (const model of textModels()) {
       const maximumUsd = estimateModelCost(model, {
         input: model.limits.input,
-        output: input.maxOutputTokens,
+        output: effectiveTextOutputLimit(model, input.maxOutputTokens),
       });
       tasks.push({
         id: `text:${fixture.id}:${model.id}`,
@@ -557,6 +644,11 @@ async function main() {
   await mkdir(blindDir, { recursive: true });
   const results: BenchmarkResult[] = [];
   const blindMap: Record<string, { taskId: string; modelId: string; variant: string }> = {};
+  const blindSamples: Array<{
+    sampleId: string;
+    kind: BenchmarkKind;
+    locale: "en" | "es";
+  }> = [];
   let sampleIndex = 0;
 
   for (const task of tasks) {
@@ -595,6 +687,7 @@ async function main() {
           : {}),
       });
       blindMap[sampleId] = { taskId: task.id, modelId: task.model.id, variant: task.variant };
+      blindSamples.push({ sampleId, kind: task.kind, locale: task.locale });
       console.log("ok");
     } catch (error) {
       ledger.complete(task.id, task.maximumUsd);
@@ -626,6 +719,11 @@ async function main() {
   };
   await writeFile(path.join(root, "report.json"), JSON.stringify(report, null, 2), "utf8");
   await writeFile(path.join(root, "blind-map.json"), JSON.stringify(blindMap, null, 2), "utf8");
+  await writeFile(
+    path.join(root, "ratings-template.json"),
+    JSON.stringify(buildBlindRatingTemplate(blindSamples), null, 2),
+    "utf8",
+  );
   console.log(JSON.stringify({ artifactRoot: root, spend: ledger.summary() }, null, 2));
 }
 

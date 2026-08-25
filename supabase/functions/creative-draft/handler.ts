@@ -7,7 +7,10 @@ import {
   type CreativeDraftRequest,
   type RecentCreativeMemory,
 } from "../_shared/creative-generation.ts";
-import { buildTextProviderBody } from "../_shared/creative-provider-adapters.ts";
+import {
+  buildTextProviderBody,
+  effectiveTextOutputLimit,
+} from "../_shared/creative-provider-adapters.ts";
 import {
   assertWithinModelBudget,
   estimateModelCost,
@@ -80,14 +83,15 @@ function generationCost(
   generation: CreativeTextGeneration,
   maxOutputTokens: number,
 ): number {
+  const outputLimit = effectiveTextOutputLimit(model, maxOutputTokens);
   return typeof generation === "string"
     ? estimateModelCost(model, {
       input: model.limits.input,
-      output: maxOutputTokens,
+      output: outputLimit,
     })
     : estimatePredictionCost(model, generation, {
       input: model.limits.input,
-      output: maxOutputTokens,
+      output: outputLimit,
     });
 }
 
@@ -201,14 +205,14 @@ export async function handleCreativeDraftRequest(
       input.role,
       estimateModelCost(initialModel, {
         input: initialModel.limits.input,
-        output: input.maxOutputTokens,
+        output: effectiveTextOutputLimit(initialModel, input.maxOutputTokens),
       }),
     );
     assertWithinModelBudget(
       "format_repair",
       estimateModelCost(repairModel, {
         input: repairModel.limits.input,
-        output: input.maxOutputTokens,
+        output: effectiveTextOutputLimit(repairModel, input.maxOutputTokens),
       }),
     );
   } catch {
@@ -240,7 +244,7 @@ export async function handleCreativeDraftRequest(
       latencyMs: Math.max(0, Math.round((deps.now?.() ?? Date.now()) - initialStartedAt)),
       estimatedCostUsd: estimateModelCost(initialModel, {
         input: initialModel.limits.input,
-        output: input.maxOutputTokens,
+        output: effectiveTextOutputLimit(initialModel, input.maxOutputTokens),
       }),
       inputUnits: null,
       outputUnits: null,
@@ -330,7 +334,7 @@ export async function handleCreativeDraftRequest(
       latencyMs: Math.max(0, Math.round((deps.now?.() ?? Date.now()) - repairStartedAt)),
       estimatedCostUsd: estimateModelCost(repairModel, {
         input: repairModel.limits.input,
-        output: input.maxOutputTokens,
+        output: effectiveTextOutputLimit(repairModel, input.maxOutputTokens),
       }),
       inputUnits: null,
       outputUnits: null,

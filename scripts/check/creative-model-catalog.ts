@@ -56,6 +56,8 @@ assert.deepEqual(CREATIVE_ROLE_BUDGETS_USD, {
 
 assert.equal(resolveCreativeModel("music_full").id, "google/lyria-3-pro");
 assert.equal(resolveCreativeModel("voice_caption").id, "inworld/realtime-tts-2");
+assert.equal(resolveCreativeModel("creative_longform").id, "openai/gpt-5.6-luna");
+assert.equal(resolveCreativeModel("creative_longform").lifecycle, "promoted");
 assert.equal(resolveCreativeModel("image_cover").id, "openai/gpt-image-2");
 assert.equal(resolveCreativeModel("image_avatar").id, "openai/gpt-image-2");
 assert.equal(resolveCreativeModel("image_cover").lifecycle, "promoted");
@@ -76,6 +78,14 @@ assert.throws(
   () => resolveCreativeModel("creative_longform", { candidateId: "reve/create" }),
   /creative_model_not_available/,
 );
+assert.throws(
+  () => resolveCreativeModel("image_cover", { candidateId: "reve/create" }),
+  /creative_model_not_available/,
+);
+assert.throws(
+  () => resolveCreativeModel("image_avatar", { candidateId: "reve/create" }),
+  /creative_model_not_available/,
+);
 
 const sonnet = resolveCreativeModel("creative_longform", {
   candidateId: "anthropic/claude-sonnet-5",
@@ -84,6 +94,26 @@ assert.equal(
   estimateModelCost(sonnet, { input: 900, output: 1_200 }),
   0.0138,
 );
+
+const baselineLongform = resolveCreativeModel("creative_longform", {
+  candidateId: "meta/llama-4-scout-instruct",
+});
+const promotedLongform = resolveCreativeModel("creative_longform");
+const baselineCover = resolveCreativeModel("image_cover", {
+  candidateId: "black-forest-labs/flux-1.1-pro",
+});
+const promotedCover = resolveCreativeModel("image_cover");
+const baselineExperienceMaximum =
+  estimateModelCost(baselineLongform, { input: 1_100, output: 1_200 }) +
+  estimateModelCost(baselineCover, { input: 0, output: 1 }) +
+  CREATIVE_ROLE_BUDGETS_USD.music_full +
+  CREATIVE_ROLE_BUDGETS_USD.voice_caption;
+const promotedExperienceMaximum =
+  estimateModelCost(promotedLongform, { input: 1_100, output: 1_200 }) +
+  estimateModelCost(promotedCover, { input: 0, output: 1 }) +
+  CREATIVE_ROLE_BUDGETS_USD.music_full +
+  CREATIVE_ROLE_BUDGETS_USD.voice_caption;
+assert.ok(promotedExperienceMaximum < baselineExperienceMaximum);
 
 const lyria = resolveCreativeModel("music_full");
 assert.equal(estimateModelCost(lyria, { input: 1, output: 1 }), 0.08);

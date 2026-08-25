@@ -80,6 +80,23 @@ assert.deepEqual(
     },
   },
 );
+assert.deepEqual(
+  buildTextProviderBody(
+    resolveCreativeModel("creative_longform", {
+      candidateId: "google/gemini-3-flash",
+    }),
+    { ...textRequest, maxOutputTokens: 1_200 },
+  ),
+  {
+    input: {
+      system_instruction: textRequest.system,
+      prompt: textRequest.prompt,
+      max_output_tokens: 4_096,
+      temperature: 0.7,
+      thinking_level: "none",
+    },
+  },
+);
 
 const imageRequest = {
   prompt: "Square album artwork, abstract paper sculpture, no text.",
@@ -124,21 +141,6 @@ assert.deepEqual(
     },
   },
 );
-assert.deepEqual(
-  buildImageProviderBody(
-    resolveCreativeModel("image_cover", { candidateId: "reve/create" }),
-    imageRequest,
-  ),
-  {
-    input: {
-      prompt: imageRequest.prompt,
-      aspect_ratio: "1:1",
-      version: "latest",
-      seed: 42,
-    },
-  },
-);
-
 assert.equal(parseReplicateTextOutput(["one", " ", "line"]), "one line");
 assert.equal(parseReplicateTextOutput("one line"), "one line");
 assert.throws(() => parseReplicateTextOutput(null), /replicate_text_output/);

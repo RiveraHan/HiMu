@@ -340,7 +340,7 @@ function renderWithLimits(
     "ORIGINALITY",
     `Core motifs to develop: ${list(request.originality.coreMotifs)}`,
     `Avoid recent motifs: ${list(request.originality.avoidRecentMotifs) || "none supplied"}`,
-    "Do not reproduce or closely imitate any existing copyrighted song, melody, lyrics, or named artist. Build a distinct composition from the specification above.",
+    "Use original musical material throughout. Avoid close imitation of any recognizable melody, lyrics, arrangement, recording, or performer. Build a distinct composition from the specification above.",
   ].join("\n");
 }
 

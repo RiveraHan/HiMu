@@ -29,6 +29,15 @@ function validTextRequest(
   }
 }
 
+export function effectiveTextOutputLimit(
+  model: ModelDefinition,
+  requestedTokens: number,
+): number {
+  return model.adapter === "gemini" && model.role === "creative_longform"
+    ? model.limits.output
+    : requestedTokens;
+}
+
 export function buildTextProviderBody(
   model: ModelDefinition,
   request: CreativeTextRequest,
@@ -72,7 +81,7 @@ export function buildTextProviderBody(
       input: {
         system_instruction: request.system,
         prompt: request.prompt,
-        max_output_tokens: request.maxOutputTokens,
+        max_output_tokens: effectiveTextOutputLimit(model, request.maxOutputTokens),
         temperature: request.temperature,
         thinking_level: "none",
       },
@@ -108,16 +117,6 @@ export function buildImageProviderBody(
         moderation: "auto",
         number_of_images: 1,
         output_compression: 92,
-      },
-    };
-  }
-  if (model.adapter === "reve") {
-    return {
-      input: {
-        prompt: request.prompt,
-        aspect_ratio: request.aspectRatio,
-        version: "latest",
-        ...(request.seed == null ? {} : { seed: request.seed }),
       },
     };
   }

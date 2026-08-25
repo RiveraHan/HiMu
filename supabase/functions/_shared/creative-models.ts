@@ -18,7 +18,6 @@ export type CreativeModelAdapter =
   | "lyria"
   | "flux"
   | "gpt_image"
-  | "reve"
   | "inworld";
 export type CreativeModelLifecycle = "baseline" | "candidate" | "promoted";
 export type CreativePriceUnit = "tokens" | "characters" | "seconds" | "output" | "megapixels";
@@ -109,7 +108,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     id: LUNA_ID,
     role: "creative_longform",
     adapter: "openai",
-    lifecycle: "candidate",
+    lifecycle: "promoted",
     price: tokens(1, 6),
     limits: { input: 1_100, output: 1_200, timeoutMs: 40_000, maxCostUsd: 0.0083 },
   }),
@@ -119,7 +118,7 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     adapter: "gemini",
     lifecycle: "candidate",
     price: tokens(0.5, 3),
-    limits: { input: 1_100, output: 1_200, timeoutMs: 40_000, maxCostUsd: 0.00415 },
+    limits: { input: 1_100, output: 4_096, timeoutMs: 40_000, maxCostUsd: 0.012838 },
   }),
   model({
     id: LLAMA_ID,
@@ -178,14 +177,6 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     limits: { input: 4_000, output: 1, timeoutMs: 120_000, maxCostUsd: 0.012 },
   }),
   model({
-    id: "reve/create",
-    role: "image_cover",
-    adapter: "reve",
-    lifecycle: "candidate",
-    price: output(0.025),
-    limits: { input: 4_000, output: 1, timeoutMs: 120_000, maxCostUsd: 0.025 },
-  }),
-  model({
     id: "black-forest-labs/flux-2-klein-9b",
     role: "image_cover",
     adapter: "flux",
@@ -208,14 +199,6 @@ export const MODEL_CATALOG: readonly ModelDefinition[] = Object.freeze([
     lifecycle: "promoted",
     price: output(0.012),
     limits: { input: 4_000, output: 1, timeoutMs: 120_000, maxCostUsd: 0.012 },
-  }),
-  model({
-    id: "reve/create",
-    role: "image_avatar",
-    adapter: "reve",
-    lifecycle: "candidate",
-    price: output(0.025),
-    limits: { input: 4_000, output: 1, timeoutMs: 120_000, maxCostUsd: 0.025 },
   }),
   model({
     id: "black-forest-labs/flux-2-klein-9b",

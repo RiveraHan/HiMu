@@ -548,6 +548,42 @@ type ParseContext = {
   durationSeconds?: number;
 };
 
+function modelJsonSource(raw: string): string {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/^```(?:json)?\r?\n([\s\S]*?)\r?\n```$/i);
+  return fenced ? fenced[1].trim() : trimmed;
+}
+
+function normalizeModelProductionPlan(
+  value: unknown,
+  durationSeconds: number,
+): unknown {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
+  const plan = value as Record<string, unknown>;
+  const keyMatch = typeof plan.key === "string"
+    ? plan.key.match(/^([A-G])([#b]?) (major|minor)$/i)
+    : null;
+  const key = keyMatch
+    ? `${keyMatch[1].toUpperCase()}${keyMatch[2].toLowerCase()} ${keyMatch[3].toLowerCase()}`
+    : plan.key;
+  const sections = Array.isArray(plan.sections)
+    ? plan.sections.map((value, index, source) => {
+      if (value == null || typeof value !== "object" || Array.isArray(value)) return value;
+      const section = value as Record<string, unknown>;
+      if (section.endSeconds != null) return section;
+      const next = source[index + 1];
+      const inferredEnd = next != null && typeof next === "object" && !Array.isArray(next) &&
+          Number.isInteger((next as Record<string, unknown>).startSeconds)
+        ? Number((next as Record<string, unknown>).startSeconds)
+        : index === source.length - 1
+        ? durationSeconds
+        : null;
+      return inferredEnd == null ? section : { ...section, endSeconds: inferredEnd };
+    })
+    : plan.sections;
+  return { ...plan, key, sections };
+}
+
 export function parseCreativeDraftOutput(
   kind: CreativeDraftKind,
   raw: string,
@@ -555,7 +591,7 @@ export function parseCreativeDraftOutput(
 ): Record<string, unknown> & { candidates?: DjIdentityCandidate[]; lyrics?: string } {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw.trim());
+    parsed = JSON.parse(modelJsonSource(raw));
   } catch {
     throw new Error("invalid_json");
   }
@@ -622,10 +658,16 @@ export function parseCreativeDraftOutput(
   }
   return {
     ...brief,
-    productionPlan: validateProductionPlan(output.productionPlan, {
+    productionPlan: validateProductionPlan(
+      normalizeModelProductionPlan(
+        output.productionPlan,
+        context.durationSeconds ?? 150,
+      ),
+      {
       mode,
       durationSeconds: context.durationSeconds ?? 150,
-    }),
+      },
+    ),
   };
 }
 

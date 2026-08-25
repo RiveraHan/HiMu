@@ -55,9 +55,10 @@ const promptContractFailures: string[] = [];
 for (const language of ["en", "es"] as const) {
   for (const instrumental of [false, true]) {
     const automatic = musicInput(language, instrumental, null).body.input.prompt;
-    if (!/copyrighted song/i.test(automatic)) {
+    if (!/Build a distinct composition from the specification above/i.test(automatic) ||
+      /copyrighted/i.test(automatic)) {
       promptContractFailures.push(
-        `${language} ${instrumental ? "instrumental" : "automatic vocal"} prompt must prohibit reproducing copyrighted songs`,
+        `${language} ${instrumental ? "instrumental" : "automatic vocal"} prompt must request a distinct composition without safety-sensitive legal phrasing`,
       );
     }
     if (instrumental) {
@@ -118,9 +119,10 @@ for (const language of ["en", "es"] as const) {
           `${language} supplied lyrics must use one exact frame absent from lyrics, base prompt, and seasoning`,
         );
       }
-      if (!/copyrighted song/i.test(supplied)) {
+      if (!/Build a distinct composition from the specification above/i.test(supplied) ||
+        /copyrighted/i.test(supplied)) {
         promptContractFailures.push(
-          `${language} supplied vocal prompt must prohibit reproducing copyrighted songs`,
+          `${language} supplied vocal prompt must request a distinct composition without safety-sensitive legal phrasing`,
         );
       }
       const wrapperIsLocalized = language === "es"

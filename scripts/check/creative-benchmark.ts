@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import {
   BenchmarkSpendLedger,
+  analyzeRatedComparison,
+  buildBlindRatingTemplate,
+  buildRatedScorecard,
   evaluatePromotion,
 } from "./creative-benchmark-core.ts";
 import {
@@ -145,12 +148,26 @@ const weakCreativeDimension = evaluatePromotion({
 assert.equal(weakCreativeDimension.promote, false);
 assert.ok(weakCreativeDimension.reasons.includes("category_originality_floor"));
 
-const textTasks = planTasks().filter(({ kind }) => kind === "text");
+const plannedTasks = planTasks();
+const textTasks = plannedTasks.filter(({ kind }) => kind === "text");
 const textLedger = new BenchmarkSpendLedger(3);
 for (const task of textTasks) textLedger.reserve(task.id, task.maximumUsd);
 assert.equal(textTasks.length, 16);
-assert.equal(textLedger.summary().reservedUsd, 0.110468);
+assert.equal(textLedger.summary().reservedUsd, 0.14522);
 assert.ok(textLedger.summary().reservedUsd < 3);
+assert.deepEqual(
+  Object.fromEntries(
+    (["text", "image", "music", "voice"] as const).map((kind) => [
+      kind,
+      plannedTasks.filter((task) => task.kind === kind).length,
+    ]),
+  ),
+  { text: 16, image: 12, music: 8, voice: 8 },
+);
+assert.equal(
+  plannedTasks.some((task) => task.model.id === "reve/create"),
+  false,
+);
 
 assert.equal(
   scoreBenchmarkLocalization(
@@ -277,6 +294,179 @@ assert.throws(
     },
   }),
   /benchmark_scores_invalid/,
+);
+
+const ratedScorecard = buildRatedScorecard({
+    categories: ["originality", "coherence", "localization"],
+    results: [
+      {
+        taskId: "task-en",
+        caseId: "en-case",
+        locale: "en",
+        success: true,
+        actualUsd: 0.02,
+        latencySeconds: 8,
+        sampleId: "sample-001",
+      },
+      {
+        taskId: "task-es",
+        caseId: "es-case",
+        locale: "es",
+        success: true,
+        actualUsd: 0.02,
+        latencySeconds: 12,
+        sampleId: "sample-002",
+      },
+    ],
+    ratings: [
+      {
+        sampleId: "sample-001",
+        overall: 0.8,
+        categories: { originality: 0.8, coherence: 0.75, localization: 0.9 },
+      },
+      {
+        sampleId: "sample-002",
+        overall: 0.72,
+        categories: { originality: 0.7, coherence: 0.75, localization: 0.8 },
+      },
+    ],
+});
+assert.deepEqual(ratedScorecard, {
+  qualityByLocale: { en: [0.8], es: [0.72] },
+  categoryScores: { originality: 0.75, coherence: 0.75, localization: 0.85 },
+  costUsd: 0.04,
+  latencySeconds: 10,
+  failures: 0,
+});
+
+const ratingTemplate = buildBlindRatingTemplate([
+    {
+      sampleId: "sample-001",
+      kind: "text",
+      locale: "es",
+      taskId: "text:es-vocal:secret-model",
+      modelId: "secret/model",
+      variant: "es-vocal",
+    },
+    {
+      sampleId: "sample-002",
+      kind: "image",
+      locale: "en",
+      taskId: "image:rain-signal:secret-model",
+      modelId: "secret/model",
+      variant: "rain-signal",
+    },
+]);
+assert.deepEqual(ratingTemplate, {
+  version: 1,
+  scale: { minimum: 0, maximum: 1 },
+  samples: [
+    {
+      sampleId: "sample-001",
+      kind: "text",
+      locale: "es",
+      overall: null,
+      categories: {
+        originality: null,
+        coherence: null,
+        localization: null,
+      },
+    },
+    {
+      sampleId: "sample-002",
+      kind: "image",
+      locale: "en",
+      overall: null,
+      categories: {
+        originality: null,
+        prompt_alignment: null,
+        composition: null,
+      },
+    },
+  ],
+});
+assert.doesNotMatch(
+  JSON.stringify(ratingTemplate),
+  /secret|modelId|taskId|variant/,
+);
+
+const comparisonCases = [
+  { caseId: "en-a", locale: "en" as const },
+  { caseId: "en-b", locale: "en" as const },
+  { caseId: "es-a", locale: "es" as const },
+  { caseId: "es-b", locale: "es" as const },
+];
+const comparisonRatings: Array<{
+  sampleId: string;
+  overall: number;
+  categories: Record<string, number>;
+}> = [];
+const baselineComparisonResults = comparisonCases.map((item, index) => {
+  const sampleId = `sample-baseline-${index}`;
+  comparisonRatings.push({
+    sampleId,
+    overall: item.locale === "en" ? 0.61 : 0.6,
+    categories: { originality: 0.6, coherence: 0.61, localization: 0.62 },
+  });
+  return {
+    taskId: `baseline-${item.caseId}`,
+    caseId: item.caseId,
+    locale: item.locale,
+    success: true,
+    actualUsd: 0.01,
+    latencySeconds: 10,
+    sampleId,
+  };
+});
+const candidateComparisonResults = comparisonCases.map((item, index) => {
+  const sampleId = `sample-candidate-${index}`;
+  comparisonRatings.push({
+    sampleId,
+    overall: item.locale === "en" ? 0.76 : 0.75,
+    categories: { originality: 0.75, coherence: 0.76, localization: 0.77 },
+  });
+  return {
+    taskId: `candidate-${item.caseId}`,
+    caseId: item.caseId,
+    locale: item.locale,
+    success: true,
+    actualUsd: 0.009,
+    latencySeconds: 11,
+    sampleId,
+  };
+});
+const comparison = analyzeRatedComparison({
+    categories: ["originality", "coherence", "localization"],
+    baselineResults: baselineComparisonResults,
+    candidateResults: candidateComparisonResults,
+    ratings: comparisonRatings,
+});
+assert.deepEqual(comparison.decision, { promote: true, reasons: [] });
+
+assert.throws(
+  () => analyzeRatedComparison({
+    categories: ["originality", "coherence", "localization"],
+    baselineResults: baselineComparisonResults,
+    candidateResults: candidateComparisonResults.map((result, index) => (
+      index === 0 ? { ...result, caseId: "different-case" } : result
+    )),
+    ratings: comparisonRatings,
+  }),
+  /benchmark_comparison_unpaired/,
+);
+
+assert.throws(
+  () => analyzeRatedComparison({
+    categories: ["originality", "coherence", "localization"],
+    baselineResults: baselineComparisonResults.map((result, index) => (
+      index === 1 ? { ...result, caseId: "en-a" } : result
+    )),
+    candidateResults: candidateComparisonResults.map((result, index) => (
+      index === 1 ? { ...result, caseId: "en-a" } : result
+    )),
+    ratings: comparisonRatings,
+  }),
+  /benchmark_comparison_unpaired/,
 );
 
 console.log("creative benchmark checks passed");

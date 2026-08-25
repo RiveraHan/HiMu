@@ -173,14 +173,47 @@ async function main() {
     118,
   );
   assert.equal(
-    ((calls.generated[0].body as { input: { max_tokens: number } }).input)
-      .max_tokens,
+    ((calls.generated[0].body as { input: { max_completion_tokens: number } }).input)
+      .max_completion_tokens,
     1_200,
   );
   assert.match(JSON.stringify(calls.generated[0].body), /creative-brief-v2/);
   assert.match(JSON.stringify(calls.generated[0].body), /Cables Beneath Rain/);
   assert.match(JSON.stringify(calls.generated[0].body), /generic neon tunnel/);
   assert.deepEqual(calls.memoryLoaded, ["dj-1"]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [10_000, 10_050];
+  const { deps, outputs, calls } = dependencies({
+    resolveModel: (role) => role === "creative_longform"
+      ? resolveCreativeModel(role, { candidateId: "google/gemini-3-flash" })
+      : resolveCreativeModel(role),
+    now: () => timestamps.shift() ?? 10_050,
+    recordUsage: (event) => usage.push(event),
+  });
+  outputs.splice(0, outputs.length, trackBriefOutput);
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    deps,
+  );
+  assert.equal(result.status, 200);
+  assert.equal(
+    ((calls.generated[0].body as { input: { max_output_tokens: number } }).input)
+      .max_output_tokens,
+    4_096,
+  );
+  assert.equal(usage[0].modelId, "google/gemini-3-flash");
+  assert.equal(usage[0].estimatedCostUsd, 0.012838);
 }
 
 {
@@ -337,7 +370,7 @@ async function main() {
   assert.equal(result.status, 200);
   assert.deepEqual(usage, [{
     role: "creative_longform",
-    modelId: "meta/llama-4-scout-instruct",
+    modelId: "openai/gpt-5.6-luna",
     status: "succeeded",
     promptVersion: "creative-brief-v2.en",
     briefVersion: 2,
@@ -345,7 +378,7 @@ async function main() {
     outcome: "accepted",
     repaired: false,
     latencyMs: 250,
-    estimatedCostUsd: 0.000967,
+    estimatedCostUsd: 0.0083,
     inputUnits: null,
     outputUnits: null,
   }]);
@@ -355,7 +388,7 @@ async function main() {
   const prediction: NormalizedPrediction<string> = {
     output: trackBriefOutput,
     predictionId: "prediction-1",
-    modelId: "meta/llama-4-scout-instruct",
+    modelId: "openai/gpt-5.6-luna",
     startedAt: "2026-08-24T08:00:00.000Z",
     completedAt: "2026-08-24T08:00:00.420Z",
     metrics: {
@@ -388,7 +421,7 @@ async function main() {
   assert.equal(result.status, 200);
   assert.deepEqual(usage, [{
     role: "creative_longform",
-    modelId: "meta/llama-4-scout-instruct",
+    modelId: "openai/gpt-5.6-luna",
     status: "succeeded",
     promptVersion: "creative-brief-v2.en",
     briefVersion: 2,
@@ -396,7 +429,7 @@ async function main() {
     outcome: "accepted",
     repaired: false,
     latencyMs: 600,
-    estimatedCostUsd: 0.000393,
+    estimatedCostUsd: 0.0034,
     inputUnits: 400,
     outputUnits: 500,
   }]);
