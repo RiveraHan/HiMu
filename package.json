@@ -21,6 +21,7 @@
     "check:creative-generation": "node --import tsx scripts/check/creative-generation-contracts.ts",
     "check:creative-generation-migration": "node --import tsx scripts/check/creative-generation-migration.ts",
     "check:creative-draft-function": "node --import tsx scripts/check/creative-draft-function.ts",
+    "check:himu-experience-state-migration": "node --import tsx scripts/check/himu-experience-state-migration.ts",
     "check:security-remediation-migration": "node --import tsx scripts/check/security-remediation-migration.ts",
     "check:security-quota-invariants": "node --import tsx scripts/check/security-quota-invariants.ts",
     "check:private-media-e2e": "node --import tsx scripts/check/private-media-e2e.ts",
