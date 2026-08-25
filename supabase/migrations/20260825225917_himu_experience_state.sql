@@ -47,14 +47,14 @@ begin
       update public.user_experience_state
       set
         intro_version_seen = greatest(intro_version_seen, p_intro_version),
-        updated_at = now()
+        updated_at = greatest(updated_at, pg_catalog.clock_timestamp())
       where user_id = p_user_id;
     when 'claim_nudge' then
       update public.user_experience_state
       set
         preference_nudge_status = 'shown',
         preference_nudge_shown_at = coalesce(preference_nudge_shown_at, now()),
-        updated_at = now()
+        updated_at = greatest(updated_at, pg_catalog.clock_timestamp())
       where user_id = p_user_id
         and preference_nudge_status = 'eligible'
         and preference_nudge_track_id = p_track_id;
@@ -63,7 +63,7 @@ begin
       set
         preference_nudge_status = 'dismissed',
         preference_nudge_dismissed_at = coalesce(preference_nudge_dismissed_at, now()),
-        updated_at = now()
+        updated_at = greatest(updated_at, pg_catalog.clock_timestamp())
       where user_id = p_user_id
         and preference_nudge_status = 'shown'
         and preference_nudge_track_id = p_track_id;
@@ -72,7 +72,7 @@ begin
       set
         preference_nudge_status = 'completed',
         preference_nudge_completed_at = coalesce(preference_nudge_completed_at, now()),
-        updated_at = now()
+        updated_at = greatest(updated_at, pg_catalog.clock_timestamp())
       where user_id = p_user_id
         and preference_nudge_status in ('eligible', 'shown', 'dismissed');
     else
@@ -99,6 +99,7 @@ set search_path = ''
 as $$
 declare
   v_track public.tracks%rowtype;
+  v_now timestamptz := pg_catalog.clock_timestamp();
 begin
   if new.status <> 'ready'
     or old.status = 'ready'
@@ -125,7 +126,13 @@ begin
     where earlier.owner_id = new.user_id
       and earlier.is_ai_generated = true
       and earlier.id <> new.track_id
-      and (earlier.created_at, earlier.id) < (v_track.created_at, v_track.id)
+      and (
+        coalesce(earlier.created_at, '-infinity'::timestamptz),
+        earlier.id
+      ) < (
+        coalesce(v_track.created_at, '-infinity'::timestamptz),
+        v_track.id
+      )
   ) then
     return new;
   end if;
@@ -141,10 +148,10 @@ begin
   values (
     new.user_id,
     new.track_id,
-    now(),
+    v_now,
     'eligible',
     new.track_id,
-    now()
+    v_now
   )
   on conflict (user_id) do update
   set
@@ -155,12 +162,12 @@ begin
         then excluded.preference_nudge_status
       else public.user_experience_state.preference_nudge_status
     end,
-    preference_nudge_track_id = coalesce(
-      public.user_experience_state.preference_nudge_track_id,
-      excluded.preference_nudge_track_id
-    ),
-    updated_at = excluded.updated_at
-  where public.user_experience_state.first_owned_track_id is null;
+    preference_nudge_track_id = excluded.preference_nudge_track_id,
+    updated_at = greatest(
+      public.user_experience_state.updated_at,
+      excluded.updated_at
+    )
+  where public.user_experience_state.first_owned_track_ready_at is null;
 
   return new;
 end;
