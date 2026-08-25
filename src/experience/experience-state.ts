@@ -1,0 +1,156 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import {
+  authMutationKey,
+  captureAuthScope,
+  invokeWithAuthScope,
+  isCurrentMutationUser,
+} from "@/src/api/auth-scope";
+import { queryKeys } from "@/src/api/queries";
+import { supabase } from "@/src/api/supabase";
+import { useCurrentUser } from "@/src/hooks/use-auth";
+
+export type ExperienceState = {
+  introVersionSeen: number;
+  firstOwnedTrackId: string | null;
+  firstOwnedTrackReadyAt: string | null;
+  preferenceNudgeStatus:
+    | "ineligible"
+    | "eligible"
+    | "shown"
+    | "dismissed"
+    | "completed";
+  preferenceNudgeTrackId: string | null;
+};
+
+type ExperienceAction =
+  | { action: "sync_intro"; version: number }
+  | { action: "claim_nudge"; trackId: string }
+  | { action: "dismiss_nudge"; trackId: string }
+  | { action: "complete_nudge" };
+
+const EXPERIENCE_STATE_COLUMNS = [
+  "intro_version_seen",
+  "first_owned_track_id",
+  "first_owned_track_ready_at",
+  "preference_nudge_status",
+  "preference_nudge_track_id",
+].join(", ");
+
+const NUDGE_STATUSES = new Set<ExperienceState["preferenceNudgeStatus"]>([
+  "ineligible",
+  "eligible",
+  "shown",
+  "dismissed",
+  "completed",
+]);
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function nullableString(value: unknown): string | null | undefined {
+  return value === null || typeof value === "string" ? value : undefined;
+}
+
+export function parseExperienceState(raw: unknown): ExperienceState {
+  const value = record(raw);
+  if (!value) throw new Error("Invalid experience state response");
+
+  const firstOwnedTrackId = nullableString(value.first_owned_track_id);
+  const firstOwnedTrackReadyAt = nullableString(value.first_owned_track_ready_at);
+  const preferenceNudgeTrackId = nullableString(value.preference_nudge_track_id);
+  if (
+    !Number.isInteger(value.intro_version_seen) ||
+    (value.intro_version_seen as number) < 0 ||
+    firstOwnedTrackId === undefined ||
+    firstOwnedTrackReadyAt === undefined ||
+    preferenceNudgeTrackId === undefined ||
+    typeof value.preference_nudge_status !== "string" ||
+    !NUDGE_STATUSES.has(value.preference_nudge_status as ExperienceState["preferenceNudgeStatus"])
+  ) {
+    throw new Error("Invalid experience state response");
+  }
+
+  return {
+    introVersionSeen: value.intro_version_seen as number,
+    firstOwnedTrackId,
+    firstOwnedTrackReadyAt,
+    preferenceNudgeStatus:
+      value.preference_nudge_status as ExperienceState["preferenceNudgeStatus"],
+    preferenceNudgeTrackId,
+  };
+}
+
+export function useExperienceState() {
+  const user = useCurrentUser();
+  const userId = user?.id ?? null;
+
+  return useQuery({
+    queryKey: queryKeys.experienceState.me(userId),
+    enabled: !!userId,
+    queryFn: async (): Promise<ExperienceState | null> => {
+      const { data, error } = await supabase
+        .from("user_experience_state")
+        .select(EXPERIENCE_STATE_COLUMNS)
+        .eq("user_id", userId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? parseExperienceState(data) : null;
+    },
+  });
+}
+
+function useExperienceMutation<T>(operation: string, toAction: (value: T) => ExperienceAction) {
+  const userId = useCurrentUser()?.id ?? "";
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.experienceState.me(userId || null);
+
+  return useMutation({
+    mutationKey: authMutationKey(operation, userId),
+    mutationFn: async (value: T): Promise<ExperienceState> => {
+      const action = toAction(value);
+      const { data, error } = await invokeWithAuthScope<{ state: unknown }>(
+        supabase.functions,
+        captureAuthScope(userId),
+        "experience-state",
+        { body: action },
+      );
+      if (error) throw error;
+      return parseExperienceState(data?.state);
+    },
+    onSuccess: (state) => {
+      if (!isCurrentMutationUser(userId)) return;
+      queryClient.setQueryData(queryKey, state);
+    },
+  });
+}
+
+export function useSyncIntroVersion() {
+  return useExperienceMutation("sync-experience-intro", (version: number) => ({
+    action: "sync_intro",
+    version,
+  }));
+}
+
+export function useClaimPreferenceNudge() {
+  return useExperienceMutation("claim-experience-nudge", (trackId: string) => ({
+    action: "claim_nudge",
+    trackId,
+  }));
+}
+
+export function useDismissPreferenceNudge() {
+  return useExperienceMutation("dismiss-experience-nudge", (trackId: string) => ({
+    action: "dismiss_nudge",
+    trackId,
+  }));
+}
+
+export function useCompletePreferenceNudge() {
+  return useExperienceMutation("complete-experience-nudge", () => ({
+    action: "complete_nudge",
+  }));
+}

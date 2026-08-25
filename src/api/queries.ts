@@ -69,6 +69,9 @@ export const queryKeys = {
   musicPreferences: {
     me: (userId: string | null) => ["music-preferences", userId] as const,
   },
+  experienceState: {
+    me: (userId: string | null) => ["experience-state", "me", userId] as const,
+  },
   onboarding: {
     current: (userId: string, version: number) =>
       ["onboarding", userId, version] as const,
