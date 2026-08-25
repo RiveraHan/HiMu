@@ -4,14 +4,6 @@ export type ExperienceAction =
   | { action: "dismiss_nudge"; trackId: string }
   | { action: "complete_nudge" };
 
-export type ExperienceState = {
-  introVersionSeen: number;
-  firstOwnedTrackId: string | null;
-  firstOwnedTrackReadyAt: string | null;
-  preferenceNudgeStatus: string;
-  preferenceNudgeTrackId: string | null;
-};
-
 export type ExperienceStateDependencies = {
   transition(
     userId: string,
@@ -50,7 +42,8 @@ function parseAction(raw: unknown): ExperienceAction | null {
     value.action === "sync_intro" &&
     exactKeys(value, ["action", "version"]) &&
     Number.isInteger(value.version) &&
-    (value.version as number) > 0
+    (value.version as number) > 0 &&
+    (value.version as number) <= 2_147_483_647
   ) {
     return { action: value.action, version: value.version as number };
   }
