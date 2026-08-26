@@ -51,13 +51,6 @@ function eventProperties() {
   };
 }
 
-function reportStorageFailure(): void {
-  void trackProductEvent("auth_failed", {
-    ...eventProperties(),
-    errorCategory: "unknown",
-  });
-}
-
 export default function WelcomeScreen() {
   const params = useLocalSearchParams<{
     step?: string | string[];
@@ -132,15 +125,11 @@ export default function WelcomeScreen() {
           introStateStore.markSeen(PUBLIC_INTRO_VERSION, now),
         ]
       : [introStateStore.markSeen(PUBLIC_INTRO_VERSION, now)];
-    const results = await Promise.allSettled(operations);
+    await Promise.allSettled(operations);
     if (
       !mounted.current ||
       routeAuthorizationRef.current !== completionAuthorization
     ) return;
-
-    if (results.some(({ status }) => status === "rejected")) {
-      reportStorageFailure();
-    }
 
     void trackProductEvent("intro_completed", {
       ...eventProperties(),

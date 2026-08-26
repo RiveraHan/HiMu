@@ -6,14 +6,14 @@ const FIRST_TRACK_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const PUBLIC_INTRO_VERSION = 2;
 
-export type FirstTrackReturnIntent = {
+export type PendingNavigationIntent = Readonly<{
   version: 1;
   kind: "first_track";
   source: "public_intro_v2";
   createdAt: string;
-};
+}>;
 
-export type PendingNavigationIntent = FirstTrackReturnIntent;
+export type FirstTrackReturnIntent = "first_track" | null;
 
 type IntroState = {
   version: number;
@@ -160,21 +160,21 @@ export const introStateStore = {
 };
 
 export const pendingIntentStore = {
-  writeFirstTrack: (createdAtMs: number) => runForKey(PENDING_INTENT_KEY, () => (
+  writeFirstTrack: (createdAtMs = Date.now()) => runForKey(PENDING_INTENT_KEY, () => (
     secureStorage.setItem(PENDING_INTENT_KEY, JSON.stringify({
       version: 1,
       kind: "first_track",
       source: "public_intro_v2",
       createdAt: timestampToIso(createdAtMs),
-    } satisfies FirstTrackReturnIntent))
+    } satisfies PendingNavigationIntent))
   )),
 
-  read: (nowMs: number) => runForKey(
+  read: (nowMs = Date.now()) => runForKey(
     PENDING_INTENT_KEY,
     () => loadPendingIntent(nowMs),
   ),
 
-  consume: (kind: PendingNavigationIntent["kind"], nowMs: number) => runForKey(
+  consume: (kind: "first_track", nowMs = Date.now()) => runForKey(
     PENDING_INTENT_KEY,
     async () => {
       const intent = await loadPendingIntent(nowMs);

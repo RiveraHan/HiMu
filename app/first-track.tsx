@@ -34,7 +34,7 @@ type OwnedFirstTrackDestination = Extract<
 
 type StorageResolutionError = {
   userId: string;
-  operation: "consume" | "clear";
+  operation: "read" | "consume" | "clear";
 };
 
 export function resolveFirstTrackDestination(
@@ -71,6 +71,9 @@ export function FirstTrackGate() {
   const [storageError, setStorageError] = useState<StorageResolutionError | null>(
     null,
   );
+  const [validatedIntentUserId, setValidatedIntentUserId] = useState<
+    string | null
+  >(null);
   const currentUserIdRef = useRef(userId);
   const controllerUserIdRef = useRef(userId);
   const routedUserIdRef = useRef<string | null>(null);
@@ -78,6 +81,7 @@ export function FirstTrackGate() {
     userId: string;
     destination: OwnedFirstTrackDestination;
   } | null>(null);
+  const readFlightRef = useRef<Promise<void> | null>(null);
   const consumeFlightRef = useRef<Promise<void> | null>(null);
   const clearFlightRef = useRef<Promise<void> | null>(null);
   const cancelRequestedRef = useRef(false);
@@ -88,6 +92,7 @@ export function FirstTrackGate() {
     controllerUserIdRef.current = userId;
     routedUserIdRef.current = null;
     ownedDestinationRef.current = null;
+    readFlightRef.current = null;
     consumeFlightRef.current = null;
     clearFlightRef.current = null;
     cancelRequestedRef.current = false;
@@ -101,6 +106,67 @@ export function FirstTrackGate() {
       mountedRef.current = false;
     };
   }, []);
+
+  const validatePendingIntent = useCallback((readUserId: string) => {
+    if (
+      !mountedRef.current ||
+      currentUserIdRef.current !== readUserId ||
+      cancelRequestedRef.current ||
+      navigationCompletedRef.current ||
+      readFlightRef.current ||
+      validatedIntentUserId === readUserId
+    ) {
+      return;
+    }
+
+    setStorageError((current) =>
+      current?.userId === readUserId ? null : current
+    );
+
+    const flight = (async () => {
+      try {
+        const intent = await pendingIntentStore.read(Date.now());
+        if (
+          !mountedRef.current ||
+          currentUserIdRef.current !== readUserId ||
+          cancelRequestedRef.current ||
+          navigationCompletedRef.current
+        ) {
+          return;
+        }
+
+        if (intent === null) {
+          navigationCompletedRef.current = true;
+          setStorageError(null);
+          router.replace("/(app)");
+          return;
+        }
+
+        setStorageError(null);
+        setValidatedIntentUserId(readUserId);
+      } catch {
+        if (
+          mountedRef.current &&
+          currentUserIdRef.current === readUserId &&
+          !cancelRequestedRef.current &&
+          !navigationCompletedRef.current
+        ) {
+          setStorageError({ userId: readUserId, operation: "read" });
+        }
+      }
+    })();
+
+    readFlightRef.current = flight;
+    void flight.then(() => {
+      if (readFlightRef.current === flight) {
+        readFlightRef.current = null;
+      }
+    });
+  }, [validatedIntentUserId]);
+
+  useEffect(() => {
+    if (userId) validatePendingIntent(userId);
+  }, [userId, validatePendingIntent]);
 
   const consumeOwnedIntent = useCallback((
     consumeUserId: string,
@@ -222,6 +288,7 @@ export function FirstTrackGate() {
   useEffect(() => {
     if (
       !userId ||
+      validatedIntentUserId !== userId ||
       !ownedDjs.isSuccess ||
       ownedDjs.data === undefined ||
       cancelRequestedRef.current ||
@@ -249,7 +316,13 @@ export function FirstTrackGate() {
 
     ownedDestinationRef.current = { userId, destination };
     consumeOwnedIntent(userId, destination);
-  }, [consumeOwnedIntent, ownedDjs.data, ownedDjs.isSuccess, userId]);
+  }, [
+    consumeOwnedIntent,
+    ownedDjs.data,
+    ownedDjs.isSuccess,
+    userId,
+    validatedIntentUserId,
+  ]);
 
   const activeStorageError = storageError?.userId === userId
     ? storageError.operation
@@ -259,6 +332,11 @@ export function FirstTrackGate() {
     retryUserId: string,
     operation: StorageResolutionError["operation"],
   ) => {
+    if (operation === "read") {
+      validatePendingIntent(retryUserId);
+      return;
+    }
+
     if (operation === "clear") {
       clearPendingIntent(retryUserId);
       return;
@@ -268,7 +346,7 @@ export function FirstTrackGate() {
     if (ownedDestination?.userId === retryUserId) {
       consumeOwnedIntent(retryUserId, ownedDestination.destination);
     }
-  }, [clearPendingIntent, consumeOwnedIntent]);
+  }, [clearPendingIntent, consumeOwnedIntent, validatePendingIntent]);
 
   const content = activeStorageError ? (
     <StateNotice

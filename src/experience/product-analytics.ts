@@ -1,5 +1,6 @@
 import { supabase } from "@/src/api/supabase";
 import { secureStorage } from "@/src/lib/secure-storage";
+import { publicHttpsUrl } from "@/src/utils/public-url";
 import { randomUUID } from "expo-crypto";
 
 import {
@@ -21,6 +22,7 @@ export type ProductAnalyticsDependencies = {
   randomUUID(): string;
   now(): Date;
   transport(event: ProductEventEnvelope): Promise<void>;
+  collectionEnabled?(): boolean;
 };
 
 export type ProductEventTransportDependencies = {
@@ -259,6 +261,9 @@ export function createProductAnalyticsClient(
 
   return {
     trackProductEvent(name, properties) {
+      if (deps.collectionEnabled && !deps.collectionEnabled()) {
+        return Promise.resolve();
+      }
       const propertySnapshot = object(properties);
       if (!propertySnapshot) return Promise.resolve();
       return enqueue(name, { ...propertySnapshot } as ProductEventProperties)
@@ -283,6 +288,9 @@ const productAnalytics = createProductAnalyticsClient({
   randomUUID,
   now: () => new Date(),
   transport: productEventTransport,
+  collectionEnabled: () => (
+    publicHttpsUrl(process.env.EXPO_PUBLIC_PRIVACY_URL) !== null
+  ),
 });
 
 export function trackProductEvent(

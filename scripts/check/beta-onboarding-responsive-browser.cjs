@@ -1,14 +1,19 @@
 const assert = require("node:assert/strict");
 const { execFile } = require("node:child_process");
 const path = require("node:path");
-const { promisify } = require("node:util");
-
-const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(__dirname, "../..");
 const runner = path.join(
   projectRoot,
   "test-support/beta-onboarding-browser/run-public-intro-responsive-browser.cjs",
 );
+const {
+  createIdempotentCleanup,
+  installSignalCleanup,
+  stopChild,
+} = require(path.join(
+  projectRoot,
+  "test-support/beta-onboarding-browser/signal-cleanup.cjs",
+));
 
 const viewports = [
   [320, 640],
@@ -94,72 +99,91 @@ function assertSnapshot(snapshot, locale, step, width, height) {
 }
 
 async function main() {
-  const { stdout } = await execFileAsync(process.execPath, [runner], {
-    cwd: projectRoot,
-    maxBuffer: 32 * 1024 * 1024,
-    timeout: 180_000,
-  });
-  const result = JSON.parse(stdout);
-  assert.equal(result.fixture, "real-app-welcome-and-public-product-intro");
-  assert.equal(result.cells.length, viewports.length * 2);
+  let runnerChild;
+  const cleanup = createIdempotentCleanup(() => stopChild(runnerChild));
+  const signalCleanup = installSignalCleanup(cleanup);
 
-  const expectedCells = ["en", "es"].flatMap((locale) =>
-    viewports.map(([width, height]) => `${locale}:${width}x${height}`),
-  );
-  assert.deepEqual(
-    result.cells.map(({ locale, width, height }) => `${locale}:${width}x${height}`),
-    expectedCells,
-  );
-
-  for (const cell of result.cells) {
-    const { locale, width, height } = cell;
-    assertSnapshot(cell.steps[0], locale, 1, width, height);
-    assertSnapshot(cell.steps[1], locale, 2, width, height);
-    assertSnapshot(cell.steps[2], locale, 3, width, height);
-    assert.equal(cell.steps[1].focusedTestId, "public-intro-heading");
-    assert.equal(cell.steps[2].focusedTestId, "public-intro-heading");
-    const primaryCopy = locale === "es"
-      ? { step2: "Continuar", step3: "Crear mi primer track" }
-      : { step2: "Continue", step3: "Create my first track" };
-    assert.deepEqual(
-      cell.keyboard.step2,
-      expectedKeyboardOrder(locale, primaryCopy.step2),
-      `${locale} ${width}x${height} must traverse every step-2 action with real Tab and Shift+Tab input`,
-    );
-    assert.deepEqual(
-      cell.keyboard.step3,
-      expectedKeyboardOrder(locale, primaryCopy.step3),
-      `${locale} ${width}x${height} must traverse every step-3 action with real Tab and Shift+Tab input`,
-    );
-    assert.deepEqual(cell.history, {
-      afterBack: 2,
-      afterSecondBack: 1,
-      afterForward: 2,
-      afterSecondForward: 3,
-      pushedEntries: 2,
-    });
-    assertSnapshot(cell.reload, locale, 3, width, height);
-    assert.deepEqual(cell.resizeSteps, [3, 3, 3]);
-    assert.deepEqual(cell.replay, {
-      introWrites: 0,
-      intentWrites: 0,
-      destination: "/(app)",
-    });
-
-    if (width === 512 && height === 384) {
-      assert.deepEqual(cell.zoomReachability, {
-        reachable: true,
-        focused: true,
-        tabIndex: 0,
+  try {
+    const { stdout } = await new Promise((resolve, reject) => {
+      runnerChild = execFile(process.execPath, [runner], {
+        cwd: projectRoot,
+        maxBuffer: 32 * 1024 * 1024,
+        timeout: 180_000,
+      }, (error, stdout, stderr) => {
+        if (error) {
+          error.stdout = stdout;
+          error.stderr = stderr;
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
       });
-    } else {
-      assert.equal(cell.zoomReachability, null);
-    }
-  }
+    });
+    const result = JSON.parse(stdout);
+    assert.equal(result.fixture, "real-app-welcome-and-public-product-intro");
+    assert.equal(result.cells.length, viewports.length * 2);
 
-  process.stdout.write(
-    `Beta onboarding browser matrix passed: ${result.cells.length} locale/viewport cells, real CDP Tab/Shift+Tab order, history, reload/replay/resize, and 200% effective zoom reachability.\n`,
-  );
+    const expectedCells = ["en", "es"].flatMap((locale) =>
+      viewports.map(([width, height]) => `${locale}:${width}x${height}`),
+    );
+    assert.deepEqual(
+      result.cells.map(({ locale, width, height }) => `${locale}:${width}x${height}`),
+      expectedCells,
+    );
+
+    for (const cell of result.cells) {
+      const { locale, width, height } = cell;
+      assertSnapshot(cell.steps[0], locale, 1, width, height);
+      assertSnapshot(cell.steps[1], locale, 2, width, height);
+      assertSnapshot(cell.steps[2], locale, 3, width, height);
+      assert.equal(cell.steps[1].focusedTestId, "public-intro-heading");
+      assert.equal(cell.steps[2].focusedTestId, "public-intro-heading");
+      const primaryCopy = locale === "es"
+        ? { step2: "Continuar", step3: "Crear mi primer track" }
+        : { step2: "Continue", step3: "Create my first track" };
+      assert.deepEqual(
+        cell.keyboard.step2,
+        expectedKeyboardOrder(locale, primaryCopy.step2),
+        `${locale} ${width}x${height} must traverse every step-2 action with real Tab and Shift+Tab input`,
+      );
+      assert.deepEqual(
+        cell.keyboard.step3,
+        expectedKeyboardOrder(locale, primaryCopy.step3),
+        `${locale} ${width}x${height} must traverse every step-3 action with real Tab and Shift+Tab input`,
+      );
+      assert.deepEqual(cell.history, {
+        afterBack: 2,
+        afterSecondBack: 1,
+        afterForward: 2,
+        afterSecondForward: 3,
+        pushedEntries: 2,
+      });
+      assertSnapshot(cell.reload, locale, 3, width, height);
+      assert.deepEqual(cell.resizeSteps, [3, 3, 3]);
+      assert.deepEqual(cell.replay, {
+        introWrites: 0,
+        intentWrites: 0,
+        destination: "/(app)",
+      });
+
+      if (width === 512 && height === 384) {
+        assert.deepEqual(cell.zoomReachability, {
+          reachable: true,
+          focused: true,
+          tabIndex: 0,
+        });
+      } else {
+        assert.equal(cell.zoomReachability, null);
+      }
+    }
+
+    process.stdout.write(
+      `Beta onboarding browser matrix passed: ${result.cells.length} locale/viewport cells, real CDP Tab/Shift+Tab order, history, reload/replay/resize, and 200% effective zoom reachability.\n`,
+    );
+  } finally {
+    signalCleanup.dispose();
+    await cleanup();
+  }
 }
 
 main().catch((error) => {

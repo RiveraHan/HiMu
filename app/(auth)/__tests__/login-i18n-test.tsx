@@ -8,6 +8,7 @@ import { darkTheme, lightTheme } from "@/src/theme/theme";
 
 const mockToastError = jest.fn();
 const mockSetSession = jest.fn();
+const mockTrackProductEvent = jest.fn();
 let mockWindowWidth = 390;
 
 function resolveAtWidth<T>(value: T | { xs?: T; xl?: T }, width: number): T | undefined {
@@ -56,6 +57,11 @@ jest.mock("@/src/api/auth", () => ({
   authApi: { signInWithGoogle: jest.fn() },
 }));
 
+jest.mock("@/src/experience", () => ({
+  PUBLIC_INTRO_VERSION: 2,
+  trackProductEvent: (...args: unknown[]) => mockTrackProductEvent(...args),
+}));
+
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({
     next: jest.fn(),
@@ -85,6 +91,7 @@ describe("Login translations", () => {
     await i18n.changeLanguage("es");
     mockToastError.mockClear();
     mockSetSession.mockClear();
+    mockTrackProductEvent.mockReset().mockResolvedValue(undefined);
     jest.mocked(authApi.signInWithGoogle).mockReset();
     delete process.env.EXPO_PUBLIC_TERMS_URL;
     delete process.env.EXPO_PUBLIC_PRIVACY_URL;
@@ -243,6 +250,23 @@ describe("Login translations", () => {
     expect(consoleError).toHaveBeenCalledWith(
       "[LoginScreen] Google sign-in error:",
       providerError,
+    );
+    expect(mockTrackProductEvent).toHaveBeenNthCalledWith(
+      1,
+      "auth_started",
+      expect.objectContaining({ flowVersion: 2, locale: "es" }),
+    );
+    expect(mockTrackProductEvent).toHaveBeenNthCalledWith(
+      2,
+      "auth_failed",
+      expect.objectContaining({
+        flowVersion: 2,
+        locale: "es",
+        errorCategory: "provider",
+      }),
+    );
+    expect(JSON.stringify(mockTrackProductEvent.mock.calls)).not.toContain(
+      "provider details must not reach the user",
     );
   });
 

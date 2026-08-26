@@ -18,6 +18,8 @@ let mockRenderOrder: string[] = [];
 let mockTourPhase = "idle";
 const mockClosePanel = jest.fn();
 const mockSetTheme = jest.fn();
+const mockIntroIsSeen = jest.fn<Promise<boolean>, [number]>();
+const mockTrackProductEvent = jest.fn();
 let mockRequestedRoute = "(app)";
 let mockMountedRoutes: string[] = [];
 let mockSegments = ["(app)"];
@@ -64,6 +66,13 @@ jest.mock("@/src/experience/PostAuthIntentRouter", () => ({
     const { View } = require("react-native");
     return <View testID="post-auth-intent-router" />;
   },
+}));
+jest.mock("@/src/experience", () => ({
+  PUBLIC_INTRO_VERSION: 2,
+  introStateStore: {
+    isSeen: (...args: [number]) => mockIntroIsSeen(...args),
+  },
+  trackProductEvent: (...args: unknown[]) => mockTrackProductEvent(...args),
 }));
 jest.mock("@/src/components/BottomChrome", () => ({
   BottomChrome: () => {
@@ -160,11 +169,12 @@ jest.mock("expo-router", () => {
       };
     }, []);
     const eligibleRoutes = eligibleRouteNames(children);
+    if (eligibleRoutes.length === 0) {
+      return <View testID="auth-stack" />;
+    }
     const selectedRoute = eligibleRoutes.includes(mockRequestedRoute)
       ? mockRequestedRoute
-      : eligibleRoutes.includes("(auth)")
-        ? "(auth)"
-        : null;
+      : eligibleRoutes[0] ?? null;
     return (
       <View testID="navigator">
         {selectedRoute ? <RouteMount name={selectedRoute} /> : null}
@@ -178,7 +188,14 @@ jest.mock("expo-router", () => {
     React.useEffect(() => {
       mockMountedRoutes.push(name);
     }, [name]);
-    return <View testID={`route-${name}`} />;
+    const AuthLayout = name === "(auth)"
+      ? require("@/app/(auth)/_layout").default
+      : null;
+    return (
+      <View testID={`route-${name}`}>
+        {AuthLayout ? <AuthLayout /> : null}
+      </View>
+    );
   }
   function StackProtected({
     children,
@@ -193,6 +210,9 @@ jest.mock("expo-router", () => {
   Stack.Protected = StackProtected;
 
   return {
+    Redirect: ({ href }: { href: string }) => (
+      <View testID={`redirect-${href}`} />
+    ),
     Link: ({ children }: { children: React.ReactNode }) => children,
     Stack,
     usePathname: () => `/${mockSegments.join("/")}`,
@@ -227,6 +247,8 @@ describe("root layout ownership and route protection", () => {
     mockTourPhase = "idle";
     mockClosePanel.mockClear();
     mockSetTheme.mockClear();
+    mockIntroIsSeen.mockReset().mockResolvedValue(true);
+    mockTrackProductEvent.mockReset().mockResolvedValue(undefined);
     mockRequestedRoute = "(app)";
     mockMountedRoutes = [];
     mockSegments = ["(app)"];
@@ -302,6 +324,63 @@ describe("root layout ownership and route protection", () => {
     expect(mockClosePanel).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["auth", null, "(auth)", ["(auth)", "login"]],
+    ["welcome", null, "welcome", ["welcome"]],
+    ["first-track", "user-a", "first-track", ["first-track"]],
+  ] as const)(
+    "does not mount ActivityPanel on the chrome-hidden %s route",
+    async (_label, userId, requestedRoute, segments) => {
+      mockAuthState = authState(userId, false);
+      mockRequestedRoute = requestedRoute;
+      mockSegments = [...segments];
+
+      const screen = await render(<RootLayout />);
+
+      expect(screen.queryByTestId("activity-panel")).toBeNull();
+    },
+  );
+
+  it("routes an unseen signed-out root fallback through auth eligibility to welcome", async () => {
+    mockRequestedRoute = "root";
+    mockSegments = [];
+    mockIntroIsSeen.mockResolvedValue(false);
+
+    const screen = await render(<RootLayout />);
+
+    expect(screen.getByTestId("route-(auth)")).toBeTruthy();
+    expect(await screen.findByTestId("redirect-/welcome?step=1")).toBeTruthy();
+    expect(screen.queryByTestId("route-welcome")).toBeNull();
+  });
+
+  it("keeps a seen signed-out root fallback in the auth navigator", async () => {
+    mockRequestedRoute = "root";
+    mockSegments = [];
+    mockIntroIsSeen.mockResolvedValue(true);
+
+    const screen = await render(<RootLayout />);
+
+    expect(screen.getByTestId("route-(auth)")).toBeTruthy();
+    expect(await screen.findByTestId("auth-stack")).toBeTruthy();
+    expect(screen.queryByTestId("route-welcome")).toBeNull();
+  });
+
+  it("returns through auth eligibility when a protected root loses its session", async () => {
+    mockAuthState = authState("user-a", false);
+    mockRequestedRoute = "(app)";
+    mockSegments = ["(app)"];
+    const screen = await render(<RootLayout />);
+    expect(screen.getByTestId("route-(app)")).toBeTruthy();
+
+    mockAuthState = authState(null, false);
+    mockIntroIsSeen.mockResolvedValue(true);
+    await screen.rerender(<RootLayout />);
+
+    expect(screen.getByTestId("route-(auth)")).toBeTruthy();
+    expect(await screen.findByTestId("auth-stack")).toBeTruthy();
+    expect(screen.queryByTestId("route-welcome")).toBeNull();
+  });
+
   it.each(PRIVATE_ROUTES)("selects auth without mounting the requested private route %s when signed out", async (route) => {
     mockRequestedRoute = route;
     const screen = await render(<RootLayout />);
@@ -340,7 +419,9 @@ describe("root layout ownership and route protection", () => {
     mockSegments = ["(auth)", "login"];
     await screen.rerender(<RootLayout />);
 
-    expect(consumeIntroLoginPermit()).toBe(true);
+    expect(await screen.findByTestId("auth-stack")).toBeTruthy();
+    expect(screen.queryByTestId("redirect-/welcome?step=1")).toBeNull();
+    expect(consumeIntroLoginPermit()).toBe(false);
   });
 
   it.each(PRIVATE_ROUTES)("mounts the requested private route %s with a session", async (route) => {

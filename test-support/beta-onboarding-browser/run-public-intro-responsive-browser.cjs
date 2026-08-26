@@ -6,6 +6,11 @@ const path = require("node:path");
 
 const { getDefaultConfig } = require("@expo/metro-config");
 const { runBuild } = require("@expo/metro/metro");
+const {
+  createIdempotentCleanup,
+  installSignalCleanup,
+  stopChild,
+} = require("./signal-cleanup.cjs");
 
 const harnessDirectory = path.dirname(path.resolve(process.argv[1]));
 const projectRoot = path.resolve(harnessDirectory, "../..");
@@ -383,27 +388,6 @@ async function runCell(cdp, origin, locale, width, height, index) {
   };
 }
 
-async function stopBrowser(browser) {
-  if (!browser || browser.exitCode !== null) return;
-  let exited = false;
-  const onExit = () => {
-    exited = true;
-  };
-  browser.once("exit", onExit);
-  browser.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => browser.once("exit", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 2000)),
-  ]);
-  if (!exited && browser.exitCode === null) {
-    browser.kill("SIGKILL");
-    await Promise.race([
-      new Promise((resolve) => browser.once("exit", resolve)),
-      new Promise((resolve) => setTimeout(resolve, 5000)),
-    ]);
-  }
-}
-
 async function removeTemporaryDirectory(directory) {
   let lastError;
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -425,6 +409,15 @@ async function main() {
   let browser;
   let cdp;
   let server;
+  const cleanup = createIdempotentCleanup(async () => {
+    cdp?.close();
+    await stopChild(browser);
+    if (server?.listening) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    await removeTemporaryDirectory(outputDirectory);
+  });
+  const signalCleanup = installSignalCleanup(cleanup);
 
   try {
     const bundlePath = path.join(outputDirectory, "fixture.js");
@@ -544,12 +537,8 @@ async function main() {
       cells,
     }));
   } finally {
-    cdp?.close();
-    await stopBrowser(browser);
-    if (server) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-    await removeTemporaryDirectory(outputDirectory);
+    signalCleanup.dispose();
+    await cleanup();
   }
 }
 

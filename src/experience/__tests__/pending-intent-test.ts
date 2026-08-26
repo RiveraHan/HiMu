@@ -31,7 +31,7 @@ jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: jest.fn() }));
 const NOW = 1_777_000_000_000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-const firstTrackIntent = (createdAt = NOW): FirstTrackReturnIntent => ({
+const firstTrackIntent = (createdAt = NOW): PendingNavigationIntent => ({
   version: 1,
   kind: "first_track",
   source: "public_intro_v2",
@@ -99,6 +99,20 @@ describe("versioned experience storage", () => {
     expect(secureStorage.removeItem).toHaveBeenCalledWith(
       "himu.pending-navigation.v1",
     );
+  });
+
+  it("defaults pending-intent writer, reader, and consumer clocks to Date.now", async () => {
+    const clock = jest.spyOn(Date, "now").mockReturnValue(NOW);
+    try {
+      await pendingIntentStore.writeFirstTrack();
+      await expect(pendingIntentStore.read()).resolves.toEqual(firstTrackIntent());
+      await expect(pendingIntentStore.consume("first_track")).resolves.toBe(true);
+
+      expect(clock).toHaveBeenCalled();
+      await expect(pendingIntentStore.read()).resolves.toBeNull();
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("allows concurrent observers to consume a first-track intent exactly once", async () => {
@@ -228,7 +242,8 @@ describe("versioned experience storage", () => {
 
   it("exports runtime and type contracts through the experience barrel", () => {
     const intent: PendingNavigationIntent = firstTrackIntent();
-    const firstTrack: FirstTrackReturnIntent = intent;
+    const firstTrack: FirstTrackReturnIntent = "first_track";
+    const noReturnIntent: FirstTrackReturnIntent = null;
     const state: ExperienceState = {
       introVersionSeen: PUBLIC_INTRO_VERSION,
       firstOwnedTrackId: null,
@@ -240,7 +255,9 @@ describe("versioned experience storage", () => {
     expect(publicIntroStateStore).toBe(introStateStore);
     expect(publicPendingIntentStore).toBe(pendingIntentStore);
     expect(PUBLIC_INTRO_VERSION).toBe(2);
-    expect(firstTrack.kind).toBe("first_track");
+    expect(intent.kind).toBe("first_track");
+    expect(firstTrack).toBe("first_track");
+    expect(noReturnIntent).toBeNull();
     expect(state.introVersionSeen).toBe(2);
   });
 });

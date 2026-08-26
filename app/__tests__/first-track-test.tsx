@@ -55,6 +55,12 @@ const mockPendingConsume = jest.fn();
 const mockPendingClear = jest.fn();
 const mockSyncIntro = jest.fn();
 const mockTrackProductEvent = jest.fn();
+const validPendingIntent = {
+  version: 1 as const,
+  kind: "first_track" as const,
+  source: "public_intro_v2" as const,
+  createdAt: "2026-08-25T12:00:00.000Z",
+};
 let mockDjsResponse: {
   data: readonly {
     id: string;
@@ -196,6 +202,7 @@ describe("FirstTrackGate", () => {
     mockWindow = { width: 390, height: 844, fontScale: 1 };
     mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     mockRouterReplace.mockClear();
+    mockPendingRead.mockReset().mockResolvedValue(validPendingIntent);
     mockPendingConsume.mockReset().mockResolvedValue(true);
     mockPendingClear.mockReset().mockResolvedValue(undefined);
     mockTrackProductEvent.mockReset().mockResolvedValue(undefined);
@@ -211,6 +218,78 @@ describe("FirstTrackGate", () => {
     });
     expect(mockPendingConsume).not.toHaveBeenCalled();
     expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  it("waits for durable intent validation before resolving a successful empty DJ query", async () => {
+    const reading = deferred<typeof validPendingIntent | null>();
+    mockPendingRead.mockReturnValue(reading.promise);
+    mockOwnedDjsQuery = query({
+      data: [],
+      isPending: false,
+      isSuccess: true,
+    });
+
+    await render(<FirstTrackScreen />);
+
+    expect(mockPendingRead).toHaveBeenCalledWith(expect.any(Number));
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+
+    await act(async () => reading.resolve(validPendingIntent));
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith({
+      pathname: "/create-dj",
+      params: { returnIntent: "first_track" },
+    }));
+    expect(mockPendingRead.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRouterReplace.mock.invocationCallOrder[0],
+    );
+  });
+
+  it.each([
+    "missing direct intent",
+    "expired intent normalized by storage",
+    "malformed intent normalized by storage",
+  ])("replaces Home for a %s", async () => {
+    mockPendingRead.mockResolvedValue(null);
+    mockOwnedDjsQuery = query({
+      data: [],
+      isPending: false,
+      isSuccess: true,
+    });
+
+    await render(<FirstTrackScreen />);
+
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith("/(app)"));
+    expect(mockPendingConsume).not.toHaveBeenCalled();
+    expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
+      "first_track_gate_resolved",
+      expect.anything(),
+    );
+  });
+
+  it("shows retry UI when durable intent storage rejects and deduplicates the retry", async () => {
+    const retryRead = deferred<typeof validPendingIntent | null>();
+    mockPendingRead
+      .mockRejectedValueOnce(new Error("storage unavailable"))
+      .mockReturnValueOnce(retryRead.promise);
+    mockOwnedDjsQuery = query({
+      data: [],
+      isPending: false,
+      isSuccess: true,
+    });
+    const screen = await render(<FirstTrackScreen />);
+    const retry = await waitFor(() => screen.getByRole("button", { name: "Retry" }));
+
+    expect(screen.getByText("We couldn't finish this step")).toBeTruthy();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    await fireEvent.press(retry);
+    await fireEvent.press(retry);
+    expect(mockPendingRead).toHaveBeenCalledTimes(2);
+
+    await act(async () => retryRead.resolve(validPendingIntent));
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith({
+      pathname: "/create-dj",
+      params: { returnIntent: "first_track" },
+    }));
   });
 
   it("shows a retryable query failure without interpreting it as no DJs", async () => {
@@ -240,6 +319,10 @@ describe("FirstTrackGate", () => {
       pathname: "/create-dj",
       params: { returnIntent: "first_track" },
     }));
+    expect(mockPendingRead).toHaveBeenCalledTimes(1);
+    expect(mockPendingRead.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRouterReplace.mock.invocationCallOrder[0],
+    );
     expect(mockPendingConsume).not.toHaveBeenCalled();
     expect(mockTrackProductEvent).toHaveBeenCalledWith(
       "first_track_gate_resolved",
@@ -261,6 +344,9 @@ describe("FirstTrackGate", () => {
       "first_track",
       expect.any(Number),
     ));
+    expect(mockPendingRead.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPendingConsume.mock.invocationCallOrder[0],
+    );
     expect(mockRouterReplace).not.toHaveBeenCalled();
 
     await act(async () => consumption.resolve(true));

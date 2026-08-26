@@ -1,14 +1,12 @@
 import {
   introStateStore,
   PUBLIC_INTRO_VERSION,
-  trackProductEvent,
 } from "@/src/experience";
 import { consumeIntroLoginPermit } from "@/src/experience/intro-login-permit";
-import i18n from "@/src/i18n";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { Redirect, Stack } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 
 export default function AuthLayout() {
   const session = useAuthStore((state) => state.session);
@@ -24,16 +22,6 @@ export default function AuthLayout() {
         if (active) setIntroSeen(seen);
       },
       () => {
-        void trackProductEvent("auth_failed", {
-          flowVersion: PUBLIC_INTRO_VERSION,
-          platform: Platform.OS === "web"
-            ? "web"
-            : Platform.OS === "android"
-              ? "android"
-              : "ios",
-          locale: i18n.resolvedLanguage === "es" ? "es" : "en",
-          errorCategory: "unknown",
-        });
         if (active) setIntroSeen(true);
       },
     );

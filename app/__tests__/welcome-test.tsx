@@ -267,9 +267,9 @@ describe("public three-step introduction", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Create my first track" }));
 
     expect(mockRouterReplace).toHaveBeenCalledWith("/login");
-    expect(mockTrackProductEvent).toHaveBeenCalledWith(
+    expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
       "auth_failed",
-      expect.objectContaining({ errorCategory: "unknown", flowVersion: 2 }),
+      expect.anything(),
     );
     expect(mockTrackProductEvent.mock.calls.flat()).not.toEqual(
       expect.arrayContaining([expect.stringContaining("raw")]),
@@ -567,5 +567,9 @@ describe("auth intro eligibility gate", () => {
     const screen = await render(<AuthLayout />);
 
     expect(await screen.findByTestId("auth-stack")).toBeTruthy();
+    expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
+      "auth_failed",
+      expect.anything(),
+    );
   });
 });

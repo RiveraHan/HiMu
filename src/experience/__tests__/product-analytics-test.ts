@@ -1,4 +1,6 @@
 import type { ProductEventEnvelope } from "../../../supabase/functions/product-events/handler";
+import { secureStorage } from "@/src/lib/secure-storage";
+import { randomUUID } from "expo-crypto";
 import {
   createProductAnalyticsClient,
   createProductEventTransport,
@@ -7,7 +9,15 @@ import {
 } from "../product-analytics";
 
 jest.mock("@/src/api/supabase", () => ({
-  supabase: { functions: { invoke: jest.fn() } },
+  supabase: {
+    auth: {
+      getSession: jest.fn(async () => ({
+        data: { session: { access_token: "verified-user-token" } },
+        error: null,
+      })),
+    },
+    functions: { invoke: jest.fn(async () => ({ error: null })) },
+  },
 }));
 jest.mock("@/src/lib/secure-storage", () => ({
   secureStorage: { getItem: jest.fn(), setItem: jest.fn() },
@@ -178,6 +188,49 @@ test("the public API rejects unknown event and property names at compile time", 
   }
 
   expect(typeof trackProductEvent).toBe("function");
+});
+
+describe("production analytics privacy readiness", () => {
+  beforeEach(() => {
+    jest.mocked(secureStorage.getItem).mockReset().mockResolvedValue(null);
+    jest.mocked(secureStorage.setItem).mockReset().mockResolvedValue(undefined);
+    jest.mocked(randomUUID)
+      .mockReset()
+      .mockReturnValueOnce(UUIDS[0]!)
+      .mockReturnValueOnce(UUIDS[1]!)
+      .mockReturnValueOnce(UUIDS[2]!);
+    delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+  });
+
+  afterAll(() => {
+    delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+  });
+
+  it("does not initialize collection for absent, malformed, or non-HTTPS notice configuration", async () => {
+    for (const privacyUrl of [
+      undefined,
+      "not a URL",
+      "http://himu.app/privacy",
+      "javascript:alert(1)",
+    ]) {
+      if (privacyUrl === undefined) delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+      else process.env.EXPO_PUBLIC_PRIVACY_URL = privacyUrl;
+
+      await expect(trackProductEvent("intro_viewed", {})).resolves.toBeUndefined();
+    }
+
+    expect(secureStorage.getItem).not.toHaveBeenCalled();
+    expect(secureStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it("enables collection when a validated HTTPS privacy notice is configured", async () => {
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+
+    await expect(trackProductEvent("intro_viewed", {})).resolves.toBeUndefined();
+
+    expect(secureStorage.getItem).toHaveBeenCalledWith(STORAGE_KEY);
+    expect(secureStorage.setItem).toHaveBeenCalled();
+  });
 });
 
 test("keeps at most 50 events and drops the oldest event first", async () => {

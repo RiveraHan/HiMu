@@ -43,7 +43,7 @@ function GlobalActivitySurfaces() {
   return (
     <>
       <BottomChrome />
-      <ActivityPanel />
+      {chromeHidden ? null : <ActivityPanel />}
     </>
   );
 }
@@ -77,10 +77,10 @@ function NavigatorShell() {
           key={session?.user.id ?? "signed-out"}
           screenOptions={{ headerShown: false }}
         >
-          <Stack.Screen name="welcome" />
           <Stack.Protected guard={!session}>
             <Stack.Screen name="(auth)" />
           </Stack.Protected>
+          <Stack.Screen name="welcome" />
           <Stack.Protected guard={!!session}>
             <Stack.Screen name="(app)" />
             <Stack.Screen
