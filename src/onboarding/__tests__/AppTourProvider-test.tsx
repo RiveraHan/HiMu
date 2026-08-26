@@ -16,6 +16,16 @@ const mockHaptic = jest.fn(async () => undefined);
 let mockPlayFirstAvailable = jest.fn<Promise<boolean>, []>();
 let mockEnsureStepVisible = jest.fn<Promise<void>, [string]>();
 let mockTourApi: ReturnType<typeof useAppTour> | null = null;
+let mockLegacyAutoStart = true;
+
+jest.mock("../constants", () => {
+  const actual = jest.requireActual("../constants");
+  return Object.defineProperty({ ...actual }, "LEGACY_ONBOARDING_AUTO_START", {
+    configurable: true,
+    enumerable: true,
+    get: () => mockLegacyAutoStart,
+  });
+});
 
 jest.mock("@/src/stores/auth-store", () => ({
   useAuthStore: (selector: (state: typeof mockAuth) => unknown) => selector(mockAuth),
@@ -192,6 +202,7 @@ beforeEach(() => {
   mockPlayFirstAvailable = jest.fn(async () => true);
   mockEnsureStepVisible = jest.fn(async (_stepId: string) => undefined);
   mockTourApi = null;
+  mockLegacyAutoStart = true;
 });
 
 it("renders unauthenticated and resolving children without an overlay", async () => {
@@ -202,6 +213,47 @@ it("renders unauthenticated and resolving children without an overlay", async ()
   mockAuth = { isLoading: true, session: { user: { id: "u1" } } };
   await view.rerender(<AppTourProvider><Text>child</Text></AppTourProvider>);
   expect(view.queryByTestId("welcome-surface")).toBeNull();
+});
+
+it("does not automatically start the legacy welcome when cutover is active", async () => {
+  mockLegacyAutoStart = false;
+  mockAuth = { isLoading: false, session: { user: { id: "u1" } } };
+
+  const view = await render(<AppTourProvider><HomeRegistration /></AppTourProvider>);
+
+  await waitFor(() => expect(view.getByTestId("phase").props.children).toBe("idle"));
+  expect(view.queryByTestId("welcome-surface")).toBeNull();
+  expect(view.queryByTestId("tour-overlay")).toBeNull();
+  expect(mockMutateAsync).not.toHaveBeenCalled();
+});
+
+it("does not automatically start a contextual spotlight after cutover", async () => {
+  mockLegacyAutoStart = false;
+  mockAuth = { isLoading: false, session: { user: { id: "u1" } } };
+  mockOnboarding = { data: completedRecord(), isPending: false, isError: false };
+  mockSegments = ["dj", "one"];
+
+  const view = await render(
+    <AppTourProvider><ContextRegistration tipId="dj.hero" /></AppTourProvider>,
+  );
+
+  await waitFor(() => expect(view.getByTestId("phase").props.children).toBe("idle"));
+  expect(view.queryByTestId("tour-overlay")).toBeNull();
+  expect(mockMutateAsync).not.toHaveBeenCalled();
+});
+
+it("keeps the explicit replay API functional after automatic cutover", async () => {
+  mockLegacyAutoStart = false;
+  mockAuth = { isLoading: false, session: { user: { id: "u1" } } };
+  mockOnboarding = { data: completedRecord(), isPending: false, isError: false };
+
+  const view = await render(<AppTourProvider><ReplayRegistration /></AppTourProvider>);
+
+  await waitFor(() => expect(
+    view.getByTestId("phase", { includeHiddenElements: true }).props.children,
+  ).toBe("welcome"));
+  expect(view.getByTestId("welcome-surface")).toBeTruthy();
+  expect(mockMutateAsync).toHaveBeenCalledTimes(1);
 });
 
 it("keeps spotlight playback active but drops engine readiness during a collision", () => {

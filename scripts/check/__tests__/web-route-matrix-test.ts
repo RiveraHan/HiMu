@@ -6,6 +6,7 @@ import { verifyWebRouteMatrix, WEB_ROUTE_MATRIX } from "../web-route-matrix";
 
 const routeArtifacts = [
   ["Login", "login.html"],
+  ["Welcome", "welcome.html"],
   ["Home", "index.html"],
   ["Discover", "discover.html"],
   ["Profile", "profile.html"],
@@ -84,9 +85,10 @@ describe("web route matrix checker", () => {
     });
   });
 
-  it("publishes exactly the fourteen shipped routes in the QA matrix", () => {
+  it("publishes exactly the fifteen shipped routes in the QA matrix", () => {
     expect(WEB_ROUTE_MATRIX.map(({ label }) => label)).toEqual([
       "Login",
+      "Welcome",
       "Home",
       "Discover",
       "Profile",

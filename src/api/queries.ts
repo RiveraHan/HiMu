@@ -3,6 +3,7 @@ export const queryKeys = {
   djs: {
     all: ["djs"] as const,
     list: (userId: string | null) => ["djs", "list", userId] as const,
+    owned: (userId: string | null) => ["djs", "owned", userId] as const,
     details: (userId: string | null, id: string) =>
       ["djs", "detail", userId, id] as const,
   },
@@ -68,6 +69,9 @@ export const queryKeys = {
   },
   musicPreferences: {
     me: (userId: string | null) => ["music-preferences", userId] as const,
+  },
+  experienceState: {
+    me: (userId: string | null) => ["experience-state", "me", userId] as const,
   },
   onboarding: {
     current: (userId: string, version: number) =>

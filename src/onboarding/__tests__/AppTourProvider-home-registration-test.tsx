@@ -22,6 +22,11 @@ let mockEngineProps: {
 } | null = null;
 const mockMutateAsync = jest.fn(async (_record: unknown) => undefined);
 
+jest.mock("../constants", () => ({
+  ...jest.requireActual("../constants"),
+  LEGACY_ONBOARDING_AUTO_START: true,
+}));
+
 jest.mock("@/src/stores/auth-store", () => ({
   useAuthStore: (selector: (state: unknown) => unknown) =>
     selector({ isLoading: false, session: { user: { id: "u1" } } }),

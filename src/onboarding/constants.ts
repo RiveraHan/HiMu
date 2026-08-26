@@ -2,6 +2,7 @@ import type { ContextualTipId, SpotlightStepDefinition } from "./types";
 
 export const ONBOARDING_VERSION = 1;
 export const ONBOARDING_STORAGE_PREFIX = "himu:onboarding";
+export const LEGACY_ONBOARDING_AUTO_START = false;
 
 export const HOME_TOUR_STEPS = [
   {

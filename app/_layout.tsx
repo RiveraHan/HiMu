@@ -22,6 +22,8 @@ import { UnistylesGestureHandlerRootView } from "@/src/components/UnistylesGestu
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { HIMU_FONTS } from "@/src/theme/fonts";
 import { UnistylesRuntime } from "@/src/theme/unistyles";
+import { observeIntroRouteTransition } from "@/src/experience/intro-login-permit";
+import { PostAuthIntentRouter } from "@/src/experience/PostAuthIntentRouter";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   useAuthInit();
@@ -31,15 +33,17 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 function GlobalActivitySurfaces() {
   const { closePanel } = useActivity();
   const { phase } = useAppTour();
+  const segments = useSegments();
+  const chromeHidden = isApplicationChromeHidden(segments);
 
   useEffect(() => {
-    if (phase !== "idle") closePanel();
-  }, [closePanel, phase]);
+    if (phase !== "idle" || chromeHidden) closePanel();
+  }, [chromeHidden, closePanel, phase]);
 
   return (
     <>
       <BottomChrome />
-      <ActivityPanel />
+      {chromeHidden ? null : <ActivityPanel />}
     </>
   );
 }
@@ -50,6 +54,7 @@ function NavigatorShell() {
   const isLoading = useAuthStore((state) => state.isLoading);
   const { phase } = useAppTour();
   const segments = useSegments();
+  observeIntroRouteTransition(segments);
 
   if (isLoading) {
     return (
@@ -72,31 +77,33 @@ function NavigatorShell() {
           key={session?.user.id ?? "signed-out"}
           screenOptions={{ headerShown: false }}
         >
-        <Stack.Protected guard={!session}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
-        <Stack.Protected guard={!!session}>
-          <Stack.Screen name="(app)" />
-          <Stack.Screen
-            name="player"
-            options={{
-              presentation: "modal",
-              animation: "slide_from_bottom",
-            }}
-          />
-          <Stack.Screen name="account-settings" />
-          <Stack.Screen name="preferences" />
-          <Stack.Screen name="favorites" />
-          <Stack.Screen name="vibe-check" />
-          <Stack.Screen name="dj/[id]" />
-          <Stack.Screen
-            name="focus-mode"
-            options={{ animation: "fade" }}
-          />
-          <Stack.Screen name="create-dj" />
-          <Stack.Screen name="create-track" />
-          <Stack.Screen name="train-dj/[id]" />
-        </Stack.Protected>
+          <Stack.Protected guard={!session}>
+            <Stack.Screen name="(auth)" />
+          </Stack.Protected>
+          <Stack.Screen name="welcome" />
+          <Stack.Protected guard={!!session}>
+            <Stack.Screen name="(app)" />
+            <Stack.Screen
+              name="player"
+              options={{
+                presentation: "modal",
+                animation: "slide_from_bottom",
+              }}
+            />
+            <Stack.Screen name="account-settings" />
+            <Stack.Screen name="preferences" />
+            <Stack.Screen name="favorites" />
+            <Stack.Screen name="vibe-check" />
+            <Stack.Screen name="dj/[id]" />
+            <Stack.Screen
+              name="focus-mode"
+              options={{ animation: "fade" }}
+            />
+            <Stack.Screen name="create-dj" />
+            <Stack.Screen name="first-track" />
+            <Stack.Screen name="create-track" />
+            <Stack.Screen name="train-dj/[id]" />
+          </Stack.Protected>
         </Stack>
       </ResponsiveAppShell>
       <GlobalActivitySurfaces />
@@ -112,6 +119,7 @@ function AppProviders() {
           <LocaleProvider>
             <ActivityProvider>
               <AppTourProvider>
+                <PostAuthIntentRouter />
                 <NavigatorShell />
               </AppTourProvider>
             </ActivityProvider>

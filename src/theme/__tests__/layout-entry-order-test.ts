@@ -27,6 +27,9 @@ test("configures the theme before the root layout evaluates styled components", 
   jest.doMock("@/src/components/Toast", () => ({ ToastHost: () => null }));
   jest.doMock("@/src/components/activity/ActivityPanel", () => ({ ActivityPanel: () => null }));
   jest.doMock("@/src/hooks/use-auth", () => ({ useAuthInit: jest.fn() }));
+  jest.doMock("@/src/experience/PostAuthIntentRouter", () => ({
+    PostAuthIntentRouter: () => null,
+  }));
   jest.doMock("@/src/i18n/LocaleProvider", () => ({
     LocaleProvider: ({ children }: { children: unknown }) => children,
   }));
