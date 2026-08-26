@@ -1,4 +1,27 @@
 export const onboarding = {
+  publicIntro: {
+    pages: {
+      promise: {
+        title: "From an emotion to a track",
+        body: "Turn an idea, feeling, or moment into an original track.",
+      },
+      dj: {
+        title: "Choose who shapes it",
+        body: "Create a DJ with its own sound and personality.",
+      },
+      result: {
+        title: "Listen, save, and share",
+        body: "Keep your result close and share it when it feels right.",
+      },
+    },
+    pageCount: "Page {{page}} of {{count}}",
+    actions: {
+      continue: "Continue",
+      create: "Create my first track",
+      existing: "I already have an account",
+      back: "Back",
+    },
+  },
   welcome: {
     eyebrow: "WELCOME TO HIMU",
     pages: {

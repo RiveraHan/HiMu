@@ -31,10 +31,12 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 function GlobalActivitySurfaces() {
   const { closePanel } = useActivity();
   const { phase } = useAppTour();
+  const segments = useSegments();
+  const chromeHidden = isApplicationChromeHidden(segments);
 
   useEffect(() => {
-    if (phase !== "idle") closePanel();
-  }, [closePanel, phase]);
+    if (phase !== "idle" || chromeHidden) closePanel();
+  }, [chromeHidden, closePanel, phase]);
 
   return (
     <>
@@ -72,31 +74,32 @@ function NavigatorShell() {
           key={session?.user.id ?? "signed-out"}
           screenOptions={{ headerShown: false }}
         >
-        <Stack.Protected guard={!session}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
-        <Stack.Protected guard={!!session}>
-          <Stack.Screen name="(app)" />
-          <Stack.Screen
-            name="player"
-            options={{
-              presentation: "modal",
-              animation: "slide_from_bottom",
-            }}
-          />
-          <Stack.Screen name="account-settings" />
-          <Stack.Screen name="preferences" />
-          <Stack.Screen name="favorites" />
-          <Stack.Screen name="vibe-check" />
-          <Stack.Screen name="dj/[id]" />
-          <Stack.Screen
-            name="focus-mode"
-            options={{ animation: "fade" }}
-          />
-          <Stack.Screen name="create-dj" />
-          <Stack.Screen name="create-track" />
-          <Stack.Screen name="train-dj/[id]" />
-        </Stack.Protected>
+          <Stack.Screen name="welcome" />
+          <Stack.Protected guard={!session}>
+            <Stack.Screen name="(auth)" />
+          </Stack.Protected>
+          <Stack.Protected guard={!!session}>
+            <Stack.Screen name="(app)" />
+            <Stack.Screen
+              name="player"
+              options={{
+                presentation: "modal",
+                animation: "slide_from_bottom",
+              }}
+            />
+            <Stack.Screen name="account-settings" />
+            <Stack.Screen name="preferences" />
+            <Stack.Screen name="favorites" />
+            <Stack.Screen name="vibe-check" />
+            <Stack.Screen name="dj/[id]" />
+            <Stack.Screen
+              name="focus-mode"
+              options={{ animation: "fade" }}
+            />
+            <Stack.Screen name="create-dj" />
+            <Stack.Screen name="create-track" />
+            <Stack.Screen name="train-dj/[id]" />
+          </Stack.Protected>
         </Stack>
       </ResponsiveAppShell>
       <GlobalActivitySurfaces />

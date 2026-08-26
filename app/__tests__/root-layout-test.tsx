@@ -276,6 +276,16 @@ describe("root layout ownership and route protection", () => {
     expect(mockClosePanel).toHaveBeenCalledTimes(1);
   });
 
+  it("closes the activity panel when the full-screen welcome route opens", async () => {
+    mockAuthState = authState("user-a", false);
+    mockRequestedRoute = "welcome";
+    mockSegments = ["welcome"];
+
+    await render(<RootLayout />);
+
+    expect(mockClosePanel).toHaveBeenCalledTimes(1);
+  });
+
   it.each(PRIVATE_ROUTES)("selects auth without mounting the requested private route %s when signed out", async (route) => {
     mockRequestedRoute = route;
     const screen = await render(<RootLayout />);
@@ -283,6 +293,23 @@ describe("root layout ownership and route protection", () => {
     expect(screen.getByTestId("route-(auth)")).toBeTruthy();
     expect(screen.queryByTestId(`route-${route}`)).toBeNull();
     expect(mockMountedRoutes).toEqual(["(auth)"]);
+  });
+
+  it("declares welcome as a public route for signed-out first-run and signed-in replay", async () => {
+    mockRequestedRoute = "welcome";
+    mockSegments = ["welcome"];
+    const signedOut = await render(<RootLayout />);
+
+    expect(signedOut.getByTestId("route-welcome")).toBeTruthy();
+    expect(signedOut.queryByTestId("route-(auth)")).toBeNull();
+    await signedOut.unmount();
+
+    mockAuthState = authState("user-a", false);
+    mockWindowWidth = 1280;
+    const signedIn = await render(<RootLayout />);
+    expect(signedIn.getByTestId("route-welcome")).toBeTruthy();
+    expect(signedIn.queryByTestId("route-(app)")).toBeNull();
+    expect(signedIn.queryByTestId("desktop-rail")).toBeNull();
   });
 
   it.each(PRIVATE_ROUTES)("mounts the requested private route %s with a session", async (route) => {
