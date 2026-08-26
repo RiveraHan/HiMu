@@ -23,7 +23,6 @@ import {
 } from "@/src/hooks/use-profile";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
-import { useAppTour } from "@/src/onboarding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
@@ -99,11 +98,11 @@ export default function ProfileScreen() {
   const { flushListeningStats } = usePlayer();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
-  const { replayTour } = useAppTour();
-
   const onReplayTour = () => {
-    replayTour();
-    router.replace("/");
+    router.push({
+      pathname: "/welcome",
+      params: { mode: "replay", step: "1" },
+    });
   };
 
   useFocusEffect(
@@ -438,7 +437,7 @@ export default function ProfileScreen() {
             ) : null}
             <SettingRow
               icon={<Compass size={20} color={theme.colors.onSurfaceVariant} />}
-              label={t("profile.replayTour")}
+              label={t("onboarding.replay.action")}
               onPress={onReplayTour}
             />
             <SettingRow

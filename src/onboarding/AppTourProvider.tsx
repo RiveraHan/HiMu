@@ -15,7 +15,12 @@ import { useOnboarding, useSaveOnboarding } from "@/src/hooks/use-onboarding";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { useConfirmStore } from "@/src/stores/confirm-store";
 import { useToastStore } from "@/src/stores/toast-store";
-import { CONTEXTUAL_TIP_COPY, HOME_TOUR_STEPS, ONBOARDING_VERSION } from "./constants";
+import {
+  CONTEXTUAL_TIP_COPY,
+  HOME_TOUR_STEPS,
+  LEGACY_ONBOARDING_AUTO_START,
+  ONBOARDING_VERSION,
+} from "./constants";
 import { SpotlightTourEngine } from "./engine/SpotlightTourEngine";
 import {
   createOnboardingState,
@@ -185,12 +190,25 @@ function AuthenticatedAppTourProvider({ children, userId }: { children: ReactNod
       homeReadinessRequestRef.current = request;
       setHomeReadyRegistration(null);
 
+      const automaticHomeReadyAllowed = () => {
+        const current = stateRef.current;
+        return LEGACY_ONBOARDING_AUTO_START || (
+          current.eligibilityResolved &&
+          (
+            current.record !== null ||
+            current.replayPending ||
+            current.replayActive
+          )
+        );
+      };
+
       if (
         !mountedRef.current ||
         homeRef.current !== input ||
         !input.ready ||
         collisionRef.current ||
-        routeRef.current !== "home"
+        routeRef.current !== "home" ||
+        !automaticHomeReadyAllowed()
       ) {
         return;
       }
@@ -221,7 +239,8 @@ function AuthenticatedAppTourProvider({ children, userId }: { children: ReactNod
           homeRef.current !== input ||
           !input.ready ||
           collisionRef.current ||
-          routeRef.current !== "home"
+          routeRef.current !== "home" ||
+          !automaticHomeReadyAllowed()
         );
 
       const commitHomeReady = () => {
@@ -255,8 +274,18 @@ function AuthenticatedAppTourProvider({ children, userId }: { children: ReactNod
   useEffect(() => {
     if (!onboarding.isPending && !onboarding.isError) {
       void send({ type: "ELIGIBILITY_RESOLVED", record: onboarding.data ?? null });
+      if (!LEGACY_ONBOARDING_AUTO_START) {
+        const registration = homeRef.current;
+        if (registration?.ready) announceHomeReady(registration);
+      }
     }
-  }, [onboarding.data, onboarding.isError, onboarding.isPending, send]);
+  }, [
+    announceHomeReady,
+    onboarding.data,
+    onboarding.isError,
+    onboarding.isPending,
+    send,
+  ]);
 
   useEffect(() => {
     void send({ type: "ROUTE_CHANGED", route });
@@ -282,7 +311,11 @@ function AuthenticatedAppTourProvider({ children, userId }: { children: ReactNod
   }, [announceHomeReady, collisionActive, retireHomeReadiness, route]);
 
   useEffect(() => {
-    if (collisionActive || state.phase !== "idle") return;
+    if (
+      !LEGACY_ONBOARDING_AUTO_START ||
+      collisionActive ||
+      state.phase !== "idle"
+    ) return;
     for (const registration of contextRefs.current.values()) {
       if (registration.ready) {
         void send({ type: "CONTEXT_TARGET_READY", tipId: registration.tipId });
@@ -308,7 +341,11 @@ function AuthenticatedAppTourProvider({ children, userId }: { children: ReactNod
   const registerContextTarget = useCallback((input: ContextRegistration) => {
     contextRefs.current.set(input.tipId, input);
     setRegistrationRevision((revision) => revision + 1);
-    if (!collisionRef.current && input.ready) {
+    if (
+      LEGACY_ONBOARDING_AUTO_START &&
+      !collisionRef.current &&
+      input.ready
+    ) {
       void send({ type: "CONTEXT_TARGET_READY", tipId: input.tipId });
     }
     return () => {

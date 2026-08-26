@@ -17,6 +17,7 @@ import {
 } from "@/src/hooks/use-home";
 import { useMusicPreferences } from "@/src/hooks/use-music-preferences";
 import { useOnboarding } from "@/src/hooks/use-onboarding";
+import { useOwnedDjs } from "@/src/hooks/use-owned-djs";
 import {
   useDjsHeard,
   useListeningTotals,
@@ -100,6 +101,7 @@ function useAllUserQueries() {
     useVibeCheck(),
     useSettings(),
     useOnboarding(1),
+    useOwnedDjs(),
   ];
   const tasteProfile = useTasteProfile();
   const dailyDrop = useDailyDrop();
@@ -128,6 +130,7 @@ function keys(userId: string) {
     queryKeys.stats.vibeCheck(userId),
     queryKeys.settings.me(userId),
     queryKeys.onboarding.current(userId, 1),
+    queryKeys.djs.owned(userId),
     queryKeys.stats.topGenre(userId),
   ];
 }
@@ -186,6 +189,7 @@ test("actual RLS query hooks never expose A's fresh cache after rerendering as B
     { days: [] },
     {},
     null,
+    [],
     "Ambient",
   ];
   aKeys.forEach((key, index) => {

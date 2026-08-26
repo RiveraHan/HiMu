@@ -59,6 +59,12 @@ jest.mock("@/src/onboarding", () => ({
   AppTourProvider: mockNamedProvider("app-tour"),
   useAppTour: () => ({ phase: mockTourPhase }),
 }));
+jest.mock("@/src/experience/PostAuthIntentRouter", () => ({
+  PostAuthIntentRouter: () => {
+    const { View } = require("react-native");
+    return <View testID="post-auth-intent-router" />;
+  },
+}));
 jest.mock("@/src/components/BottomChrome", () => ({
   BottomChrome: () => {
     const { View } = require("react-native");
@@ -202,6 +208,7 @@ const PRIVATE_ROUTES = [
   "favorites",
   "vibe-check",
   "focus-mode",
+  "first-track",
   "dj/[id]",
   "create-dj",
   "train-dj/[id]",
@@ -240,6 +247,7 @@ describe("root layout ownership and route protection", () => {
     ]);
     const appTour = screen.getByTestId("provider-app-tour");
     expect(within(appTour).getByTestId("navigator")).toBeTruthy();
+    expect(within(appTour).getByTestId("post-auth-intent-router")).toBeTruthy();
     expect(within(appTour).getByTestId("bottom-chrome")).toBeTruthy();
     expect(within(appTour).getByTestId("activity-panel")).toBeTruthy();
   });
@@ -364,6 +372,7 @@ describe("root layout ownership and route protection", () => {
   it.each([
     ["player", ["player"]],
     ["focus-mode", ["focus-mode"]],
+    ["first-track", ["first-track"]],
   ])("suppresses the actual desktop shell rail for the full-screen %s route", async (route, segments) => {
     mockAuthState = authState("user-a", false);
     mockRequestedRoute = route;

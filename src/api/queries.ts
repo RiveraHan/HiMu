@@ -3,6 +3,7 @@ export const queryKeys = {
   djs: {
     all: ["djs"] as const,
     list: (userId: string | null) => ["djs", "list", userId] as const,
+    owned: (userId: string | null) => ["djs", "owned", userId] as const,
     details: (userId: string | null, id: string) =>
       ["djs", "detail", userId, id] as const,
   },

@@ -8,6 +8,7 @@ export function isApplicationChromeHidden(segments: readonly string[]) {
   return (
     segments[0] === "(auth)" ||
     segments[0] === "welcome" ||
+    segments[0] === "first-track" ||
     segments[0] === "player" ||
     segments[0] === "focus-mode"
   );

@@ -226,6 +226,7 @@ describe("BottomChrome", () => {
     [["player"], "idle"],
     [["focus-mode"], "idle"],
     [["welcome"], "idle"],
+    [["first-track"], "idle"],
     [["(app)"], "welcome"],
   ])("hides on route %j in onboarding phase %s", async (segments, phase) => {
     mockSegments = segments;

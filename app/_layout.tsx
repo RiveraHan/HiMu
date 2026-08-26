@@ -23,6 +23,7 @@ import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { HIMU_FONTS } from "@/src/theme/fonts";
 import { UnistylesRuntime } from "@/src/theme/unistyles";
 import { observeIntroRouteTransition } from "@/src/experience/intro-login-permit";
+import { PostAuthIntentRouter } from "@/src/experience/PostAuthIntentRouter";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   useAuthInit();
@@ -99,6 +100,7 @@ function NavigatorShell() {
               options={{ animation: "fade" }}
             />
             <Stack.Screen name="create-dj" />
+            <Stack.Screen name="first-track" />
             <Stack.Screen name="create-track" />
             <Stack.Screen name="train-dj/[id]" />
           </Stack.Protected>
@@ -117,6 +119,7 @@ function AppProviders() {
           <LocaleProvider>
             <ActivityProvider>
               <AppTourProvider>
+                <PostAuthIntentRouter />
                 <NavigatorShell />
               </AppTourProvider>
             </ActivityProvider>

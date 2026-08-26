@@ -22,6 +22,10 @@ export const onboarding = {
       back: "Back",
     },
   },
+  firstTrack: {
+    checking: "Checking your DJs",
+    unavailable: "We couldn't check your DJs",
+  },
   welcome: {
     eyebrow: "WELCOME TO HIMU",
     pages: {
@@ -116,6 +120,6 @@ export const onboarding = {
     },
   },
   replay: {
-    action: "Replay product tour",
+    action: "How HiMu works",
   },
 } as const;

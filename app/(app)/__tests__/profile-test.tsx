@@ -238,6 +238,7 @@ describe("ProfileScreen", () => {
 
     expect(screen.getByText("PREFERENCIAS")).toBeTruthy();
     expect(screen.getByLabelText("Detalles de la cuenta")).toBeTruthy();
+    expect(screen.getByLabelText("Cómo funciona HiMu")).toBeTruthy();
     expect(screen.getByText("Oyente")).toBeTruthy();
     expect(screen.getByLabelText("Cerrar sesión")).toBeTruthy();
   });
@@ -277,7 +278,7 @@ describe("ProfileScreen", () => {
     expect(screen.getByLabelText("Account Details")).toBeTruthy();
     expect(screen.getByLabelText("Music Preferences")).toBeTruthy();
     expect(screen.queryByLabelText("Subscription")).toBeNull();
-    expect(screen.getByLabelText("Replay product tour")).toBeTruthy();
+    expect(screen.getByLabelText("How HiMu works")).toBeTruthy();
     expect(screen.getByLabelText("Logout")).toBeTruthy();
     expect(mockUseProfile).toHaveBeenCalledTimes(1);
     expect(mockUseListeningTotals).toHaveBeenCalledTimes(1);
@@ -285,16 +286,17 @@ describe("ProfileScreen", () => {
     expect(mockUseDJs).toHaveBeenCalledTimes(1);
   });
 
-  it("requests replay before replacing Profile with Home", async () => {
+  it("opens the exact public-intro replay URL from Profile", async () => {
     const screen = await render(<ProfileScreen />);
 
-    await fireEvent.press(screen.getByLabelText("Replay product tour"));
+    await fireEvent.press(screen.getByLabelText("How HiMu works"));
 
-    expect(mockReplayTour).toHaveBeenCalledTimes(1);
-    expect(mockRouterReplace).toHaveBeenCalledWith("/");
-    expect(mockReplayTour.mock.invocationCallOrder[0]).toBeLessThan(
-      mockRouterReplace.mock.invocationCallOrder[0],
-    );
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: "/welcome",
+      params: { mode: "replay", step: "1" },
+    });
+    expect(mockReplayTour).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
   });
 
   it("shows resolved identity while stats and DJs remain unresolved", async () => {
