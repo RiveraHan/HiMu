@@ -101,7 +101,17 @@ function isFresh(intent: PendingNavigationIntent, nowMs: number): boolean {
   return age >= 0 && age < FIRST_TRACK_TTL_MS;
 }
 
+function assertValidTimestamp(timestamp: number, label: string): void {
+  if (
+    !Number.isFinite(timestamp) ||
+    !Number.isFinite(new Date(timestamp).getTime())
+  ) {
+    throw new TypeError(`${label} must be a valid millisecond timestamp`);
+  }
+}
+
 function timestampToIso(timestamp: number): string {
+  assertValidTimestamp(timestamp, "Timestamp");
   return new Date(timestamp).toISOString();
 }
 
@@ -115,6 +125,7 @@ async function loadIntroState(): Promise<IntroState | null> {
 }
 
 async function loadPendingIntent(nowMs: number): Promise<PendingNavigationIntent | null> {
+  assertValidTimestamp(nowMs, "Current time");
   const serialized = await secureStorage.getItem(PENDING_INTENT_KEY);
   if (serialized === null) return null;
 
