@@ -13,7 +13,7 @@ import { grantIntroLoginPermit } from "@/src/experience/intro-login-permit";
 import i18n from "@/src/i18n";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
 const STEP_KEYS = ["promise", "dj", "result"] as const;
@@ -65,6 +65,19 @@ export default function WelcomeScreen() {
     : "first-run";
   const startedAt = useRef(Date.now());
   const viewedSteps = useRef(new Set<PublicIntroStep>());
+  const completionStarted = useRef(false);
+  const mounted = useRef(true);
+  const routeAuthorization = `${mode}:${session?.user.id ?? "signed-out"}`;
+  const routeAuthorizationRef = useRef(routeAuthorization);
+  const [isCompleting, setIsCompleting] = useState(false);
+  routeAuthorizationRef.current = routeAuthorization;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isCanonicalStep(params.step)) {
@@ -91,8 +104,15 @@ export default function WelcomeScreen() {
   if (mode === "first-run" && session) return <Redirect href="/(app)" />;
 
   const completeIntro = async (withFirstTrackIntent: boolean) => {
+    if (completionStarted.current) return;
+    completionStarted.current = true;
+    setIsCompleting(true);
+    const completionAuthorization = routeAuthorizationRef.current;
+
     if (mode === "replay") {
-      router.replace("/(app)");
+      if (mounted.current && routeAuthorizationRef.current === completionAuthorization) {
+        router.replace("/(app)");
+      }
       return;
     }
 
@@ -104,6 +124,11 @@ export default function WelcomeScreen() {
         ]
       : [introStateStore.markSeen(PUBLIC_INTRO_VERSION, now)];
     const results = await Promise.allSettled(operations);
+    if (
+      !mounted.current ||
+      routeAuthorizationRef.current !== completionAuthorization
+    ) return;
+
     if (results.some(({ status }) => status === "rejected")) {
       reportStorageFailure();
     }
@@ -121,6 +146,7 @@ export default function WelcomeScreen() {
       step={step}
       mode={mode}
       callbacks={{
+        disabled: isCompleting,
         onBack: () => router.setParams({ step: String(step - 1) }),
         onContinue: () => router.setParams({ step: String(step + 1) }),
         onCreate: () => completeIntro(true),

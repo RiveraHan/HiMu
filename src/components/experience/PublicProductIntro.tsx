@@ -9,6 +9,7 @@ export type PublicIntroStep = 1 | 2 | 3;
 export type PublicIntroMode = "first-run" | "replay";
 
 export type PublicProductIntroCallbacks = Readonly<{
+  disabled?: boolean;
   onBack(): void;
   onContinue(): void;
   onCreate(): void | Promise<void>;
@@ -27,22 +28,27 @@ function IntroAction({
   label,
   onPress,
   primary = false,
+  disabled = false,
   testID,
 }: Readonly<{
   label: string;
   onPress(): void | Promise<void>;
   primary?: boolean;
+  disabled?: boolean;
   testID?: string;
 }>) {
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       testID={testID}
       style={({ pressed }) => [
         styles.action,
         primary ? styles.primaryAction : styles.secondaryAction,
+        disabled && styles.disabledAction,
         pressed && styles.pressedAction,
       ]}
     >
@@ -57,7 +63,7 @@ function IntroAction({
   );
 }
 
-export function PublicProductIntro({ step, mode, callbacks }: Props) {
+export function PublicProductIntro({ step, callbacks }: Props) {
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -70,6 +76,7 @@ export function PublicProductIntro({ step, mode, callbacks }: Props) {
     count: PAGE_KEYS.length,
   });
   const isFinal = step === PAGE_KEYS.length;
+  const actionsDisabled = callbacks.disabled ?? false;
 
   return (
     <ScrollView
@@ -99,6 +106,7 @@ export function PublicProductIntro({ step, mode, callbacks }: Props) {
             <IntroAction
               label={t("onboarding.publicIntro.actions.back")}
               onPress={callbacks.onBack}
+              disabled={actionsDisabled}
             />
           ) : null}
 
@@ -126,14 +134,14 @@ export function PublicProductIntro({ step, mode, callbacks }: Props) {
               )}
               onPress={isFinal ? callbacks.onCreate : callbacks.onContinue}
               primary
+              disabled={actionsDisabled}
               testID="public-intro-primary-action"
             />
-            {mode === "first-run" ? (
-              <IntroAction
-                label={t("onboarding.publicIntro.actions.existing")}
-                onPress={callbacks.onExistingAccount}
-              />
-            ) : null}
+            <IntroAction
+              label={t("onboarding.publicIntro.actions.existing")}
+              onPress={callbacks.onExistingAccount}
+              disabled={actionsDisabled}
+            />
           </View>
         </GlassCard>
       </View>
@@ -200,6 +208,9 @@ const styles = StyleSheet.create((theme) => ({
   },
   pressedAction: {
     transform: [{ scale: 0.98 }],
+  },
+  disabledAction: {
+    opacity: 0.5,
   },
   actionLabel: {
     textAlign: "center",

@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { StyleSheet as RNStyleSheet } from "react-native";
 
 import AuthLayout from "@/app/(auth)/_layout";
 import WelcomeScreen from "@/app/welcome";
 import { PublicProductIntro } from "@/src/components/experience/PublicProductIntro";
+import {
+  consumeIntroLoginPermit,
+} from "@/src/experience/intro-login-permit";
 import i18n from "@/src/i18n";
 
 const mockRouterSetParams = jest.fn();
@@ -17,6 +20,23 @@ const mockTrackProductEvent = jest.fn<Promise<void>, [string, Record<string, unk
 let mockAuthState = { session: null as null | { user: { id: string } } };
 let mockSearchParams: { step?: string | string[]; mode?: string | string[] } = { step: "1" };
 let mockWindow = { width: 390, height: 844 };
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
+async function invokePress(element: { props: { onClick?: (event: object) => void } }) {
+  await act(async () => {
+    element.props.onClick?.({ nativeEvent: {} });
+    await Promise.resolve();
+  });
+}
 
 jest.mock("@/src/stores/auth-store", () => ({
   useAuthStore: (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
@@ -81,6 +101,7 @@ async function renderWelcome(
 
 describe("public three-step introduction", () => {
   beforeEach(async () => {
+    consumeIntroLoginPermit();
     mockRouterSetParams.mockReset();
     mockRouterReplace.mockReset();
     mockIntroIsSeen.mockReset().mockResolvedValue(false);
@@ -180,6 +201,25 @@ describe("public three-step introduction", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith("/(app)");
   });
 
+  it.each([1, 2, 3] as const)(
+    "keeps the existing-account action visible and store-free on replay page %s",
+    async (step) => {
+      const screen = await renderWelcome(
+        { step: String(step), mode: "replay" },
+        "user-a",
+      );
+
+      await fireEvent.press(
+        screen.getByRole("button", { name: "I already have an account" }),
+      );
+
+      expect(mockIntroMarkSeen).not.toHaveBeenCalled();
+      expect(mockWriteFirstTrack).not.toHaveBeenCalled();
+      expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+      expect(mockRouterReplace).toHaveBeenCalledWith("/(app)");
+    },
+  );
+
   it("rejects signed-out replay and redirects authenticated non-replay visits Home", async () => {
     const signedOut = await renderWelcome({ step: "1", mode: "replay" });
     expect(signedOut.getByText("redirect:/login")).toBeTruthy();
@@ -210,6 +250,76 @@ describe("public three-step introduction", () => {
     const auth = await render(<AuthLayout />);
     expect(await auth.findByTestId("auth-stack")).toBeTruthy();
     expect(auth.queryByText("redirect:/welcome?step=1")).toBeNull();
+  });
+
+  it("locks completion across double taps and primary-to-secondary races while storage settles", async () => {
+    const intentWrite = deferred<void>();
+    const introWrite = deferred<void>();
+    mockWriteFirstTrack.mockReturnValue(intentWrite.promise);
+    mockIntroMarkSeen.mockReturnValue(introWrite.promise);
+    const screen = await renderWelcome({ step: "3" });
+    const primary = screen.getByRole("button", { name: "Create my first track" });
+    const existing = screen.getByRole("button", { name: "I already have an account" });
+
+    await invokePress(primary);
+
+    expect(mockWriteFirstTrack).toHaveBeenCalledTimes(1);
+    expect(mockIntroMarkSeen).toHaveBeenCalledTimes(1);
+    for (const name of ["Back", "Create my first track", "I already have an account"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+
+    await invokePress(primary);
+    await invokePress(existing);
+    expect(mockWriteFirstTrack).toHaveBeenCalledTimes(1);
+    expect(mockIntroMarkSeen).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      intentWrite.resolve();
+      introWrite.resolve();
+      await Promise.all([intentWrite.promise, introWrite.promise]);
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).toHaveBeenCalledWith("/login");
+  });
+
+  it("abandons a pending completion without stale navigation or a later Login bypass", async () => {
+    const intentWrite = deferred<void>();
+    const introWrite = deferred<void>();
+    mockWriteFirstTrack.mockReturnValue(intentWrite.promise);
+    mockIntroMarkSeen.mockReturnValue(introWrite.promise);
+    const screen = await renderWelcome({ step: "3" });
+
+    await invokePress(screen.getByRole("button", { name: "Create my first track" }));
+    await screen.unmount();
+    await act(async () => {
+      intentWrite.resolve();
+      introWrite.resolve();
+      await Promise.all([intentWrite.promise, introWrite.promise]);
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    mockIntroIsSeen.mockResolvedValue(false);
+    const auth = await render(<AuthLayout />);
+    expect(await auth.findByText("redirect:/welcome?step=1")).toBeTruthy();
+    expect(auth.queryByTestId("auth-stack")).toBeNull();
+  });
+
+  it("expires an unused completion permit before an unrelated later Login mount", async () => {
+    const now = jest.spyOn(Date, "now").mockReturnValue(1_000_000);
+    const screen = await renderWelcome({ step: "3" });
+    await fireEvent.press(screen.getByRole("button", { name: "Create my first track" }));
+    expect(mockRouterReplace).toHaveBeenCalledWith("/login");
+    await screen.unmount();
+
+    now.mockReturnValue(1_060_000);
+    mockIntroIsSeen.mockResolvedValue(false);
+    const auth = await render(<AuthLayout />);
+
+    expect(await auth.findByText("redirect:/welcome?step=1")).toBeTruthy();
+    expect(auth.queryByTestId("auth-stack")).toBeNull();
+    now.mockRestore();
   });
 
   it("uses top-aligned scroll flow below 600px while preserving one readable card", async () => {
