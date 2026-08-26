@@ -364,7 +364,7 @@ describe("FirstTrackGate", () => {
     );
   });
 
-  it("keeps the gate retryable when owned-intent consumption returns false", async () => {
+  it("replaces Home without telemetry when owned-intent consumption resolves false", async () => {
     mockPendingConsume.mockResolvedValue(false);
     mockOwnedDjsQuery = query({
       data: [{ id: "dj-1" }],
@@ -374,15 +374,14 @@ describe("FirstTrackGate", () => {
 
     const screen = await render(<FirstTrackScreen />);
 
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
-    expect(screen.getByText("We couldn't finish this step")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry" })).toHaveStyle({
-      minHeight: 44,
-      minWidth: 44,
-    });
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith("/(app)"));
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(mockPendingConsume).toHaveBeenCalledTimes(1);
     expect(mockPendingClear).not.toHaveBeenCalled();
-    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalledWith({
+      pathname: "/create-track",
+      params: { djId: "dj-1" },
+    });
     expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
       "first_track_gate_resolved",
       expect.anything(),
@@ -420,7 +419,7 @@ describe("FirstTrackGate", () => {
   it("suppresses a successful consume retry after the auth scope changes", async () => {
     const retryConsumption = deferred<boolean>();
     mockPendingConsume
-      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(new Error("storage unavailable"))
       .mockReturnValueOnce(retryConsumption.promise);
     mockOwnedDjsQuery = query({
       data: [{ id: "dj-a" }],
@@ -443,7 +442,7 @@ describe("FirstTrackGate", () => {
   it("suppresses a successful consume retry after the gate unmounts", async () => {
     const retryConsumption = deferred<boolean>();
     mockPendingConsume
-      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(new Error("storage unavailable"))
       .mockReturnValueOnce(retryConsumption.promise);
     mockOwnedDjsQuery = query({
       data: [{ id: "dj-a" }],
@@ -698,7 +697,7 @@ describe("FirstTrackGate", () => {
 
   it("localizes storage failure and retry action in Spanish", async () => {
     await i18n.changeLanguage("es");
-    mockPendingConsume.mockResolvedValue(false);
+    mockPendingConsume.mockRejectedValue(new Error("storage unavailable"));
     mockOwnedDjsQuery = query({
       data: [{ id: "dj-a" }],
       isPending: false,

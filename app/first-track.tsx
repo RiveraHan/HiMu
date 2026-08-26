@@ -187,11 +187,19 @@ export function FirstTrackGate() {
     );
 
     const flight = (async () => {
-      let consumed = false;
+      let consumed: boolean;
       try {
         consumed = await pendingIntentStore.consume("first_track", Date.now());
       } catch {
-        consumed = false;
+        if (
+          mountedRef.current &&
+          currentUserIdRef.current === consumeUserId &&
+          !cancelRequestedRef.current &&
+          !navigationCompletedRef.current
+        ) {
+          setStorageError({ userId: consumeUserId, operation: "consume" });
+        }
+        return;
       }
 
       if (
@@ -203,8 +211,10 @@ export function FirstTrackGate() {
         return;
       }
 
-      if (consumed !== true) {
-        setStorageError({ userId: consumeUserId, operation: "consume" });
+      if (!consumed) {
+        navigationCompletedRef.current = true;
+        setStorageError(null);
+        router.replace("/(app)");
         return;
       }
 
