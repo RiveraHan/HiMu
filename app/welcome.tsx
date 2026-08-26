@@ -9,7 +9,12 @@ import {
   PUBLIC_INTRO_VERSION,
   trackProductEvent,
 } from "@/src/experience";
-import { grantIntroLoginPermit } from "@/src/experience/intro-login-permit";
+import {
+  abandonIntroLoginOrigin,
+  beginIntroLoginHandoff,
+  cancelIntroLoginHandoff,
+  registerIntroLoginOrigin,
+} from "@/src/experience/intro-login-permit";
 import i18n from "@/src/i18n";
 import { useAuthStore } from "@/src/stores/auth-store";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
@@ -67,6 +72,7 @@ export default function WelcomeScreen() {
   const viewedSteps = useRef(new Set<PublicIntroStep>());
   const completionStarted = useRef(false);
   const mounted = useRef(true);
+  const loginOrigin = useRef(Symbol("public-intro-login-origin")).current;
   const routeAuthorization = `${mode}:${session?.user.id ?? "signed-out"}`;
   const routeAuthorizationRef = useRef(routeAuthorization);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -74,10 +80,12 @@ export default function WelcomeScreen() {
 
   useEffect(() => {
     mounted.current = true;
+    registerIntroLoginOrigin(loginOrigin);
     return () => {
       mounted.current = false;
+      abandonIntroLoginOrigin(loginOrigin);
     };
-  }, []);
+  }, [loginOrigin]);
 
   useEffect(() => {
     if (!isCanonicalStep(params.step)) {
@@ -104,10 +112,11 @@ export default function WelcomeScreen() {
   if (mode === "first-run" && session) return <Redirect href="/(app)" />;
 
   const completeIntro = async (withFirstTrackIntent: boolean) => {
+    if (routeAuthorizationRef.current !== routeAuthorization) return;
     if (completionStarted.current) return;
     completionStarted.current = true;
     setIsCompleting(true);
-    const completionAuthorization = routeAuthorizationRef.current;
+    const completionAuthorization = routeAuthorization;
 
     if (mode === "replay") {
       if (mounted.current && routeAuthorizationRef.current === completionAuthorization) {
@@ -137,8 +146,12 @@ export default function WelcomeScreen() {
       ...eventProperties(),
       elapsedMs: Math.min(86_400_000, Math.max(0, now - startedAt.current)),
     });
-    grantIntroLoginPermit();
-    router.replace("/login");
+    if (!beginIntroLoginHandoff(loginOrigin)) return;
+    try {
+      router.replace("/login");
+    } catch {
+      cancelIntroLoginHandoff(loginOrigin);
+    }
   };
 
   return (

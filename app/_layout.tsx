@@ -22,6 +22,7 @@ import { UnistylesGestureHandlerRootView } from "@/src/components/UnistylesGestu
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { HIMU_FONTS } from "@/src/theme/fonts";
 import { UnistylesRuntime } from "@/src/theme/unistyles";
+import { observeIntroRouteTransition } from "@/src/experience/intro-login-permit";
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {
   useAuthInit();
@@ -52,6 +53,7 @@ function NavigatorShell() {
   const isLoading = useAuthStore((state) => state.isLoading);
   const { phase } = useAppTour();
   const segments = useSegments();
+  observeIntroRouteTransition(segments);
 
   if (isLoading) {
     return (

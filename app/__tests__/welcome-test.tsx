@@ -7,6 +7,7 @@ import WelcomeScreen from "@/app/welcome";
 import { PublicProductIntro } from "@/src/components/experience/PublicProductIntro";
 import {
   consumeIntroLoginPermit,
+  observeIntroRouteTransition,
 } from "@/src/experience/intro-login-permit";
 import i18n from "@/src/i18n";
 
@@ -94,6 +95,7 @@ async function renderWelcome(
   params: typeof mockSearchParams = { step: "1" },
   userId: string | null = null,
 ) {
+  observeIntroRouteTransition(["welcome"]);
   mockSearchParams = params;
   mockAuthState = { session: userId ? { user: { id: userId } } : null };
   return render(<WelcomeScreen />);
@@ -101,6 +103,7 @@ async function renderWelcome(
 
 describe("public three-step introduction", () => {
   beforeEach(async () => {
+    observeIntroRouteTransition(["test-reset"]);
     consumeIntroLoginPermit();
     mockRouterSetParams.mockReset();
     mockRouterReplace.mockReset();
@@ -245,11 +248,12 @@ describe("public three-step introduction", () => {
       expect.arrayContaining([expect.stringContaining("raw")]),
     );
 
-    await screen.unmount();
+    observeIntroRouteTransition(["(auth)", "login"]);
     mockIntroIsSeen.mockResolvedValue(false);
     const auth = await render(<AuthLayout />);
     expect(await auth.findByTestId("auth-stack")).toBeTruthy();
     expect(auth.queryByText("redirect:/welcome?step=1")).toBeNull();
+    await screen.unmount();
   });
 
   it("locks completion across double taps and primary-to-secondary races while storage settles", async () => {
@@ -311,15 +315,32 @@ describe("public three-step introduction", () => {
     const screen = await renderWelcome({ step: "3" });
     await fireEvent.press(screen.getByRole("button", { name: "Create my first track" }));
     expect(mockRouterReplace).toHaveBeenCalledWith("/login");
-    await screen.unmount();
 
     now.mockReturnValue(1_060_000);
+    observeIntroRouteTransition(["(auth)", "login"]);
     mockIntroIsSeen.mockResolvedValue(false);
     const auth = await render(<AuthLayout />);
 
     expect(await auth.findByText("redirect:/welcome?step=1")).toBeTruthy();
     expect(auth.queryByTestId("auth-stack")).toBeNull();
+    await screen.unmount();
     now.mockRestore();
+  });
+
+  it("cancels the Login bypass when router replacement fails", async () => {
+    mockRouterReplace.mockImplementationOnce(() => {
+      throw new Error("router unavailable");
+    });
+    const screen = await renderWelcome({ step: "3" });
+
+    await fireEvent.press(screen.getByRole("button", { name: "Create my first track" }));
+
+    expect(mockWriteFirstTrack).toHaveBeenCalledTimes(1);
+    expect(mockIntroMarkSeen).toHaveBeenCalledTimes(1);
+    expect(consumeIntroLoginPermit()).toBe(false);
+    mockIntroIsSeen.mockResolvedValue(false);
+    const auth = await render(<AuthLayout />);
+    expect(await auth.findByText("redirect:/welcome?step=1")).toBeTruthy();
   });
 
   it("uses top-aligned scroll flow below 600px while preserving one readable card", async () => {
@@ -371,6 +392,8 @@ describe("public three-step introduction", () => {
 
 describe("auth intro eligibility gate", () => {
   beforeEach(() => {
+    observeIntroRouteTransition(["test-reset"]);
+    consumeIntroLoginPermit();
     mockAuthState = { session: null };
     mockIntroIsSeen.mockReset();
     mockTrackProductEvent.mockReset().mockResolvedValue(undefined);

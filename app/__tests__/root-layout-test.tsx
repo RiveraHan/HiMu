@@ -2,6 +2,12 @@
 import { render, within } from "@testing-library/react-native";
 
 import RootLayout from "@/app/_layout";
+import {
+  beginIntroLoginHandoff,
+  consumeIntroLoginPermit,
+  observeIntroRouteTransition,
+  registerIntroLoginOrigin,
+} from "@/src/experience/intro-login-permit";
 
 let mockFontState: [boolean, Error | null] = [true, null];
 let mockThemeName = "dark";
@@ -203,6 +209,8 @@ const PRIVATE_ROUTES = [
 
 describe("root layout ownership and route protection", () => {
   beforeEach(() => {
+    observeIntroRouteTransition(["test-reset"]);
+    consumeIntroLoginPermit();
     mockAuthState = authState(null, false);
     mockFontState = [true, null];
     mockThemeName = "dark";
@@ -310,6 +318,21 @@ describe("root layout ownership and route protection", () => {
     expect(signedIn.getByTestId("route-welcome")).toBeTruthy();
     expect(signedIn.queryByTestId("route-(app)")).toBeNull();
     expect(signedIn.queryByTestId("desktop-rail")).toBeNull();
+  });
+
+  it("observes the exact welcome-to-Login transition for the scoped handoff", async () => {
+    mockRequestedRoute = "welcome";
+    mockSegments = ["welcome"];
+    const screen = await render(<RootLayout />);
+    const origin = Symbol("root-welcome-origin");
+    registerIntroLoginOrigin(origin);
+    expect(beginIntroLoginHandoff(origin)).toBe(true);
+
+    mockRequestedRoute = "(auth)";
+    mockSegments = ["(auth)", "login"];
+    await screen.rerender(<RootLayout />);
+
+    expect(consumeIntroLoginPermit()).toBe(true);
   });
 
   it.each(PRIVATE_ROUTES)("mounts the requested private route %s with a session", async (route) => {
