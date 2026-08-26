@@ -3,6 +3,7 @@ import { Button, Text } from "@/src/components";
 import { LoginHero } from "@/src/components/auth/LoginHero";
 import { GoogleIcon } from "@/src/components/icons";
 import { useToast } from "@/src/hooks/use-toast";
+import { useAuthStore } from "@/src/stores/auth-store";
 import { publicHttpsUrl } from "@/src/utils/public-url";
 import { Fragment, useState } from "react";
 import { Linking, Pressable, View } from "react-native";
@@ -61,6 +62,17 @@ export default function LoginScreen() {
           loadingLabel={t("common.auth.signingIn")}
           onPress={handleGoogleSignIn}
         />
+        {__DEV__ && process.env.EXPO_PUBLIC_BETA_SMOKE === "1" ? (
+          <Button
+            variant="ghost"
+            label="Continue beta smoke"
+            onPress={() => {
+              useAuthStore.getState().setSession({
+                user: { id: "beta-smoke-local-user" },
+              } as never);
+            }}
+          />
+        ) : null}
       </View>
 
       {legalLinks.length > 0 ? (

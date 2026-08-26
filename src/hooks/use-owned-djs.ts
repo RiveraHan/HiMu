@@ -30,6 +30,11 @@ export function useOwnedDjs() {
   return useQuery({
     queryKey: queryKeys.djs.owned(userId),
     enabled: !!userId,
-    queryFn: () => fetchOwnedDjs(userId!),
+    queryFn: async () => {
+      if (__DEV__ && process.env.EXPO_PUBLIC_BETA_SMOKE === "1") {
+        if (userId === "beta-smoke-local-user") return [];
+      }
+      return fetchOwnedDjs(userId!);
+    },
   });
 }

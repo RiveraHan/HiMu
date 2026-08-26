@@ -3,7 +3,7 @@
     "name": "HiMu",
     "slug": "himu",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "himu",
     "userInterfaceStyle": "dark",

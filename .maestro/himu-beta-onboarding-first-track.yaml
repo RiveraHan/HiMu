@@ -1,0 +1,21 @@
+appId: com.himu.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "From an emotion to a track"
+- tapOn: "Continue"
+- tapOn: "Continue"
+- tapOn: "Create my first track"
+- assertVisible: "Welcome to HiMu"
+- tapOn: "Continue beta smoke"
+- assertVisible: "Create your DJ"
+- setOrientation: LANDSCAPE
+- assertVisible: "Create your DJ"
+
+# Pending manual device matrix (the local CI sandbox has no usable ADB daemon,
+# Maestro binary, or tablet AVD): run this flow on the 320x640 phone and
+# 1280x800 tablet with EXPO_PUBLIC_BETA_SMOKE=1. On each serial, also run
+# `adb -s SERIAL shell settings put system user_rotation 1` and reassert the
+# current Create your DJ screen. Repeat the critical flow after
+# `adb -s SERIAL shell settings put system font_scale 1.5` and again at 2.0,
+# scrolling as needed to prove every action remains reachable.

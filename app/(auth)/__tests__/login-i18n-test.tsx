@@ -7,6 +7,7 @@ import i18n from "@/src/i18n";
 import { darkTheme, lightTheme } from "@/src/theme/theme";
 
 const mockToastError = jest.fn();
+const mockSetSession = jest.fn();
 let mockWindowWidth = 390;
 
 function resolveAtWidth<T>(value: T | { xs?: T; xl?: T }, width: number): T | undefined {
@@ -72,19 +73,43 @@ jest.mock("@/src/hooks/use-toast", () => ({
   useToast: () => ({ error: mockToastError, info: jest.fn() }),
 }));
 
+jest.mock("@/src/stores/auth-store", () => ({
+  useAuthStore: {
+    getState: () => ({ setSession: (...args: unknown[]) => mockSetSession(...args) }),
+  },
+}));
+
 describe("Login translations", () => {
   beforeEach(async () => {
     mockWindowWidth = 390;
     await i18n.changeLanguage("es");
     mockToastError.mockClear();
+    mockSetSession.mockClear();
     jest.mocked(authApi.signInWithGoogle).mockReset();
     delete process.env.EXPO_PUBLIC_TERMS_URL;
     delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+    delete process.env.EXPO_PUBLIC_BETA_SMOKE;
     jest.spyOn(Linking, "openURL").mockResolvedValue(true);
   });
 
   afterEach(() => {
+    delete process.env.EXPO_PUBLIC_BETA_SMOKE;
     jest.restoreAllMocks();
+  });
+
+  it("exposes a synthetic local session only through the explicit debug smoke action", async () => {
+    const ordinary = await render(<LoginScreen />);
+    expect(ordinary.queryByRole("button", { name: "Continue beta smoke" })).toBeNull();
+    await ordinary.unmount();
+
+    process.env.EXPO_PUBLIC_BETA_SMOKE = "1";
+    const smoke = await render(<LoginScreen />);
+    await fireEvent.press(smoke.getByRole("button", { name: "Continue beta smoke" }));
+
+    expect(mockSetSession).toHaveBeenCalledTimes(1);
+    expect(mockSetSession).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "beta-smoke-local-user" }) }),
+    );
   });
 
   it("renders without initializing Supabase when public configuration is absent", async () => {

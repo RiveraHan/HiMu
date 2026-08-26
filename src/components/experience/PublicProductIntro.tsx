@@ -1,7 +1,16 @@
 import { GlassCard } from "@/src/components/GlassCard";
 import { Text } from "@/src/components/Text";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
-import { Pressable, ScrollView, useWindowDimensions, View } from "react-native";
+import { useEffect, useRef } from "react";
+import * as ReactNative from "react-native";
+import {
+  AccessibilityInfo,
+  Platform,
+  Pressable,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
@@ -67,7 +76,8 @@ export function PublicProductIntro({ step, callbacks }: Props) {
   const { t } = useTranslation();
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const lowHeight = height < 600;
+  const headingRef = useRef<View>(null);
+  const lowHeight = height - insets.top - insets.bottom < 600;
   const pageKey = PAGE_KEYS[step - 1];
   const title = t(`onboarding.publicIntro.pages.${pageKey}.title`);
   const body = t(`onboarding.publicIntro.pages.${pageKey}.body`);
@@ -77,6 +87,15 @@ export function PublicProductIntro({ step, callbacks }: Props) {
   });
   const isFinal = step === PAGE_KEYS.length;
   const actionsDisabled = callbacks.disabled ?? false;
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      (headingRef.current as unknown as HTMLElement | null)?.focus();
+      return;
+    }
+    const node = ReactNative.findNodeHandle(headingRef.current);
+    if (node != null) AccessibilityInfo.setAccessibilityFocus(node);
+  }, [step]);
 
   return (
     <ScrollView
@@ -102,30 +121,55 @@ export function PublicProductIntro({ step, callbacks }: Props) {
         ]}
       >
         <GlassCard level={2} style={styles.card} testID="public-intro-card">
-          {step > 1 ? (
-            <IntroAction
-              label={t("onboarding.publicIntro.actions.back")}
-              onPress={callbacks.onBack}
-              disabled={actionsDisabled}
-            />
-          ) : null}
-
           <Text
+            aria-valuemax={PAGE_KEYS.length}
+            aria-valuemin={1}
+            aria-valuenow={step}
+            aria-valuetext={pageCount}
+            accessibilityLabel={pageCount}
             accessibilityLiveRegion="polite"
+            accessibilityRole="progressbar"
+            accessibilityValue={{
+              min: 1,
+              max: PAGE_KEYS.length,
+              now: step,
+              text: pageCount,
+            }}
             style={styles.pageCount}
+            testID="public-intro-progress"
             variant="labelCaps"
             color="onSurfaceVariant"
           >
             {pageCount}
           </Text>
-          <Text accessibilityRole="header" accessibilityLabel={title} variant="h1">
-            {title}
-          </Text>
-          <Text variant="bodyLg" color="onSurfaceVariant" style={styles.body}>
+          <View
+            accessible
+            accessibilityLabel={title}
+            accessibilityRole="header"
+            focusable
+            ref={headingRef}
+            testID="public-intro-heading"
+          >
+            <Text variant="h1">{title}</Text>
+          </View>
+          <Text
+            variant="bodyLg"
+            color="onSurfaceVariant"
+            style={styles.body}
+            testID="public-intro-body"
+          >
             {body}
           </Text>
 
-          <View style={styles.actions}>
+          <View style={styles.actions} testID="public-intro-actions">
+            {step > 1 ? (
+              <IntroAction
+                label={t("onboarding.publicIntro.actions.back")}
+                onPress={callbacks.onBack}
+                disabled={actionsDisabled}
+                testID="public-intro-back-action"
+              />
+            ) : null}
             <IntroAction
               label={t(
                 isFinal
@@ -141,6 +185,7 @@ export function PublicProductIntro({ step, callbacks }: Props) {
               label={t("onboarding.publicIntro.actions.existing")}
               onPress={callbacks.onExistingAccount}
               disabled={actionsDisabled}
+              testID="public-intro-existing-action"
             />
           </View>
         </GlassCard>

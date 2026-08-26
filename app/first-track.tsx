@@ -1,6 +1,12 @@
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -58,6 +64,8 @@ export function FirstTrackGate() {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
   const insets = useSafeAreaInsets();
+  const { height, fontScale } = useWindowDimensions();
+  const compactHeight = height - insets.top - insets.bottom < 600 || fontScale >= 1.5;
   const userId = useCurrentUser()?.id ?? null;
   const ownedDjs = useOwnedDjs();
   const [storageError, setStorageError] = useState<StorageResolutionError | null>(
@@ -293,16 +301,21 @@ export function FirstTrackGate() {
   );
 
   return (
-    <View
-      style={[
-        styles.root,
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        compactHeight ? styles.contentCompact : styles.contentCentered,
         {
           paddingTop: insets.top + theme.spacing.gutter,
+          paddingRight: insets.right + theme.spacing.gutter,
           paddingBottom: insets.bottom + theme.spacing.gutter,
+          paddingLeft: insets.left + theme.spacing.gutter,
         },
       ]}
+      style={styles.root}
+      testID="first-track-scroll"
     >
-      <View style={styles.card}>
+      <View style={styles.card} testID="first-track-card">
         {content}
         <Button
           variant="ghost"
@@ -312,16 +325,23 @@ export function FirstTrackGate() {
           }}
         />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: theme.spacing.gutter,
     backgroundColor: theme.colors.background,
+  },
+  content: {
+    flexGrow: 1,
+  },
+  contentCentered: {
+    justifyContent: "center",
+  },
+  contentCompact: {
+    justifyContent: "flex-start",
   },
   card: {
     width: "100%",

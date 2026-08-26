@@ -1,4 +1,5 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleSheet as RNStyleSheet } from "react-native";
 
 import FirstTrackScreen, {
   resolveFirstTrackDestination,
@@ -46,6 +47,8 @@ function query(
 
 let mockCurrentUser: { id: string } | null = { id: "user-a" };
 let mockOwnedDjsQuery = query();
+let mockWindow = { width: 390, height: 844, fontScale: 1 };
+let mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const mockRouterReplace = jest.fn();
 const mockPendingRead = jest.fn();
 const mockPendingConsume = jest.fn();
@@ -108,7 +111,15 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  useSafeAreaInsets: () => mockInsets,
+}));
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({
+    ...mockWindow,
+    scale: 1,
+  }),
 }));
 
 describe("owned DJ resolution", () => {
@@ -182,6 +193,8 @@ describe("FirstTrackGate", () => {
     await i18n.changeLanguage("en");
     mockCurrentUser = { id: "user-a" };
     mockOwnedDjsQuery = query();
+    mockWindow = { width: 390, height: 844, fontScale: 1 };
+    mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     mockRouterReplace.mockClear();
     mockPendingConsume.mockReset().mockResolvedValue(true);
     mockPendingClear.mockReset().mockResolvedValue(undefined);
@@ -521,6 +534,97 @@ describe("FirstTrackGate", () => {
     await act(async () => consumption.resolve(true));
 
     expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  it("uses a four-edge safe-area scroll flow with a bounded readable card", async () => {
+    mockInsets = { top: 11, right: 22, bottom: 33, left: 44 };
+    const screen = await render(<FirstTrackScreen />);
+    const contentStyle = RNStyleSheet.flatten(
+      screen.getByTestId("first-track-scroll").props.contentContainerStyle,
+    );
+    const cardStyle = RNStyleSheet.flatten(
+      screen.getByTestId("first-track-card").props.style,
+    );
+
+    expect(contentStyle.paddingTop).toBeGreaterThan(mockInsets.top);
+    expect(contentStyle.paddingRight).toBeGreaterThan(mockInsets.right);
+    expect(contentStyle.paddingBottom).toBeGreaterThan(mockInsets.bottom);
+    expect(contentStyle.paddingLeft).toBeGreaterThan(mockInsets.left);
+    expect(cardStyle).toEqual(expect.objectContaining({ width: "100%", maxWidth: 560 }));
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+  });
+
+  it.each([
+    { height: 384, fontScale: 1.5 },
+    { height: 844, fontScale: 2 },
+  ])(
+    "top-aligns the scroll flow at $height px and font scale $fontScale",
+    async ({ height, fontScale }) => {
+      mockWindow = { width: 720, height, fontScale };
+      const screen = await render(<FirstTrackScreen />);
+
+      expect(
+        RNStyleSheet.flatten(
+          screen.getByTestId("first-track-scroll").props.contentContainerStyle,
+        ),
+      ).toEqual(expect.objectContaining({ justifyContent: "flex-start" }));
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+    },
+  );
+
+  it("does not repeat intent consumption when only dimensions or font scale change", async () => {
+    const consumption = deferred<boolean>();
+    mockPendingConsume.mockReturnValue(consumption.promise);
+    mockOwnedDjsQuery = query({
+      data: [{ id: "dj-a" }],
+      isPending: false,
+      isSuccess: true,
+    });
+    const screen = await render(<FirstTrackScreen />);
+    await waitFor(() => expect(mockPendingConsume).toHaveBeenCalledTimes(1));
+
+    mockWindow = { width: 720, height: 384, fontScale: 1.5 };
+    await screen.rerender(<FirstTrackScreen />);
+    mockWindow = { width: 1280, height: 800, fontScale: 2 };
+    await screen.rerender(<FirstTrackScreen />);
+
+    expect(mockPendingConsume).toHaveBeenCalledTimes(1);
+    await act(async () => consumption.resolve(true));
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledTimes(1));
+  });
+
+  it("localizes loading, query failure, retry, and cancel actions in Spanish", async () => {
+    await i18n.changeLanguage("es");
+    const loading = await render(<FirstTrackScreen />);
+    expect(loading.getByRole("progressbar", { name: "Revisando tus DJs" })).toBeTruthy();
+    expect(loading.getByText("Revisando tus DJs")).toBeTruthy();
+    expect(loading.getByRole("button", { name: "Cancelar" })).toBeTruthy();
+    await loading.unmount();
+
+    mockOwnedDjsQuery = query({ isPending: false, isError: true });
+    const failure = await render(<FirstTrackScreen />);
+    expect(failure.getByText("No pudimos revisar tus DJs")).toBeTruthy();
+    const retry = failure.getByRole("button", { name: "Reintentar" });
+    await fireEvent.press(retry);
+    expect(mockOwnedDjsQuery.refetch).toHaveBeenCalledTimes(1);
+    expect(failure.getByRole("button", { name: "Cancelar" })).toBeTruthy();
+  });
+
+  it("localizes storage failure and retry action in Spanish", async () => {
+    await i18n.changeLanguage("es");
+    mockPendingConsume.mockResolvedValue(false);
+    mockOwnedDjsQuery = query({
+      data: [{ id: "dj-a" }],
+      isPending: false,
+      isSuccess: true,
+    });
+    const screen = await render(<FirstTrackScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText("No pudimos completar este paso")).toBeTruthy();
+    });
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeTruthy();
   });
 });
 

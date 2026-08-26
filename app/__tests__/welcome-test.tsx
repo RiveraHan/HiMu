@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { StyleSheet as RNStyleSheet } from "react-native";
+import * as ReactNative from "react-native";
+import { AccessibilityInfo, StyleSheet as RNStyleSheet } from "react-native";
 
 import AuthLayout from "@/app/(auth)/_layout";
 import WelcomeScreen from "@/app/welcome";
@@ -12,6 +13,7 @@ import {
 import i18n from "@/src/i18n";
 
 const mockRouterSetParams = jest.fn();
+const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockIntroIsSeen = jest.fn<Promise<boolean>, [number]>();
 const mockIntroMarkSeen = jest.fn<Promise<void>, [number, number]>();
@@ -20,7 +22,8 @@ const mockTrackProductEvent = jest.fn<Promise<void>, [string, Record<string, unk
 
 let mockAuthState = { session: null as null | { user: { id: string } } };
 let mockSearchParams: { step?: string | string[]; mode?: string | string[] } = { step: "1" };
-let mockWindow = { width: 390, height: 844 };
+let mockWindow = { width: 390, height: 844, fontScale: 1 };
+let mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -61,12 +64,11 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   default: () => ({
     ...mockWindow,
     scale: 1,
-    fontScale: 1,
   }),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  useSafeAreaInsets: () => mockInsets,
 }));
 
 jest.mock("expo-router", () => {
@@ -84,6 +86,7 @@ jest.mock("expo-router", () => {
     Redirect: ({ href }: { href: string }) => <Text>{`redirect:${href}`}</Text>,
     Stack,
     router: {
+      push: (...args: unknown[]) => mockRouterPush(...args),
       setParams: (...args: unknown[]) => mockRouterSetParams(...args),
       replace: (...args: unknown[]) => mockRouterReplace(...args),
     },
@@ -106,6 +109,7 @@ describe("public three-step introduction", () => {
     observeIntroRouteTransition(["test-reset"]);
     consumeIntroLoginPermit();
     mockRouterSetParams.mockReset();
+    mockRouterPush.mockReset();
     mockRouterReplace.mockReset();
     mockIntroIsSeen.mockReset().mockResolvedValue(false);
     mockIntroMarkSeen.mockReset().mockResolvedValue(undefined);
@@ -113,7 +117,8 @@ describe("public three-step introduction", () => {
     mockTrackProductEvent.mockReset().mockResolvedValue(undefined);
     mockAuthState = { session: null };
     mockSearchParams = { step: "1" };
-    mockWindow = { width: 390, height: 844 };
+    mockWindow = { width: 390, height: 844, fontScale: 1 };
+    mockInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     await i18n.changeLanguage("en");
   });
 
@@ -125,7 +130,10 @@ describe("public three-step introduction", () => {
     expect(screen.getByText("Page 1 of 3")).toBeTruthy();
 
     await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
-    expect(mockRouterSetParams).toHaveBeenLastCalledWith({ step: "2" });
+    expect(mockRouterPush).toHaveBeenLastCalledWith({
+      pathname: "/welcome",
+      params: { step: "2" },
+    });
 
     mockSearchParams = { step: "2" };
     await screen.rerender(<WelcomeScreen />);
@@ -134,7 +142,10 @@ describe("public three-step introduction", () => {
     expect(screen.getByText("Page 2 of 3")).toBeTruthy();
 
     await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
-    expect(mockRouterSetParams).toHaveBeenLastCalledWith({ step: "3" });
+    expect(mockRouterPush).toHaveBeenLastCalledWith({
+      pathname: "/welcome",
+      params: { step: "3" },
+    });
 
     mockSearchParams = { step: "3" };
     await screen.rerender(<WelcomeScreen />);
@@ -170,7 +181,23 @@ describe("public three-step introduction", () => {
 
     await fireEvent.press(screen.getByRole("button", { name: "Back" }));
 
-    expect(mockRouterSetParams).toHaveBeenCalledWith({ step: "2" });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: "/welcome",
+      params: { step: "2" },
+    });
+    expect(mockRouterSetParams).not.toHaveBeenCalled();
+  });
+
+  it("preserves replay mode while valid user transitions create history entries", async () => {
+    const screen = await renderWelcome({ step: "1", mode: "replay" }, "user-a");
+
+    await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
+
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: "/welcome",
+      params: { step: "2", mode: "replay" },
+    });
+    expect(mockRouterSetParams).not.toHaveBeenCalled();
   });
 
   it("marks the intro seen for an existing account without creating intent", async () => {
@@ -344,7 +371,7 @@ describe("public three-step introduction", () => {
   });
 
   it("uses top-aligned scroll flow below 600px while preserving one readable card", async () => {
-    mockWindow = { width: 720, height: 599 };
+    mockWindow = { width: 720, height: 599, fontScale: 1 };
     const screen = await render(
       <PublicProductIntro
         step={1}
@@ -388,6 +415,118 @@ describe("public three-step introduction", () => {
       expect(style.minHeight ?? style.height ?? 0).toBeGreaterThanOrEqual(44);
     }
   });
+
+  it.each([
+    { height: 599, insets: { top: 0, right: 0, bottom: 0, left: 0 }, alignment: "flex-start" },
+    { height: 600, insets: { top: 0, right: 0, bottom: 0, left: 0 }, alignment: "center" },
+    { height: 600, insets: { top: 10, right: 0, bottom: 10, left: 0 }, alignment: "flex-start" },
+  ])(
+    "uses effective safe-area height at raw height $height with $insets.top/$insets.bottom insets",
+    async ({ height, insets, alignment }) => {
+      mockWindow = { width: 720, height, fontScale: 1 };
+      mockInsets = insets;
+      const screen = await render(
+        <PublicProductIntro
+          step={1}
+          mode="first-run"
+          callbacks={{
+            onBack: jest.fn(),
+            onContinue: jest.fn(),
+            onCreate: jest.fn(),
+            onExistingAccount: jest.fn(),
+          }}
+        />,
+      );
+
+      expect(
+        RNStyleSheet.flatten(screen.getByTestId("public-intro-content").props.style),
+      ).toEqual(expect.objectContaining({ justifyContent: alignment }));
+    },
+  );
+
+  it("places progress, heading, and body before every action and exposes progress values", async () => {
+    const screen = await render(
+      <PublicProductIntro
+        step={2}
+        mode="first-run"
+        callbacks={{
+          onBack: jest.fn(),
+          onContinue: jest.fn(),
+          onCreate: jest.fn(),
+          onExistingAccount: jest.fn(),
+        }}
+      />,
+    );
+    const renderedTree = JSON.stringify(screen.toJSON());
+    const expectedOrder = [
+      "public-intro-progress",
+      "public-intro-heading",
+      "public-intro-body",
+      "public-intro-back-action",
+      "public-intro-primary-action",
+      "public-intro-existing-action",
+    ];
+    const positions = expectedOrder.map((testID) =>
+      renderedTree.indexOf(`\"testID\":\"${testID}\"`)
+    );
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+    expect(screen.getByTestId("public-intro-progress")).toHaveProp(
+      "accessibilityValue",
+      { min: 1, max: 3, now: 2, text: "Page 2 of 3" },
+    );
+  });
+
+  it("moves accessibility focus to the new heading after a step transition", async () => {
+    const focus = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus");
+    const nodeHandle = jest.spyOn(ReactNative, "findNodeHandle").mockReturnValue(71);
+    const callbacks = {
+      onBack: jest.fn(),
+      onContinue: jest.fn(),
+      onCreate: jest.fn(),
+      onExistingAccount: jest.fn(),
+    };
+    const screen = await render(
+      <PublicProductIntro step={1} mode="first-run" callbacks={callbacks} />,
+    );
+    focus.mockClear();
+
+    await screen.rerender(
+      <PublicProductIntro step={2} mode="first-run" callbacks={callbacks} />,
+    );
+
+    await waitFor(() => expect(focus).toHaveBeenCalledWith(71));
+    expect(screen.getByTestId("public-intro-heading")).toHaveProp("focusable", true);
+    nodeHandle.mockRestore();
+  });
+
+  it.each([
+    ["en", 1, "From an emotion to a track", "Turn an idea, feeling, or moment into an original track."],
+    ["en", 2, "Choose who shapes it", "Create a DJ with its own sound and personality."],
+    ["en", 3, "Listen, save, and share", "Keep your result close and share it when it feels right."],
+    ["es", 1, "De una emoción a un track", "Convierte una idea, sentimiento o momento en un track original."],
+    ["es", 2, "Elige quién le da forma", "Crea un DJ con su propio sonido y personalidad."],
+    ["es", 3, "Escucha, guarda y comparte", "Mantén tu resultado cerca y compártelo cuando se sienta bien."],
+  ] as const)(
+    "renders complete %s copy for page %s",
+    async (locale, step, title, body) => {
+      await i18n.changeLanguage(locale);
+      const screen = await render(
+        <PublicProductIntro
+          step={step}
+          mode="first-run"
+          callbacks={{
+            onBack: jest.fn(),
+            onContinue: jest.fn(),
+            onCreate: jest.fn(),
+            onExistingAccount: jest.fn(),
+          }}
+        />,
+      );
+      expect(screen.getByRole("header", { name: title })).toBeTruthy();
+      expect(screen.getByText(body)).toBeTruthy();
+    },
+  );
 });
 
 describe("auth intro eligibility gate", () => {

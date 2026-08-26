@@ -160,8 +160,18 @@ export default function WelcomeScreen() {
       mode={mode}
       callbacks={{
         disabled: isCompleting,
-        onBack: () => router.setParams({ step: String(step - 1) }),
-        onContinue: () => router.setParams({ step: String(step + 1) }),
+        onBack: () => router.push({
+          pathname: "/welcome",
+          params: mode === "replay"
+            ? { step: String(step - 1), mode: "replay" }
+            : { step: String(step - 1) },
+        }),
+        onContinue: () => router.push({
+          pathname: "/welcome",
+          params: mode === "replay"
+            ? { step: String(step + 1), mode: "replay" }
+            : { step: String(step + 1) },
+        }),
         onCreate: () => completeIntro(true),
         onExistingAccount: () => completeIntro(false),
       }}

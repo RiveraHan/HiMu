@@ -16,6 +16,7 @@ async function createFixture() {
   await Promise.all([
     writeFile(path.join(exportDirectory, "index.html"), "Manrope-Regular Manrope-SemiBold Manrope-Bold"),
     writeFile(path.join(exportDirectory, "login.html"), "login"),
+    writeFile(path.join(exportDirectory, "welcome.html"), "welcome"),
     writeFile(path.join(exportDirectory, "profile.html"), "profile"),
     writeFile(path.join(exportDirectory, "player.html"), "player"),
     writeFile(path.join(bundleDirectory, "bundle.any-hash.js"), '"himu-image-fallback"'),
@@ -61,6 +62,13 @@ describe("web foundation checker", () => {
   test("accepts a complete export with Expo-style opaque font hashes", async () => {
     await withFixture(async (exportDirectory) => {
       await expect(verifyWebFoundation(exportDirectory)).resolves.toBeUndefined();
+    });
+  });
+
+  test("requires the public Welcome route artifact", async () => {
+    await withFixture(async (exportDirectory) => {
+      await unlink(path.join(exportDirectory, "welcome.html"));
+      await expectCheckerFailure(exportDirectory, "Welcome route artifact is missing");
     });
   });
 
