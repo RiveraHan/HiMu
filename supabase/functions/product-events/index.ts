@@ -1,22 +1,14 @@
 import { cors, json } from "../_shared/http.ts";
 import { admin, getUser } from "../_shared/supabase.ts";
 import {
+  authenticateProductEventRequest,
   handleProductEventEdgeRequest,
   type ProductEventEdgeDependencies,
   type ProductEventRecordResult,
 } from "./handler.ts";
 
 const dependencies: ProductEventEdgeDependencies = {
-  authenticate: async (req) => {
-    const user = await getUser(req);
-    if (user) return { verified: true, userId: user.id };
-
-    const authorization = req.headers.get("Authorization");
-    const anonymousKey = Deno.env.get("SUPABASE_ANON_KEY");
-    return anonymousKey && authorization === `Bearer ${anonymousKey}`
-      ? { verified: true, userId: null }
-      : { verified: false };
-  },
+  authenticate: (req) => authenticateProductEventRequest(req, getUser),
   record: async (event, userId) => {
     const { data, error } = await admin.rpc("record_product_event", {
       p_event_id: event.eventId,

@@ -48,7 +48,7 @@ on public.product_events (installation_id, created_at desc);
 
 alter table public.product_events enable row level security;
 revoke all on table public.product_events from public, anon, authenticated;
-grant all on table public.product_events to service_role;
+grant select, insert on table public.product_events to service_role;
 
 create function public.record_product_event(
   p_event_id uuid,

@@ -60,10 +60,26 @@ export type ProductEventDependencies = {
 
 export type ProductEventEdgeDependencies = ProductEventDependencies & {
   authenticate(req: Request): Promise<
-    | { verified: true; userId: string | null }
+    | { verified: true; userId: string }
     | { verified: false }
   >;
 };
+
+export type ProductEventAuthUser = Readonly<{ id: string }>;
+
+export async function authenticateProductEventRequest(
+  req: Request,
+  getVerifiedUser: (req: Request) => Promise<ProductEventAuthUser | null>,
+): Promise<{ verified: true; userId: string } | { verified: false }> {
+  try {
+    const user = await getVerifiedUser(req);
+    return user
+      ? { verified: true, userId: user.id }
+      : { verified: false };
+  } catch {
+    return { verified: false };
+  }
+}
 
 type ProductEventHttpResult = {
   status: number;
@@ -307,7 +323,7 @@ export async function handleProductEventEdgeRequest(
   let userId: string | null = null;
   if (hasAuthorization) {
     let authentication:
-      | { verified: true; userId: string | null }
+      | { verified: true; userId: string }
       | { verified: false };
     try {
       authentication = await deps.authenticate(req);

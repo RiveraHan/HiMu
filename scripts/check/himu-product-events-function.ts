@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  authenticateProductEventRequest,
   handleProductEventEdgeRequest,
   handleProductEventRequest,
   parseProductEventEnvelope,
@@ -97,25 +98,28 @@ async function main() {
   assert.equal(authCalls, 0);
   assert.equal(anonymousUser, null);
 
-  let credentialUser: string | null | undefined = undefined;
-  const anonymousCredential = await handleProductEventEdgeRequest(
-    request(envelope(), { Authorization: "Bearer verified-anonymous-project-key" }),
+  let anonymousBearerAuthCalls = 0;
+  const anonymousBearer = await handleProductEventEdgeRequest(
+    request(envelope(), { Authorization: "Bearer public-anon-key" }),
     {
-      authenticate: async () => ({ verified: true, userId: null }),
-      record: async (_event, userId) => {
-        credentialUser = userId;
-        return "accepted";
-      },
+      authenticate: (req) => authenticateProductEventRequest(req, async () => {
+        anonymousBearerAuthCalls += 1;
+        return null;
+      }),
+      record: async () => "accepted",
     },
   );
-  assert.equal(anonymousCredential.status, 202);
-  assert.equal(credentialUser, null);
+  assert.deepEqual(anonymousBearer, {
+    status: 401,
+    body: { error: "unauthorized", code: "unauthorized" },
+  });
+  assert.equal(anonymousBearerAuthCalls, 1);
 
   let invalidTokenWrites = 0;
   const invalidToken = await handleProductEventEdgeRequest(
     request(envelope(), { Authorization: "Bearer invalid-token" }),
     {
-      authenticate: async () => ({ verified: false }),
+      authenticate: (req) => authenticateProductEventRequest(req, async () => null),
       record: async () => {
         invalidTokenWrites += 1;
         return "accepted";
@@ -131,7 +135,9 @@ async function main() {
   const verified = await handleProductEventEdgeRequest(
     request(envelope(), { Authorization: "Bearer verified-token" }),
     {
-      authenticate: async () => ({ verified: true, userId: USER_ID }),
+      authenticate: (req) => authenticateProductEventRequest(req, async () => ({
+        id: USER_ID,
+      })),
       record: async (_event, userId) => {
         assert.equal(userId, USER_ID);
         return "accepted";

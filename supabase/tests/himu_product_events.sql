@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(17);
+select plan(24);
 
 select has_table(
   'public',
@@ -36,6 +36,26 @@ select is(
   has_table_privilege('service_role', 'public.product_events', 'SELECT'),
   true,
   'service role can inspect product-event rows'
+);
+select is(
+  has_table_privilege('service_role', 'public.product_events', 'INSERT'),
+  true,
+  'service role can append product-event rows'
+);
+select is(
+  has_table_privilege('service_role', 'public.product_events', 'UPDATE'),
+  false,
+  'service role cannot update accepted product-event rows'
+);
+select is(
+  has_table_privilege('service_role', 'public.product_events', 'DELETE'),
+  false,
+  'service role cannot delete accepted product-event rows'
+);
+select is(
+  has_table_privilege('service_role', 'public.product_events', 'TRUNCATE'),
+  false,
+  'service role cannot truncate accepted product-event rows'
 );
 
 select is(
@@ -98,6 +118,27 @@ select is(
   (select count(*) from public.product_events where event_id = '60000000-0000-4000-8000-000000000001'),
   1::bigint,
   'a duplicate event ID does not insert a second row'
+);
+select throws_ok(
+  $$update public.product_events
+    set occurred_at = '2026-08-25 12:00:02+00'
+    where event_id = '60000000-0000-4000-8000-000000000001'$$,
+  '42501',
+  null,
+  'service role cannot mutate an accepted event'
+);
+select throws_ok(
+  $$delete from public.product_events
+    where event_id = '60000000-0000-4000-8000-000000000001'$$,
+  '42501',
+  null,
+  'service role cannot remove an accepted event'
+);
+select throws_ok(
+  $$truncate table public.product_events$$,
+  '42501',
+  null,
+  'service role cannot truncate accepted events'
 );
 
 select throws_ok(

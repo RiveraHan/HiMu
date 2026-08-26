@@ -23,6 +23,27 @@ export type ProductAnalyticsDependencies = {
   transport(event: ProductEventEnvelope): Promise<void>;
 };
 
+export type ProductEventTransportDependencies = {
+  functionUrl: string;
+  publicApiKey: string;
+  accessToken(): Promise<string | null>;
+  invoke(
+    name: "product-events",
+    options: {
+      body: ProductEventEnvelope;
+      headers: { Authorization: string };
+    },
+  ): Promise<{ error: unknown | null }>;
+  fetch(
+    input: string,
+    init: {
+      method: "POST";
+      headers: { apikey: string; "Content-Type": "application/json" };
+      body: string;
+    },
+  ): Promise<{ ok: boolean }>;
+};
+
 type QueuedProductEvent = {
   envelope: ProductEventEnvelope;
   attempts: number;
@@ -46,6 +67,32 @@ const STORAGE_KEY = "himu.product-analytics.v1";
 const MAX_QUEUE_SIZE = 50;
 const MAX_DELIVERY_ATTEMPTS = 3;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function createProductEventTransport(
+  deps: ProductEventTransportDependencies,
+): (event: ProductEventEnvelope) => Promise<void> {
+  return async (event) => {
+    const accessToken = await deps.accessToken();
+    if (accessToken) {
+      const { error } = await deps.invoke("product-events", {
+        body: event,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (error) throw new Error("product_event_delivery_failed");
+      return;
+    }
+
+    const response = await deps.fetch(deps.functionUrl, {
+      method: "POST",
+      headers: {
+        apikey: deps.publicApiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(event),
+    });
+    if (!response.ok) throw new Error("product_event_delivery_failed");
+  };
+}
 
 function object(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -220,16 +267,22 @@ export function createProductAnalyticsClient(
   };
 }
 
+const productEventTransport = createProductEventTransport({
+  functionUrl: `${process.env.EXPO_PUBLIC_SUPABASE_URL ?? ""}/functions/v1/product-events`,
+  publicApiKey: process.env.EXPO_PUBLIC_SUPABASE_KEY ?? "",
+  accessToken: async () => {
+    const { data, error } = await supabase.auth.getSession();
+    return error ? null : data.session?.access_token ?? null;
+  },
+  invoke: (name, options) => supabase.functions.invoke(name, options),
+  fetch: (input, init) => fetch(input, init),
+});
+
 const productAnalytics = createProductAnalyticsClient({
   storage: secureStorage,
   randomUUID,
   now: () => new Date(),
-  transport: async (event) => {
-    const { error } = await supabase.functions.invoke("product-events", {
-      body: event,
-    });
-    if (error) throw new Error("product_event_delivery_failed");
-  },
+  transport: productEventTransport,
 });
 
 export function trackProductEvent(

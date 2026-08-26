@@ -1,6 +1,7 @@
 import type { ProductEventEnvelope } from "../../../supabase/functions/product-events/handler";
 import {
   createProductAnalyticsClient,
+  createProductEventTransport,
   trackProductEvent,
   type ProductAnalyticsStorage,
 } from "../product-analytics";
@@ -18,6 +19,15 @@ const UUIDS = Array.from(
   { length: 80 },
   (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
 );
+
+const TRANSPORT_EVENT: ProductEventEnvelope = {
+  eventId: "00000000-0000-4000-8000-000000000001",
+  installationId: "00000000-0000-4000-8000-000000000002",
+  sessionId: "00000000-0000-4000-8000-000000000003",
+  name: "intro_viewed",
+  occurredAt: "2026-08-25T12:00:00.000Z",
+  properties: { flowVersion: 2, platform: "web", locale: "en" },
+};
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -86,6 +96,60 @@ test("delivers a valid allowlisted event without creative or identity content", 
   expect(JSON.stringify(transport.mock.calls)).not.toMatch(
     /idea|title|lyrics|email|url|token|provider|djName|identityConcept/i,
   );
+});
+
+test("anonymous production transport sends only the public API key and no authorization", async () => {
+  const invoke = jest.fn();
+  const fetchRequest = jest.fn(async (
+    _input: string,
+    _init: {
+      headers: { apikey: string; "Content-Type": "application/json" };
+    },
+  ) => ({ ok: true }));
+  const transport = createProductEventTransport({
+    functionUrl: "https://project.example/functions/v1/product-events",
+    publicApiKey: "public-anon-key",
+    accessToken: async () => null,
+    invoke,
+    fetch: fetchRequest,
+  });
+
+  await transport(TRANSPORT_EVENT);
+
+  expect(invoke).not.toHaveBeenCalled();
+  expect(fetchRequest).toHaveBeenCalledWith(
+    "https://project.example/functions/v1/product-events",
+    expect.objectContaining({
+      method: "POST",
+      headers: {
+        apikey: "public-anon-key",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(TRANSPORT_EVENT),
+    }),
+  );
+  const headers = fetchRequest.mock.calls[0]?.[1]?.headers as Record<string, string>;
+  expect(Object.keys(headers).map((key) => key.toLowerCase())).not.toContain("authorization");
+});
+
+test("authenticated production transport invokes with the verified session access token", async () => {
+  const invoke = jest.fn(async () => ({ error: null }));
+  const fetchRequest = jest.fn();
+  const transport = createProductEventTransport({
+    functionUrl: "https://project.example/functions/v1/product-events",
+    publicApiKey: "public-anon-key",
+    accessToken: async () => "verified-user-token",
+    invoke,
+    fetch: fetchRequest,
+  });
+
+  await transport(TRANSPORT_EVENT);
+
+  expect(fetchRequest).not.toHaveBeenCalled();
+  expect(invoke).toHaveBeenCalledWith("product-events", {
+    body: TRANSPORT_EVENT,
+    headers: { Authorization: "Bearer verified-user-token" },
+  });
 });
 
 test("rejects unknown events, unknown properties, and cross-event property values", async () => {
