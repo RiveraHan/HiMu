@@ -5,7 +5,6 @@ import { Pressable, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   SlideInUp,
-  SlideOutUp,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -89,7 +88,6 @@ function ToastCard({
     <GestureDetector gesture={pan}>
       <Animated.View
         entering={SlideInUp.duration(300)}
-        exiting={SlideOutUp.duration(200)}
         style={[
           styles.root,
           { top: insets.top + theme.spacing.stackSm },
