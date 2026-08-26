@@ -212,6 +212,59 @@ async function clickLabel(cdp, label) {
   );
 }
 
+async function dispatchTab(cdp, shift = false) {
+  const modifiers = shift ? 8 : 0;
+  const key = {
+    key: "Tab",
+    code: "Tab",
+    modifiers,
+    windowsVirtualKeyCode: 9,
+    nativeVirtualKeyCode: 9,
+  };
+  await cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...key });
+  await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...key });
+  await evaluate(
+    cdp,
+    "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+  );
+}
+
+async function readFocusedAction(cdp, context) {
+  const focused = await evaluate(
+    cdp,
+    `(() => {
+      const active = document.activeElement;
+      return {
+        label: active?.getAttribute?.('aria-label') ?? active?.textContent?.trim() ?? null,
+        role: active?.getAttribute?.('role') ?? null,
+        testId: active?.getAttribute?.('data-testid') ?? null,
+        tagName: active?.tagName ?? null,
+      };
+    })()`,
+  );
+  if (focused.role !== "button" || !focused.label) {
+    throw new Error(
+      `Keyboard traversal left the production action order at ${context}: ${JSON.stringify(focused)}`,
+    );
+  }
+  return focused.label;
+}
+
+async function readKeyboardActionOrder(cdp, context) {
+  const forward = [];
+  for (let index = 0; index < 3; index += 1) {
+    await dispatchTab(cdp);
+    forward.push(await readFocusedAction(cdp, `${context} forward key ${index + 1}`));
+  }
+
+  const reverse = [forward[forward.length - 1]];
+  for (let index = 1; index < 3; index += 1) {
+    await dispatchTab(cdp, true);
+    reverse.push(await readFocusedAction(cdp, `${context} reverse key ${index}`));
+  }
+  return { forward, reverse };
+}
+
 async function traverseHistory(cdp, direction, expectedStep, width, height) {
   await evaluate(cdp, `window.history.${direction}()`);
   return readStep(cdp, expectedStep, width, height);
@@ -253,8 +306,16 @@ async function runCell(cdp, origin, locale, width, height, index) {
 
   await clickLabel(cdp, copy[locale].continue);
   const step2 = await readStep(cdp, 2, width, height, true);
+  const step2Keyboard = await readKeyboardActionOrder(
+    cdp,
+    `${locale} ${width}x${height} step 2`,
+  );
   await clickLabel(cdp, copy[locale].continue);
   const step3 = await readStep(cdp, 3, width, height, true);
+  const step3Keyboard = await readKeyboardActionOrder(
+    cdp,
+    `${locale} ${width}x${height} step 3`,
+  );
   const pushedEntries =
     (await evaluate(cdp, "window.__HIMU_ROUTER_PUSH_COUNT__ || 0")) - historyStart;
 
@@ -304,6 +365,10 @@ async function runCell(cdp, origin, locale, width, height, index) {
     width,
     height,
     steps: [initial, step2, step3],
+    keyboard: {
+      step2: step2Keyboard,
+      step3: step3Keyboard,
+    },
     history: {
       afterBack,
       afterSecondBack,

@@ -35,6 +35,17 @@ const headings = {
   ],
 };
 
+function expectedKeyboardOrder(locale, primary) {
+  const actionCopy = locale === "es"
+    ? { back: "Atrás", existing: "Ya tengo una cuenta" }
+    : { back: "Back", existing: "I already have an account" };
+  const forward = [actionCopy.back, primary, actionCopy.existing];
+  return {
+    forward,
+    reverse: [...forward].reverse(),
+  };
+}
+
 function assertSnapshot(snapshot, locale, step, width, height) {
   assert.equal(snapshot.viewportWidth, width);
   assert.equal(snapshot.viewportHeight, height);
@@ -107,6 +118,19 @@ async function main() {
     assertSnapshot(cell.steps[2], locale, 3, width, height);
     assert.equal(cell.steps[1].focusedTestId, "public-intro-heading");
     assert.equal(cell.steps[2].focusedTestId, "public-intro-heading");
+    const primaryCopy = locale === "es"
+      ? { step2: "Continuar", step3: "Crear mi primer track" }
+      : { step2: "Continue", step3: "Create my first track" };
+    assert.deepEqual(
+      cell.keyboard.step2,
+      expectedKeyboardOrder(locale, primaryCopy.step2),
+      `${locale} ${width}x${height} must traverse every step-2 action with real Tab and Shift+Tab input`,
+    );
+    assert.deepEqual(
+      cell.keyboard.step3,
+      expectedKeyboardOrder(locale, primaryCopy.step3),
+      `${locale} ${width}x${height} must traverse every step-3 action with real Tab and Shift+Tab input`,
+    );
     assert.deepEqual(cell.history, {
       afterBack: 2,
       afterSecondBack: 1,
@@ -134,7 +158,7 @@ async function main() {
   }
 
   process.stdout.write(
-    `Beta onboarding browser matrix passed: ${result.cells.length} locale/viewport cells, real history, reload/replay/resize, and 200% effective zoom reachability.\n`,
+    `Beta onboarding browser matrix passed: ${result.cells.length} locale/viewport cells, real CDP Tab/Shift+Tab order, history, reload/replay/resize, and 200% effective zoom reachability.\n`,
   );
 }
 

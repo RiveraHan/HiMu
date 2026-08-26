@@ -2,7 +2,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
 
-const projectRoot = path.resolve(__dirname, "../..");
+const projectRootArgument = process.argv.indexOf("--project-root");
+const projectRoot = projectRootArgument === -1
+  ? path.resolve(__dirname, "../..")
+  : path.resolve(process.argv[projectRootArgument + 1] ?? "");
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Beta responsive contract failed: ${message}`);
@@ -22,39 +25,116 @@ function parse(relativePath: string, contents: string) {
   );
 }
 
-function guardContainsBoth(sourceFile: ts.SourceFile, expression: ts.Expression) {
-  const text = expression.getText(sourceFile);
-  return (
-    /\b__DEV__\b/.test(text) &&
-    /process\.env\.EXPO_PUBLIC_BETA_SMOKE\s*===\s*["']1["']/.test(text)
-  );
-}
-
 function isInside(node: ts.Node, ancestor: ts.Node) {
   return node.pos >= ancestor.pos && node.end <= ancestor.end;
 }
 
-function isDoublyGuarded(sourceFile: ts.SourceFile, node: ts.Node) {
+type SmokeGuardFact = "development" | "smoke-flag" | "smoke-user";
+
+function unparenthesized(expression: ts.Expression): ts.Expression {
+  return ts.isParenthesizedExpression(expression)
+    ? unparenthesized(expression.expression)
+    : expression;
+}
+
+function isSmokeEnvironmentAccess(expression: ts.Expression) {
+  const candidate = unparenthesized(expression);
+  return (
+    ts.isPropertyAccessExpression(candidate) &&
+    candidate.name.text === "EXPO_PUBLIC_BETA_SMOKE" &&
+    ts.isPropertyAccessExpression(candidate.expression) &&
+    candidate.expression.name.text === "env" &&
+    ts.isIdentifier(candidate.expression.expression) &&
+    candidate.expression.expression.text === "process"
+  );
+}
+
+function isStringLiteral(expression: ts.Expression, value: string) {
+  const candidate = unparenthesized(expression);
+  return ts.isStringLiteral(candidate) && candidate.text === value;
+}
+
+function equalityFact(expression: ts.BinaryExpression): SmokeGuardFact | null {
+  if (expression.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) return null;
+
+  if (
+    (isSmokeEnvironmentAccess(expression.left) && isStringLiteral(expression.right, "1")) ||
+    (isStringLiteral(expression.left, "1") && isSmokeEnvironmentAccess(expression.right))
+  ) {
+    return "smoke-flag";
+  }
+
+  const isUserId = (candidate: ts.Expression) => {
+    const unwrapped = unparenthesized(candidate);
+    return ts.isIdentifier(unwrapped) && unwrapped.text === "userId";
+  };
+  if (
+    (isUserId(expression.left) && isStringLiteral(expression.right, "beta-smoke-local-user")) ||
+    (isStringLiteral(expression.left, "beta-smoke-local-user") && isUserId(expression.right))
+  ) {
+    return "smoke-user";
+  }
+
+  return null;
+}
+
+function positiveConjunctiveFacts(expression: ts.Expression): Set<SmokeGuardFact> {
+  const candidate = unparenthesized(expression);
+  if (
+    ts.isBinaryExpression(candidate) &&
+    candidate.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+  ) {
+    return new Set([
+      ...positiveConjunctiveFacts(candidate.left),
+      ...positiveConjunctiveFacts(candidate.right),
+    ]);
+  }
+  if (ts.isIdentifier(candidate) && candidate.text === "__DEV__") {
+    return new Set(["development"]);
+  }
+  if (ts.isBinaryExpression(candidate)) {
+    const fact = equalityFact(candidate);
+    if (fact) return new Set([fact]);
+  }
+  return new Set();
+}
+
+function dominatingSmokeFacts(node: ts.Node) {
+  const facts = new Set<SmokeGuardFact>();
   let current: ts.Node | undefined = node;
   while (current?.parent) {
     const parent = current.parent;
     if (
       ts.isConditionalExpression(parent) &&
-      isInside(node, parent.whenTrue) &&
-      guardContainsBoth(sourceFile, parent.condition)
+      isInside(node, parent.whenTrue)
     ) {
-      return true;
+      positiveConjunctiveFacts(parent.condition).forEach((fact) => facts.add(fact));
     }
     if (
       ts.isIfStatement(parent) &&
-      isInside(node, parent.thenStatement) &&
-      guardContainsBoth(sourceFile, parent.expression)
+      isInside(node, parent.thenStatement)
     ) {
-      return true;
+      positiveConjunctiveFacts(parent.expression).forEach((fact) => facts.add(fact));
+    }
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+      isInside(node, parent.right)
+    ) {
+      positiveConjunctiveFacts(parent.left).forEach((fact) => facts.add(fact));
     }
     current = parent;
   }
-  return false;
+  return facts;
+}
+
+function hasPositiveSmokeDominance(node: ts.Node) {
+  const facts = dominatingSmokeFacts(node);
+  return facts.has("development") && facts.has("smoke-flag");
+}
+
+function hasExactSmokeUserDominance(node: ts.Node) {
+  return dominatingSmokeFacts(node).has("smoke-user");
 }
 
 function descendants(sourceFile: ts.SourceFile) {
@@ -156,23 +236,34 @@ async function verifySmokeBoundary() {
   const loginPath = "app/(auth)/login.tsx";
   const loginSource = parse(loginPath, await source(loginPath));
   const loginNodes = descendants(loginSource);
-  const smokeLabels = loginNodes.filter(
-    (node): node is ts.StringLiteral => ts.isStringLiteral(node) && node.text === "Continue beta smoke",
+  const smokeButtons = loginNodes.filter(
+    (node): node is ts.JsxSelfClosingElement | ts.JsxOpeningElement =>
+      (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
+      node.tagName.getText(loginSource) === "Button" &&
+      jsxAttributeValue(node, "label") === "Continue beta smoke",
   );
-  invariant(smokeLabels.length === 1, "Login must declare exactly one Continue beta smoke label.");
+  invariant(smokeButtons.length === 1, "Login must render exactly one Continue beta smoke Button.");
   invariant(
-    smokeLabels.every((node) => isDoublyGuarded(loginSource, node)),
-    "The beta-smoke Login render must be dominated by __DEV__ and EXPO_PUBLIC_BETA_SMOKE === \"1\".",
+    smokeButtons.every(hasPositiveSmokeDominance),
+    "The beta-smoke Login render and label require positive conjunctive __DEV__ and EXPO_PUBLIC_BETA_SMOKE === \"1\" dominance.",
   );
 
-  const smokeUsers = loginNodes.filter(
-    (node): node is ts.StringLiteral =>
-      ts.isStringLiteral(node) && node.text === "beta-smoke-local-user",
+  const smokeButton = smokeButtons[0]!;
+  const onPressAttributes = smokeButton.attributes.properties.filter(
+    (candidate): candidate is ts.JsxAttribute =>
+      ts.isJsxAttribute(candidate) && candidate.name.getText(loginSource) === "onPress",
   );
-  invariant(smokeUsers.length === 1, "Login must create exactly one synthetic local smoke user.");
   invariant(
-    smokeUsers.every((node) => isDoublyGuarded(loginSource, node)),
-    "The synthetic smoke session must be dominated by both beta-smoke guards.",
+    onPressAttributes.length === 1 &&
+      !!onPressAttributes[0]!.initializer &&
+      ts.isJsxExpression(onPressAttributes[0]!.initializer) &&
+      !!onPressAttributes[0]!.initializer.expression,
+    "The beta-smoke Button must declare exactly one executable onPress handler.",
+  );
+  const onPress = (onPressAttributes[0]!.initializer as ts.JsxExpression).expression!;
+  invariant(
+    hasPositiveSmokeDominance(onPress),
+    "The beta-smoke Login handler requires positive conjunctive __DEV__ and EXPO_PUBLIC_BETA_SMOKE === \"1\" dominance.",
   );
 
   const sessionHandlers = loginNodes.filter(
@@ -181,11 +272,25 @@ async function verifySmokeBoundary() {
   );
   invariant(sessionHandlers.length === 1, "Login must expose exactly one local smoke-session handler.");
   invariant(
-    sessionHandlers.every((node) => isDoublyGuarded(loginSource, node)),
-    "The local smoke-session handler must be dominated by both beta-smoke guards.",
+    sessionHandlers.every(
+      (node) => isInside(node, onPress) && hasPositiveSmokeDominance(node),
+    ),
+    "The local smoke session requires positive conjunctive __DEV__ and EXPO_PUBLIC_BETA_SMOKE === \"1\" dominance inside the guarded handler.",
   );
 
-  const guardedLoginText = smokeLabels[0]!.parent.parent.getText(loginSource);
+  const smokeUsers = loginNodes.filter(
+    (node): node is ts.StringLiteral =>
+      ts.isStringLiteral(node) &&
+      node.text === "beta-smoke-local-user" &&
+      isInside(node, sessionHandlers[0]!),
+  );
+  invariant(smokeUsers.length === 1, "Login must create exactly one synthetic local smoke user.");
+  invariant(
+    smokeUsers.every(hasPositiveSmokeDominance),
+    "The synthetic smoke session requires positive conjunctive __DEV__ and EXPO_PUBLIC_BETA_SMOKE === \"1\" dominance.",
+  );
+
+  const guardedLoginText = smokeButton.getText(loginSource);
   invariant(
     !/(service[_-]?role|access[_-]?token|refresh[_-]?token|client[_-]?secret|SUPABASE_SERVICE)/i.test(
       guardedLoginText,
@@ -196,26 +301,35 @@ async function verifySmokeBoundary() {
   const ownedPath = "src/hooks/use-owned-djs.ts";
   const ownedSource = parse(ownedPath, await source(ownedPath));
   const ownedNodes = descendants(ownedSource);
+  const emptyReturns = ownedNodes.filter(
+    (node): node is ts.ReturnStatement =>
+      ts.isReturnStatement(node) &&
+      !!node.expression &&
+      ts.isArrayLiteralExpression(node.expression) &&
+      node.expression.elements.length === 0,
+  );
+  invariant(emptyReturns.length > 0, "The deterministic empty-owned-DJ fixture must exist.");
+  invariant(
+    emptyReturns.every(hasPositiveSmokeDominance),
+    "An unguarded empty-owned-DJ override is forbidden; every empty return requires positive conjunctive __DEV__ and EXPO_PUBLIC_BETA_SMOKE === \"1\" dominance.",
+  );
+  invariant(
+    emptyReturns.every(hasExactSmokeUserDominance),
+    "Every empty-owned-DJ override must be additionally dominated by the exact smoke user id.",
+  );
+  invariant(
+    emptyReturns.length === 1,
+    "The deterministic empty-owned-DJ fixture must exist exactly once.",
+  );
+
   const ownedSmokeUsers = ownedNodes.filter(
     (node): node is ts.StringLiteral =>
       ts.isStringLiteral(node) && node.text === "beta-smoke-local-user",
   );
   invariant(ownedSmokeUsers.length === 1, "Owned-DJ loading must declare one local smoke-user boundary.");
   invariant(
-    ownedSmokeUsers.every((node) => isDoublyGuarded(ownedSource, node)),
-    "The empty-owned-DJ override must be dominated by both beta-smoke guards.",
-  );
-  const guardedEmptyReturns = ownedNodes.filter(
-    (node): node is ts.ReturnStatement =>
-      ts.isReturnStatement(node) &&
-      !!node.expression &&
-      ts.isArrayLiteralExpression(node.expression) &&
-      node.expression.elements.length === 0 &&
-      isDoublyGuarded(ownedSource, node),
-  );
-  invariant(
-    guardedEmptyReturns.length === 1,
-    "The deterministic empty-owned-DJ fixture must exist exactly once under both guards.",
+    ownedSmokeUsers.every(hasPositiveSmokeDominance),
+    "The exact smoke-user comparison requires positive conjunctive __DEV__ and EXPO_PUBLIC_BETA_SMOKE === \"1\" dominance.",
   );
 }
 
