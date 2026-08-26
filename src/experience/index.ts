@@ -16,3 +16,9 @@ export type {
   FirstTrackReturnIntent,
   PendingNavigationIntent,
 } from "./pending-intent";
+
+export { trackProductEvent } from "./product-analytics";
+export type {
+  ProductEventName,
+  ProductEventProperties,
+} from "./product-analytics";

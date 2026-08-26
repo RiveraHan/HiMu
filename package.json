@@ -23,6 +23,8 @@
     "check:creative-draft-function": "node --import tsx scripts/check/creative-draft-function.ts",
     "check:himu-experience-state-migration": "node --import tsx scripts/check/himu-experience-state-migration.ts",
     "check:himu-experience-state-function": "node --import tsx scripts/check/himu-experience-state-function.ts",
+    "check:himu-product-events-migration": "node --import tsx scripts/check/himu-product-events-migration.ts",
+    "check:himu-product-events-function": "node --import tsx scripts/check/himu-product-events-function.ts",
     "check:security-remediation-migration": "node --import tsx scripts/check/security-remediation-migration.ts",
     "check:security-quota-invariants": "node --import tsx scripts/check/security-quota-invariants.ts",
     "check:private-media-e2e": "node --import tsx scripts/check/private-media-e2e.ts",
