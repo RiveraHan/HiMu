@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,6 +20,16 @@ import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 type FirstTrackDestination =
   | { kind: "create_dj" }
   | { kind: "create_track"; djId: string; anomaly: boolean };
+
+type OwnedFirstTrackDestination = Extract<
+  FirstTrackDestination,
+  { kind: "create_track" }
+>;
+
+type StorageResolutionError = {
+  userId: string;
+  operation: "consume" | "clear";
+};
 
 export function resolveFirstTrackDestination(
   rows: readonly { id: string }[],
@@ -50,10 +60,31 @@ export function FirstTrackGate() {
   const insets = useSafeAreaInsets();
   const userId = useCurrentUser()?.id ?? null;
   const ownedDjs = useOwnedDjs();
+  const [storageError, setStorageError] = useState<StorageResolutionError | null>(
+    null,
+  );
   const currentUserIdRef = useRef(userId);
+  const controllerUserIdRef = useRef(userId);
   const routedUserIdRef = useRef<string | null>(null);
-  const cancelStartedRef = useRef(false);
+  const ownedDestinationRef = useRef<{
+    userId: string;
+    destination: OwnedFirstTrackDestination;
+  } | null>(null);
+  const consumeFlightRef = useRef<Promise<void> | null>(null);
+  const clearFlightRef = useRef<Promise<void> | null>(null);
+  const cancelRequestedRef = useRef(false);
+  const navigationCompletedRef = useRef(false);
   const mountedRef = useRef(true);
+
+  if (controllerUserIdRef.current !== userId) {
+    controllerUserIdRef.current = userId;
+    routedUserIdRef.current = null;
+    ownedDestinationRef.current = null;
+    consumeFlightRef.current = null;
+    clearFlightRef.current = null;
+    cancelRequestedRef.current = false;
+    navigationCompletedRef.current = false;
+  }
   currentUserIdRef.current = userId;
 
   useEffect(() => {
@@ -63,50 +94,48 @@ export function FirstTrackGate() {
     };
   }, []);
 
-  useEffect(() => {
+  const consumeOwnedIntent = useCallback((
+    consumeUserId: string,
+    destination: OwnedFirstTrackDestination,
+  ) => {
     if (
-      !userId ||
-      !ownedDjs.isSuccess ||
-      ownedDjs.data === undefined ||
-      cancelStartedRef.current ||
-      routedUserIdRef.current === userId
+      !mountedRef.current ||
+      currentUserIdRef.current !== consumeUserId ||
+      cancelRequestedRef.current ||
+      navigationCompletedRef.current ||
+      consumeFlightRef.current
     ) {
       return;
     }
 
-    routedUserIdRef.current = userId;
-    const destination = resolveFirstTrackDestination(ownedDjs.data);
+    setStorageError((current) =>
+      current?.userId === consumeUserId ? null : current
+    );
 
-    const route = async () => {
-      if (destination.kind === "create_dj") {
-        void trackProductEvent("first_track_gate_resolved", {
-          ...eventProperties(),
-          routeOutcome: "create_dj",
-        });
-        if (
-          mountedRef.current &&
-          !cancelStartedRef.current &&
-          currentUserIdRef.current === userId
-        ) {
-          router.replace({
-            pathname: "/create-dj",
-            params: { returnIntent: "first_track" },
-          });
-        }
+    const flight = (async () => {
+      let consumed = false;
+      try {
+        consumed = await pendingIntentStore.consume("first_track", Date.now());
+      } catch {
+        consumed = false;
+      }
+
+      if (
+        !mountedRef.current ||
+        currentUserIdRef.current !== consumeUserId ||
+        cancelRequestedRef.current ||
+        navigationCompletedRef.current
+      ) {
         return;
       }
 
-      try {
-        await pendingIntentStore.consume("first_track", Date.now());
-      } catch {
-        // Routing remains available after a best-effort storage cleanup.
+      if (consumed !== true) {
+        setStorageError({ userId: consumeUserId, operation: "consume" });
+        return;
       }
-      if (
-        !mountedRef.current ||
-        cancelStartedRef.current ||
-        currentUserIdRef.current !== userId
-      ) return;
 
+      navigationCompletedRef.current = true;
+      setStorageError(null);
       void trackProductEvent("first_track_gate_resolved", {
         ...eventProperties(),
         routeOutcome: destination.anomaly
@@ -117,35 +146,132 @@ export function FirstTrackGate() {
         pathname: "/create-track",
         params: { djId: destination.djId },
       });
-    };
+    })();
 
-    void route();
-  }, [ownedDjs.data, ownedDjs.isSuccess, userId]);
+    consumeFlightRef.current = flight;
+    void flight.then(() => {
+      if (consumeFlightRef.current === flight) {
+        consumeFlightRef.current = null;
+      }
+    });
+  }, []);
 
-  const cancel = useCallback(async () => {
-    if (cancelStartedRef.current) return;
-    cancelStartedRef.current = true;
-    const cancelUserId = currentUserIdRef.current;
-    try {
-      await pendingIntentStore.clear();
-    } catch {
-      // Cancellation navigation must not be trapped by unavailable storage.
-    }
+  const clearPendingIntent = useCallback((clearUserId: string) => {
     if (
       !mountedRef.current ||
-      !cancelUserId ||
-      currentUserIdRef.current !== cancelUserId
+      currentUserIdRef.current !== clearUserId ||
+      navigationCompletedRef.current
     ) {
       return;
     }
-    void trackProductEvent("first_track_intent_cancelled", {
-      ...eventProperties(),
-      routeOutcome: "home",
+
+    cancelRequestedRef.current = true;
+    if (clearFlightRef.current) return;
+
+    setStorageError((current) =>
+      current?.userId === clearUserId ? null : current
+    );
+
+    const flight = (async () => {
+      let cleared = false;
+      try {
+        await pendingIntentStore.clear();
+        cleared = true;
+      } catch {
+        cleared = false;
+      }
+
+      if (
+        !mountedRef.current ||
+        currentUserIdRef.current !== clearUserId ||
+        navigationCompletedRef.current
+      ) {
+        return;
+      }
+
+      if (!cleared) {
+        setStorageError({ userId: clearUserId, operation: "clear" });
+        return;
+      }
+
+      navigationCompletedRef.current = true;
+      setStorageError(null);
+      void trackProductEvent("first_track_intent_cancelled", {
+        ...eventProperties(),
+        routeOutcome: "home",
+      });
+      router.replace("/(app)");
+    })();
+
+    clearFlightRef.current = flight;
+    void flight.then(() => {
+      if (clearFlightRef.current === flight) {
+        clearFlightRef.current = null;
+      }
     });
-    router.replace("/(app)");
   }, []);
 
-  const content = ownedDjs.isError ? (
+  useEffect(() => {
+    if (
+      !userId ||
+      !ownedDjs.isSuccess ||
+      ownedDjs.data === undefined ||
+      cancelRequestedRef.current ||
+      navigationCompletedRef.current ||
+      routedUserIdRef.current === userId
+    ) {
+      return;
+    }
+
+    routedUserIdRef.current = userId;
+    const destination = resolveFirstTrackDestination(ownedDjs.data);
+
+    if (destination.kind === "create_dj") {
+      navigationCompletedRef.current = true;
+      void trackProductEvent("first_track_gate_resolved", {
+        ...eventProperties(),
+        routeOutcome: "create_dj",
+      });
+      router.replace({
+        pathname: "/create-dj",
+        params: { returnIntent: "first_track" },
+      });
+      return;
+    }
+
+    ownedDestinationRef.current = { userId, destination };
+    consumeOwnedIntent(userId, destination);
+  }, [consumeOwnedIntent, ownedDjs.data, ownedDjs.isSuccess, userId]);
+
+  const activeStorageError = storageError?.userId === userId
+    ? storageError.operation
+    : null;
+
+  const retryStorageResolution = useCallback((
+    retryUserId: string,
+    operation: StorageResolutionError["operation"],
+  ) => {
+    if (operation === "clear") {
+      clearPendingIntent(retryUserId);
+      return;
+    }
+
+    const ownedDestination = ownedDestinationRef.current;
+    if (ownedDestination?.userId === retryUserId) {
+      consumeOwnedIntent(retryUserId, ownedDestination.destination);
+    }
+  }, [clearPendingIntent, consumeOwnedIntent]);
+
+  const content = activeStorageError ? (
+    <StateNotice
+      kind="error"
+      title={t("onboarding.firstTrack.storageUnavailable")}
+      actionLabel={t("common.actions.retry")}
+      onAction={() => {
+        if (userId) retryStorageResolution(userId, activeStorageError);
+      }}
+    />
+  ) : ownedDjs.isError ? (
     <StateNotice
       kind="error"
       title={t("onboarding.firstTrack.unavailable")}
@@ -181,7 +307,9 @@ export function FirstTrackGate() {
         <Button
           variant="ghost"
           label={t("common.actions.cancel")}
-          onPress={() => void cancel()}
+          onPress={() => {
+            if (userId) clearPendingIntent(userId);
+          }}
         />
       </View>
     </View>

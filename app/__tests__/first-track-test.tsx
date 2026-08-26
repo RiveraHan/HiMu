@@ -265,6 +265,103 @@ describe("FirstTrackGate", () => {
     );
   });
 
+  it("keeps the gate retryable when owned-intent consumption returns false", async () => {
+    mockPendingConsume.mockResolvedValue(false);
+    mockOwnedDjsQuery = query({
+      data: [{ id: "dj-1" }],
+      isPending: false,
+      isSuccess: true,
+    });
+
+    const screen = await render(<FirstTrackScreen />);
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(screen.getByText("We couldn't finish this step")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry" })).toHaveStyle({
+      minHeight: 44,
+      minWidth: 44,
+    });
+    expect(mockPendingConsume).toHaveBeenCalledTimes(1);
+    expect(mockPendingClear).not.toHaveBeenCalled();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
+      "first_track_gate_resolved",
+      expect.anything(),
+    );
+  });
+
+  it("deduplicates a rejected consume retry and routes only after true", async () => {
+    const retryConsumption = deferred<boolean>();
+    mockPendingConsume
+      .mockRejectedValueOnce(new Error("storage unavailable"))
+      .mockReturnValueOnce(retryConsumption.promise);
+    mockOwnedDjsQuery = query({
+      data: [{ id: "dj-1" }],
+      isPending: false,
+      isSuccess: true,
+    });
+    const screen = await render(<FirstTrackScreen />);
+    const retry = await waitFor(() => screen.getByRole("button", { name: "Retry" }));
+
+    await fireEvent.press(retry);
+    await fireEvent.press(retry);
+
+    expect(mockPendingConsume).toHaveBeenCalledTimes(2);
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    await act(async () => retryConsumption.resolve(true));
+
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith({
+      pathname: "/create-track",
+      params: { djId: "dj-1" },
+    }));
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    expect(mockTrackProductEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses a successful consume retry after the auth scope changes", async () => {
+    const retryConsumption = deferred<boolean>();
+    mockPendingConsume
+      .mockResolvedValueOnce(false)
+      .mockReturnValueOnce(retryConsumption.promise);
+    mockOwnedDjsQuery = query({
+      data: [{ id: "dj-a" }],
+      isPending: false,
+      isSuccess: true,
+    });
+    const screen = await render(<FirstTrackScreen />);
+    const retry = await waitFor(() => screen.getByRole("button", { name: "Retry" }));
+
+    await fireEvent.press(retry);
+    mockCurrentUser = { id: "user-b" };
+    mockOwnedDjsQuery = query();
+    await screen.rerender(<FirstTrackScreen />);
+    await act(async () => retryConsumption.resolve(true));
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockTrackProductEvent).not.toHaveBeenCalled();
+  });
+
+  it("suppresses a successful consume retry after the gate unmounts", async () => {
+    const retryConsumption = deferred<boolean>();
+    mockPendingConsume
+      .mockResolvedValueOnce(false)
+      .mockReturnValueOnce(retryConsumption.promise);
+    mockOwnedDjsQuery = query({
+      data: [{ id: "dj-a" }],
+      isPending: false,
+      isSuccess: true,
+    });
+    const screen = await render(<FirstTrackScreen />);
+    const retry = await waitFor(() => screen.getByRole("button", { name: "Retry" }));
+
+    await fireEvent.press(retry);
+    await screen.unmount();
+    await act(async () => retryConsumption.resolve(true));
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockTrackProductEvent).not.toHaveBeenCalled();
+  });
+
   it("uses the first deterministic DJ and emits bounded anomaly telemetry", async () => {
     mockOwnedDjsQuery = query({
       data: [{ id: "dj-1" }, { id: "dj-2" }],
@@ -300,6 +397,68 @@ describe("FirstTrackGate", () => {
       "first_track_intent_cancelled",
       expect.objectContaining({ routeOutcome: "home" }),
     );
+  });
+
+  it("requires a successful clear and deduplicates retry with Cancel-again", async () => {
+    const consumption = deferred<boolean>();
+    const retryClear = deferred<void>();
+    mockPendingConsume.mockReturnValue(consumption.promise);
+    mockPendingClear
+      .mockRejectedValueOnce(new Error("storage unavailable"))
+      .mockReturnValueOnce(retryClear.promise);
+    mockOwnedDjsQuery = query({
+      data: [{ id: "dj-a" }],
+      isPending: false,
+      isSuccess: true,
+    });
+    const screen = await render(<FirstTrackScreen />);
+    await waitFor(() => expect(mockPendingConsume).toHaveBeenCalledTimes(1));
+
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+    const retry = await waitFor(() => screen.getByRole("button", { name: "Retry" }));
+    expect(screen.getByText("We couldn't finish this step")).toBeTruthy();
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockTrackProductEvent).not.toHaveBeenCalled();
+
+    await fireEvent.press(retry);
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+    expect(mockPendingClear).toHaveBeenCalledTimes(2);
+
+    await act(async () => consumption.resolve(true));
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
+      "first_track_gate_resolved",
+      expect.anything(),
+    );
+
+    await act(async () => retryClear.resolve(undefined));
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith("/(app)"));
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    expect(mockTrackProductEvent).toHaveBeenCalledTimes(1);
+    expect(mockTrackProductEvent).toHaveBeenCalledWith(
+      "first_track_intent_cancelled",
+      expect.objectContaining({ routeOutcome: "home" }),
+    );
+  });
+
+  it("suppresses a successful clear retry after the auth scope changes", async () => {
+    const retryClear = deferred<void>();
+    mockPendingClear
+      .mockRejectedValueOnce(new Error("storage unavailable"))
+      .mockReturnValueOnce(retryClear.promise);
+    const screen = await render(<FirstTrackScreen />);
+
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+    const retry = await waitFor(() => screen.getByRole("button", { name: "Retry" }));
+    await fireEvent.press(retry);
+
+    mockCurrentUser = { id: "user-b" };
+    mockOwnedDjsQuery = query();
+    await screen.rerender(<FirstTrackScreen />);
+    await act(async () => retryClear.resolve(undefined));
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockTrackProductEvent).not.toHaveBeenCalled();
   });
 
   it("does not let late owned-intent consumption overwrite explicit cancellation", async () => {

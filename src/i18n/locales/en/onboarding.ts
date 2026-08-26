@@ -25,6 +25,7 @@ export const onboarding = {
   firstTrack: {
     checking: "Checking your DJs",
     unavailable: "We couldn't check your DJs",
+    storageUnavailable: "We couldn't finish this step",
   },
   welcome: {
     eyebrow: "WELCOME TO HIMU",
