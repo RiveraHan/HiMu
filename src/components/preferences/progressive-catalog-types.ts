@@ -11,6 +11,7 @@ export type ProgressiveCatalogPickerProps = Readonly<{
   selected: readonly string[];
   min: number;
   max: number;
+  disabled?: boolean;
   getGroupLabel(value: string): string;
   getItemLabel(value: string): string;
   onChange(selected: string[]): void;

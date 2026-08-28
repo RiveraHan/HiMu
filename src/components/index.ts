@@ -69,5 +69,7 @@ export * from "./dj/DjHero";
 export * from "./dj/GenerationBriefEditor";
 export * from "./dj/GenerationConfirmation";
 export * from "./dj/DjTraitsForm";
+export * from "./dj/DjIntensityChoice";
+export * from "./dj/DjSoundFields";
 export * from "./dj/GeneratingTrackCard";
 export * from "./dj/TrainDjSkeleton";

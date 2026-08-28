@@ -12,6 +12,7 @@ type Props<T extends string> = {
   value: T;
   onChange(value: T): void;
   disabled?: boolean;
+  accessibilityLabel?: string;
 };
 
 export function Segmented<T extends string>({
@@ -19,9 +20,10 @@ export function Segmented<T extends string>({
   value,
   onChange,
   disabled,
+  accessibilityLabel,
 }: Props<T>) {
   return (
-    <View style={[styles.track, disabled && styles.disabled]}>
+    <View testID="segmented-radiogroup" accessibilityRole="radiogroup" accessibilityLabel={accessibilityLabel} style={[styles.track, disabled && styles.disabled]}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -29,7 +31,7 @@ export function Segmented<T extends string>({
             key={option.value}
             onPress={() => onChange(option.value)}
             disabled={disabled}
-            accessibilityRole="button"
+            accessibilityRole="radio"
             accessibilityState={{ selected: active }}
             style={[styles.segment, active && styles.segmentActive]}
           >

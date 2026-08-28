@@ -29,6 +29,24 @@ export type CreateDjWizardState = Readonly<{
 
 export const DJ_INTENSITY_ENERGY = { calm: 3, balanced: 6, intense: 9 } as const;
 
+export function intensityToEnergy(intensity: DjIntensityChoice): number {
+  return DJ_INTENSITY_ENERGY[intensity];
+}
+
+export function energyToIntensity(energy: number): DjIntensityChoice {
+  if (energy <= 4) return "calm";
+  if (energy <= 7) return "balanced";
+  return "intense";
+}
+
+/** Keeps a legacy numeric value until the user chooses a different band. */
+export function applyExplicitIntensity(
+  energy: number,
+  intensity: DjIntensityChoice,
+): number {
+  return energyToIntensity(energy) === intensity ? energy : intensityToEnergy(intensity);
+}
+
 export type CreateDjWizardEvent =
   | { type: "sound_changed"; patch: Partial<DjSoundDraft> }
   | { type: "identity_changed"; value: DjIdentityDraftValue }
@@ -60,7 +78,7 @@ export function createDjTraitsFingerprint(sound: DjSoundDraft): string {
   return JSON.stringify([
     sound.genres,
     sound.moods,
-    DJ_INTENSITY_ENERGY[sound.intensity],
+    intensityToEnergy(sound.intensity),
     sound.mode,
     normalizeDjVibe(sound.vibe),
   ]);
@@ -173,7 +191,7 @@ export function toCreateDjInput(state: CreateDjWizardState): CreateDJInput {
     identityConcept: state.identity.identityConcept.trim(),
     genres: [...state.sound.genres],
     moods: [...state.sound.moods],
-    energy: DJ_INTENSITY_ENERGY[state.sound.intensity],
+    energy: intensityToEnergy(state.sound.intensity),
     isInstrumental: state.sound.mode === "instrumental",
     vibe: normalizeDjVibe(state.sound.vibe) || undefined,
     isPublic: state.visibility === "public",

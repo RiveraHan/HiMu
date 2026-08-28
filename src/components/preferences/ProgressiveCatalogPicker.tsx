@@ -39,6 +39,7 @@ export function ProgressiveCatalogPicker({
   getGroupLabel,
   getItemLabel,
   onChange,
+  disabled = false,
 }: ProgressiveCatalogPickerProps) {
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState("");
@@ -51,6 +52,7 @@ export function ProgressiveCatalogPicker({
   );
 
   const open = () => {
+    if (disabled) return;
     setQuery("");
     setExpandedGroup(groups[0]?.label ?? null);
     setLimitAnnouncement("");
@@ -59,6 +61,7 @@ export function ProgressiveCatalogPicker({
 
   const close = () => setVisible(false);
   const toggle = (value: string) => {
+    if (disabled) return;
     const result = nextCatalogSelection(selected, value, max);
     if (result.rejected) {
       setLimitAnnouncement(`Choose up to ${max}`);
@@ -70,7 +73,7 @@ export function ProgressiveCatalogPicker({
 
   return (
     <View style={styles.root}>
-      <Button label={`Edit ${title}`} variant="glass" onPress={open} />
+      <Button label={`Edit ${title}`} variant="glass" onPress={open} disabled={disabled} />
       {selectedLabels.length > 0 ? (
         <Text accessibilityLabel={`Selected: ${selectedLabels.join(", ")}`} variant="bodyMd">
           Selected: {selectedLabels.join(", ")}

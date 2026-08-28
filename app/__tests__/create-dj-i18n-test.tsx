@@ -104,18 +104,19 @@ jest.mock("@/src/components/preferences/PrefSection", () => {
       children,
     ) };
 });
-jest.mock("@/src/components/preferences/GroupedChipPicker", () => {
+jest.mock("@/src/components/preferences/ProgressiveCatalogPicker", () => {
   const React = require("react");
   const { Pressable, Text, View } = require("react-native");
-  return { GroupedChipPicker: ({ groups, getItemLabel, onToggle }: {
+  return { ProgressiveCatalogPicker: ({ groups, selected, getItemLabel, onChange }: {
     groups: readonly { items: readonly string[] }[];
+    selected: string[];
     getItemLabel: (value: string) => string;
-    onToggle: (value: string) => void;
+    onChange: (values: string[]) => void;
   }) => {
     const item = groups[0].items[0];
     const label = getItemLabel(item);
     return React.createElement(View, null,
-      React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: label, onPress: () => onToggle(item) },
+      React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: label, onPress: () => onChange(selected.includes(item) ? [] : [item]) },
         React.createElement(Text, null, label)),
     );
   } };
@@ -361,7 +362,7 @@ test.each([390, 1440])(
 
     await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
     await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
-    await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(3));
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Static Bloom/ })).toBeTruthy());
     await fireEvent.press(screen.getByRole("radio", { name: /Static Bloom/ }));
     await fireEvent.press(screen.getByRole("button", { name: "Confirm this identity" }));
     await fireEvent.press(screen.getByRole("button", { name: "PUBLIC" }));
@@ -397,7 +398,7 @@ test("keeps stale candidate text and custom identity edits in the composed workf
 
   await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
   await fireEvent.press(screen.getByRole("button", { name: "Focus" }));
-  await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(3));
+  await waitFor(() => expect(screen.getByRole("radio", { name: /Velvet Index/ })).toBeTruthy());
   await fireEvent.press(screen.getByRole("radio", { name: /Velvet Index/ }));
   await fireEvent.press(screen.getByRole("button", { name: "Confirm this identity" }));
   await fireEvent.press(screen.getByRole("button", { name: "Ambient" }));
