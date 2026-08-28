@@ -54,12 +54,14 @@ export function useDjIdentityController({
   const requestedFingerprint = useRef<string | null>(null);
   const previousFingerprint = useRef(fingerprint);
   const previousActive = useRef(false);
+  const previousDisabled = useRef(disabled);
   const previousUserId = useRef(userId);
   const currentFingerprint = useRef(fingerprint);
   const currentTraits = useRef(traits);
   const currentDisabled = useRef(disabled);
   const currentUserId = useRef(userId);
   const currentCandidates = useRef(candidates);
+  const currentStatus = useRef(status);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
 
@@ -68,6 +70,7 @@ export function useDjIdentityController({
   currentDisabled.current = disabled;
   currentUserId.current = userId;
   currentCandidates.current = candidates;
+  currentStatus.current = status;
   valueRef.current = value;
   onChangeRef.current = onChange;
 
@@ -79,6 +82,7 @@ export function useDjIdentityController({
     requestedFingerprint.current = requestFingerprint;
     setCandidates([]);
     setSelectedName(null);
+    currentStatus.current = "loading";
     setStatus("loading");
     try {
       const response = await draftMutation.mutateAsync({
@@ -97,6 +101,7 @@ export function useDjIdentityController({
       ) return;
       setCandidates(response.draft.candidates.slice(0, 3));
       setSelectedName(null);
+      currentStatus.current = "ready";
       setStatus("ready");
     } catch {
       if (
@@ -105,6 +110,7 @@ export function useDjIdentityController({
         currentUserId.current !== requestUserId ||
         !canDraft(currentTraits.current, currentDisabled.current)
       ) return;
+      currentStatus.current = "error";
       setStatus("error");
     }
   };
@@ -113,6 +119,8 @@ export function useDjIdentityController({
     const fingerprintChanged = previousFingerprint.current !== fingerprint;
     const authChanged = previousUserId.current !== userId;
     const enteredIdentity = active && !previousActive.current;
+    const cancelledLoading = currentStatus.current === "loading" &&
+      ((!active && previousActive.current) || (disabled && !previousDisabled.current));
     if (fingerprintChanged || authChanged) {
       requestGeneration.current += 1;
       requestedFingerprint.current = null;
@@ -120,20 +128,31 @@ export function useDjIdentityController({
       previousUserId.current = userId;
       setCandidates([]);
       setSelectedName(null);
+      currentStatus.current = "idle";
       setStatus("idle");
       const current = valueRef.current;
       if (current.confirmed) onChangeRef.current({ ...current, confirmed: false });
+    }
+    if (cancelledLoading) {
+      requestGeneration.current += 1;
+      requestedFingerprint.current = null;
+      setCandidates([]);
+      setSelectedName(null);
+      currentStatus.current = "idle";
+      setStatus("idle");
     }
     if (enteredIdentity && canDraft(traits, disabled) && requestedFingerprint.current !== fingerprint) {
       void request();
     }
     previousActive.current = active;
-    return () => {
-      requestGeneration.current += 1;
-    };
+    previousDisabled.current = disabled;
     // Identity entry, not individual trait edits, owns automatic generation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, disabled, fingerprint, userId]);
+
+  useEffect(() => () => {
+      requestGeneration.current += 1;
+  }, []);
 
   function select(candidate: DjIdentityCandidate) {
     setSelectedName(candidate.name);

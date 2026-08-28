@@ -152,3 +152,45 @@ test("does not apply an in-flight request after unmount", async () => {
   await act(async () => { resolveDraft({ version: 1, kind: "dj-identity", draft: { candidates } }); });
   expect(mockDraft).toHaveBeenCalledTimes(1);
 });
+
+test("retries the same fingerprint after leaving Identity while loading", async () => {
+  let resolveFirst!: (value: unknown) => void;
+  mockDraft.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+    .mockResolvedValueOnce({ version: 1, kind: "dj-identity", draft: { candidates } });
+  const view = await renderHook<DjIdentityController, { active: boolean }>(
+    ({ active }) => useHarness(active),
+    { initialProps: { active: true } },
+  );
+  await waitFor(() => expect(view.result.current.status).toBe("loading"));
+  await act(async () => { view.rerender({ active: false }); });
+  expect(view.result.current.status).toBe("idle");
+  await act(async () => { view.rerender({ active: true }); });
+  await waitFor(() => expect(view.result.current.status).toBe("ready"));
+  expect(mockDraft).toHaveBeenCalledTimes(2);
+  await act(async () => { resolveFirst({ version: 1, kind: "dj-identity", draft: { candidates: [{ ...candidates[0], name: "Late" }] } }); });
+  expect(view.result.current.candidates[0]?.name).toBe("Static Bloom");
+  await view.unmount();
+});
+
+test("resets a disabled in-flight request so a later Identity entry can recover", async () => {
+  let resolveFirst!: (value: unknown) => void;
+  mockDraft.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+    .mockResolvedValueOnce({ version: 1, kind: "dj-identity", draft: { candidates } });
+  const view = await renderHook<DjIdentityController, { active: boolean; disabled: boolean }>(
+    ({ active, disabled }) => {
+      const [value, setValue] = useState<DjIdentityDraftValue>({ name: "", identityConcept: "", provenance: "custom", confirmed: false });
+      return useDjIdentityController({ active, disabled, fingerprint: "sound-a", traits, value, onChange: setValue });
+    },
+    { initialProps: { active: true, disabled: false } },
+  );
+  await waitFor(() => expect(view.result.current.status).toBe("loading"));
+  await act(async () => { view.rerender({ active: true, disabled: true }); });
+  expect(view.result.current.status).toBe("idle");
+  await act(async () => { view.rerender({ active: false, disabled: false }); });
+  await act(async () => { view.rerender({ active: true, disabled: false }); });
+  await waitFor(() => expect(view.result.current.status).toBe("ready"));
+  expect(mockDraft).toHaveBeenCalledTimes(2);
+  await act(async () => { resolveFirst({ version: 1, kind: "dj-identity", draft: { candidates: [{ ...candidates[0], name: "Late" }] } }); });
+  expect(view.result.current.candidates[0]?.name).toBe("Static Bloom");
+  await view.unmount();
+});

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, findNodeHandle, Pressable, Text as RNText, View } from "react-native";
+import * as ReactNative from "react-native";
+import { Pressable, Text as RNText, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/src/components/Button";
@@ -12,6 +13,7 @@ import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = Readonly<{
   controller: DjIdentityController;
+  active?: boolean;
   value: DjIdentityDraftValue;
   disabled?: boolean;
   onContinue?: () => void;
@@ -24,9 +26,10 @@ function canContinue(value: DjIdentityDraftValue, selectedName: string | null): 
   return hasValidText && (selectedName !== null || value.provenance !== "suggested");
 }
 
-export function CreateDjIdentityStep({ controller, value, disabled = false, onContinue }: Props) {
+export function CreateDjIdentityStep({ active = false, controller, value, disabled = false, onContinue }: Props) {
   const { t } = useTranslation();
   const headingRef = useRef<RNText>(null);
+  const previousActive = useRef(false);
   const [editing, setEditing] = useState(value.provenance !== "suggested" && Boolean(value.name || value.identityConcept));
   const busy = controller.status === "loading";
   const validToContinue = canContinue(value, controller.selectedName);
@@ -36,9 +39,12 @@ export function CreateDjIdentityStep({ controller, value, disabled = false, onCo
   }, [value.identityConcept, value.name, value.provenance]);
 
   useEffect(() => {
-    const node = findNodeHandle(headingRef.current);
-    if (node !== null) AccessibilityInfo.setAccessibilityFocus(node);
-  }, []);
+    if (active && !previousActive.current) {
+      const node = ReactNative.findNodeHandle(headingRef.current);
+      if (node !== null) ReactNative.AccessibilityInfo.setAccessibilityFocus(node);
+    }
+    previousActive.current = active;
+  }, [active]);
 
   function startCustom() {
     setEditing(true);

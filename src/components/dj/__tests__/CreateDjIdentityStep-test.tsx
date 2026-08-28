@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { AccessibilityInfo } from "react-native";
 
 import { CreateDjIdentityStep } from "../CreateDjIdentityStep";
 import type { DjIdentityController } from "@/src/hooks/use-dj-identity-controller";
@@ -7,7 +8,7 @@ import type { DjIdentityController } from "@/src/hooks/use-dj-identity-controlle
 jest.mock("@/src/components/preferences/PrefSection", () => {
   const React = require("react");
   const { Text, View } = require("react-native");
-  return { PrefSection: ({ title, children }: { title: string; children: React.ReactNode }) => React.createElement(View, null, React.createElement(Text, null, title), children) };
+  return { PrefSection: ({ title, titleRef, children }: { title: string; titleRef?: React.Ref<React.ElementRef<typeof View>>; children: React.ReactNode }) => React.createElement(View, { ref: titleRef }, React.createElement(Text, null, title), children) };
 });
 jest.mock("@/src/components/Button", () => {
   const React = require("react"); const { Pressable, Text } = require("react-native");
@@ -58,4 +59,15 @@ test("hides stale candidates while loading", async () => {
   const screen = await render(<CreateDjIdentityStep controller={{ ...controller, status: "loading" }} value={{ name: "", identityConcept: "", provenance: "custom", confirmed: false }} onContinue={jest.fn()} />);
   expect(screen.queryByRole("radio")).toBeNull();
   expect(screen.getByText("Creating three ideas…")).toBeTruthy();
+});
+
+test("does not focus an inactive mount and focuses on later Identity entry", async () => {
+  const focus = jest.spyOn(AccessibilityInfo, "setAccessibilityFocus");
+  const node = jest.spyOn(require("react-native"), "findNodeHandle").mockReturnValue(1);
+  const screen = await render(<CreateDjIdentityStep active={false} controller={controller} value={{ name: "", identityConcept: "", provenance: "custom", confirmed: false }} onContinue={jest.fn()} />);
+  expect(focus).not.toHaveBeenCalled();
+  screen.rerender(<CreateDjIdentityStep active controller={controller} value={{ name: "", identityConcept: "", provenance: "custom", confirmed: false }} onContinue={jest.fn()} />);
+  await waitFor(() => expect(focus).toHaveBeenCalledTimes(1));
+  focus.mockRestore();
+  node.mockRestore();
 });

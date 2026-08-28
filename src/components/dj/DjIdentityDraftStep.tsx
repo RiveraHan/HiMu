@@ -27,5 +27,5 @@ function traitsFingerprint(traits: DjDraftTraits): string {
 export function DjIdentityDraftStep({ active = false, traits, value, onChange, disabled = false }: Props) {
   const fingerprint = useMemo(() => traitsFingerprint(traits), [traits]);
   const controller = useDjIdentityController({ active, fingerprint, traits, value, onChange, disabled });
-  return <CreateDjIdentityStep controller={controller} value={value} disabled={disabled} />;
+  return <CreateDjIdentityStep active={active} controller={controller} value={value} disabled={disabled} />;
 }
