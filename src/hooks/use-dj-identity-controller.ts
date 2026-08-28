@@ -53,6 +53,8 @@ export function useDjIdentityController({
   const requestGeneration = useRef(0);
   const requestedFingerprint = useRef<string | null>(null);
   const previousFingerprint = useRef(fingerprint);
+  const previousActive = useRef(false);
+  const previousUserId = useRef(userId);
   const currentFingerprint = useRef(fingerprint);
   const currentTraits = useRef(traits);
   const currentDisabled = useRef(disabled);
@@ -75,6 +77,8 @@ export function useDjIdentityController({
     const requestUserId = currentUserId.current;
     const requestToken = ++requestGeneration.current;
     requestedFingerprint.current = requestFingerprint;
+    setCandidates([]);
+    setSelectedName(null);
     setStatus("loading");
     try {
       const response = await draftMutation.mutateAsync({
@@ -106,19 +110,30 @@ export function useDjIdentityController({
   };
 
   useEffect(() => {
-    if (previousFingerprint.current !== fingerprint) {
+    const fingerprintChanged = previousFingerprint.current !== fingerprint;
+    const authChanged = previousUserId.current !== userId;
+    const enteredIdentity = active && !previousActive.current;
+    if (fingerprintChanged || authChanged) {
       requestGeneration.current += 1;
       requestedFingerprint.current = null;
       previousFingerprint.current = fingerprint;
+      previousUserId.current = userId;
+      setCandidates([]);
+      setSelectedName(null);
+      setStatus("idle");
       const current = valueRef.current;
       if (current.confirmed) onChangeRef.current({ ...current, confirmed: false });
     }
-    if (active && canDraft(traits, disabled) && requestedFingerprint.current !== fingerprint) {
+    if (enteredIdentity && canDraft(traits, disabled) && requestedFingerprint.current !== fingerprint) {
       void request();
     }
+    previousActive.current = active;
+    return () => {
+      requestGeneration.current += 1;
+    };
     // Identity entry, not individual trait edits, owns automatic generation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, disabled, fingerprint]);
+  }, [active, disabled, fingerprint, userId]);
 
   function select(candidate: DjIdentityCandidate) {
     setSelectedName(candidate.name);
@@ -137,7 +152,7 @@ export function useDjIdentityController({
 
   function startCustom() {
     setSelectedName(null);
-    onChange({ name: "", identityConcept: "", provenance: "custom", confirmed: false });
+    onChange({ ...valueRef.current, provenance: "custom", confirmed: false });
   }
 
   function confirm() {

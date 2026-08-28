@@ -6,10 +6,11 @@ import { useDjIdentityDrafts } from "@/src/hooks/use-creative-draft";
 import type { DjIdentityDraftValue } from "@/src/components/dj/DjIdentityDraftStep";
 
 const mockDraft = jest.fn();
+let mockCurrentUserId: string | null = "listener";
 
 jest.mock("@/src/hooks/use-creative-draft", () => ({ useDjIdentityDrafts: jest.fn() }));
 jest.mock("@/src/i18n/use-locale", () => ({ useLocale: () => ({ resolvedLanguage: "en" }) }));
-jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => ({ id: "listener" }) }));
+jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => mockCurrentUserId ? ({ id: mockCurrentUserId }) : null }));
 
 const traits = { genres: ["House"], moods: ["Dreamy"], energy: 6, isInstrumental: false, vibe: "Rain-lit rooftop" };
 const candidates = [
@@ -25,6 +26,7 @@ function useHarness(active: boolean, energy = 6) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockCurrentUserId = "listener";
   mockDraft.mockResolvedValue({ version: 1, kind: "dj-identity", draft: { candidates } });
   jest.mocked(useDjIdentityDrafts).mockImplementation(() => ({ mutateAsync: mockDraft }) as never);
 });
@@ -64,9 +66,10 @@ test("ignores a stale response after the fingerprint changes", async () => {
   let resolveSecond!: (value: unknown) => void;
   mockDraft.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
     .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
-  const view = await renderHook<DjIdentityController, { energy: number }>(({ energy }) => useHarness(true, energy), { initialProps: { energy: 6 } });
+  const view = await renderHook<DjIdentityController, { active: boolean; energy: number }>(({ active, energy }) => useHarness(active, energy), { initialProps: { active: true, energy: 6 } });
   await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
-  await act(async () => { view.rerender({ energy: 7 }); });
+  await act(async () => { view.rerender({ active: false, energy: 7 }); });
+  await act(async () => { view.rerender({ active: true, energy: 7 }); });
   await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(2));
   await act(async () => { resolveSecond({ version: 1, kind: "dj-identity", draft: { candidates } }); });
   await waitFor(() => expect(view.result.current.candidates[0]?.name).toBe("Static Bloom"));
@@ -83,6 +86,22 @@ test("regeneration excludes current candidate names", async () => {
   await view.unmount();
 });
 
+test("clears candidates while an explicit regeneration is loading", async () => {
+  let resolveRegeneration!: (value: unknown) => void;
+  mockDraft.mockResolvedValueOnce({ version: 1, kind: "dj-identity", draft: { candidates } })
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveRegeneration = resolve; }));
+  const view = await renderHook<DjIdentityController, void>(() => useHarness(true));
+  await waitFor(() => expect(view.result.current.status).toBe("ready"));
+  let request!: Promise<void>;
+  await act(async () => { request = view.result.current.request(); });
+  expect(view.result.current).toMatchObject({ status: "loading", candidates: [] });
+  await act(async () => {
+    resolveRegeneration({ version: 1, kind: "dj-identity", draft: { candidates } });
+    await request;
+  });
+  await view.unmount();
+});
+
 test("exposes failure without inserting a generic candidate and permits custom entry", async () => {
   mockDraft.mockRejectedValueOnce(new Error("unavailable"));
   const view = await renderHook<DjIdentityController, void>(() => useHarness(true));
@@ -92,4 +111,44 @@ test("exposes failure without inserting a generic candidate and permits custom e
   await act(async () => { view.result.current.edit("name", "Night Cartographer"); });
   expect(view.result.current.selectedName).toBeNull();
   await view.unmount();
+});
+
+test("does not request again when traits change while Identity remains active", async () => {
+  const view = await renderHook<DjIdentityController, { energy: number }>(
+    ({ energy }) => useHarness(true, energy),
+    { initialProps: { energy: 6 } },
+  );
+  await waitFor(() => expect(view.result.current.status).toBe("ready"));
+  await act(async () => { view.rerender({ energy: 7 }); });
+  expect(mockDraft).toHaveBeenCalledTimes(1);
+  expect(view.result.current.candidates).toEqual([]);
+  await view.unmount();
+});
+
+test("clears candidates and ignores a late request after the auth scope changes", async () => {
+  let resolveDraft!: (value: unknown) => void;
+  mockDraft.mockImplementationOnce(() => new Promise((resolve) => { resolveDraft = resolve; }));
+  const view = await renderHook<DjIdentityController, { userId: string }>(
+    ({ userId }) => {
+      mockCurrentUserId = userId;
+      return useHarness(true);
+    },
+    { initialProps: { userId: "listener" } },
+  );
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await act(async () => { view.rerender({ userId: "another-listener" }); });
+  expect(view.result.current.candidates).toEqual([]);
+  await act(async () => { resolveDraft({ version: 1, kind: "dj-identity", draft: { candidates } }); });
+  expect(view.result.current.candidates).toEqual([]);
+  await view.unmount();
+});
+
+test("does not apply an in-flight request after unmount", async () => {
+  let resolveDraft!: (value: unknown) => void;
+  mockDraft.mockImplementationOnce(() => new Promise((resolve) => { resolveDraft = resolve; }));
+  const view = await renderHook<DjIdentityController, void>(() => useHarness(true));
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await view.unmount();
+  await act(async () => { resolveDraft({ version: 1, kind: "dj-identity", draft: { candidates } }); });
+  expect(mockDraft).toHaveBeenCalledTimes(1);
 });

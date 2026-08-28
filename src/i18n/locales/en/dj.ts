@@ -43,6 +43,8 @@ export const dj = {
     regenerate: "Try new suggestions",
     generating: "Creating three ideas…",
     custom: "Write my own",
+    edit: "Edit",
+    continue: "Continue",
     nameLabel: "DJ name",
     namePlaceholder: "DJ name",
     conceptLabel: "Identity concept",

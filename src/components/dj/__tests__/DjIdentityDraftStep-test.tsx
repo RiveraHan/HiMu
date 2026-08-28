@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import { useState } from "react";
 
 import { DjIdentityDraftStep, type DjIdentityDraftValue } from "../DjIdentityDraftStep";
@@ -22,7 +22,7 @@ const candidates = [
 
 function Harness() {
   const [value, setValue] = useState<DjIdentityDraftValue>({ name: "", identityConcept: "", provenance: "custom", confirmed: false });
-  return <DjIdentityDraftStep traits={traits} value={value} onChange={setValue} />;
+  return <DjIdentityDraftStep active={false} traits={traits} value={value} onChange={setValue} />;
 }
 
 beforeEach(() => {
@@ -31,12 +31,10 @@ beforeEach(() => {
   jest.mocked(useDjIdentityDrafts).mockImplementation(() => ({ mutateAsync: mockDraft }) as never);
 });
 
-test("keeps the compatibility wrapper candidate-first", async () => {
+test("does not request through the compatibility wrapper while Identity is inactive", async () => {
   const screen = await render(<Harness />);
-  await waitFor(() => expect(screen.getAllByRole("radio")).toHaveLength(3));
-  expect(screen.queryByPlaceholderText("DJ name")).toBeNull();
-  await fireEvent.press(screen.getByRole("radio", { name: /Velvet Index/ }));
-  expect(screen.getByRole("radio", { name: /Velvet Index/ }).props.accessibilityState.selected).toBe(true);
+  expect(screen.queryByRole("radio")).toBeNull();
+  expect(mockDraft).not.toHaveBeenCalled();
 });
 
 test("reveals manual inputs only after Write my own", async () => {

@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { Text as RNText, type TextProps } from "react-native";
 import { useUnistyles } from "@/src/theme/react-native-unistyles";
 
@@ -9,17 +10,18 @@ interface Props extends TextProps {
   opacity?: number;
 }
 
-export function Text({
+export const Text = forwardRef<RNText, Props>(function Text({
   variant = "bodyMd",
   color = "onSurface",
   opacity,
   style,
   ...props
-}: Props) {
+}: Props, ref) {
   const { theme } = useUnistyles();
 
   return (
     <RNText
+      ref={ref}
       style={[
         theme.typography[variant],
         { color: theme.colors[color], opacity },
@@ -28,4 +30,4 @@ export function Text({
       {...props}
     />
   );
-}
+});

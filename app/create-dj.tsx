@@ -115,6 +115,7 @@ export default function CreateDJScreen() {
               showName={false}
             />
             <DjIdentityDraftStep
+              active={activeStep === "identity"}
               traits={{
                 genres: traits.genres,
                 moods: traits.moods,

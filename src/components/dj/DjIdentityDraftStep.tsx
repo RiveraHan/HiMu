@@ -12,6 +12,7 @@ export type DjIdentityDraftValue = {
 };
 
 type Props = Readonly<{
+  active?: boolean;
   traits: DjDraftTraits;
   value: DjIdentityDraftValue;
   onChange: (value: DjIdentityDraftValue) => void;
@@ -23,8 +24,8 @@ function traitsFingerprint(traits: DjDraftTraits): string {
 }
 
 /** @deprecated New create flows keep the controller mounted and render CreateDjIdentityStep only while active. */
-export function DjIdentityDraftStep({ traits, value, onChange, disabled = false }: Props) {
+export function DjIdentityDraftStep({ active = false, traits, value, onChange, disabled = false }: Props) {
   const fingerprint = useMemo(() => traitsFingerprint(traits), [traits]);
-  const controller = useDjIdentityController({ active: true, fingerprint, traits, value, onChange, disabled });
+  const controller = useDjIdentityController({ active, fingerprint, traits, value, onChange, disabled });
   return <CreateDjIdentityStep controller={controller} value={value} disabled={disabled} />;
 }
