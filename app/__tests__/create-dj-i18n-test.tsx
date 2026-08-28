@@ -2,14 +2,22 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { BackHandler, Platform } from "react-native";
 
-import CreateDJScreen from "@/app/create-dj";
+import CreateDJScreen, { mapCreateDjErrorCategory } from "@/app/create-dj";
+import type { EdgeErrorPayload } from "@/src/api/edge-errors";
+import type { CreateDJInput } from "@/src/hooks/use-create-dj";
 import i18n from "@/src/i18n";
 
 const mockDraft = jest.fn();
 const mockConfirm = jest.fn<Promise<boolean>, [object]>();
+const mockConsumePendingIntent = jest.fn<Promise<boolean>, ["first_track"]>();
+const mockCreateDj = jest.fn();
+const mockGetEdgeErrorPayload = jest.fn<Promise<EdgeErrorPayload>, [unknown]>();
 const mockRouterBack = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockRouterSetParams = jest.fn();
+const mockTrackProductEvent = jest.fn();
+let mockCurrentUserId = "listener";
+let mockIsCreatePending = false;
 let mockSearchParams: { step?: string | string[]; returnIntent?: string | string[] } = {};
 let mockWindow = { width: 390, height: 844, fontScale: 1 };
 type HardwareBackHandler = Parameters<typeof BackHandler.addEventListener>[1];
@@ -31,7 +39,7 @@ function dispatchMockAndroidHardwareBack(): boolean {
 }
 
 const identityCandidates = [
-  { name: "Static Bloom", identityConcept: "A patient selector tracing city lights through warm analog haze." },
+  { name: "Night Cartographer", identityConcept: "Maps patient rhythms into luminous shared journeys." },
   { name: "Velvet Index", identityConcept: "A curious archivist reshaping forgotten dance floors into intimate rituals." },
   { name: "Orbit Mercy", identityConcept: "A celestial night guide balancing kinetic rhythm with quiet gravity." },
 ];
@@ -41,11 +49,23 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   default: () => ({ ...mockWindow, scale: 1 }),
 }));
 jest.mock("@/src/hooks/use-create-dj", () => ({
-  useCreateDJ: () => {
-    throw new Error("Task 5 must not invoke useCreateDJ");
-  },
+  useCreateDJ: () => ({ mutate: mockCreateDj, isPending: mockIsCreatePending }),
 }));
-jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => ({ id: "listener" }) }));
+jest.mock("@/src/hooks/use-auth", () => ({
+  useCurrentUser: () => mockCurrentUserId ? { id: mockCurrentUserId } : null,
+}));
+jest.mock("@/src/api/auth-scope", () => ({
+  isCurrentMutationUser: (userId: string) => userId === mockCurrentUserId,
+}));
+jest.mock("@/src/api/edge-errors", () => ({
+  getEdgeErrorPayload: (error: unknown) => mockGetEdgeErrorPayload(error),
+}));
+jest.mock("@/src/experience", () => ({
+  pendingIntentStore: {
+    consume: (kind: "first_track") => mockConsumePendingIntent(kind),
+  },
+  trackProductEvent: (...args: unknown[]) => mockTrackProductEvent(...args),
+}));
 jest.mock("@/src/hooks/use-creative-draft", () => ({
   useDjIdentityDrafts: () => ({ mutateAsync: mockDraft, isPending: false, error: null }),
 }));
@@ -113,24 +133,29 @@ jest.mock("@/src/components/Button", () => {
   const React = require("react");
   const { Pressable, Text } = require("react-native");
   return {
-    Button: ({ label, disabled, loading, onPress, testID }: {
+    Button: ({ label, disabled, loading, loadingLabel, onPress, testID }: {
       label: string;
       disabled?: boolean;
       loading?: boolean;
+      loadingLabel?: string;
       onPress?: () => void;
       testID?: string;
-    }) => React.createElement(
+    }) => {
+      const isDisabled = Boolean(disabled || loading);
+      const accessibleLabel = loading ? loadingLabel ?? label : label;
+      return React.createElement(
       Pressable,
       {
         accessibilityRole: "button",
-        accessibilityLabel: label,
-        accessibilityState: { disabled: Boolean(disabled), busy: Boolean(loading) },
-        disabled,
+        accessibilityLabel: accessibleLabel,
+        accessibilityState: { disabled: isDisabled, busy: Boolean(loading) },
+        disabled: isDisabled,
         onPress,
         testID,
       },
-      React.createElement(Text, null, label),
-    ),
+      React.createElement(Text, null, accessibleLabel),
+      );
+    },
   };
 });
 jest.mock("expo-router", () => {
@@ -171,12 +196,12 @@ async function reachIdentity(screen: Awaited<ReturnType<typeof render>>) {
   await choose(screen, i18n.t("dj.traits.genres"), i18n.language === "es" ? "Ambiental" : "Ambient");
   await choose(screen, i18n.t("dj.traits.moods"), i18n.language === "es" ? "Concentración" : "Focus");
   await fireEvent.press(screen.getByRole("button", { name: i18n.t("dj.create.continue") }));
-  await waitFor(() => expect(screen.getByRole("radio", { name: /Static Bloom/ })).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole("radio", { name: /Night Cartographer/ })).toBeTruthy());
 }
 
 async function reachReview(screen: Awaited<ReturnType<typeof render>>) {
   await reachIdentity(screen);
-  await fireEvent.press(screen.getByRole("radio", { name: /Static Bloom/ }));
+  await fireEvent.press(screen.getByRole("radio", { name: /Night Cartographer/ }));
   await fireEvent.press(screen.getByRole("button", { name: i18n.t("dj.identity.continue") }));
   await waitFor(() => expect(screen.getByTestId("create-dj-review")).toBeTruthy());
 }
@@ -185,11 +210,15 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await i18n.changeLanguage("en");
   mockSearchParams = {};
+  mockCurrentUserId = "listener";
+  mockIsCreatePending = false;
   mockWindow = { width: 390, height: 844, fontScale: 1 };
   mockOpenNativeModalRequestClose = null;
   mockHardwareBackHandlers = [];
   mockWizardBackHandlerInvocations = 0;
   mockConfirm.mockResolvedValue(false);
+  mockConsumePendingIntent.mockResolvedValue(true);
+  mockGetEdgeErrorPayload.mockResolvedValue({ code: null, dailyLimit: null, limit: null });
   mockDraft.mockResolvedValue({ version: 1, kind: "dj-identity", draft: { candidates: identityCandidates } });
   Object.defineProperty(Platform, "OS", { configurable: true, value: "android" });
 });
@@ -213,8 +242,8 @@ test("navigates Sound to Identity to Review and Back in deterministic step order
   const screen = await render(<CreateDJScreen />);
   await reachReview(screen);
   expect(screen.queryByRole("button", { name: "Edit Genres" })).toBeNull();
-  expect(screen.getByText("Static Bloom")).toBeTruthy();
-  expect(screen.getByText("A patient selector tracing city lights through warm analog haze.")).toBeTruthy();
+  expect(screen.getByText("Night Cartographer")).toBeTruthy();
+  expect(screen.getByText("Maps patient rhythms into luminous shared journeys.")).toBeTruthy();
   expect(screen.getByText("Balanced")).toBeTruthy();
   expect(screen.getByText("Instrumental")).toBeTruthy();
   expect(screen.getByText("Only you can see this DJ.")).toBeTruthy();
@@ -320,4 +349,162 @@ test("localizes progress, review labels, edit actions, visibility consequence, a
   expect(screen.getByRole("button", { name: "Editar identidad" })).toBeTruthy();
   expect(screen.getByText("Solo tú puedes ver este DJ.")).toBeTruthy();
   expect(screen.getByRole("button", { name: "Dar vida a mi DJ" })).toBeTruthy();
+});
+
+test("adopts first-track once and submits only the final Review action exactly once", async () => {
+  mockSearchParams = { returnIntent: "first_track" };
+  const screen = await render(<CreateDJScreen />);
+  await waitFor(() => expect(mockConsumePendingIntent).toHaveBeenCalledTimes(1));
+  expect(mockConsumePendingIntent).toHaveBeenCalledWith("first_track");
+
+  await choose(screen, "Genres", "Ambient");
+  expect(mockCreateDj).not.toHaveBeenCalled();
+  await choose(screen, "Moods", "Focus");
+  expect(mockCreateDj).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
+  await waitFor(() => expect(screen.getByRole("radio", { name: /Night Cartographer/ })).toBeTruthy());
+  expect(mockCreateDj).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("radio", { name: /Night Cartographer/ }));
+  expect(mockCreateDj).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByTestId("create-dj-review")).toBeTruthy();
+  expect(mockCreateDj).not.toHaveBeenCalled();
+
+  await fireEvent.press(screen.getByRole("button", { name: "Back" }));
+  expect(mockCreateDj).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByTestId("create-dj-review")).toBeTruthy();
+
+  mockSearchParams = { step: "identity", returnIntent: "invalid" };
+  await screen.rerender(<CreateDJScreen />);
+  await waitFor(() => expect(screen.getByText("Step 2 of 3")).toBeTruthy());
+  expect(mockCreateDj).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
+
+  mockWindow = { width: 1440, height: 900, fontScale: 1 };
+  await screen.rerender(<CreateDJScreen />);
+  expect(screen.getByText("Step 3 of 3")).toBeTruthy();
+  expect(mockCreateDj).not.toHaveBeenCalled();
+  expect(mockConsumePendingIntent).toHaveBeenCalledTimes(1);
+
+  const expectedCreateDjInput: CreateDJInput = {
+    name: "Night Cartographer",
+    identityConcept: "Maps patient rhythms into luminous shared journeys.",
+    genres: ["Ambient"],
+    moods: ["Focus"],
+    energy: 6,
+    isInstrumental: true,
+    vibe: undefined,
+    isPublic: false,
+  };
+  const submit = screen.getByRole("button", { name: "Bring my DJ to life" });
+  await fireEvent.press(submit);
+  await fireEvent.press(submit);
+  expect(mockCreateDj).toHaveBeenCalledTimes(1);
+  expect(mockCreateDj).toHaveBeenCalledWith(
+    expectedCreateDjInput,
+    expect.objectContaining({
+      onSuccess: expect.any(Function),
+      onError: expect.any(Function),
+    }),
+  );
+  expect(mockTrackProductEvent).toHaveBeenCalledWith("dj_creation_started", {
+    flowVersion: 1,
+    platform: "android",
+    locale: "en",
+    step: "review",
+  });
+
+  const callbacks = mockCreateDj.mock.calls[0][1] as {
+    onSuccess(result: { djId: string; avatarReady: boolean }): void;
+  };
+  await act(async () => callbacks.onSuccess({ djId: "dj-new", avatarReady: true }));
+  expect(mockRouterReplace).toHaveBeenCalledWith({
+    pathname: "/create-track",
+    params: { djId: "dj-new" },
+  });
+});
+
+test("ordinary success opens the DJ while a previous user's late success cannot navigate", async () => {
+  const ordinary = await render(<CreateDJScreen />);
+  await reachReview(ordinary);
+  await fireEvent.press(ordinary.getByRole("button", { name: "Bring my DJ to life" }));
+  const ordinarySuccess = mockCreateDj.mock.calls[0][1].onSuccess as (
+    result: { djId: string; avatarReady: boolean },
+  ) => void;
+  await act(async () => ordinarySuccess({ djId: "dj-ordinary", avatarReady: false }));
+  expect(mockRouterReplace).toHaveBeenCalledWith("/dj/dj-ordinary");
+  await ordinary.unmount();
+
+  jest.clearAllMocks();
+  mockDraft.mockResolvedValue({ version: 1, kind: "dj-identity", draft: { candidates: identityCandidates } });
+  const stale = await render(<CreateDJScreen />);
+  await reachReview(stale);
+  await fireEvent.press(stale.getByRole("button", { name: "Bring my DJ to life" }));
+  const staleSuccess = mockCreateDj.mock.calls[0][1].onSuccess as (
+    result: { djId: string; avatarReady: boolean },
+  ) => void;
+  mockCurrentUserId = "another-listener";
+  await act(async () => staleSuccess({ djId: "dj-stale", avatarReady: true }));
+  expect(mockRouterReplace).not.toHaveBeenCalled();
+  expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
+    "dj_created",
+    expect.anything(),
+  );
+});
+
+test("pending submission locks Review, marks the final action busy, and leaves Back available", async () => {
+  const screen = await render(<CreateDJScreen />);
+  await reachReview(screen);
+  await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
+  expect(screen.getByTestId("create-dj-submit").props.accessibilityState).toEqual(
+    expect.objectContaining({ disabled: true, busy: true }),
+  );
+  expect(screen.queryByRole("button", { name: "Edit sound" })).toBeNull();
+  const back = screen.getByRole("button", { name: "Back" });
+  expect(back.props.accessibilityState?.disabled).not.toBe(true);
+  await fireEvent.press(back);
+  expect(mockRouterBack).toHaveBeenCalledTimes(1);
+  expect(mockCreateDj).toHaveBeenCalledTimes(1);
+
+  mockIsCreatePending = true;
+  await screen.rerender(<CreateDJScreen />);
+  const submit = screen.getByTestId("create-dj-submit");
+  expect(submit.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true, busy: true }));
+  expect(screen.queryByRole("button", { name: "Edit sound" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Edit identity" })).toBeNull();
+  expect(screen.queryByRole("radio", { name: "PRIVATE" })).toBeNull();
+});
+
+test("maps only bounded create errors and keeps localized Review state without raw provider text", async () => {
+  expect([
+    mapCreateDjErrorCategory({ code: "dj_quota_reached", dailyLimit: null, limit: 1 }),
+    mapCreateDjErrorCategory({ code: "invalid_input", dailyLimit: null, limit: null }),
+    mapCreateDjErrorCategory({ code: "provider_error", dailyLimit: null, limit: null }),
+    mapCreateDjErrorCategory({ code: "provider secret", dailyLimit: null, limit: null }),
+  ]).toEqual(["quota", "validation", "provider", "unknown"]);
+
+  await i18n.changeLanguage("es");
+  mockGetEdgeErrorPayload.mockResolvedValue({
+    code: "provider_error",
+    dailyLimit: null,
+    limit: null,
+  });
+  const screen = await render(<CreateDJScreen />);
+  await reachReview(screen);
+  await fireEvent.press(screen.getByRole("button", { name: "Dar vida a mi DJ" }));
+  const callbacks = mockCreateDj.mock.calls[0][1] as {
+    onError(error: unknown): Promise<void>;
+  };
+  await act(async () => callbacks.onError(new Error("raw provider secret and stack")));
+
+  expect(screen.getByText("Revisa tu DJ")).toBeTruthy();
+  expect(screen.getByText("Night Cartographer")).toBeTruthy();
+  expect(screen.getByText("El servicio de creación no está disponible. Inténtalo de nuevo.")).toBeTruthy();
+  expect(screen.queryByText(/raw provider secret/i)).toBeNull();
+  expect(mockRouterReplace).not.toHaveBeenCalled();
+  expect(mockTrackProductEvent).toHaveBeenCalledWith(
+    "dj_creation_failed",
+    expect.objectContaining({ errorCategory: "provider" }),
+  );
 });

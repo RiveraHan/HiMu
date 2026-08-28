@@ -106,6 +106,7 @@ export const dj = {
     errorTitle: "Couldn't create your DJ",
     quotaError: "You already have 1 DJ. Delete it to create another.",
     invalidError: "Please check the fields and try again.",
+    providerError: "The creation service is unavailable. Please try again.",
     genericError: "Something went wrong. Please try again.",
   },
   birth: {
