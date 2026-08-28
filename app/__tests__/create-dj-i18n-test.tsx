@@ -44,7 +44,7 @@ jest.mock("@/src/components/GlassInput", () => {
 });
 jest.mock("@/src/components/preferences/ProgressiveCatalogPicker", () => {
   const React = require("react");
-  const { Modal, Pressable, Text, View } = require("react-native");
+  const { BackHandler, Modal, Pressable, Text, View } = require("react-native");
   return {
     ProgressiveCatalogPicker: ({ title, groups, selected, getItemLabel, onChange }: {
       title: string;
@@ -56,6 +56,18 @@ jest.mock("@/src/components/preferences/ProgressiveCatalogPicker", () => {
       const [visible, setVisible] = React.useState(false);
       const value = groups[0].items[0];
       const label = getItemLabel(value);
+      React.useEffect(() => {
+        if (!visible) return;
+        // Jest's Modal does not emulate Android's native onRequestClose
+        // interception. Register the later hardware listener while visible so
+        // this route test exercises BackHandler priority instead of invoking a
+        // Modal prop directly.
+        const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+          setVisible(false);
+          return true;
+        });
+        return () => subscription.remove();
+      }, [visible]);
       return React.createElement(View, null,
         React.createElement(Pressable, {
           accessibilityRole: "button",
@@ -213,22 +225,19 @@ test("lets an open native picker close before hardware Back changes wizard state
   const addBackHandler = jest.spyOn(BackHandler, "addEventListener");
   const screen = await render(<CreateDJScreen />);
   await fireEvent.press(screen.getByRole("button", { name: "Edit Genres" }));
-  await act(async () => {
-    screen.getByTestId("catalog-picker-modal").props.onRequestClose();
-  });
-  expect(screen.getByText("Step 1 of 3")).toBeTruthy();
-  expect(mockRouterBack).not.toHaveBeenCalled();
 
-  await reachIdentity(screen);
-  const hardwareBack = addBackHandler.mock.calls.at(-1)?.[1];
-  let handled: boolean | undefined;
+  expect(screen.getByRole("checkbox", { name: "Ambient" })).toBeTruthy();
+  const pickerHardwareBack = addBackHandler.mock.calls.at(-1)?.[1];
+  let pickerHandled: boolean | undefined;
   await act(async () => {
-    handled = hardwareBack?.() ?? undefined;
+    pickerHandled = pickerHardwareBack?.() ?? undefined;
     await Promise.resolve();
   });
-  expect(handled).toBe(true);
-  await waitFor(() => expect(screen.getByText("Step 1 of 3")).toBeTruthy());
+  expect(pickerHandled).toBe(true);
+  expect(screen.queryByRole("checkbox", { name: "Ambient" })).toBeNull();
+  expect(screen.getByText("Step 1 of 3")).toBeTruthy();
   expect(mockRouterBack).not.toHaveBeenCalled();
+  expect(mockConfirm).not.toHaveBeenCalled();
   addBackHandler.mockRestore();
 });
 
