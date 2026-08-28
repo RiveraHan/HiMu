@@ -1,0 +1,95 @@
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react-native";
+import { useState } from "react";
+
+import { useDjIdentityController, type DjIdentityController } from "../use-dj-identity-controller";
+import { useDjIdentityDrafts } from "@/src/hooks/use-creative-draft";
+import type { DjIdentityDraftValue } from "@/src/components/dj/DjIdentityDraftStep";
+
+const mockDraft = jest.fn();
+
+jest.mock("@/src/hooks/use-creative-draft", () => ({ useDjIdentityDrafts: jest.fn() }));
+jest.mock("@/src/i18n/use-locale", () => ({ useLocale: () => ({ resolvedLanguage: "en" }) }));
+jest.mock("@/src/hooks/use-auth", () => ({ useCurrentUser: () => ({ id: "listener" }) }));
+
+const traits = { genres: ["House"], moods: ["Dreamy"], energy: 6, isInstrumental: false, vibe: "Rain-lit rooftop" };
+const candidates = [
+  { name: "Static Bloom", identityConcept: "A patient selector tracing city lights through warm analog haze." },
+  { name: "Velvet Index", identityConcept: "A curious archivist reshaping forgotten dance floors into intimate rituals." },
+  { name: "Orbit Mercy", identityConcept: "A celestial night guide balancing kinetic rhythm with quiet gravity." },
+];
+
+function useHarness(active: boolean, energy = 6) {
+  const [value, setValue] = useState<DjIdentityDraftValue>({ name: "", identityConcept: "", provenance: "custom", confirmed: false });
+  return useDjIdentityController({ active, fingerprint: `sound-${energy}`, traits: { ...traits, energy }, value, onChange: setValue });
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockDraft.mockResolvedValue({ version: 1, kind: "dj-identity", draft: { candidates } });
+  jest.mocked(useDjIdentityDrafts).mockImplementation(() => ({ mutateAsync: mockDraft }) as never);
+});
+
+afterEach(cleanup);
+
+test("requests only once when Identity becomes active and reuses candidates on return", async () => {
+  const view = await renderHook<DjIdentityController, { active: boolean }>(({ active }) => useHarness(active), { initialProps: { active: false } });
+  expect(mockDraft).not.toHaveBeenCalled();
+
+  await act(async () => { view.rerender({ active: true }); });
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await act(async () => { view.rerender({ active: false }); });
+  await act(async () => { view.rerender({ active: true }); });
+  expect(mockDraft).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(view.result.current.status).toBe("ready"));
+  await view.unmount();
+});
+
+test("marks confirmed text stale without discarding it and requests once for a new fingerprint", async () => {
+  function useConfirmedHarness(active: boolean, energy: number) {
+    const [value, setValue] = useState<DjIdentityDraftValue>({ name: "Static Bloom", identityConcept: candidates[0].identityConcept, provenance: "suggested", confirmed: true });
+    return { controller: useDjIdentityController({ active, fingerprint: `sound-${energy}`, traits: { ...traits, energy }, value, onChange: setValue }), value };
+  }
+  const view = await renderHook<{ controller: DjIdentityController; value: DjIdentityDraftValue }, { active: boolean; energy: number }>(({ active, energy }) => useConfirmedHarness(active, energy), { initialProps: { active: true, energy: 6 } });
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await act(async () => { view.rerender({ active: false, energy: 7 }); });
+  await waitFor(() => expect(view.result.current.value).toMatchObject({ name: "Static Bloom", confirmed: false }));
+  await act(async () => { view.rerender({ active: true, energy: 7 }); });
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(view.result.current.controller.status).toBe("ready"));
+  await view.unmount();
+});
+
+test("ignores a stale response after the fingerprint changes", async () => {
+  let resolveFirst!: (value: unknown) => void;
+  let resolveSecond!: (value: unknown) => void;
+  mockDraft.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+  const view = await renderHook<DjIdentityController, { energy: number }>(({ energy }) => useHarness(true, energy), { initialProps: { energy: 6 } });
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(1));
+  await act(async () => { view.rerender({ energy: 7 }); });
+  await waitFor(() => expect(mockDraft).toHaveBeenCalledTimes(2));
+  await act(async () => { resolveSecond({ version: 1, kind: "dj-identity", draft: { candidates } }); });
+  await waitFor(() => expect(view.result.current.candidates[0]?.name).toBe("Static Bloom"));
+  await act(async () => { resolveFirst({ version: 1, kind: "dj-identity", draft: { candidates: [{ ...candidates[0], name: "Stale" }] } }); });
+  expect(view.result.current.candidates[0]?.name).toBe("Static Bloom");
+  await view.unmount();
+});
+
+test("regeneration excludes current candidate names", async () => {
+  const view = await renderHook<DjIdentityController, void>(() => useHarness(true));
+  await waitFor(() => expect(view.result.current.status).toBe("ready"));
+  await act(async () => { await view.result.current.request(); });
+  expect(mockDraft).toHaveBeenLastCalledWith(expect.objectContaining({ exclude: candidates.map((candidate) => candidate.name) }));
+  await view.unmount();
+});
+
+test("exposes failure without inserting a generic candidate and permits custom entry", async () => {
+  mockDraft.mockRejectedValueOnce(new Error("unavailable"));
+  const view = await renderHook<DjIdentityController, void>(() => useHarness(true));
+  await waitFor(() => expect(view.result.current.status).toBe("error"));
+  expect(view.result.current.candidates).toEqual([]);
+  await act(async () => { view.result.current.startCustom(); });
+  await act(async () => { view.result.current.edit("name", "Night Cartographer"); });
+  expect(view.result.current.selectedName).toBeNull();
+  await view.unmount();
+});

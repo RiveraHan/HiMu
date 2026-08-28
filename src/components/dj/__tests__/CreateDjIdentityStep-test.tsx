@@ -1,0 +1,43 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+import { fireEvent, render } from "@testing-library/react-native";
+
+import { CreateDjIdentityStep } from "../CreateDjIdentityStep";
+import type { DjIdentityController } from "@/src/hooks/use-dj-identity-controller";
+
+jest.mock("@/src/components/preferences/PrefSection", () => {
+  const React = require("react");
+  const { Text, View } = require("react-native");
+  return { PrefSection: ({ title, children }: { title: string; children: React.ReactNode }) => React.createElement(View, null, React.createElement(Text, null, title), children) };
+});
+jest.mock("@/src/components/Button", () => {
+  const React = require("react"); const { Pressable, Text } = require("react-native");
+  return { Button: ({ label, onPress, disabled }: { label: string; onPress?: () => void; disabled?: boolean }) => React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: label, accessibilityState: { disabled }, disabled, onPress }, React.createElement(Text, null, label)) };
+});
+jest.mock("@/src/components/GlassInput", () => {
+  const React = require("react"); const { TextInput } = require("react-native");
+  return { GlassInput: (props: object) => React.createElement(TextInput, props) };
+});
+
+const controller: DjIdentityController = {
+  candidates: [{ name: "Static Bloom", identityConcept: "A patient selector tracing city lights through warm analog haze." }],
+  selectedName: null, status: "ready", request: jest.fn(), select: jest.fn(), edit: jest.fn(), startCustom: jest.fn(), confirm: jest.fn(),
+};
+
+test("shows candidates before optional editing and continues through confirm", async () => {
+  const screen = await render(<CreateDjIdentityStep controller={controller} value={{ name: "", identityConcept: "", provenance: "custom", confirmed: false }} />);
+  expect(screen.getByRole("radio", { name: /Static Bloom/ })).toBeTruthy();
+  expect(screen.queryByPlaceholderText("DJ name")).toBeNull();
+  await fireEvent.press(screen.getByRole("radio", { name: /Static Bloom/ }));
+  expect(controller.select).toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole("button", { name: "Confirm this identity" }));
+  expect(controller.confirm).toHaveBeenCalled();
+});
+
+test("offers retry and manual entry after a generation error", async () => {
+  const screen = await render(<CreateDjIdentityStep controller={{ ...controller, candidates: [], status: "error" }} value={{ name: "", identityConcept: "", provenance: "custom", confirmed: false }} />);
+  expect(screen.getByText("Suggestions are unavailable")).toBeTruthy();
+  await fireEvent.press(screen.getByRole("button", { name: "Try new suggestions" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Write my own" }));
+  expect(controller.request).toHaveBeenCalled();
+  expect(controller.startCustom).toHaveBeenCalled();
+});
