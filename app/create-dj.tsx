@@ -221,7 +221,6 @@ export default function CreateDJScreen() {
       flowVersion: 1,
       platform: Platform.OS === "web" ? "web" : "android",
       locale: resolvedLanguage,
-      step: "review",
     } as const;
 
     void trackProductEvent("dj_creation_started", eventContext);
@@ -237,9 +236,9 @@ export default function CreateDJScreen() {
       },
       onError: async (error) => {
         if (!isCurrentMutationUser(submittedUserId)) return;
-        const errorCategory = mapCreateDjErrorCategory(
-          await getEdgeErrorPayload(error),
-        );
+        const payload = await getEdgeErrorPayload(error);
+        if (!isCurrentMutationUser(submittedUserId)) return;
+        const errorCategory = mapCreateDjErrorCategory(payload);
         submitInFlight.current = false;
         setSubmitAccepted(false);
         setSubmitError(errorCategory);

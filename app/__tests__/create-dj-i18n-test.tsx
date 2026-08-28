@@ -4,8 +4,10 @@ import { BackHandler, Platform } from "react-native";
 
 import CreateDJScreen, { mapCreateDjErrorCategory } from "@/app/create-dj";
 import type { EdgeErrorPayload } from "@/src/api/edge-errors";
+import type { ProductEventName, ProductEventProperties } from "@/src/experience";
 import type { CreateDJInput } from "@/src/hooks/use-create-dj";
 import i18n from "@/src/i18n";
+import { handleProductEventRequest } from "@/supabase/functions/product-events/handler";
 
 const mockDraft = jest.fn();
 const mockConfirm = jest.fn<Promise<boolean>, [object]>();
@@ -185,6 +187,29 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 const originalPlatform = Object.getOwnPropertyDescriptor(Platform, "OS");
+
+async function expectTrackedEventsAccepted(expectedNames: ProductEventName[]) {
+  const calls = mockTrackProductEvent.mock.calls as [
+    ProductEventName,
+    ProductEventProperties,
+  ][];
+  expect(calls.map(([name]) => name)).toEqual(expectedNames);
+  const record = jest.fn(async () => "accepted" as const);
+
+  for (const [index, [name, properties]] of calls.entries()) {
+    const result = await handleProductEventRequest({
+      eventId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      installationId: "00000000-0000-4000-8000-000000000101",
+      sessionId: "00000000-0000-4000-8000-000000000102",
+      name,
+      occurredAt: "2026-08-25T12:00:00.000Z",
+      properties,
+    }, "listener", { record });
+    expect(result).toEqual({ status: 202, body: { status: "accepted" } });
+  }
+
+  expect(record).toHaveBeenCalledTimes(expectedNames.length);
+}
 
 async function choose(screen: Awaited<ReturnType<typeof render>>, title: string, item: string) {
   await fireEvent.press(screen.getByRole("button", { name: `Edit ${title}` }));
@@ -412,7 +437,6 @@ test("adopts first-track once and submits only the final Review action exactly o
     flowVersion: 1,
     platform: "android",
     locale: "en",
-    step: "review",
   });
 
   const callbacks = mockCreateDj.mock.calls[0][1] as {
@@ -423,6 +447,7 @@ test("adopts first-track once and submits only the final Review action exactly o
     pathname: "/create-track",
     params: { djId: "dj-new" },
   });
+  await expectTrackedEventsAccepted(["dj_creation_started", "dj_created"]);
 });
 
 test("ordinary success opens the DJ while a previous user's late success cannot navigate", async () => {
@@ -506,5 +531,38 @@ test("maps only bounded create errors and keeps localized Review state without r
   expect(mockTrackProductEvent).toHaveBeenCalledWith(
     "dj_creation_failed",
     expect.objectContaining({ errorCategory: "provider" }),
+  );
+  await expectTrackedEventsAccepted(["dj_creation_started", "dj_creation_failed"]);
+});
+
+test("ignores a previous user's error when the account changes during Edge error parsing", async () => {
+  let resolvePayload!: (payload: EdgeErrorPayload) => void;
+  mockGetEdgeErrorPayload.mockReturnValue(new Promise((resolve) => {
+    resolvePayload = resolve;
+  }));
+  const screen = await render(<CreateDJScreen />);
+  await reachReview(screen);
+  await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
+  const callbacks = mockCreateDj.mock.calls[0][1] as {
+    onError(error: unknown): Promise<void>;
+  };
+  const errorPromise = callbacks.onError(new Error("old user's provider secret"));
+  await act(async () => Promise.resolve());
+
+  mockCurrentUserId = "another-listener";
+  await screen.rerender(<CreateDJScreen />);
+  resolvePayload({ code: "provider_error", dailyLimit: null, limit: null });
+  await act(async () => errorPromise);
+
+  expect(screen.getByText("Review your DJ")).toBeTruthy();
+  expect(screen.getByText("Night Cartographer")).toBeTruthy();
+  expect(screen.queryByText("The creation service is unavailable. Please try again.")).toBeNull();
+  expect(screen.queryByText(/old user's provider secret/i)).toBeNull();
+  expect(screen.getByTestId("create-dj-submit").props.accessibilityState).toEqual(
+    expect.objectContaining({ disabled: true, busy: true }),
+  );
+  expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
+    "dj_creation_failed",
+    expect.anything(),
   );
 });
