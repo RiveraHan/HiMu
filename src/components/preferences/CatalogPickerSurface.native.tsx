@@ -7,6 +7,10 @@ import { Text } from "@/src/components/Text";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import type { CatalogPickerSurfaceProps } from "./progressive-catalog-types";
 
+export function catalogPickerKeyboardBehavior(platform: string): "height" | "padding" {
+  return platform === "android" ? "height" : "padding";
+}
+
 export function CatalogPickerSurface({
   visible,
   title,
@@ -27,7 +31,7 @@ export function CatalogPickerSurface({
       testID="catalog-picker-modal"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={catalogPickerKeyboardBehavior(Platform.OS)}
         style={styles.backdrop}
       >
         <Pressable accessible={false} onPress={onRequestClose} style={StyleSheet.absoluteFill} />

@@ -1,14 +1,22 @@
 import { useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 
 import { Button } from "@/src/components/Button";
 import { Chip } from "@/src/components/preferences/Chip";
 import { Text } from "@/src/components/Text";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
-import { CatalogPickerSurface } from "./CatalogPickerSurface";
+import { CatalogPickerSurface as NativeCatalogPickerSurface } from "./CatalogPickerSurface.native";
+import { CatalogPickerSurface as WebCatalogPickerSurface } from "./CatalogPickerSurface.web";
 import type { ProgressiveCatalogPickerProps } from "./progressive-catalog-types";
 
 export type { CatalogPickerSurfaceProps, ProgressiveCatalogPickerProps } from "./progressive-catalog-types";
+
+/** Explicit platform imports prevent Metro source-extension ordering from bypassing web. */
+export function resolveCatalogPickerSurface(platform: string) {
+  return platform === "web" ? WebCatalogPickerSurface : NativeCatalogPickerSurface;
+}
+
+const CatalogPickerSurface = resolveCatalogPickerSurface(Platform.OS);
 
 export function nextCatalogSelection(
   selected: readonly string[],
@@ -145,7 +153,7 @@ function CatalogPickerContents({
         </View>
       ) : null}
       {matchingGroups.map((group) => {
-        const expanded = expandedGroup === group.label || normalizedQuery.length > 0;
+        const expanded = expandedGroup === group.label;
         const label = getGroupLabel(group.label);
         return (
           <View key={group.label} style={styles.group}>

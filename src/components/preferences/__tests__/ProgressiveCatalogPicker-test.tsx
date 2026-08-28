@@ -3,8 +3,15 @@ import { fireEvent, render } from "@testing-library/react-native";
 import {
   ProgressiveCatalogPicker,
   nextCatalogSelection,
+  resolveCatalogPickerSurface,
 } from "../ProgressiveCatalogPicker";
-import { CatalogPickerSurface as NativeCatalogPickerSurface } from "../CatalogPickerSurface.native";
+import {
+  CatalogPickerSurface as NativeCatalogPickerSurface,
+  catalogPickerKeyboardBehavior,
+} from "../CatalogPickerSurface.native";
+import {
+  CatalogPickerSurface as WebCatalogPickerSurface,
+} from "../CatalogPickerSurface.web";
 
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
@@ -59,8 +66,37 @@ describe("ProgressiveCatalogPicker", () => {
     expect(screen.queryByText("House")).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Cumbia" })).toBeTruthy();
     await fireEvent.changeText(screen.getByPlaceholderText("Search Genres"), "ambiente");
+    expect(screen.queryByRole("checkbox", { name: "Ambiente" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Electrónica" }));
     expect(screen.getByRole("checkbox", { name: "Ambiente" })).toBeTruthy();
     expect(screen.getByText("Selected: Ambiente")).toBeTruthy();
+  });
+
+  it("keeps search results within the one selected expanded group and permits collapse", async () => {
+    const screen = await render(
+      <ProgressiveCatalogPicker
+        title="Genres"
+        groups={groups}
+        selected={[]}
+        min={0}
+        max={3}
+        getGroupLabel={(value) => value}
+        getItemLabel={(value) => value}
+        onChange={jest.fn()}
+      />,
+    );
+
+    await fireEvent.press(screen.getByRole("button", { name: "Edit Genres" }));
+    await fireEvent.changeText(screen.getByPlaceholderText("Search Genres"), "a");
+    expect(screen.getByRole("checkbox", { name: "Ambient" })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: "Cumbia" })).toBeNull();
+
+    await fireEvent.press(screen.getByRole("button", { name: "global" }));
+    expect(screen.getByRole("checkbox", { name: "Cumbia" })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: "Ambient" })).toBeNull();
+
+    await fireEvent.press(screen.getByRole("button", { name: "global" }));
+    expect(screen.queryByRole("checkbox", { name: "Cumbia" })).toBeNull();
   });
 
   it("allows legacy over-limit selections to be removed but rejects new additions", () => {
@@ -99,5 +135,12 @@ describe("ProgressiveCatalogPicker", () => {
 
     await screen.getByTestId("catalog-picker-modal").props.onRequestClose();
     expect(onRequestClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the platform-specific surface and Android keyboard avoidance", () => {
+    expect(resolveCatalogPickerSurface("web")).toBe(WebCatalogPickerSurface);
+    expect(resolveCatalogPickerSurface("ios")).toBe(NativeCatalogPickerSurface);
+    expect(catalogPickerKeyboardBehavior("android")).toBe("height");
+    expect(catalogPickerKeyboardBehavior("ios")).toBe("padding");
   });
 });
