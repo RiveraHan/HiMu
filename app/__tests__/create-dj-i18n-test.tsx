@@ -12,6 +12,23 @@ const mockRouterReplace = jest.fn();
 const mockRouterSetParams = jest.fn();
 let mockSearchParams: { step?: string | string[]; returnIntent?: string | string[] } = {};
 let mockWindow = { width: 390, height: 844, fontScale: 1 };
+type HardwareBackHandler = Parameters<typeof BackHandler.addEventListener>[1];
+let mockOpenNativeModalRequestClose: (() => void) | null = null;
+let mockHardwareBackHandlers: HardwareBackHandler[] = [];
+let mockWizardBackHandlerInvocations = 0;
+
+function dispatchMockAndroidHardwareBack(): boolean {
+  const modalRequestClose = mockOpenNativeModalRequestClose;
+  if (modalRequestClose) {
+    modalRequestClose();
+    return true;
+  }
+  for (let index = mockHardwareBackHandlers.length - 1; index >= 0; index -= 1) {
+    mockWizardBackHandlerInvocations += 1;
+    if (mockHardwareBackHandlers[index]?.()) return true;
+  }
+  return false;
+}
 
 const identityCandidates = [
   { name: "Static Bloom", identityConcept: "A patient selector tracing city lights through warm analog haze." },
@@ -44,7 +61,7 @@ jest.mock("@/src/components/GlassInput", () => {
 });
 jest.mock("@/src/components/preferences/ProgressiveCatalogPicker", () => {
   const React = require("react");
-  const { BackHandler, Modal, Pressable, Text, View } = require("react-native");
+  const { Modal, Pressable, Text, View } = require("react-native");
   return {
     ProgressiveCatalogPicker: ({ title, groups, selected, getItemLabel, onChange }: {
       title: string;
@@ -56,18 +73,16 @@ jest.mock("@/src/components/preferences/ProgressiveCatalogPicker", () => {
       const [visible, setVisible] = React.useState(false);
       const value = groups[0].items[0];
       const label = getItemLabel(value);
+      const requestClose = React.useCallback(() => setVisible(false), []);
       React.useEffect(() => {
         if (!visible) return;
-        // Jest's Modal does not emulate Android's native onRequestClose
-        // interception. Register the later hardware listener while visible so
-        // this route test exercises BackHandler priority instead of invoking a
-        // Modal prop directly.
-        const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-          setVisible(false);
-          return true;
-        });
-        return () => subscription.remove();
-      }, [visible]);
+        mockOpenNativeModalRequestClose = requestClose;
+        return () => {
+          if (mockOpenNativeModalRequestClose === requestClose) {
+            mockOpenNativeModalRequestClose = null;
+          }
+        };
+      }, [requestClose, visible]);
       return React.createElement(View, null,
         React.createElement(Pressable, {
           accessibilityRole: "button",
@@ -77,7 +92,7 @@ jest.mock("@/src/components/preferences/ProgressiveCatalogPicker", () => {
         React.createElement(Modal, {
           visible,
           testID: "catalog-picker-modal",
-          onRequestClose: () => setVisible(false),
+          onRequestClose: requestClose,
         },
         React.createElement(Pressable, {
           accessibilityRole: "checkbox",
@@ -171,6 +186,9 @@ beforeEach(async () => {
   await i18n.changeLanguage("en");
   mockSearchParams = {};
   mockWindow = { width: 390, height: 844, fontScale: 1 };
+  mockOpenNativeModalRequestClose = null;
+  mockHardwareBackHandlers = [];
+  mockWizardBackHandlerInvocations = 0;
   mockConfirm.mockResolvedValue(false);
   mockDraft.mockResolvedValue({ version: 1, kind: "dj-identity", draft: { candidates: identityCandidates } });
   Object.defineProperty(Platform, "OS", { configurable: true, value: "android" });
@@ -222,23 +240,31 @@ test("uses Review edit mappings without mounting another editor", async () => {
 });
 
 test("lets an open native picker close before hardware Back changes wizard state", async () => {
-  const addBackHandler = jest.spyOn(BackHandler, "addEventListener");
+  const addBackHandler = jest.spyOn(BackHandler, "addEventListener").mockImplementation((_event, handler) => {
+    mockHardwareBackHandlers.push(handler);
+    return {
+      remove: () => {
+        mockHardwareBackHandlers = mockHardwareBackHandlers.filter((candidate) => candidate !== handler);
+      },
+    };
+  });
   const screen = await render(<CreateDJScreen />);
   await fireEvent.press(screen.getByRole("button", { name: "Edit Genres" }));
 
   expect(screen.getByRole("checkbox", { name: "Ambient" })).toBeTruthy();
-  const pickerHardwareBack = addBackHandler.mock.calls.at(-1)?.[1];
-  let pickerHandled: boolean | undefined;
+  expect(addBackHandler).toHaveBeenCalledWith("hardwareBackPress", expect.any(Function));
+  let pickerHandled = false;
   await act(async () => {
-    pickerHandled = pickerHardwareBack?.() ?? undefined;
+    pickerHandled = dispatchMockAndroidHardwareBack();
     await Promise.resolve();
   });
+  addBackHandler.mockRestore();
   expect(pickerHandled).toBe(true);
   expect(screen.queryByRole("checkbox", { name: "Ambient" })).toBeNull();
   expect(screen.getByText("Step 1 of 3")).toBeTruthy();
+  expect(mockWizardBackHandlerInvocations).toBe(0);
   expect(mockRouterBack).not.toHaveBeenCalled();
   expect(mockConfirm).not.toHaveBeenCalled();
-  addBackHandler.mockRestore();
 });
 
 test("keeps dirty Sound on Stay, discards on confirmation, and exits clean Sound directly", async () => {
