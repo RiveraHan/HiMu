@@ -36,6 +36,7 @@ export function Chip({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={t("common.actions.removeLabel", { label })}
+          style={styles.removeButton}
         >
           <X size={14} color={theme.colors.onSurfaceVariant} />
         </Pressable>
@@ -100,6 +101,14 @@ const styles = StyleSheet.create((theme) => ({
   removable: {
     backgroundColor: theme.colors.surfaceContainerHigh,
     borderColor: theme.colors.glassBorder,
+  },
+  removeButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: -theme.spacing.stackSm,
+    marginRight: -theme.spacing.stackMd + 2,
   },
   pressed: {
     opacity: 0.6,
