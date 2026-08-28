@@ -21,9 +21,11 @@ const CatalogPickerSurface = resolveCatalogPickerSurface(Platform.OS);
 export function nextCatalogSelection(
   selected: readonly string[],
   value: string,
+  min: number,
   max: number,
 ): { next: string[]; rejected: boolean } {
   if (selected.includes(value)) {
+    if (selected.length <= min) return { next: [...selected], rejected: true };
     return { next: selected.filter((item) => item !== value), rejected: false };
   }
   if (selected.length >= max) return { next: [...selected], rejected: true };
@@ -62,9 +64,10 @@ export function ProgressiveCatalogPicker({
   const close = () => setVisible(false);
   const toggle = (value: string) => {
     if (disabled) return;
-    const result = nextCatalogSelection(selected, value, max);
+    const removing = selected.includes(value);
+    const result = nextCatalogSelection(selected, value, min, max);
     if (result.rejected) {
-      setLimitAnnouncement(`Choose up to ${max}`);
+      setLimitAnnouncement(removing ? `Choose at least ${min}` : `Choose up to ${max}`);
       return;
     }
     setLimitAnnouncement("");

@@ -1,4 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import { useState } from "react";
 
 import {
   ProgressiveCatalogPicker,
@@ -44,6 +45,31 @@ describe("ProgressiveCatalogPicker", () => {
 
     expect(onChange).not.toHaveBeenCalled();
     expect(screen.getByText("Choose up to 1")).toBeTruthy();
+  });
+
+  it("keeps the final required selection when a user removes it from the checked option", async () => {
+    function RequiredSelectionHarness() {
+      const [selected, setSelected] = useState<string[]>(["Ambient"]);
+      return (
+        <ProgressiveCatalogPicker
+          title="Genres"
+          groups={groups}
+          selected={selected}
+          min={1}
+          max={3}
+          getGroupLabel={(value) => value}
+          getItemLabel={(value) => value}
+          onChange={setSelected}
+        />
+      );
+    }
+
+    const screen = await render(<RequiredSelectionHarness />);
+    await fireEvent.press(screen.getByRole("button", { name: "Edit Genres" }));
+    await fireEvent.press(screen.getByRole("checkbox", { name: "Ambient" }));
+
+    expect(screen.getByRole("checkbox", { name: "Ambient" }).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByText("Choose at least 1")).toBeTruthy();
   });
 
   it("expands one group at a time, filters localized labels, and keeps the selected tray canonical", async () => {
@@ -99,13 +125,17 @@ describe("ProgressiveCatalogPicker", () => {
     expect(screen.queryByRole("checkbox", { name: "Cumbia" })).toBeNull();
   });
 
-  it("allows legacy over-limit selections to be removed but rejects new additions", () => {
-    expect(nextCatalogSelection(["Ambient", "House"], "Ambient", 1)).toEqual({
+  it("allows legacy over-limit selections to be removed but rejects new additions and below-min removals", () => {
+    expect(nextCatalogSelection(["Ambient", "House"], "Ambient", 1, 1)).toEqual({
       next: ["House"],
       rejected: false,
     });
-    expect(nextCatalogSelection(["Ambient", "House"], "Cumbia", 1)).toEqual({
+    expect(nextCatalogSelection(["Ambient", "House"], "Cumbia", 1, 1)).toEqual({
       next: ["Ambient", "House"],
+      rejected: true,
+    });
+    expect(nextCatalogSelection(["House"], "House", 1, 3)).toEqual({
+      next: ["House"],
       rejected: true,
     });
   });
