@@ -68,6 +68,38 @@ export const dj = {
   create: {
     title: "Crear tu DJ",
     subtitle: "Da forma a un compañero que genera música solo para ti.",
+    progress: "Paso {{current}} de {{total}}",
+    steps: {
+      sound: "Sonido",
+      identity: "Identidad",
+      review: "Revisión",
+    },
+    continue: "Continuar",
+    review: {
+      title: "Revisa tu DJ",
+      identityTitle: "Identidad",
+      soundTitle: "Sonido",
+      editIdentity: "Editar identidad",
+      editSound: "Editar sonido",
+      intensity: "Intensidad",
+      soundMode: "Tipo de sonido",
+      personalDetail: "Detalle personal",
+      intensityValues: {
+        calm: "Calma",
+        balanced: "Equilibrado",
+        intense: "Intenso",
+      },
+      soundModes: {
+        instrumental: "Instrumental",
+        vocal: "Vocal",
+      },
+    },
+    abandon: {
+      title: "¿Descartar este borrador de DJ?",
+      message: "Perderás el borrador local de tu DJ.",
+      stay: "Quedarme",
+      discard: "Descartar",
+    },
     defaultName: "tu DJ",
     submit: "Dar vida a mi DJ",
     loading: "Dando vida a {{name}}…",
