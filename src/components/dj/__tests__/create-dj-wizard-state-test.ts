@@ -23,7 +23,7 @@ describe("create DJ wizard state", () => {
     const initial = createInitialCreateDjWizardState("first_track");
     const soundReady = reduceCreateDjWizard(initial, {
       type: "sound_changed",
-      patch: { genres: ["Ambient"], moods: ["Calm"] },
+      patch: { genres: ["Ambient"], moods: ["Focus"] },
     });
     const confirmedReviewState: CreateDjWizardState = {
       ...soundReady,
@@ -34,19 +34,19 @@ describe("create DJ wizard state", () => {
         provenance: "custom",
         confirmed: true,
       },
-      identityFingerprint: JSON.stringify([["Ambient"], ["Calm"], 6, "instrumental", ""]),
+      identityFingerprint: JSON.stringify([["Ambient"], ["Focus"], 6, "instrumental", ""]),
       identityFreshness: "fresh",
       dirty: true,
     };
     expect(canEnterCreateDjStep(soundReady, "identity")).toBe(true);
     expect(createDjTraitsFingerprint(soundReady.sound)).toBe(
-      JSON.stringify([["Ambient"], ["Calm"], 6, "instrumental", ""]),
+      JSON.stringify([["Ambient"], ["Focus"], 6, "instrumental", ""]),
     );
     expect(toCreateDjInput(confirmedReviewState)).toEqual({
       name: "Night Cartographer",
       identityConcept: "Maps patient rhythms into luminous shared journeys.",
       genres: ["Ambient"],
-      moods: ["Calm"],
+      moods: ["Focus"],
       energy: 6,
       isInstrumental: true,
       vibe: undefined,
@@ -65,9 +65,52 @@ describe("create DJ wizard state", () => {
     expect(canEnterCreateDjStep(fourSelections, "review")).toBe(false);
   });
 
+  it("rejects non-canonical and duplicate selections, and overlong vibes", () => {
+    const initial = createInitialCreateDjWizardState();
+    for (const patch of [
+      { genres: ["Not a genre"], moods: ["Focus"] },
+      { genres: ["Ambient", "Ambient"], moods: ["Focus"] },
+      { genres: ["Ambient"], moods: ["Not a mood"] },
+      { genres: ["Ambient"], moods: ["Focus", "Focus"] },
+      { genres: ["Ambient"], moods: ["Calm"] },
+    ]) {
+      const invalid = reduceCreateDjWizard(initial, { type: "sound_changed", patch });
+      expect(canEnterCreateDjStep(invalid, "identity")).toBe(false);
+      expect(() => toCreateDjInput({
+        ...invalid,
+        step: "review",
+        identity: {
+          name: "Night Cartographer",
+          identityConcept: "Maps patient rhythms into luminous shared journeys.",
+          provenance: "custom",
+          confirmed: true,
+        },
+        identityFingerprint: createDjTraitsFingerprint(invalid.sound),
+        identityFreshness: "fresh",
+      })).toThrow("create_dj_state_invalid");
+    }
+    const overlong = reduceCreateDjWizard(initial, {
+      type: "sound_changed",
+      patch: { genres: ["Ambient"], moods: ["Focus"], vibe: "x".repeat(141) },
+    });
+    expect(canEnterCreateDjStep(overlong, "identity")).toBe(false);
+    expect(() => toCreateDjInput({
+      ...overlong,
+      step: "review",
+      identity: {
+        name: "Night Cartographer",
+        identityConcept: "Maps patient rhythms into luminous shared journeys.",
+        provenance: "custom",
+        confirmed: true,
+      },
+      identityFingerprint: createDjTraitsFingerprint(overlong.sound),
+      identityFreshness: "fresh",
+    })).toThrow("create_dj_state_invalid");
+  });
+
   it("stales confirmed identity when sound changes, without losing its text", () => {
     const sound = reduceCreateDjWizard(createInitialCreateDjWizardState(), {
-      type: "sound_changed", patch: { genres: ["Ambient"], moods: ["Calm"] },
+      type: "sound_changed", patch: { genres: ["Ambient"], moods: ["Focus"] },
     });
     const confirmed = reduceCreateDjWizard(sound, {
       type: "identity_changed",
@@ -98,5 +141,22 @@ describe("create DJ wizard state", () => {
     expect(consumed.returnIntent).toBeNull();
     expect(reduceCreateDjWizard(consumed, { type: "return_intent_consumed" })).toBe(consumed);
     expect(() => toCreateDjInput(initial)).toThrow("create_dj_state_invalid");
+  });
+
+  it("requires the identity fingerprint to match current sound traits", () => {
+    const sound = reduceCreateDjWizard(createInitialCreateDjWizardState(), {
+      type: "sound_changed", patch: { genres: ["Ambient"], moods: ["Focus"] },
+    });
+    const confirmed = reduceCreateDjWizard(sound, {
+      type: "identity_changed",
+      value: { name: "Night Cartographer", identityConcept: "Maps patient rhythms into luminous shared journeys.", provenance: "custom", confirmed: true },
+    });
+    const forged: CreateDjWizardState = {
+      ...confirmed,
+      step: "review",
+      identityFingerprint: "different",
+    };
+    expect(canEnterCreateDjStep(forged, "review")).toBe(false);
+    expect(() => toCreateDjInput(forged)).toThrow("create_dj_state_invalid");
   });
 });

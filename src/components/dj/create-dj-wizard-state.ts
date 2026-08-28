@@ -2,6 +2,7 @@ import type { DjIdentityDraftValue } from "@/src/components/dj/DjIdentityDraftSt
 import type { CreateDJInput } from "@/src/hooks/use-create-dj";
 import type { FirstTrackReturnIntent } from "@/src/experience/pending-intent";
 import type { Visibility } from "@/src/types/content-visibility";
+import { DJ_MOODS, GENRES } from "@/src/types/music-preferences";
 
 export type CreateDjStep = "sound" | "identity" | "review";
 export type DjIntensityChoice = "calm" | "balanced" | "intense";
@@ -86,17 +87,28 @@ function canConfirmIdentity(identity: DjIdentityDraftValue): boolean {
   return name.length >= 2 && name.length <= 24 && concept.length >= 10 && concept.length <= 240;
 }
 
+function isUniqueCanonicalSelection(values: readonly string[], allowed: readonly string[]): boolean {
+  return values.length >= 1 && values.length <= 3 &&
+    new Set(values).size === values.length &&
+    values.every((value) => allowed.includes(value));
+}
+
+function hasValidSound(state: CreateDjWizardState): boolean {
+  return isUniqueCanonicalSelection(state.sound.genres, GENRES) &&
+    isUniqueCanonicalSelection(state.sound.moods, DJ_MOODS) &&
+    normalizeDjVibe(state.sound.vibe).length <= 140;
+}
+
 export function canEnterCreateDjStep(
   state: CreateDjWizardState,
   step: CreateDjStep,
 ): boolean {
   if (step === "sound") return true;
-  if (
-    state.sound.genres.length === 0 || state.sound.genres.length > 3 ||
-    state.sound.moods.length === 0 || state.sound.moods.length > 3
-  ) return false;
+  if (!hasValidSound(state)) return false;
   if (step === "identity") return true;
-  return state.identityFreshness === "fresh" && state.identity.confirmed && canConfirmIdentity(state.identity);
+  return state.identityFreshness === "fresh" && state.identity.confirmed &&
+    canConfirmIdentity(state.identity) &&
+    state.identityFingerprint === createDjTraitsFingerprint(state.sound);
 }
 
 function reduceSoundChanged(
