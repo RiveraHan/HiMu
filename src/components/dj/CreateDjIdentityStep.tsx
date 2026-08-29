@@ -39,6 +39,7 @@ export function CreateDjIdentityStep({ active = false, controller, value, disabl
   }, [value.identityConcept, value.name, value.provenance]);
 
   useEffect(() => {
+    if (ReactNative.Platform.OS === "web") return;
     if (active && !previousActive.current) {
       const node = ReactNative.findNodeHandle(headingRef.current);
       if (node !== null) ReactNative.AccessibilityInfo.setAccessibilityFocus(node);
@@ -92,7 +93,7 @@ export function CreateDjIdentityStep({ active = false, controller, value, disabl
         <GlassInput accessibilityLabel={t("dj.identity.conceptLabel")} placeholder={t("dj.identity.conceptPlaceholder")} value={value.identityConcept} onChangeText={(text) => controller.edit("identityConcept", text)} maxLength={240} multiline editable={!disabled} />
       </View> : null}
 
-      <Button label={t("dj.identity.continue")} disabled={disabled || busy || !validToContinue} onPress={continueIdentity} />
+      <Button testID="create-dj-identity-action" label={t("dj.identity.continue")} disabled={disabled || busy || !validToContinue} onPress={continueIdentity} />
     </PrefSection>
   );
 }

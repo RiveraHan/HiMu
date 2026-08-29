@@ -8,220 +8,257 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import CreateDJScreen from "../../app/create-dj";
 import TrainDJScreen from "../../app/train-dj/[id]";
+import i18n from "../../src/i18n";
 import { LocaleContext } from "../../src/i18n/use-locale";
+import type { SupportedLanguage } from "../../src/i18n/types";
+
+type RectSnapshot = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+type TargetSnapshot = RectSnapshot & {
+  label: string;
+  role: string;
+  disabled: boolean;
+  focusable: boolean;
+};
 
 type WorkflowSnapshot = {
+  flow: "create" | "train";
+  locale: SupportedLanguage;
   viewportWidth: number;
-  contentDirection: string;
-  railDisplay: string;
-  reviewPosition: string;
-  name: string;
-  identityConcept: string;
+  viewportHeight: number;
+  documentClientWidth: number;
+  documentScrollWidth: number;
+  maxContentScrollWidth: number;
+  contentMode: string;
+  lowHeight: boolean | null;
+  contentDirection: string | null;
+  railDisplay: string | null;
+  reviewPosition: string | null;
+  activeStep: number | null;
+  activeStepLabel: string | null;
+  activeEditorCount: number;
   candidateCount: number;
-  visibilitySummary: string;
-  finalActionCount: number;
-  finalActionDisabled: boolean;
+  identityRequestCount: number;
+  actionCount: number;
+  actionDisabled: boolean | null;
+  actionRect: RectSnapshot | null;
+  dialogCount: number;
+  dialogFocus: string | null;
+  selectedValues: string[];
+  reviewText: string;
   createCalls: number;
-  trainContentDirection: string;
-  trainRailDisplay: string;
-  trainReviewPosition: string;
-  trainName: string;
-  trainReviewSummary: string;
-  trainFinalActionCount: number;
-  trainFinalActionDisabled: boolean;
   updateCalls: number;
+  updateInput: unknown;
+  targetRects: TargetSnapshot[];
+  routeStep: string | null;
+  setParamsCalls: number;
 };
 
 declare global {
   interface Window {
     __HIMU_BROWSER_ERROR__?: string;
     __HIMU_CREATE_CALLS__?: number;
+    __HIMU_IDENTITY_REQUESTS__?: number;
+    __HIMU_ROUTER_SET_PARAMS_COUNT__?: number;
     __HIMU_UPDATE_CALLS__?: number;
-    __HIMU_INITIAL_FINAL_DISABLED__?: boolean;
+    __HIMU_UPDATE_INPUT__?: unknown;
     __HIMU_WORKFLOW_READ__?: () => WorkflowSnapshot;
     __HIMU_WORKFLOW_READY__?: boolean;
   }
 }
 
-function elementsByLabel(label: string): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>("[aria-label]"))
-    .filter((element) => element.getAttribute("aria-label") === label);
+function testElement(testID: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-testid="${testID}"]`);
 }
 
-function elementByLabel(label: string): HTMLElement {
-  const element = elementsByLabel(label)[0];
-  if (!element) throw new Error(`Missing production control: ${label}`);
-  return element;
+function rect(element: Element): RectSnapshot {
+  const value = element.getBoundingClientRect();
+  return {
+    top: value.top,
+    right: value.right,
+    bottom: value.bottom,
+    left: value.left,
+    width: value.width,
+    height: value.height,
+  };
 }
 
-function buttonByText(text: string): HTMLElement {
-  const element = Array.from(
-    document.querySelectorAll<HTMLElement>('[role="button"]'),
-  ).find((candidate) => candidate.textContent?.trim() === text);
-  if (!element) throw new Error(`Missing production button: ${text}`);
-  return element;
-}
-
-function testElement(testID: string): HTMLElement {
-  const element = document.querySelector<HTMLElement>(
-    `[data-testid="${testID}"]`,
+function label(element: HTMLElement): string {
+  return (
+    element.getAttribute("aria-label") ??
+    element.getAttribute("placeholder") ??
+    element.textContent?.trim() ??
+    ""
   );
-  if (!element) throw new Error(`Missing production element: ${testID}`);
-  return element;
-}
-
-function testElements(testID: string): HTMLElement[] {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>(`[data-testid="${testID}"]`),
-  );
-}
-
-function setInput(label: string, value: string) {
-  const input = elementByLabel(label) as HTMLInputElement | HTMLTextAreaElement;
-  const setter = Object.getOwnPropertyDescriptor(
-    Object.getPrototypeOf(input),
-    "value",
-  )?.set;
-  if (!setter) throw new Error("Browser input value setter is unavailable");
-  setter.call(input, value);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}
-
-async function waitFor(check: () => boolean, message: string) {
-  const startedAt = Date.now();
-  while (!check()) {
-    if (Date.now() - startedAt > 5000) throw new Error(message);
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
 }
 
 function isDisabled(element: HTMLElement): boolean {
-  return element.getAttribute("aria-disabled") === "true";
+  return (
+    element.getAttribute("aria-disabled") === "true" ||
+    (element as HTMLButtonElement).disabled === true
+  );
 }
 
-function BrowserWorkflowProbe() {
+function visible(element: HTMLElement): boolean {
+  const bounds = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  return (
+    bounds.width > 0 &&
+    bounds.height > 0 &&
+    style.display !== "none" &&
+    style.visibility !== "hidden"
+  );
+}
+
+function targetRects(): TargetSnapshot[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[role="button"], [role="checkbox"], [role="radio"], input, textarea, button',
+    ),
+  )
+    .filter(visible)
+    .map((element) => ({
+      ...rect(element),
+      label: label(element),
+      role: element.getAttribute("role") ?? element.tagName.toLowerCase(),
+      disabled: isDisabled(element),
+      focusable: element.tabIndex >= 0,
+    }));
+}
+
+function readWorkflow(
+  flow: "create" | "train",
+  locale: SupportedLanguage,
+): WorkflowSnapshot {
+  const layout = document.querySelector<HTMLElement>(
+    '[id^="create-dj-layout-"]',
+  );
+  const content = testElement("responsive-form-content");
+  const rail = testElement("form-step-rail");
+  const review = flow === "create"
+    ? testElement("create-dj-review")
+    : testElement("sticky-review-panel");
+  const actionContainer = testElement("responsive-form-footer");
+  const actions = flow === "create"
+    ? Array.from(document.querySelectorAll<HTMLElement>(
+        '[data-testid="create-dj-sound-action"], [data-testid="create-dj-identity-action"], [data-testid="create-dj-submit"]',
+      )).filter(visible)
+    : actionContainer
+      ? Array.from(actionContainer.querySelectorAll<HTMLElement>('[role="button"]')).filter(visible)
+      : [];
+  const progress = document.querySelector<HTMLElement>('[role="progressbar"]');
+  const progressCurrent = progress?.getAttribute("aria-valuenow") ??
+    progress?.getAttribute("aria-label")?.match(/\d+/)?.[0] ??
+    progress?.textContent?.match(/\d+/)?.[0] ??
+    null;
+  const selectedStep = Array.from(
+    document.querySelectorAll<HTMLElement>('[role="button"][aria-selected="true"]'),
+  )[0];
+  const selectedValues = Array.from(
+    document.querySelectorAll<HTMLElement>('[aria-label^="Selected:"]'),
+  ).map((element) => element.getAttribute("aria-label") ?? "");
+  const active = document.activeElement as HTMLElement | null;
+  const allElements = Array.from(document.querySelectorAll<HTMLElement>("body *"));
+
+  return {
+    flow,
+    locale,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    documentClientWidth: document.documentElement.clientWidth,
+    documentScrollWidth: document.documentElement.scrollWidth,
+    maxContentScrollWidth: allElements.reduce(
+      (maximum, element) => Math.max(maximum, element.scrollWidth),
+      0,
+    ),
+    contentMode: layout?.dataset.contentMode ??
+      layout?.id.replace("create-dj-layout-", "") ??
+      (content ? getComputedStyle(content).flexDirection : "unknown"),
+    lowHeight: layout?.dataset.lowHeight === undefined
+      ? null
+      : layout.dataset.lowHeight === "true",
+    contentDirection: content ? getComputedStyle(content).flexDirection : null,
+    railDisplay: rail ? getComputedStyle(rail).display : null,
+    reviewPosition: review ? getComputedStyle(review).position : null,
+    activeStep: progressCurrent === null ? null : Number(progressCurrent),
+    activeStepLabel: selectedStep ? label(selectedStep) : null,
+    activeEditorCount: flow === "create"
+      ? document.querySelectorAll('[data-testid="create-dj-active-editor"]').length
+      : document.querySelectorAll('[data-testid="responsive-form-editor"]').length,
+    candidateCount: document.querySelectorAll('[role="radio"][aria-label*=". "]').length,
+    identityRequestCount: window.__HIMU_IDENTITY_REQUESTS__ ?? 0,
+    actionCount: actions.length,
+    actionDisabled: actions[0] ? isDisabled(actions[0]) : null,
+    actionRect: actions[0] ? rect(actions[0]) : null,
+    dialogCount: document.querySelectorAll('[role="dialog"][aria-modal="true"]').length,
+    dialogFocus: active ? label(active) : null,
+    selectedValues,
+    reviewText: review?.textContent ?? "",
+    createCalls: window.__HIMU_CREATE_CALLS__ ?? 0,
+    updateCalls: window.__HIMU_UPDATE_CALLS__ ?? 0,
+    updateInput: window.__HIMU_UPDATE_INPUT__ ?? null,
+    targetRects: targetRects(),
+    routeStep: new URLSearchParams(window.location.search).get("step"),
+    setParamsCalls: window.__HIMU_ROUTER_SET_PARAMS_COUNT__ ?? 0,
+  };
+}
+
+function BrowserWorkflowProbe({
+  flow,
+  locale,
+}: {
+  flow: "create" | "train";
+  locale: SupportedLanguage;
+}) {
   useEffect(() => {
-    const driveWorkflow = async () => {
-      const finalAction = elementByLabel("Bring my DJ to life");
-      window.__HIMU_INITIAL_FINAL_DISABLED__ = isDisabled(finalAction);
-
-      elementByLabel("Chill & Ambient").click();
-      await waitFor(
-        () => elementsByLabel("Ambient").length === 1,
-        "Ambient trait did not become available",
-      );
-      elementByLabel("Ambient").click();
-      elementByLabel("Calm").click();
-      await waitFor(
-        () => elementsByLabel("Focus").length === 1,
-        "Focus trait did not become available",
-      );
-      elementByLabel("Focus").click();
-
-      await waitFor(
-        () => document.querySelectorAll('[role="radio"]').length === 3,
-        "Exactly three production identity candidates were not rendered",
-      );
-      elementByLabel("Write my own").click();
-      setInput("DJ name", "Night Cartographer");
-      setInput(
-        "Identity concept",
-        "A custom navigator mapping patient rhythms into luminous shared journeys.",
-      );
-      await waitFor(
-        () => !isDisabled(elementByLabel("Confirm this identity")),
-        "Production identity validation did not enable confirmation",
-      );
-      elementByLabel("Confirm this identity").click();
-      buttonByText("PUBLIC").click();
-      await waitFor(
-        () => !isDisabled(finalAction),
-        "Production traits and identity validation did not enable the final action",
-      );
-
-      window.__HIMU_WORKFLOW_READ__ = () => {
-        const [content, trainContent] = testElements("responsive-form-content");
-        const [rail, trainRail] = testElements("form-step-rail");
-        const [review, trainReview] = testElements("sticky-review-panel");
-        const name = elementByLabel("DJ name") as HTMLInputElement;
-        const identityConcept = elementByLabel(
-          "Identity concept",
-        ) as HTMLInputElement;
-        const finalActions = elementsByLabel("Bring my DJ to life");
-        const trainName = document.querySelector<HTMLInputElement>(
-          'input[placeholder="e.g. Lumen"]',
-        );
-        const trainFinalActions = elementsByLabel("Save changes");
-
-        if (
-          !content ||
-          !trainContent ||
-          !rail ||
-          !trainRail ||
-          !review ||
-          !trainReview
-        ) {
-          throw new Error("Both production responsive workflow shells must be mounted");
-        }
-
-        return {
-          viewportWidth: window.innerWidth,
-          contentDirection: getComputedStyle(content).flexDirection,
-          railDisplay: getComputedStyle(rail).display,
-          reviewPosition: getComputedStyle(review).position,
-          name: name.value,
-          identityConcept: identityConcept.value,
-          candidateCount: document.querySelectorAll('[role="radio"]').length,
-          visibilitySummary: testElement(
-            "create-dj-visibility-summary",
-          ).textContent ?? "",
-          finalActionCount: finalActions.length,
-          finalActionDisabled: isDisabled(finalActions[0]),
-          createCalls: window.__HIMU_CREATE_CALLS__ ?? 0,
-          trainContentDirection: getComputedStyle(trainContent).flexDirection,
-          trainRailDisplay: getComputedStyle(trainRail).display,
-          trainReviewPosition: getComputedStyle(trainReview).position,
-          trainName: trainName?.value ?? "",
-          trainReviewSummary: testElement("train-dj-review").textContent ?? "",
-          trainFinalActionCount: trainFinalActions.length,
-          trainFinalActionDisabled: isDisabled(trainFinalActions[0]),
-          updateCalls: window.__HIMU_UPDATE_CALLS__ ?? 0,
-        };
-      };
-      window.__HIMU_WORKFLOW_READY__ = true;
+    window.__HIMU_WORKFLOW_READ__ = () => readWorkflow(flow, locale);
+    window.__HIMU_WORKFLOW_READY__ = true;
+    return () => {
+      window.__HIMU_WORKFLOW_READY__ = false;
+      delete window.__HIMU_WORKFLOW_READ__;
     };
-
-    void driveWorkflow().catch((error: unknown) => {
-      window.__HIMU_BROWSER_ERROR__ =
-        error instanceof Error ? error.stack ?? error.message : String(error);
-    });
-  }, []);
-
+  }, [flow, locale]);
   return null;
 }
 
-const root = document.querySelector("#root");
-if (!root) throw new Error("Missing browser fixture root");
+async function start() {
+  const params = new URLSearchParams(window.location.search);
+  const locale: SupportedLanguage = params.get("locale") === "es" ? "es" : "en";
+  const flow = params.get("flow") === "train" ? "train" : "create";
+  await i18n.changeLanguage(locale);
 
-createRoot(root).render(
-  <SafeAreaProvider
-    initialMetrics={{
-      frame: { x: 0, y: 0, width: 390, height: 844 },
-      insets: { top: 0, right: 0, bottom: 0, left: 0 },
-    }}
-  >
-    <LocaleContext.Provider
-      value={{
-        preference: "en",
-        resolvedLanguage: "en",
-        setPreference: async () => undefined,
-        isSaving: false,
+  const root = document.querySelector("#root");
+  if (!root) throw new Error("Missing browser fixture root");
+  createRoot(root).render(
+    <SafeAreaProvider
+      initialMetrics={{
+        frame: { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight },
+        insets: { top: 0, right: 0, bottom: 0, left: 0 },
       }}
     >
-      <CreateDJScreen />
-      <TrainDJScreen />
-      <BrowserWorkflowProbe />
-    </LocaleContext.Provider>
-  </SafeAreaProvider>,
-);
+      <LocaleContext.Provider
+        value={{
+          preference: locale,
+          resolvedLanguage: locale,
+          setPreference: async () => undefined,
+          isSaving: false,
+        }}
+      >
+        {flow === "create" ? <CreateDJScreen /> : <TrainDJScreen />}
+        <BrowserWorkflowProbe flow={flow} locale={locale} />
+      </LocaleContext.Provider>
+    </SafeAreaProvider>,
+  );
+}
+
+void start().catch((error: unknown) => {
+  window.__HIMU_BROWSER_ERROR__ =
+    error instanceof Error ? error.stack ?? error.message : String(error);
+});

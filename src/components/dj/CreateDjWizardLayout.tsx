@@ -59,13 +59,14 @@ export function CreateDjWizardLayout({
   useEffect(() => {
     const changed = previousStep.current !== step;
     previousStep.current = step;
-    if (!changed || step === "identity") return;
+    if (Platform.OS === "web" || !changed || step === "identity") return;
     const node = ReactNative.findNodeHandle(progressRef.current);
     if (node !== null) ReactNative.AccessibilityInfo.setAccessibilityFocus(node);
   }, [step]);
 
   return (
     <ScrollView
+      testID="create-dj-wizard-scroll-view"
       style={styles.root}
       contentContainerStyle={styles.scrollContent}
       keyboardShouldPersistTaps="handled"
@@ -75,6 +76,12 @@ export function CreateDjWizardLayout({
         variant="wide"
         testID="create-dj-wizard-layout"
         nativeID={`create-dj-layout-${layout.mode}`}
+        {...({
+          dataSet: {
+            contentMode: layout.mode,
+            lowHeight: layout.lowHeight ? "true" : "false",
+          },
+        } as unknown as { nativeID?: string })}
         onLayout={(event) => {
           const nextWidth = event.nativeEvent.layout.width;
           setMeasuredWidth((currentWidth) => currentWidth === nextWidth ? currentWidth : nextWidth);

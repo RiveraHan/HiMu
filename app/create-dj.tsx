@@ -286,6 +286,7 @@ export default function CreateDJScreen() {
 
   const action = state.step === "sound" ? (
     <Button
+      testID="create-dj-sound-action"
       label={t("dj.create.continue")}
       disabled={!canEnterCreateDjStep(state, "identity")}
       onPress={() => requestStep("identity")}
