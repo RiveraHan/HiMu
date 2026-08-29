@@ -53,6 +53,8 @@ export * from "./settings/Toggle";
 export * from "./preferences/Chip";
 export * from "./preferences/GroupedChipPicker";
 export * from "./preferences/ProgressiveCatalogPicker";
+export * from "./preferences/AtmosphereChoice";
+export * from "./preferences/MusicPreferenceSkeletons";
 export * from "./preferences/PrefSection";
 export * from "./preferences/Segmented";
 export * from "./preferences/VibeSlider";

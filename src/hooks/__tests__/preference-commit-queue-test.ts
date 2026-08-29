@@ -78,6 +78,7 @@ test("optimistically replays rapid edits but persists one cumulative head at a t
     persist,
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -114,6 +115,7 @@ test("a failed head rolls back only itself and preserves a newer same-chip inten
       .mockImplementationOnce(() => second.promise),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure,
   });
 
@@ -140,6 +142,7 @@ test("dispose makes an old user's deferred completion invisible", async () => {
     persist: () => save.promise,
     cancel: jest.fn(),
     invalidate,
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -164,6 +167,7 @@ test("a same-user remount reuses the writer but refreshes callbacks for queued w
     writeOptimistic: jest.fn(),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   };
   const queue = getOrCreatePreferenceCommitQueue(client, "A", {
@@ -211,6 +215,7 @@ test("drains a commit queued while the idle invalidation is still pending", asyn
     persist,
     cancel,
     invalidate,
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -256,6 +261,7 @@ test("first failure preserves and persists a newer unrelated preference", async 
       }),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -286,6 +292,7 @@ test("second failure rolls back only itself after the first preference commits",
       .mockImplementationOnce(() => second.promise),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure,
   });
 
@@ -313,6 +320,7 @@ test("ignores a stale refetch baseline while a local commit is pending", async (
     persist: () => save.promise,
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -337,6 +345,7 @@ test("rolls back a failed second same-chip toggle to the first committed intent"
       .mockImplementationOnce(() => second.promise),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -394,6 +403,7 @@ test("a real deferred refetch cannot overwrite an optimistic serialized save", a
     writeOptimistic: (next) => client.setQueryData(key, next),
     persist: () => save.promise,
     invalidate: () => client.invalidateQueries({ queryKey: key }),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
