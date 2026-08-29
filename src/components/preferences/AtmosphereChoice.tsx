@@ -44,7 +44,7 @@ export function AtmosphereChoice({
             accessibilityRole="radio"
             accessibilityLabel={option.label}
             accessibilityHint={option.description}
-            accessibilityState={{ selected, disabled }}
+            accessibilityState={{ checked: selected, disabled }}
             disabled={disabled}
             onPress={() => onChange(option.value)}
             style={[styles.option, selected && styles.selected, disabled && styles.disabled]}
