@@ -21,7 +21,7 @@ export function useMusicPreferences() {
     queryFn: async (): Promise<MusicPreferences> => {
       const { data, error } = await supabase
         .from("music_preferences")
-        .select("genres, moods, vibe_mapping, ai_frequency, discovery_depth")
+        .select("genres, moods, atmosphere")
         .eq("user_id", user!.id)
         .maybeSingle();
 
@@ -46,12 +46,7 @@ export function useUpdateMusicPreferences() {
             user_id: scope.userId,
             genres: next.genres,
             moods: next.excludedMoods,
-            vibe_mapping: {
-              organic_electronic: next.vibeMapping.organicElectronic,
-              melancholic_euphoric: next.vibeMapping.melancholicEuphoric,
-            },
-            ai_frequency: next.aiFrequency,
-            discovery_depth: next.discoveryDepth,
+            atmosphere: next.atmosphere,
           },
           { onConflict: "user_id" },
         ),
