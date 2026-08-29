@@ -1,9 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render } from "@testing-library/react-native";
 import { useState } from "react";
+import { Platform } from "react-native";
 
 import { DjSoundFields } from "../DjSoundFields";
+import { DjIntensityChoice } from "../DjIntensityChoice";
 import { DjTraitsForm } from "../DjTraitsForm";
+import { Segmented } from "@/src/components/preferences/Segmented";
 import {
   applyExplicitIntensity,
   energyToIntensity,
@@ -103,5 +106,81 @@ describe("DjSoundFields", () => {
 
     await fireEvent.press(screen.getByRole("radio", { name: "CALM" }));
     expect(onChange).toHaveBeenLastCalledWith({ energy: 3 });
+  });
+
+  it("uses arrow keys and one tabbable radio for intensity and segmented choices on web", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(Platform, "OS");
+    Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+    try {
+      const screen = await render(<Harness />);
+      const calm = screen.getByRole("radio", { name: "CALM" });
+      const balanced = screen.getByRole("radio", { name: "BALANCED" });
+      const intense = screen.getByRole("radio", { name: "INTENSE" });
+      expect([calm.props.tabIndex, balanced.props.tabIndex, intense.props.tabIndex]).toEqual([-1, 0, -1]);
+
+      await fireEvent(balanced, "keyDown", { key: "ArrowRight", preventDefault: jest.fn() });
+      expect(screen.getByRole("radio", { name: "INTENSE" }).props.accessibilityState.selected).toBe(true);
+      expect(screen.getByRole("radio", { name: "INTENSE" }).props.tabIndex).toBe(0);
+      await fireEvent(screen.getByRole("radio", { name: "INTENSE" }), "keyDown", { key: "ArrowUp", preventDefault: jest.fn() });
+      expect(screen.getByRole("radio", { name: "BALANCED" }).props.accessibilityState.selected).toBe(true);
+
+      const instrumental = screen.getByRole("radio", { name: "INSTRUMENTAL" });
+      const vocal = screen.getByRole("radio", { name: "VOCAL" });
+      expect([instrumental.props.tabIndex, vocal.props.tabIndex]).toEqual([0, -1]);
+      await fireEvent(instrumental, "keyDown", { key: "ArrowDown", preventDefault: jest.fn() });
+      expect(screen.getByRole("radio", { name: "VOCAL" }).props.accessibilityState.selected).toBe(true);
+      expect(screen.getByRole("radio", { name: "VOCAL" }).props.tabIndex).toBe(0);
+      await fireEvent(screen.getByRole("radio", { name: "VOCAL" }), "keyDown", { key: "ArrowLeft", preventDefault: jest.fn() });
+      expect(screen.getByRole("radio", { name: "INSTRUMENTAL" }).props.accessibilityState.selected).toBe(true);
+    } finally {
+      if (originalPlatform) Object.defineProperty(Platform, "OS", originalPlatform);
+    }
+  });
+
+  it("removes disabled intensity and segmented choices from the web tab order", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(Platform, "OS");
+    Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+    const onIntensityChange = jest.fn();
+    const onModeChange = jest.fn();
+
+    try {
+      const screen = await render(
+        <>
+          <DjIntensityChoice
+            accessibilityLabel="Disabled intensity"
+            disabled
+            onChange={onIntensityChange}
+            options={[
+              { value: "calm", label: "CALM", description: "Low" },
+              { value: "balanced", label: "BALANCED", description: "Medium" },
+            ]}
+            value="calm"
+          />
+          <Segmented
+            accessibilityLabel="Disabled mode"
+            disabled
+            onChange={onModeChange}
+            options={[
+              { value: "instrumental", label: "INSTRUMENTAL" },
+              { value: "vocal", label: "VOCAL" },
+            ]}
+            value="instrumental"
+          />
+        </>,
+      );
+
+      for (const radio of screen.getAllByRole("radio")) {
+        expect(radio.props.tabIndex).toBe(-1);
+        expect(radio.props.accessibilityState.disabled).toBe(true);
+      }
+      await fireEvent(screen.getByRole("radio", { name: "CALM" }), "keyDown", {
+        key: "ArrowRight",
+        preventDefault: jest.fn(),
+      });
+      expect(onIntensityChange).not.toHaveBeenCalled();
+      expect(onModeChange).not.toHaveBeenCalled();
+    } finally {
+      if (originalPlatform) Object.defineProperty(Platform, "OS", originalPlatform);
+    }
   });
 });

@@ -69,6 +69,12 @@ function single(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function parseReturnIntent(
+  value: string | string[] | undefined,
+): FirstTrackReturnIntent {
+  return value === "first_track" ? "first_track" : null;
+}
+
 function parseStep(value: string | string[] | undefined): CreateDjStep | null {
   const candidate = single(value);
   return candidate === "sound" || candidate === "identity" || candidate === "review"
@@ -94,7 +100,7 @@ export default function CreateDJScreen() {
   }>();
   const confirm = useConfirm();
   const initialReturnIntent = useRef<FirstTrackReturnIntent>(
-    single(params.returnIntent) === "first_track" ? "first_track" : null,
+    parseReturnIntent(params.returnIntent),
   ).current;
   const [state, dispatch] = useReducer(
     reduceCreateDjWizard,

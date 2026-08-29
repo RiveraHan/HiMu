@@ -44,6 +44,13 @@ const copy = {
     mood: "Focus",
     searchGenres: "Search Genres",
     searchMoods: "Search Moods",
+    done: "Done",
+    minimum: "Choose at least 1",
+    selectedGenre: "Selected Ambient. 1 of 3 selected.",
+    selectedMood: "Selected Focus. 1 of 3 selected.",
+    intensityGroup: "Intensity",
+    soundGroup: "Sound",
+    identityGroup: "DJ identity ideas",
     continue: "Continue",
     custom: "Write my own",
     name: "DJ name",
@@ -53,14 +60,21 @@ const copy = {
     vibePlaceholder: "e.g. late-night rooftop textures",
   },
   es: {
-    editGenres: "Edit Géneros",
-    editMoods: "Edit Estados de ánimo",
+    editGenres: "Editar Géneros",
+    editMoods: "Editar Estados de ánimo",
     genreGroup: "Relajado y ambiental",
     genre: "Ambiental",
     moodGroup: "Calma",
     mood: "Concentración",
-    searchGenres: "Search Géneros",
-    searchMoods: "Search Estados de ánimo",
+    searchGenres: "Buscar Géneros",
+    searchMoods: "Buscar Estados de ánimo",
+    done: "Listo",
+    minimum: "Elige al menos 1",
+    selectedGenre: "Seleccionaste Ambiental. Selecciones: 1 de 3.",
+    selectedMood: "Seleccionaste Concentración. Selecciones: 1 de 3.",
+    intensityGroup: "Intensidad",
+    soundGroup: "Sonido",
+    identityGroup: "Ideas de identidad del DJ",
     continue: "Continuar",
     custom: "Escribir la mía",
     name: "Nombre del DJ",
@@ -252,8 +266,16 @@ async function setInput(cdp, labelOrPlaceholder, value) {
 }
 
 async function dispatchKey(cdp, key, shift = false) {
-  const code = key === "Escape" ? "Escape" : "Tab";
-  const virtualKeyCode = key === "Escape" ? 27 : 9;
+  const keyCodes = {
+    Escape: 27,
+    Tab: 9,
+    ArrowLeft: 37,
+    ArrowUp: 38,
+    ArrowRight: 39,
+    ArrowDown: 40,
+  };
+  const code = key;
+  const virtualKeyCode = keyCodes[key];
   const event = {
     key,
     code,
@@ -294,7 +316,7 @@ async function activeLabel(cdp) {
   );
 }
 
-async function readProgressiveSelection(cdp, item) {
+async function readProgressiveSelection(cdp, item, expectedLimit) {
   return evaluate(
     cdp,
     `(() => {
@@ -312,8 +334,9 @@ async function readProgressiveSelection(cdp, item) {
           );
         }
       );
-      const limitAnnouncement = dialog.textContent?.includes('Choose at least 1')
-        ? 'Choose at least 1'
+      const status = dialog.querySelector('[aria-live="polite"]')?.textContent?.trim() ?? '';
+      const limitAnnouncement = status.includes(${JSON.stringify(expectedLimit)})
+        ? ${JSON.stringify(expectedLimit)}
         : '';
       return {
         checked: removableSelection,
@@ -323,7 +346,17 @@ async function readProgressiveSelection(cdp, item) {
   );
 }
 
-async function exerciseDialog(cdp, opener, searchLabel, group, item, progressiveMode) {
+async function exerciseDialog(
+  cdp,
+  opener,
+  searchLabel,
+  group,
+  item,
+  progressiveMode,
+  doneLabel,
+  minimumLabel,
+  selectionLabel,
+) {
   await clickLabel(cdp, opener);
   const opened = await readWorkflow(
     cdp,
@@ -349,9 +382,9 @@ async function exerciseDialog(cdp, opener, searchLabel, group, item, progressive
     await readWorkflow(cdp, (state) => state.dialogCount === 1, `${opener} did not reopen`);
     await clickLabel(cdp, group);
     await clickLabel(cdp, group);
-    const before = await readProgressiveSelection(cdp, item);
+    const before = await readProgressiveSelection(cdp, item, minimumLabel);
     await clickLabel(cdp, item);
-    const after = await readProgressiveSelection(cdp, item);
+    const after = await readProgressiveSelection(cdp, item, minimumLabel);
     if (
       (progressiveMode === "select" && !after.checked) ||
       (progressiveMode === "retain" && (!after.checked || !after.limitAnnouncement))
@@ -363,12 +396,65 @@ async function exerciseDialog(cdp, opener, searchLabel, group, item, progressive
       checkedBefore: before.checked,
       checkedAfter: after.checked,
       limitAnnouncement: after.limitAnnouncement,
+      selectionAnnouncement: await evaluate(
+        cdp,
+        `document.querySelector('[role="dialog"] [aria-live="polite"]')?.textContent?.trim() ?? ''`,
+      ),
     };
-    await clickLabel(cdp, "Done");
+    if (
+      progressiveMode === "select" &&
+      progressive.selectionAnnouncement !== selectionLabel
+    ) {
+      throw new Error(
+        `${opener} selection announcement mismatch: ${JSON.stringify(progressive.selectionAnnouncement)}`,
+      );
+    }
+    await clickLabel(cdp, doneLabel);
     await readWorkflow(cdp, (state) => state.dialogCount === 0, `${opener} did not close`);
   }
 
   return { opened, escaped, first, last, reverseWrap, forwardWrap, progressive };
+}
+
+async function readRadioGroup(cdp, groupLabel) {
+  return evaluate(
+    cdp,
+    `(() => {
+      const group = Array.from(document.querySelectorAll('[role="radiogroup"]')).find(
+        (element) => element.getAttribute('aria-label') === ${JSON.stringify(groupLabel)}
+      );
+      if (!group) throw new Error('Missing production radiogroup: ' + ${JSON.stringify(groupLabel)});
+      const radios = Array.from(group.querySelectorAll('[role="radio"]'));
+      const active = document.activeElement;
+      return {
+        labels: radios.map((radio) => radio.getAttribute('aria-label') ?? radio.textContent?.trim() ?? ''),
+        selected: radios.filter((radio) => radio.getAttribute('aria-checked') === 'true').map((radio) => radio.getAttribute('aria-label') ?? radio.textContent?.trim() ?? ''),
+        tabbable: radios.filter((radio) => radio.tabIndex === 0).map((radio) => radio.getAttribute('aria-label') ?? radio.textContent?.trim() ?? ''),
+        active: active?.getAttribute?.('aria-label') ?? active?.textContent?.trim() ?? null,
+      };
+    })()`,
+  );
+}
+
+async function exerciseRadioGroup(cdp, groupLabel) {
+  const initial = await readRadioGroup(cdp, groupLabel);
+  if (initial.tabbable.length !== 1) {
+    throw new Error(`${groupLabel} expected one tabbable radio: ${JSON.stringify(initial)}`);
+  }
+  await evaluate(
+    cdp,
+    `(() => {
+      const group = Array.from(document.querySelectorAll('[role="radiogroup"]')).find(
+        (element) => element.getAttribute('aria-label') === ${JSON.stringify(groupLabel)}
+      );
+      group.querySelector('[role="radio"][tabindex="0"]')?.focus();
+    })()`,
+  );
+  await dispatchKey(cdp, "ArrowRight");
+  const next = await readRadioGroup(cdp, groupLabel);
+  await dispatchKey(cdp, "ArrowUp");
+  const previous = await readRadioGroup(cdp, groupLabel);
+  return { initial, next, previous };
 }
 
 async function actionReachability(cdp, actionLabel, scrollTestId, pageScaleFactor = 1) {
@@ -422,6 +508,8 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
   const url = `${origin}/create-dj?flow=create&locale=${locale}&cell=${index}`;
   const initial = await navigate(cdp, url, "create", width, height);
   const historyStart = initial.pushCalls;
+  const intensityKeyboard = await exerciseRadioGroup(cdp, labels.intensityGroup);
+  const soundKeyboard = await exerciseRadioGroup(cdp, labels.soundGroup);
   const genresDialog = await exerciseDialog(
     cdp,
     labels.editGenres,
@@ -429,6 +517,9 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
     labels.genreGroup,
     labels.genre,
     "select",
+    labels.done,
+    labels.minimum,
+    labels.selectedGenre,
   );
   const moodsDialog = await exerciseDialog(
     cdp,
@@ -437,6 +528,9 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
     labels.moodGroup,
     labels.mood,
     "select",
+    labels.done,
+    labels.minimum,
+    labels.selectedMood,
   );
   const soundReady = await readWorkflow(
     cdp,
@@ -452,6 +546,7 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
       state.identityRequestCount === 1,
     `${locale} ${width}x${height} Identity did not render three candidates once`,
   );
+  const identityKeyboard = await exerciseRadioGroup(cdp, labels.identityGroup);
   await clickLabel(cdp, labels.custom);
   await setInput(cdp, labels.name, "Night Cartographer");
   await setInput(
@@ -505,10 +600,13 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
 
   return {
     initial,
+    intensityKeyboard,
+    soundKeyboard,
     genresDialog,
     moodsDialog,
     soundReady,
     identity,
+    identityKeyboard,
     review,
     resizeSnapshots,
     restored,
@@ -542,6 +640,9 @@ async function runTrainCell(cdp, origin, locale, width, height, index) {
     labels.genreGroup,
     labels.genre,
     "retain",
+    labels.done,
+    labels.minimum,
+    "",
   );
   const moodsDialog = await exerciseDialog(
     cdp,
@@ -550,6 +651,9 @@ async function runTrainCell(cdp, origin, locale, width, height, index) {
     labels.moodGroup,
     labels.mood,
     "retain",
+    labels.done,
+    labels.minimum,
+    "",
   );
   await setInput(cdp, labels.vibePlaceholder, "Patient aurora drive");
   const edited = await readWorkflow(

@@ -54,6 +54,7 @@ export const dj = {
     stale: "Review after trait changes",
     confirmed: "Identity confirmed",
     confirm: "Confirm this identity",
+    candidatesLabel: "DJ identity ideas",
   },
   visibility: {
     title: "Visibility",

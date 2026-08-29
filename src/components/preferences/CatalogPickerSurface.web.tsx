@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 // react-dom is shipped by Expo; its optional type package is not installed here.
 // @ts-expect-error react-dom's optional type package is not installed in this workspace
 import { createPortal } from "react-dom";
@@ -14,9 +15,11 @@ export function CatalogPickerSurface({
   onRequestClose,
   children,
 }: CatalogPickerSurfaceProps) {
+  const { t } = useTranslation();
   const openerRef = useRef<HTMLElement | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const dialogRootRef = useRef<HTMLDivElement>(null);
+  const searchLabel = t("common.catalogPicker.search", { title });
 
   useEffect(() => {
     if (visible) {
@@ -68,12 +71,14 @@ export function CatalogPickerSurface({
       >
         <div style={styles.heading}>
           <h2 id="catalog-picker-title" tabIndex={-1} style={styles.title}>{title}</h2>
-          <button type="button" onClick={onDone} style={styles.button}>Done</button>
+          <button type="button" onClick={onDone} style={styles.button}>
+            {t("common.catalogPicker.done")}
+          </button>
         </div>
         <input
           ref={searchRef}
-          aria-label={`Search ${title}`}
-          placeholder={`Search ${title}`}
+          aria-label={searchLabel}
+          placeholder={searchLabel}
           value={query}
           onChange={(event) => onQueryChange(event.currentTarget.value)}
           style={styles.search}

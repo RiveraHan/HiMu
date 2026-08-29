@@ -7,6 +7,7 @@ import { Button } from "@/src/components/Button";
 import { GlassInput } from "@/src/components/GlassInput";
 import { Text } from "@/src/components/Text";
 import { PrefSection } from "@/src/components/preferences/PrefSection";
+import { useRovingRadioGroup } from "@/src/components/preferences/use-roving-radio-group";
 import type { DjIdentityController } from "@/src/hooks/use-dj-identity-controller";
 import type { DjIdentityDraftValue } from "@/src/components/dj/DjIdentityDraftStep";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
@@ -33,6 +34,15 @@ export function CreateDjIdentityStep({ active = false, controller, value, disabl
   const [editing, setEditing] = useState(value.provenance !== "suggested" && Boolean(value.name || value.identityConcept));
   const busy = controller.status === "loading";
   const validToContinue = canContinue(value, controller.selectedName);
+  const radioProps = useRovingRadioGroup(
+    controller.candidates.map((candidate) => candidate.name),
+    controller.selectedName,
+    disabled,
+    (name) => {
+      const candidate = controller.candidates.find((item) => item.name === name);
+      if (candidate) select(candidate);
+    },
+  );
 
   useEffect(() => {
     if (value.provenance !== "suggested" && (value.name || value.identityConcept)) setEditing(true);
@@ -71,10 +81,14 @@ export function CreateDjIdentityStep({ active = false, controller, value, disabl
       </View>
 
       {controller.status === "ready" && controller.candidates.length > 0 ? (
-        <View style={styles.candidates} accessibilityRole="radiogroup">
-          {controller.candidates.map((candidate) => {
+        <View
+          style={styles.candidates}
+          accessibilityRole="radiogroup"
+          accessibilityLabel={t("dj.identity.candidatesLabel")}
+        >
+          {controller.candidates.map((candidate, index) => {
             const selected = controller.selectedName === candidate.name;
-            return <Pressable key={candidate.name} accessibilityRole="radio" accessibilityLabel={`${candidate.name}. ${candidate.identityConcept}`} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => select(candidate)} style={[styles.candidate, selected && styles.candidateSelected]}>
+            return <Pressable {...radioProps(index)} key={candidate.name} accessibilityRole="radio" accessibilityLabel={`${candidate.name}. ${candidate.identityConcept}`} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => select(candidate)} style={[styles.candidate, selected && styles.candidateSelected]}>
               <Text variant="bodyLg">{candidate.name}</Text>
               <Text color="onSurfaceVariant">{candidate.identityConcept}</Text>
             </Pressable>;

@@ -1,5 +1,6 @@
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/src/components/Button";
 import { GlassInput } from "@/src/components/GlassInput";
@@ -20,7 +21,9 @@ export function CatalogPickerSurface({
   onRequestClose,
   children,
 }: CatalogPickerSurfaceProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const searchLabel = t("common.catalogPicker.search", { title });
 
   return (
     <Modal
@@ -41,13 +44,13 @@ export function CatalogPickerSurface({
         >
           <View style={styles.heading}>
             <Text accessibilityRole="header" variant="h2">{title}</Text>
-            <Button label="Done" variant="ghost" onPress={onDone} />
+            <Button label={t("common.catalogPicker.done")} variant="ghost" onPress={onDone} />
           </View>
           <GlassInput
-            placeholder={`Search ${title}`}
+            placeholder={searchLabel}
             value={query}
             onChangeText={onQueryChange}
-            accessibilityLabel={`Search ${title}`}
+            accessibilityLabel={searchLabel}
             style={styles.search}
           />
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">

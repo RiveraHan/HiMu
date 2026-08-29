@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import { AccessibilityInfo } from "react-native";
+import { AccessibilityInfo, Platform } from "react-native";
+import { useState } from "react";
 
 import { CreateDjIdentityStep } from "../CreateDjIdentityStep";
 import type { DjIdentityController } from "@/src/hooks/use-dj-identity-controller";
@@ -70,4 +71,70 @@ test("does not focus an inactive mount and focuses on later Identity entry", asy
   await waitFor(() => expect(focus).toHaveBeenCalledTimes(1));
   focus.mockRestore();
   node.mockRestore();
+});
+
+test("uses roving focus and arrow-key selection for identity candidates on web", async () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(Platform, "OS");
+  Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+  const candidates = [
+    controller.candidates[0],
+    { name: "Velvet Index", identityConcept: "A curious archivist reshaping forgotten dance floors into intimate rituals." },
+  ];
+
+  function Harness() {
+    const [selectedName, setSelectedName] = useState<string | null>(null);
+    const identityController: DjIdentityController = {
+      ...controller,
+      candidates,
+      selectedName,
+      select: (candidate) => setSelectedName(candidate.name),
+    };
+    return <CreateDjIdentityStep controller={identityController} value={{ name: "", identityConcept: "", provenance: "custom", confirmed: false }} />;
+  }
+
+  try {
+    const screen = await render(<Harness />);
+    const first = screen.getByRole("radio", { name: /Static Bloom/ });
+    const second = screen.getByRole("radio", { name: /Velvet Index/ });
+    expect([first.props.tabIndex, second.props.tabIndex]).toEqual([0, -1]);
+
+    await fireEvent(first, "keyDown", { key: "ArrowRight", preventDefault: jest.fn() });
+    expect(screen.getByRole("radio", { name: /Velvet Index/ }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByRole("radio", { name: /Velvet Index/ }).props.tabIndex).toBe(0);
+    await fireEvent(screen.getByRole("radio", { name: /Velvet Index/ }), "keyDown", { key: "ArrowUp", preventDefault: jest.fn() });
+    expect(screen.getByRole("radio", { name: /Static Bloom/ }).props.accessibilityState.selected).toBe(true);
+  } finally {
+    if (originalPlatform) Object.defineProperty(Platform, "OS", originalPlatform);
+  }
+});
+
+test("marks disabled identity candidates unavailable to web keyboard navigation", async () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(Platform, "OS");
+  Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+  const candidates = [
+    controller.candidates[0],
+    { name: "Velvet Index", identityConcept: "A curious archivist reshaping forgotten dance floors into intimate rituals." },
+  ];
+  const select = jest.fn();
+
+  try {
+    const screen = await render(
+      <CreateDjIdentityStep
+        controller={{ ...controller, candidates, select }}
+        disabled
+        value={{ name: "", identityConcept: "", provenance: "custom", confirmed: false }}
+      />,
+    );
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio.props.tabIndex).toBe(-1);
+      expect(radio.props.accessibilityState.disabled).toBe(true);
+    }
+    await fireEvent(screen.getByRole("radio", { name: /Static Bloom/ }), "keyDown", {
+      key: "ArrowRight",
+      preventDefault: jest.fn(),
+    });
+    expect(select).not.toHaveBeenCalled();
+  } finally {
+    if (originalPlatform) Object.defineProperty(Platform, "OS", originalPlatform);
+  }
 });

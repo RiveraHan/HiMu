@@ -466,6 +466,31 @@ test("adopts first-track once and submits only the final Review action exactly o
   await expectTrackedEventsAccepted(["dj_creation_started", "dj_created"]);
 });
 
+test.each([
+  ["single array value", ["first_track"]],
+  ["duplicate values", ["first_track", "first_track"]],
+  ["valid then invalid values", ["first_track", "invalid"]],
+  ["invalid then valid values", ["invalid", "first_track"]],
+] as const)("treats repeated returnIntent route params with %s as no intent", async (_case, returnIntent) => {
+  mockSearchParams = { returnIntent: [...returnIntent] };
+  const screen = await render(<CreateDJScreen />);
+
+  await act(async () => Promise.resolve());
+  expect(mockConsumePendingIntent).not.toHaveBeenCalled();
+
+  await reachReview(screen);
+  await fireEvent.press(screen.getByRole("button", { name: "Bring my DJ to life" }));
+  const success = mockCreateDj.mock.calls[0][1].onSuccess as (
+    result: { djId: string; avatarReady: boolean },
+  ) => void;
+  await act(async () => success({ djId: "dj-with-malformed-intent", avatarReady: true }));
+
+  expect(mockRouterReplace).toHaveBeenCalledWith("/dj/dj-with-malformed-intent");
+  expect(mockRouterReplace).not.toHaveBeenCalledWith(
+    expect.objectContaining({ pathname: "/create-track" }),
+  );
+});
+
 test("ordinary success opens the DJ while a previous user's late success cannot navigate", async () => {
   const ordinary = await render(<CreateDJScreen />);
   await reachReview(ordinary);

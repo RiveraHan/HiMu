@@ -22,6 +22,17 @@ export const common = {
     tracks_one: "{{count}} track",
     tracks_other: "{{count}} tracks",
   },
+  catalogPicker: {
+    edit: "Edit {{title}}",
+    selected: "Selected: {{items}}",
+    selectedHeading: "Selected",
+    done: "Done",
+    search: "Search {{title}}",
+    minimum: "Choose at least {{min}}",
+    maximum: "Choose up to {{max}}",
+    selectedAnnouncement: "Selected {{item}}. {{count}} of {{max}} selected.",
+    removedAnnouncement: "Removed {{item}}. {{count}} of {{max}} selected.",
+  },
   errors: {
     offline: "You're offline",
     reconnect: "Reconnect to update this content.",

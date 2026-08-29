@@ -54,6 +54,7 @@ export const dj = {
     stale: "Revísalo después de cambiar los rasgos",
     confirmed: "Identidad confirmada",
     confirm: "Confirmar esta identidad",
+    candidatesLabel: "Ideas de identidad del DJ",
   },
   visibility: {
     title: "Visibilidad",

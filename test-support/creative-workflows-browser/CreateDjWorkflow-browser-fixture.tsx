@@ -164,7 +164,7 @@ function readWorkflow(
     document.querySelectorAll<HTMLElement>('[role="button"][aria-selected="true"]'),
   )[0];
   const selectedValues = Array.from(
-    document.querySelectorAll<HTMLElement>('[aria-label^="Selected:"]'),
+    document.querySelectorAll<HTMLElement>('[data-testid="catalog-picker-selection"]'),
   ).map((element) => element.getAttribute("aria-label") ?? "");
   const active = document.activeElement as HTMLElement | null;
   const allElements = Array.from(document.querySelectorAll<HTMLElement>("body *"));

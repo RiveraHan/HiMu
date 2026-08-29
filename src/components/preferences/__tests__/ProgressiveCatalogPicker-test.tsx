@@ -1,5 +1,7 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import { useState } from "react";
+
+import i18n from "@/src/i18n";
 
 import {
   ProgressiveCatalogPicker,
@@ -24,6 +26,10 @@ const groups = [
 ] as const;
 
 describe("ProgressiveCatalogPicker", () => {
+  beforeEach(async () => {
+    await act(async () => i18n.changeLanguage("en"));
+  });
+
   it("keeps a maxed selection unchanged and announces the limit", async () => {
     const onChange = jest.fn();
     const screen = await render(
@@ -172,5 +178,74 @@ describe("ProgressiveCatalogPicker", () => {
     expect(resolveCatalogPickerSurface("ios")).toBe(NativeCatalogPickerSurface);
     expect(catalogPickerKeyboardBehavior("android")).toBe("height");
     expect(catalogPickerKeyboardBehavior("ios")).toBe("padding");
+  });
+
+  it.each([
+    {
+      locale: "en",
+      title: "Genres",
+      edit: "Edit Genres",
+      selected: "Selected: Ambient",
+      done: "Done",
+      search: "Search Genres",
+      minimum: "Choose at least 1",
+      maximum: "Choose up to 3",
+      added: "Selected House. 2 of 3 selected.",
+    },
+    {
+      locale: "es",
+      title: "Géneros",
+      edit: "Editar Géneros",
+      selected: "Selección: Ambient",
+      done: "Listo",
+      search: "Buscar Géneros",
+      minimum: "Elige al menos 1",
+      maximum: "Elige hasta 3",
+      added: "Seleccionaste House. Selecciones: 2 de 3.",
+    },
+  ])("localizes picker controls and polite selection status in $locale", async ({ locale, title, edit, selected, done, search, minimum, maximum, added }) => {
+    await act(async () => i18n.changeLanguage(locale));
+
+    const localizedGroups = [
+      groups[0],
+      { label: "global", items: ["Cumbia", "Salsa"] },
+    ] as const;
+
+    function LocalizedHarness() {
+      const [values, setValues] = useState<string[]>(["Ambient"]);
+      return (
+        <ProgressiveCatalogPicker
+          title={title}
+          groups={localizedGroups}
+          selected={values}
+          min={1}
+          max={3}
+          getGroupLabel={(value) => value}
+          getItemLabel={(value) => value}
+          onChange={setValues}
+        />
+      );
+    }
+
+    const screen = await render(<LocalizedHarness />);
+    expect(screen.getByText(selected)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: edit }));
+    expect(screen.getByRole("button", { name: done })).toBeTruthy();
+    expect(screen.getByPlaceholderText(search)).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole("checkbox", { name: "House" }));
+    const status = screen.getByTestId("catalog-picker-status");
+    expect(status.props.accessibilityLiveRegion).toBe("polite");
+    expect(status).toHaveTextContent(added);
+
+    await fireEvent.press(screen.getByRole("checkbox", { name: "House" }));
+    await fireEvent.press(screen.getByRole("checkbox", { name: "Ambient" }));
+    expect(status).toHaveTextContent(minimum);
+
+    await fireEvent.press(screen.getByRole("checkbox", { name: "House" }));
+    await fireEvent.press(screen.getByRole("button", { name: "global" }));
+    await fireEvent.press(screen.getByRole("checkbox", { name: "Cumbia" }));
+    await fireEvent.press(screen.getByRole("checkbox", { name: "Salsa" }));
+    expect(status).toHaveTextContent(maximum);
   });
 });

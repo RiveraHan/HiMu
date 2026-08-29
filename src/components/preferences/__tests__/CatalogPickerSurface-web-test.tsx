@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 import { CatalogPickerSurface } from "../CatalogPickerSurface.web";
+import i18n from "@/src/i18n";
 
 describe("CatalogPickerSurface.web", () => {
   let container: HTMLDivElement;
@@ -24,6 +25,35 @@ describe("CatalogPickerSurface.web", () => {
     act(() => root.unmount());
     opener.remove();
     container.remove();
+  });
+
+  it("renders Spanish Done and Search copy for browser and reader access", async () => {
+    await i18n.changeLanguage("es");
+    act(() => {
+      root.render(
+        <CatalogPickerSurface
+          visible
+          title="Géneros"
+          groups={[]}
+          selected={[]}
+          min={0}
+          max={3}
+          query=""
+          expandedGroup={null}
+          getGroupLabel={(value) => value}
+          getItemLabel={(value) => value}
+          onChange={jest.fn()}
+          onQueryChange={jest.fn()}
+          onExpandedGroupChange={jest.fn()}
+          onToggle={jest.fn()}
+          onDone={jest.fn()}
+          onRequestClose={jest.fn()}
+        />,
+      );
+    });
+
+    expect(document.body.querySelector("input")?.getAttribute("aria-label")).toBe("Buscar Géneros");
+    expect(Array.from(document.body.querySelectorAll("button")).some((button) => button.textContent === "Listo")).toBe(true);
   });
 
   it("traps focus, closes on Escape, and restores the opener", () => {

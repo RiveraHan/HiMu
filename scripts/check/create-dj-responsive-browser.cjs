@@ -33,10 +33,10 @@ const copy = {
   es: {
     genre: "Ambiental",
     mood: "Concentración",
-    searchGenres: "Search Géneros",
-    searchMoods: "Search Estados de ánimo",
-    editGenres: "Edit Géneros",
-    editMoods: "Edit Estados de ánimo",
+    searchGenres: "Buscar Géneros",
+    searchMoods: "Buscar Estados de ánimo",
+    editGenres: "Editar Géneros",
+    editMoods: "Editar Estados de ánimo",
     review: "Revisa tu DJ",
   },
 };
@@ -49,7 +49,7 @@ function assertTargets(snapshot, context) {
       target.width >= 44 && target.height >= 44,
       `${context} target ${JSON.stringify(target.label)} is ${target.width}x${target.height}`,
     );
-    if (!target.disabled) {
+    if (!target.disabled && target.role !== "radio") {
       assert.equal(
         target.focusable,
         true,
@@ -57,6 +57,26 @@ function assertTargets(snapshot, context) {
       );
     }
   }
+}
+
+function assertRadioKeyboard(result, context) {
+  assert.equal(result.initial.tabbable.length, 1, `${context} initial roving tab stop`);
+  assert.equal(result.next.tabbable.length, 1, `${context} next roving tab stop`);
+  assert.equal(result.next.selected.length, 1, `${context} next selection`);
+  assert.equal(result.next.active, result.next.selected[0], `${context} next focus`);
+  assert.notEqual(
+    result.next.selected[0],
+    result.initial.tabbable[0],
+    `${context} ArrowRight did not advance`,
+  );
+  assert.equal(result.previous.tabbable.length, 1, `${context} previous roving tab stop`);
+  assert.equal(result.previous.selected.length, 1, `${context} previous selection`);
+  assert.equal(result.previous.active, result.previous.selected[0], `${context} previous focus`);
+  assert.equal(
+    result.previous.selected[0],
+    result.initial.tabbable[0],
+    `${context} ArrowUp did not return`,
+  );
 }
 
 function assertCommon(snapshot, locale, width, height, context) {
@@ -83,6 +103,8 @@ function assertCreateCell(cell, mode) {
   assert.equal(create.initial.actionDisabled, true);
   assert.equal(create.initial.identityRequestCount, 0);
   assert.equal(create.initial.createCalls, 0);
+  assertRadioKeyboard(create.intensityKeyboard, `${context} intensity`);
+  assertRadioKeyboard(create.soundKeyboard, `${context} sound mode`);
 
   for (const [name, dialog, search, opener] of [
     ["Genres", create.genresDialog, copy[locale].searchGenres, copy[locale].editGenres],
@@ -113,6 +135,7 @@ function assertCreateCell(cell, mode) {
   assert.equal(create.identity.candidateCount, 3);
   assert.equal(create.identity.identityRequestCount, 1);
   assert.equal(create.identity.createCalls, 0);
+  assertRadioKeyboard(create.identityKeyboard, `${context} identity candidates`);
 
   assertCommon(create.review, locale, width, height, `${context} Review`);
   assert.equal(create.review.activeStep, 3);
@@ -185,7 +208,10 @@ function assertTrainCell(cell, direction) {
     assertTargets(dialog.opened, `${context} dialog`);
     assert.equal(dialog.progressive.checkedBefore, true);
     assert.equal(dialog.progressive.checkedAfter, true);
-    assert.match(dialog.progressive.limitAnnouncement, /Choose at least 1/);
+    assert.equal(
+      dialog.progressive.limitAnnouncement,
+      locale === "es" ? "Elige al menos 1" : "Choose at least 1",
+    );
   }
   assert.equal(train.saved.updateCalls, 1);
   assert.equal(train.saved.updateInput.energy, 7);

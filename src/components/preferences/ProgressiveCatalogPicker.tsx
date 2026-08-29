@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Platform, Pressable, View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/src/components/Button";
 import { Chip } from "@/src/components/preferences/Chip";
@@ -43,10 +44,11 @@ export function ProgressiveCatalogPicker({
   onChange,
   disabled = false,
 }: ProgressiveCatalogPickerProps) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState("");
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
-  const [limitAnnouncement, setLimitAnnouncement] = useState("");
+  const [statusAnnouncement, setStatusAnnouncement] = useState("");
 
   const selectedLabels = useMemo(
     () => selected.map(getItemLabel),
@@ -57,7 +59,7 @@ export function ProgressiveCatalogPicker({
     if (disabled) return;
     setQuery("");
     setExpandedGroup(groups[0]?.label ?? null);
-    setLimitAnnouncement("");
+    setStatusAnnouncement("");
     setVisible(true);
   };
 
@@ -67,19 +69,36 @@ export function ProgressiveCatalogPicker({
     const removing = selected.includes(value);
     const result = nextCatalogSelection(selected, value, min, max);
     if (result.rejected) {
-      setLimitAnnouncement(removing ? `Choose at least ${min}` : `Choose up to ${max}`);
+      setStatusAnnouncement(
+        removing
+          ? t("common.catalogPicker.minimum", { min })
+          : t("common.catalogPicker.maximum", { max }),
+      );
       return;
     }
-    setLimitAnnouncement("");
+    setStatusAnnouncement(t(
+      removing
+        ? "common.catalogPicker.removedAnnouncement"
+        : "common.catalogPicker.selectedAnnouncement",
+      {
+        item: getItemLabel(value),
+        count: result.next.length,
+        max,
+      },
+    ));
     onChange(result.next);
   };
 
   return (
     <View style={styles.root}>
-      <Button label={`Edit ${title}`} variant="glass" onPress={open} disabled={disabled} />
+      <Button label={t("common.catalogPicker.edit", { title })} variant="glass" onPress={open} disabled={disabled} />
       {selectedLabels.length > 0 ? (
-        <Text accessibilityLabel={`Selected: ${selectedLabels.join(", ")}`} variant="bodyMd">
-          Selected: {selectedLabels.join(", ")}
+        <Text
+          accessibilityLabel={t("common.catalogPicker.selected", { items: selectedLabels.join(", ") })}
+          testID="catalog-picker-selection"
+          variant="bodyMd"
+        >
+          {t("common.catalogPicker.selected", { items: selectedLabels.join(", ") })}
         </Text>
       ) : null}
       <CatalogPickerSurface
@@ -109,7 +128,7 @@ export function ProgressiveCatalogPicker({
           getItemLabel={getItemLabel}
           onExpandedGroupChange={setExpandedGroup}
           onToggle={toggle}
-          limitAnnouncement={limitAnnouncement}
+          statusAnnouncement={statusAnnouncement}
         />
       </CatalogPickerSurface>
     </View>
@@ -121,7 +140,7 @@ type ContentsProps = Pick<ProgressiveCatalogPickerProps, "groups" | "selected" |
   expandedGroup: string | null;
   onExpandedGroupChange(group: string | null): void;
   onToggle(value: string): void;
-  limitAnnouncement: string;
+  statusAnnouncement: string;
 };
 
 function CatalogPickerContents({
@@ -133,8 +152,9 @@ function CatalogPickerContents({
   getItemLabel,
   onExpandedGroupChange,
   onToggle,
-  limitAnnouncement,
+  statusAnnouncement,
 }: ContentsProps) {
+  const { t } = useTranslation();
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const matchingGroups = groups.map((group) => ({
     ...group,
@@ -145,12 +165,18 @@ function CatalogPickerContents({
 
   return (
     <View style={styles.contents}>
-      <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-        {limitAnnouncement}
+      <Text
+        accessibilityLiveRegion="polite"
+        testID="catalog-picker-status"
+        style={styles.srOnly}
+      >
+        {statusAnnouncement}
       </Text>
       {selected.length > 0 ? (
         <View style={styles.tray}>
-          <Text variant="labelCaps" color="onSurfaceVariant">Selected</Text>
+          <Text variant="labelCaps" color="onSurfaceVariant">
+            {t("common.catalogPicker.selectedHeading")}
+          </Text>
           <View style={styles.trayChips}>
             {selected.map((value) => (
               <Chip key={value} label={getItemLabel(value)} onRemove={() => onToggle(value)} />
