@@ -29,7 +29,10 @@ export type PlayableTrack = {
   is_public?: boolean;
 };
 
-export type ContextualTrack = PlayableTrack & { mood_tags: string[] | null };
+export type ContextualTrack = PlayableTrack & {
+  mood_tags: string[] | null;
+  energy_level: number | null;
+};
 
 export type RecentTrack = PlayableTrack & {
   mood_tags: string[] | null;
@@ -102,7 +105,7 @@ export function useAIMixTracks() {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
+          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, mood_tags, owner_id, is_public",
         )
         .eq("is_ai_generated", true)
         .not("audio_url", "is", null)
@@ -179,7 +182,7 @@ export function useTimeOfDayShelf() {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
+          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, mood_tags, owner_id, is_public",
         )
         .overlaps("mood_tags", moods)
         .not("audio_url", "is", null)

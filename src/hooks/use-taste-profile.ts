@@ -59,6 +59,7 @@ export function useTasteProfile(): TasteWeights {
       affineGenres: prefs ? new Set(prefs.genres) : EMPTY,
       excludedMoods: prefs ? new Set(prefs.excludedMoods) : EMPTY,
       topGenre: topGenre ?? null,
+      atmosphere: prefs?.atmosphere ?? "balanced",
     }),
     [prefs, topGenre],
   );
