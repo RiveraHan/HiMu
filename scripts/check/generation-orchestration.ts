@@ -1514,7 +1514,9 @@ async function main() {
         queuedAt: defaultQueuedAt,
         cfg: persistedCfg,
         lyrics: null,
-        seasoning: ["persisted seasoning"],
+        seasoning: [
+          "listener preference: driving dynamics, pronounced contrast, and a high-energy arc",
+        ],
         language: "en",
         drop: { localHour: 12 },
       },
@@ -1522,6 +1524,11 @@ async function main() {
     );
     assert.equal(state.insertedAudius[0]?.dj_id, "dj-persisted");
     assert.equal(state.updates[0]?.jobId, "job-persisted-dj-audius");
+    assert.equal(
+      state.replicateInputs.some(({ endpoint }) => endpoint === LYRIA_ENDPOINT),
+      false,
+      "Audius candidate selection must not use preference seasoning to generate or rank music",
+    );
   }
 
   {
@@ -1585,13 +1592,22 @@ async function main() {
         cfg,
         lyrics: validBrief.lyrics,
         brief: validBriefV2,
-        seasoning: ["late night atmosphere"],
+        seasoning: [
+          "listener preference: balanced dynamics, controlled contrast, and a moderate energy arc",
+          "late night atmosphere",
+        ],
         language: "en",
       },
       state.deps,
     );
     assert.equal(state.finalizations[0]?.title, validBrief.title);
     const prompt = String(state.replicateInputs[0]?.body?.input?.prompt ?? "");
+    assert.ok(
+      prompt.includes(
+        "listener preference: balanced dynamics, controlled contrast, and a moderate energy arc",
+      ),
+      "manual generation must receive atmosphere seasoning through the shared music input",
+    );
     assert.ok(prompt.includes(validBrief.creativeDirection));
     assert.ok(prompt.includes(validBrief.lyrics));
     assert.match(prompt, /Tempo: 118 BPM/);
@@ -2104,11 +2120,19 @@ async function main() {
         queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
-        seasoning: [],
+        seasoning: [
+          "listener preference: restrained dynamics, softer transients, and a gentle energy arc",
+        ],
         language: "es",
         drop: { localHour: 21 },
       },
       state.deps,
+    );
+    assert.ok(
+      String(state.replicateInputs[0]?.body?.input?.prompt ?? "").includes(
+        "listener preference: restrained dynamics, softer transients, and a gentle energy arc",
+      ),
+      "generated Daily Drop fallback must receive atmosphere seasoning through the shared music input",
     );
     const ready = state.finalizations.at(-1);
     assert.equal(ready?.caption, "Turn it up [scream], then [laugh].");

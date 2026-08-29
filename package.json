@@ -31,6 +31,7 @@
     "check:dj-performance": "node --import tsx scripts/check/dj-performance.ts",
     "check:generation-brief-v2-migration": "node --import tsx scripts/check/generation-brief-v2-migration.ts",
     "check:music-production": "node --import tsx scripts/check/music-production.ts",
+    "check:generation-seasoning": "node --import tsx scripts/check/generation-seasoning.ts",
     "check:visual-direction": "node --import tsx scripts/check/visual-direction.ts",
     "check:himu-experience-state-migration": "node --import tsx scripts/check/himu-experience-state-migration.ts",
     "check:himu-experience-state-function": "node --import tsx scripts/check/himu-experience-state-function.ts",

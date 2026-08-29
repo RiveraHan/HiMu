@@ -93,6 +93,14 @@ const directionFrame = prompt.match(
   /<<<(HIMU_DIRECTION_\d+)_START>>>\n([\s\S]*?)\n<<<\1_END>>>/,
 );
 assert.equal(directionFrame?.[2], args.creativeDirection);
+assert.ok(
+  prompt.indexOf(directionFrame?.[0] ?? "") > prompt.indexOf("Production context:"),
+  "creative direction must remain separately framed after production context",
+);
+assert.ok(
+  prompt.indexOf(directionFrame?.[0] ?? "") < prompt.indexOf("MUSICAL SPECIFICATION"),
+  "creative direction frame must remain within the production-context section",
+);
 assert.match(prompt, /Build a distinct composition from the specification above/i);
 assert.doesNotMatch(prompt, /copyrighted/i);
 
