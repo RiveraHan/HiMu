@@ -49,7 +49,7 @@ export function useMusicPreferencesController() {
   const { mutateAsync: update } = useUpdateMusicPreferences();
   const experienceState = useExperienceState();
   const { mutateAsync: completeNudge } = useCompletePreferenceNudge();
-  const nudgeCompletionAttempted = useRef(false);
+  const nudgeCompletionAttemptedForUser = useRef(new Set<string>());
   const [saveStatus, setSaveStatus] = useState<PreferenceSaveStatus>("idle");
   const initialBaseline = useRef<MusicPreferences>(
     preferencesQuery.data ?? DEFAULT_MUSIC_PREFERENCES,
@@ -76,10 +76,11 @@ export function useMusicPreferencesController() {
         const snapshot = currentPrefs.current;
         const nudgeStatus = experienceState.data?.preferenceNudgeStatus;
         if (
-          !nudgeCompletionAttempted.current
+          userId !== null
+          && !nudgeCompletionAttemptedForUser.current.has(userId)
           && (nudgeStatus === "eligible" || nudgeStatus === "shown" || nudgeStatus === "dismissed")
         ) {
-          nudgeCompletionAttempted.current = true;
+          nudgeCompletionAttemptedForUser.current.add(userId);
           void completeNudge(undefined).catch(() => undefined);
         }
         void trackProductEvent("music_preferences_saved", {

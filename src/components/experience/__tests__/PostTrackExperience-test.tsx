@@ -75,6 +75,30 @@ test("claims a matching eligible track before the preference card appears", asyn
   expect(screen.getByText("Make the next track feel more like you")).toBeTruthy();
 });
 
+test("shares one claim and one shown card across matching mounted boundaries", async () => {
+  mockState = eligibleState;
+  const screen = await render(
+    <>
+      <PostTrackExperience trackId="track-first" />
+      <PostTrackExperience trackId="track-first" />
+    </>,
+  );
+
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(1));
+  mockState = {
+    ...eligibleState,
+    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
+  };
+  await screen.rerender(
+    <>
+      <PostTrackExperience trackId="track-first" />
+      <PostTrackExperience trackId="track-first" />
+    </>,
+  );
+
+  await waitFor(() => expect(screen.getAllByText("Make the next track feel more like you")).toHaveLength(1));
+});
+
 test("never renders or claims a nudge for a different current track", async () => {
   mockState = eligibleState;
   const screen = await render(<PostTrackExperience trackId="track-other" />);

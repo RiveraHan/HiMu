@@ -9,11 +9,17 @@ import { trackProductEvent } from "@/src/experience/product-analytics";
 import { useLocale } from "@/src/i18n/use-locale";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { router } from "expo-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 export type PostTrackExperienceProps = Readonly<{ trackId: string }>;
+
+const trackOwners = new Map<string, symbol>();
+
+function releaseTrackOwner(trackId: string, owner: symbol) {
+  if (trackOwners.get(trackId) === owner) trackOwners.delete(trackId);
+}
 
 function platform() {
   if (Platform.OS === "web") return "web" as const;
@@ -27,8 +33,11 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
   const state = useExperienceState();
   const claim = useClaimPreferenceNudge();
   const dismiss = useDismissPreferenceNudge();
+  const owner = useRef(Symbol("post-track-experience")).current;
+  const ownedTrackId = useRef<string | null>(null);
   const attemptedTrackId = useRef<string | null>(null);
   const shownTrackedTrackId = useRef<string | null>(null);
+  const [ownsTrack, setOwnsTrack] = useState(false);
   const eligible = !state.isLoading
     && !state.isError
     && state.data?.preferenceNudgeStatus === "eligible"
@@ -44,7 +53,40 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
   } as const), [resolvedLanguage]);
 
   useEffect(() => {
-    if (!eligible) {
+    const participates = eligible || shown;
+    if (ownedTrackId.current && ownedTrackId.current !== trackId) {
+      releaseTrackOwner(ownedTrackId.current, owner);
+      ownedTrackId.current = null;
+    }
+    if (!participates) {
+      if (ownedTrackId.current) {
+        releaseTrackOwner(ownedTrackId.current, owner);
+        ownedTrackId.current = null;
+      }
+      attemptedTrackId.current = null;
+      setOwnsTrack(false);
+      return;
+    }
+
+    const trackOwner = trackOwners.get(trackId);
+    if (!trackOwner) {
+      trackOwners.set(trackId, owner);
+      ownedTrackId.current = trackId;
+      setOwnsTrack(true);
+      return;
+    }
+    setOwnsTrack(trackOwner === owner);
+  }, [eligible, owner, shown, trackId]);
+
+  useEffect(() => () => {
+    if (ownedTrackId.current) {
+      releaseTrackOwner(ownedTrackId.current, owner);
+    }
+  }, [owner]);
+
+  useEffect(() => {
+    if (!eligible || !ownsTrack) return;
+    if (claim.isError) {
       attemptedTrackId.current = null;
       return;
     }
@@ -52,16 +94,16 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
 
     attemptedTrackId.current = trackId;
     claim.mutate(trackId);
-  }, [claim, eligible, trackId]);
+  }, [claim, eligible, ownsTrack, trackId]);
 
   useEffect(() => {
-    if (!shown || shownTrackedTrackId.current === trackId) return;
+    if (!shown || !ownsTrack || shownTrackedTrackId.current === trackId) return;
 
     shownTrackedTrackId.current = trackId;
     void trackProductEvent("preference_nudge_shown", analytics);
-  }, [analytics, shown, trackId]);
+  }, [analytics, ownsTrack, shown, trackId]);
 
-  if (!shown) return null;
+  if (!shown || !ownsTrack) return null;
 
   const accept = () => {
     void trackProductEvent("preference_nudge_accepted", analytics);

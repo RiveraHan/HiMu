@@ -13,6 +13,7 @@ const mockCancelQueries = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockRefetch = jest.fn();
 let mockOnline = true;
+let mockUserId = "user-a";
 let mockPreferencesQuery: Record<string, unknown>;
 const mockQueryClient = {
   setQueryData: mockSetQueryData,
@@ -37,7 +38,7 @@ jest.mock("../use-music-preferences", () => ({
   useMusicPreferences: () => mockPreferencesQuery,
   useUpdateMusicPreferences: () => ({ mutateAsync: mockUpdate }),
 }));
-jest.mock("../use-auth", () => ({ useCurrentUser: () => ({ id: "user-a" }) }));
+jest.mock("../use-auth", () => ({ useCurrentUser: () => ({ id: mockUserId }) }));
 jest.mock("../use-online-status", () => ({ useOnlineStatus: () => mockOnline }));
 jest.mock("../use-toast", () => ({ useToast: () => ({ error: mockToastError }) }));
 jest.mock("@/src/i18n/use-locale", () => ({ useLocale: () => ({ resolvedLanguage: "en" }) }));
@@ -50,6 +51,7 @@ jest.mock("@/src/experience", () => ({
 
 beforeEach(() => {
   mockOnline = true;
+  mockUserId = "user-a";
   mockUpdate.mockReset().mockResolvedValue(undefined);
   mockCompleteNudge.mockReset().mockResolvedValue(undefined);
   mockTrackProductEvent.mockReset();
@@ -229,6 +231,30 @@ test("does not complete a terminal nudge after a later successful preference sav
   await waitFor(() => expect(hook.result.current.saveStatus).toBe("saved"));
 
   expect(mockCompleteNudge).not.toHaveBeenCalled();
+});
+
+test("completes the current nudge once for each authenticated user after an auth switch", async () => {
+  const hook = await renderHook(() => useMusicPreferencesController());
+
+  await act(async () => {
+    hook.result.current.setAtmosphere("calm");
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(mockCompleteNudge).toHaveBeenCalledTimes(1));
+
+  mockUserId = "user-b";
+  await hook.rerender();
+  await act(async () => {
+    hook.result.current.setAtmosphere("intense");
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  await waitFor(() => expect(mockCompleteNudge).toHaveBeenCalledTimes(2));
+  expect(mockInvalidateQueries).toHaveBeenCalledWith({
+    queryKey: ["music-preferences", "user-b"],
+  });
 });
 
 test("does not complete the nudge for an offline preference edit", async () => {
