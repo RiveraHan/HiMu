@@ -42,6 +42,14 @@ export const playback = {
       decrement: "Back {{seconds}} seconds",
     },
   },
+  preferenceNudge: {
+    title: "Make the next track feel more like you",
+    body: "Choose a few music preferences to shape what comes next.",
+    actions: {
+      choose: "Choose my preferences",
+      notNow: "Not now",
+    },
+  },
   focus: {
     title: "Focus Mode",
     unavailable: "Focus audio is unavailable",

@@ -4,7 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { queryKeys } from "@/src/api/queries";
-import { trackProductEvent, useCompletePreferenceNudge } from "@/src/experience";
+import {
+  trackProductEvent,
+  useCompletePreferenceNudge,
+  useExperienceState,
+} from "@/src/experience";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import { useMusicPreferences, useUpdateMusicPreferences } from "@/src/hooks/use-music-preferences";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
@@ -43,7 +47,9 @@ export function useMusicPreferencesController() {
   const queryClient = useQueryClient();
   const preferencesQuery = useMusicPreferences();
   const { mutateAsync: update } = useUpdateMusicPreferences();
+  const experienceState = useExperienceState();
   const { mutateAsync: completeNudge } = useCompletePreferenceNudge();
+  const nudgeCompletionAttempted = useRef(false);
   const [saveStatus, setSaveStatus] = useState<PreferenceSaveStatus>("idle");
   const initialBaseline = useRef<MusicPreferences>(
     preferencesQuery.data ?? DEFAULT_MUSIC_PREFERENCES,
@@ -68,7 +74,14 @@ export function useMusicPreferencesController() {
         if (status !== "saved") return;
 
         const snapshot = currentPrefs.current;
-        void completeNudge(undefined).catch(() => undefined);
+        const nudgeStatus = experienceState.data?.preferenceNudgeStatus;
+        if (
+          !nudgeCompletionAttempted.current
+          && (nudgeStatus === "eligible" || nudgeStatus === "shown" || nudgeStatus === "dismissed")
+        ) {
+          nudgeCompletionAttempted.current = true;
+          void completeNudge(undefined).catch(() => undefined);
+        }
         void trackProductEvent("music_preferences_saved", {
           flowVersion: 1,
           platform: platform(),
@@ -83,7 +96,7 @@ export function useMusicPreferencesController() {
         t("common.errors.saveRestoredMessage"),
       ),
     }),
-    [completeNudge, queryClient, queryKey, resolvedLanguage, t, toast, update, userId],
+    [completeNudge, experienceState.data?.preferenceNudgeStatus, queryClient, queryKey, resolvedLanguage, t, toast, update, userId],
   );
 
   useEffect(() => {

@@ -42,6 +42,14 @@ export const playback = {
       decrement: "Retroceder {{seconds}} segundos",
     },
   },
+  preferenceNudge: {
+    title: "Haz que la próxima pista se parezca más a ti",
+    body: "Elige algunas preferencias musicales para dar forma a lo que viene.",
+    actions: {
+      choose: "Elegir mis preferencias",
+      notNow: "Ahora no",
+    },
+  },
   focus: {
     title: "Modo concentración",
     unavailable: "El audio de enfoque no está disponible",

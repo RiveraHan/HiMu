@@ -6,6 +6,7 @@ import { useMusicPreferencesController } from "../use-music-preferences-controll
 const mockUpdate = jest.fn();
 const mockCompleteNudge = jest.fn();
 const mockTrackProductEvent = jest.fn();
+let mockExperienceState: Record<string, unknown>;
 const mockToastError = jest.fn();
 const mockSetQueryData = jest.fn();
 const mockCancelQueries = jest.fn();
@@ -43,6 +44,7 @@ jest.mock("@/src/i18n/use-locale", () => ({ useLocale: () => ({ resolvedLanguage
 jest.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock("@/src/experience", () => ({
   useCompletePreferenceNudge: () => ({ mutateAsync: mockCompleteNudge }),
+  useExperienceState: () => mockExperienceState,
   trackProductEvent: (...args: unknown[]) => mockTrackProductEvent(...args),
 }));
 
@@ -51,6 +53,11 @@ beforeEach(() => {
   mockUpdate.mockReset().mockResolvedValue(undefined);
   mockCompleteNudge.mockReset().mockResolvedValue(undefined);
   mockTrackProductEvent.mockReset();
+  mockExperienceState = {
+    data: { preferenceNudgeStatus: "shown" },
+    isLoading: false,
+    isError: false,
+  };
   mockToastError.mockReset();
   mockSetQueryData.mockReset();
   mockCancelQueries.mockReset().mockResolvedValue(undefined);
@@ -204,6 +211,35 @@ test("announces saving then saved and completes the nudge with bucket-only analy
     locale: "en",
     selectedCountBucket: "0",
   });
+});
+
+test("does not complete a terminal nudge after a later successful preference save", async () => {
+  mockExperienceState = {
+    data: { preferenceNudgeStatus: "completed" },
+    isLoading: false,
+    isError: false,
+  };
+  const hook = await renderHook(() => useMusicPreferencesController());
+
+  await act(async () => {
+    hook.result.current.setAtmosphere("calm");
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(hook.result.current.saveStatus).toBe("saved"));
+
+  expect(mockCompleteNudge).not.toHaveBeenCalled();
+});
+
+test("does not complete the nudge for an offline preference edit", async () => {
+  mockOnline = false;
+  const hook = await renderHook(() => useMusicPreferencesController());
+
+  await act(async () => {
+    hook.result.current.setAtmosphere("calm");
+  });
+
+  expect(mockCompleteNudge).not.toHaveBeenCalled();
 });
 
 test("auth-scope disposal makes a late save completion invisible", async () => {

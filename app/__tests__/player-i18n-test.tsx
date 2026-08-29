@@ -28,6 +28,9 @@ let mockPrivateDetails: null | { trackId: string; confirmedLyrics: string; djId:
   djId: "dj-one",
 };
 const mockToastError = jest.fn();
+const mockPostTrackExperience = jest.fn(({ trackId }: { trackId: string }) => (
+  mockReact.createElement(mockNativeView, { testID: "player-nudge-boundary", accessibilityLabel: trackId })
+));
 let mockEdgePayload = {
   code: null as string | null,
   dailyLimit: null as number | null,
@@ -85,6 +88,9 @@ jest.mock("@/src/hooks/use-toast", () => ({
 }));
 jest.mock("@/src/api/edge-errors", () => ({
   getEdgeErrorPayload: jest.fn(async () => mockEdgePayload),
+}));
+jest.mock("@/src/experience", () => ({
+  PostTrackExperience: (props: { trackId: string }) => mockPostTrackExperience(props),
 }));
 jest.mock("expo-router", () => ({
   router: {
@@ -174,6 +180,16 @@ describe("PlayerScreen localization", () => {
 
     expect(screen.getByText("Signal Bloom")).toBeTruthy();
     expect(screen.getByText("DJ One")).toBeTruthy();
+  });
+
+  test("keeps core player controls operable when the post-track extension is present", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    expect(screen.getByTestId("player-nudge-boundary")).toBeTruthy();
+    expect(mockPostTrackExperience).toHaveBeenCalledWith({ trackId: "track-one" });
+    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
   });
 
   test("keeps one compact-ordered stage while CSS maps it to a desktop two-column landmark", async () => {

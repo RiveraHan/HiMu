@@ -1,6 +1,7 @@
 import { getEdgeErrorPayload } from "@/src/api/edge-errors";
 import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
+import { PostTrackExperience } from "@/src/experience";
 import { PlayerArtwork } from "@/src/components/player/PlayerArtwork";
 import {
   PlayerDesktopLayout,
@@ -432,6 +433,7 @@ export default function PlayerScreen() {
             </View>
           </PlayerDesktopLayoutSlot>
         </PlayerDesktopLayout>
+        <PostTrackExperience trackId={track.id} />
       </ScrollView>
     </View>
   );

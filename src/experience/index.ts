@@ -7,6 +7,9 @@ export {
 } from "./experience-state";
 export type { ExperienceState } from "./experience-state";
 
+export { PostTrackExperience } from "@/src/components/experience/PostTrackExperience";
+export type { PostTrackExperienceProps } from "@/src/components/experience/PostTrackExperience";
+
 export {
   introStateStore,
   pendingIntentStore,
