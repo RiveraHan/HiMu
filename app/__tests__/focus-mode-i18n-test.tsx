@@ -218,6 +218,42 @@ describe("FocusModeScreen data states", () => {
     );
   });
 
+  it("keeps an energy and BPM tie stable when only atmosphere changes", async () => {
+    mockFocusQuery = {
+      data: [
+        { ...focusTrack, id: "first", energy_level: 5, bpm: 90 },
+        { ...focusTrack, id: "second", energy_level: 5, bpm: 90 },
+      ],
+      isPending: false,
+      isError: false,
+      fetchStatus: "idle",
+      refetch: mockFocusRefetch,
+    };
+    const random = jest.spyOn(Math, "random")
+      .mockReturnValueOnce(0.1)
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.1);
+    const screen = await render(<FocusModeScreen />);
+
+    try {
+      await fireEvent.press(screen.getByRole("button", { name: "Start focus session" }));
+      const initialQueue = mockPlayerLoad.mock.calls[0][1];
+
+      mockAtmosphere = "intense";
+      await screen.rerender(<FocusModeScreen />);
+      await fireEvent.press(screen.getByRole("button", { name: "Start focus session" }));
+
+      expect(initialQueue.map((track: { id: string }) => track.id)).toEqual(["first", "second"]);
+      expect(mockPlayerLoad.mock.calls[1][1].map((track: { id: string }) => track.id)).toEqual([
+        "first",
+        "second",
+      ]);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   it.each([
     ["failed", true, true, "idle", "Focus audio is unavailable"],
     ["offline", false, false, "paused", "You're offline"],

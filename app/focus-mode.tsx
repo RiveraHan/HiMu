@@ -41,7 +41,7 @@ export default function FocusModeScreen() {
   const setRepeatMode = usePlayerStore((s) => s.setRepeatMode);
   const focusQuery = useFocusTracks();
   const focusData = focusQuery.data;
-  const taste = useTasteProfile();
+  const { excludedMoods } = useTasteProfile();
 
   // Focus queue: calmest first (energy asc, then bpm asc; nulls = neutral mid),
   // with a random tiebreak for session-to-session variety.
@@ -50,7 +50,7 @@ export default function FocusModeScreen() {
       (focusData ?? []).filter(
         (t): t is typeof t & { audio_url: string } => t.audio_url != null,
       ),
-      taste.excludedMoods,
+      excludedMoods,
     );
     return rows
       .map((t) => ({ t, r: Math.random() }))
@@ -70,7 +70,7 @@ export default function FocusModeScreen() {
         duration: t.duration,
         genre: t.genre,
       }));
-  }, [focusData, taste]);
+  }, [excludedMoods, focusData]);
 
   // Undo the session loop when leaving focus mode (only if we started it).
   const startedLoop = useRef(false);
