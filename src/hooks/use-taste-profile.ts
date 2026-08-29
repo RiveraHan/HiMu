@@ -54,13 +54,22 @@ export function useTasteProfile(): TasteWeights {
     },
   });
 
+  const excludedMoodKey = JSON.stringify(prefs?.excludedMoods ?? null);
+  const excludedMoods = useMemo<ReadonlySet<string>>(
+    () => {
+      const moods = JSON.parse(excludedMoodKey) as string[] | null;
+      return moods ? new Set(moods) : EMPTY;
+    },
+    [excludedMoodKey],
+  );
+
   return useMemo(
     () => ({
       affineGenres: prefs ? new Set(prefs.genres) : EMPTY,
-      excludedMoods: prefs ? new Set(prefs.excludedMoods) : EMPTY,
+      excludedMoods,
       topGenre: topGenre ?? null,
       atmosphere: prefs?.atmosphere ?? "balanced",
     }),
-    [prefs, topGenre],
+    [excludedMoods, prefs, topGenre],
   );
 }
