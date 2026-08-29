@@ -95,6 +95,9 @@ function assertCreateCell(cell, mode) {
     assert.equal(dialog.escaped.dialogCount, 0);
     assert.equal(dialog.escaped.dialogFocus, opener);
     assertTargets(dialog.opened, `${context} ${name} dialog`);
+    assert.equal(dialog.progressive.checkedBefore, false);
+    assert.equal(dialog.progressive.checkedAfter, true);
+    assert.equal(dialog.progressive.limitAnnouncement, "");
   }
 
   assertCommon(create.soundReady, locale, width, height, `${context} Sound`);
@@ -136,8 +139,17 @@ function assertCreateCell(cell, mode) {
   assert.equal(create.restored.identityRequestCount, 1);
   assert.equal(create.restored.createCalls, 0);
   assert.equal(create.submitted.createCalls, 1);
-  assert.equal(create.history.entriesAdded, 0);
-  assert.equal(create.history.backForwardVerified, false);
+  assert.deepEqual(create.history, {
+    entriesAdded: 2,
+    afterBack: 2,
+    afterSecondBack: 1,
+    afterForward: 2,
+    afterSecondForward: 3,
+    createCalls: [0, 0, 0, 0],
+  });
+  assert.equal(create.reachability.actionVisible, true);
+  assert.equal(create.reachability.actionFocused, true);
+  assert.ok(create.reachability.actionTabIndex >= 0);
 
   if (create.zoom) {
     assert.equal(create.zoom.viewportWidth, 512);
@@ -171,12 +183,18 @@ function assertTrainCell(cell, direction) {
     assert.equal(dialog.forwardWrap, dialog.first);
     assert.equal(dialog.escaped.dialogFocus, opener);
     assertTargets(dialog.opened, `${context} dialog`);
+    assert.equal(dialog.progressive.checkedBefore, true);
+    assert.equal(dialog.progressive.checkedAfter, true);
+    assert.match(dialog.progressive.limitAnnouncement, /Choose at least 1/);
   }
   assert.equal(train.saved.updateCalls, 1);
   assert.equal(train.saved.updateInput.energy, 7);
   assert.equal(train.saved.updateInput.vibe, "Patient aurora drive");
   assert.equal(train.saved.updateInput.regenerateAvatar, false);
   assert.match(train.saved.reviewText, /7\/10/);
+  assert.equal(train.reachability.actionVisible, true);
+  assert.equal(train.reachability.actionFocused, true);
+  assert.ok(train.reachability.actionTabIndex >= 0);
   if (train.zoom) {
     assert.equal(train.zoom.actionVisible, true);
     assert.equal(train.zoom.actionFocused, true);
@@ -235,10 +253,12 @@ async function main() {
     assert.equal(fallback.selectedValues.length, 0);
     assert.equal(fallback.identityRequestCount, 0);
     assert.equal(fallback.createCalls, 0);
+    assert.ok(fallback.setParamsCalls >= 1);
+    assert.equal(fallback.pushCalls, 0);
   }
 
   process.stdout.write(
-    "Create/Train DJ browser matrix passed for 18 locale/viewport cells: real production dialogs, focus traps, overflow/targets, responsive state, reload fallback, submit gating, and Train energy 7 parity. Back/Forward remains unverified because production step updates replace the current URL entry.\n",
+    "Create/Train DJ browser matrix passed for 18 locale/viewport cells: real production dialogs, progressive selection, focus traps, overflow/targets, every-cell CTA reachability, Back/Forward step history, reload fallback, submit gating, and Train energy 7 parity.\n",
   );
 }
 

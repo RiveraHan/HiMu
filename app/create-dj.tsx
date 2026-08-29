@@ -133,14 +133,20 @@ export default function CreateDJScreen() {
     onChange: (value) => dispatch({ type: "identity_changed", value }),
   });
 
-  const setWebStep = useCallback((step: CreateDjStep) => {
-    if (Platform.OS === "web") router.setParams({ step });
-  }, []);
+  const pushWebStep = useCallback((step: CreateDjStep) => {
+    if (Platform.OS !== "web") return;
+    router.push({
+      pathname: "/create-dj",
+      params: initialReturnIntent === "first_track"
+        ? { step, returnIntent: initialReturnIntent }
+        : { step },
+    });
+  }, [initialReturnIntent]);
 
   const requestStep = useCallback((step: CreateDjStep) => {
     dispatch({ type: "step_requested", step });
-    setWebStep(step);
-  }, [setWebStep]);
+    pushWebStep(step);
+  }, [pushWebStep]);
 
   const requestEditableStep = useCallback((step: CreateDjStep) => {
     if (isPendingRef.current || submitInFlight.current) return;

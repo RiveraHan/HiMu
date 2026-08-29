@@ -59,6 +59,7 @@ type WorkflowSnapshot = {
   targetRects: TargetSnapshot[];
   routeStep: string | null;
   setParamsCalls: number;
+  pushCalls: number;
 };
 
 declare global {
@@ -67,6 +68,7 @@ declare global {
     __HIMU_CREATE_CALLS__?: number;
     __HIMU_IDENTITY_REQUESTS__?: number;
     __HIMU_ROUTER_SET_PARAMS_COUNT__?: number;
+    __HIMU_ROUTER_PUSH_COUNT__?: number;
     __HIMU_UPDATE_CALLS__?: number;
     __HIMU_UPDATE_INPUT__?: unknown;
     __HIMU_WORKFLOW_READ__?: () => WorkflowSnapshot;
@@ -207,6 +209,7 @@ function readWorkflow(
     targetRects: targetRects(),
     routeStep: new URLSearchParams(window.location.search).get("step"),
     setParamsCalls: window.__HIMU_ROUTER_SET_PARAMS_COUNT__ ?? 0,
+    pushCalls: window.__HIMU_ROUTER_PUSH_COUNT__ ?? 0,
   };
 }
 

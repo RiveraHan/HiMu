@@ -12,11 +12,13 @@ const ROUTER_EVENT = "himu-create-dj-browser-router-change";
 declare global {
   interface Window {
     __HIMU_ROUTER_BACK_COUNT__?: number;
+    __HIMU_ROUTER_PUSH_COUNT__?: number;
     __HIMU_ROUTER_SET_PARAMS_COUNT__?: number;
   }
 }
 
 window.__HIMU_ROUTER_BACK_COUNT__ = 0;
+window.__HIMU_ROUTER_PUSH_COUNT__ = 0;
 window.__HIMU_ROUTER_SET_PARAMS_COUNT__ = 0;
 
 function hrefUrl(href: Href) {
@@ -57,6 +59,8 @@ export const router = {
   push(href: Href) {
     const url = hrefUrl(href);
     window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    window.__HIMU_ROUTER_PUSH_COUNT__ =
+      (window.__HIMU_ROUTER_PUSH_COUNT__ ?? 0) + 1;
     notify();
   },
   replace(href: Href) {

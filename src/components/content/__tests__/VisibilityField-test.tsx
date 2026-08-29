@@ -14,10 +14,10 @@ describe("VisibilityField", () => {
     expect(screen.getByText("Visibility")).toBeTruthy();
     expect(screen.getByText("Only you can see this DJ.")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "PRIVATE" }).props.accessibilityState,
+      screen.getByRole("radio", { name: "PRIVATE" }).props.accessibilityState,
     ).toEqual(expect.objectContaining({ selected: true }));
     expect(
-      screen.getByRole("button", { name: "PUBLIC" }).props.accessibilityState,
+      screen.getByRole("radio", { name: "PUBLIC" }).props.accessibilityState,
     ).toEqual(expect.objectContaining({ selected: false }));
   });
 
@@ -27,7 +27,7 @@ describe("VisibilityField", () => {
       <VisibilityField value="private" onChange={onChange} />,
     );
 
-    await fireEvent.press(screen.getByRole("button", { name: "PUBLIC" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "PUBLIC" }));
 
     expect(onChange).toHaveBeenCalledWith("public");
   });
@@ -39,7 +39,7 @@ describe("VisibilityField", () => {
     );
 
     for (const label of ["PRIVATE", "PUBLIC"]) {
-      const target = screen.getByRole("button", { name: label });
+      const target = screen.getByRole("radio", { name: label });
       expect(target.props.accessibilityState).toEqual(
         expect.objectContaining({ disabled: true }),
       );

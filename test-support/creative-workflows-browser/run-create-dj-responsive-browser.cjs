@@ -294,7 +294,36 @@ async function activeLabel(cdp) {
   );
 }
 
-async function exerciseDialog(cdp, opener, searchLabel, group, item, selectItem) {
+async function readProgressiveSelection(cdp, item) {
+  return evaluate(
+    cdp,
+    `(() => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const checkbox = Array.from(dialog?.querySelectorAll('[role="checkbox"]') ?? []).find(
+        (element) => element.getAttribute('aria-label') === ${JSON.stringify(item)}
+      );
+      if (!dialog || !checkbox) throw new Error('Missing progressive catalog item: ' + ${JSON.stringify(item)});
+      const removableSelection = Array.from(dialog.querySelectorAll('[role="button"][aria-label]')).some(
+        (element) => {
+          const label = element.getAttribute('aria-label') ?? '';
+          return (
+            (label.startsWith('Remove ') || label.startsWith('Eliminar ')) &&
+            label.endsWith(${JSON.stringify(item)})
+          );
+        }
+      );
+      const limitAnnouncement = dialog.textContent?.includes('Choose at least 1')
+        ? 'Choose at least 1'
+        : '';
+      return {
+        checked: removableSelection,
+        limitAnnouncement,
+      };
+    })()`,
+  );
+}
+
+async function exerciseDialog(cdp, opener, searchLabel, group, item, progressiveMode) {
   await clickLabel(cdp, opener);
   const opened = await readWorkflow(
     cdp,
@@ -314,21 +343,36 @@ async function exerciseDialog(cdp, opener, searchLabel, group, item, selectItem)
     `${opener} did not restore focus after Escape`,
   );
 
-  if (selectItem) {
+  let progressive = null;
+  if (progressiveMode) {
     await clickLabel(cdp, opener);
     await readWorkflow(cdp, (state) => state.dialogCount === 1, `${opener} did not reopen`);
     await clickLabel(cdp, group);
     await clickLabel(cdp, group);
+    const before = await readProgressiveSelection(cdp, item);
     await clickLabel(cdp, item);
+    const after = await readProgressiveSelection(cdp, item);
+    if (
+      (progressiveMode === "select" && !after.checked) ||
+      (progressiveMode === "retain" && (!after.checked || !after.limitAnnouncement))
+    ) {
+      throw new Error(`${opener} controlled selection mismatch: ${JSON.stringify({ before, after })}`);
+    }
+    progressive = {
+      mode: progressiveMode,
+      checkedBefore: before.checked,
+      checkedAfter: after.checked,
+      limitAnnouncement: after.limitAnnouncement,
+    };
     await clickLabel(cdp, "Done");
     await readWorkflow(cdp, (state) => state.dialogCount === 0, `${opener} did not close`);
   }
 
-  return { opened, escaped, first, last, reverseWrap, forwardWrap };
+  return { opened, escaped, first, last, reverseWrap, forwardWrap, progressive };
 }
 
-async function zoomReachability(cdp, actionLabel, scrollTestId) {
-  await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 2 });
+async function actionReachability(cdp, actionLabel, scrollTestId, pageScaleFactor = 1) {
+  await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor });
   const state = await evaluate(
     cdp,
     `(async () => {
@@ -347,6 +391,7 @@ async function zoomReachability(cdp, actionLabel, scrollTestId) {
       return {
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
+        pageScaleFactor: ${JSON.stringify(pageScaleFactor)},
         visualHeight,
         visualTop,
         actionRect: { top: bounds.top, bottom: bounds.bottom },
@@ -363,18 +408,27 @@ async function zoomReachability(cdp, actionLabel, scrollTestId) {
   return state;
 }
 
+async function traverseHistory(cdp, direction, expectedStep, context) {
+  await evaluate(cdp, `window.history.${direction}()`);
+  return readWorkflow(
+    cdp,
+    (state) => state.activeStep === expectedStep && state.routeStep === ["sound", "identity", "review"][expectedStep - 1],
+    `${context} did not reach step ${expectedStep}`,
+  );
+}
+
 async function runCreateCell(cdp, origin, locale, width, height, index) {
   const labels = copy[locale];
   const url = `${origin}/create-dj?flow=create&locale=${locale}&cell=${index}`;
   const initial = await navigate(cdp, url, "create", width, height);
-  const historyStart = await evaluate(cdp, "window.history.length");
+  const historyStart = initial.pushCalls;
   const genresDialog = await exerciseDialog(
     cdp,
     labels.editGenres,
     labels.searchGenres,
     labels.genreGroup,
     labels.genre,
-    true,
+    "select",
   );
   const moodsDialog = await exerciseDialog(
     cdp,
@@ -382,7 +436,7 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
     labels.searchMoods,
     labels.moodGroup,
     labels.mood,
-    true,
+    "select",
   );
   const soundReady = await readWorkflow(
     cdp,
@@ -428,9 +482,18 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
     (state) => state.viewportWidth === width && state.viewportHeight === height,
     `Create viewport did not restore to ${width}x${height}`,
   );
-  const historyEnd = await evaluate(cdp, "window.history.length");
+  const historyEnd = restored.pushCalls;
+  const afterBack = await traverseHistory(cdp, "back", 2, `${locale} ${width}x${height} browser Back`);
+  const afterSecondBack = await traverseHistory(cdp, "back", 1, `${locale} ${width}x${height} second browser Back`);
+  const afterForward = await traverseHistory(cdp, "forward", 2, `${locale} ${width}x${height} browser Forward`);
+  const afterSecondForward = await traverseHistory(cdp, "forward", 3, `${locale} ${width}x${height} second browser Forward`);
+  const reachability = await actionReachability(
+    cdp,
+    labels.submit,
+    "create-dj-wizard-scroll-view",
+  );
   const zoom = width === 512 && height === 384
-    ? await zoomReachability(cdp, labels.submit, "create-dj-wizard-scroll-view")
+    ? await actionReachability(cdp, labels.submit, "create-dj-wizard-scroll-view", 2)
     : null;
   await clickLabel(cdp, labels.submit);
   await clickLabel(cdp, labels.submit).catch(() => undefined);
@@ -452,9 +515,18 @@ async function runCreateCell(cdp, origin, locale, width, height, index) {
     submitted,
     history: {
       entriesAdded: historyEnd - historyStart,
-      backForwardVerified: false,
-      reason: "Production uses router.setParams, which replaces the current URL entry.",
+      afterBack: afterBack.activeStep,
+      afterSecondBack: afterSecondBack.activeStep,
+      afterForward: afterForward.activeStep,
+      afterSecondForward: afterSecondForward.activeStep,
+      createCalls: [
+        afterBack.createCalls,
+        afterSecondBack.createCalls,
+        afterForward.createCalls,
+        afterSecondForward.createCalls,
+      ],
     },
+    reachability,
     zoom,
   };
 }
@@ -469,7 +541,7 @@ async function runTrainCell(cdp, origin, locale, width, height, index) {
     labels.searchGenres,
     labels.genreGroup,
     labels.genre,
-    false,
+    "retain",
   );
   const moodsDialog = await exerciseDialog(
     cdp,
@@ -477,7 +549,7 @@ async function runTrainCell(cdp, origin, locale, width, height, index) {
     labels.searchMoods,
     labels.moodGroup,
     labels.mood,
-    false,
+    "retain",
   );
   await setInput(cdp, labels.vibePlaceholder, "Patient aurora drive");
   const edited = await readWorkflow(
@@ -485,8 +557,13 @@ async function runTrainCell(cdp, origin, locale, width, height, index) {
     (state) => state.reviewText.includes("Patient aurora drive") && state.updateCalls === 0,
     `${locale} ${width}x${height} Train non-intensity edit did not reach review`,
   );
+  const reachability = await actionReachability(
+    cdp,
+    labels.save,
+    "responsive-form-scroll-view",
+  );
   const zoom = width === 512 && height === 384
-    ? await zoomReachability(cdp, labels.save, "responsive-form-scroll-view")
+    ? await actionReachability(cdp, labels.save, "responsive-form-scroll-view", 2)
     : null;
   await clickLabel(cdp, labels.save);
   const saved = await readWorkflow(
@@ -494,7 +571,7 @@ async function runTrainCell(cdp, origin, locale, width, height, index) {
     (state) => state.updateCalls === 1,
     `${locale} ${width}x${height} Train save was not captured`,
   );
-  return { initial, genresDialog, moodsDialog, edited, saved, zoom };
+  return { initial, genresDialog, moodsDialog, edited, saved, reachability, zoom };
 }
 
 async function runReloadFallback(cdp, origin, locale) {

@@ -15,6 +15,7 @@ const mockConsumePendingIntent = jest.fn<Promise<boolean>, ["first_track"]>();
 const mockCreateDj = jest.fn();
 const mockGetEdgeErrorPayload = jest.fn<Promise<EdgeErrorPayload>, [unknown]>();
 const mockRouterBack = jest.fn();
+const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockRouterSetParams = jest.fn();
 const mockTrackProductEvent = jest.fn();
@@ -166,6 +167,7 @@ jest.mock("expo-router", () => {
     router: {
       back: (...args: unknown[]) => mockRouterBack(...args),
       canGoBack: () => true,
+      push: (...args: unknown[]) => mockRouterPush(...args),
       replace: (...args: unknown[]) => mockRouterReplace(...args),
       setParams: (...args: unknown[]) => mockRouterSetParams(...args),
     },
@@ -344,7 +346,7 @@ test("keeps dirty Sound on Stay, discards on confirmation, and exits clean Sound
   await waitFor(() => expect(mockRouterBack).toHaveBeenCalledTimes(1));
 });
 
-test("canonicalizes a direct invalid Review URL to Sound and syncs valid web step history", async () => {
+test("replaces invalid web steps and pushes valid user-directed step history", async () => {
   Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
   mockSearchParams = { step: "review" };
   const direct = await render(<CreateDJScreen />);
@@ -353,15 +355,29 @@ test("canonicalizes a direct invalid Review URL to Sound and syncs valid web ste
   await direct.unmount();
 
   mockRouterSetParams.mockClear();
+  mockRouterPush.mockClear();
   mockSearchParams = { step: "sound" };
   const screen = await render(<CreateDJScreen />);
   await reachReview(screen);
-  expect(mockRouterSetParams).toHaveBeenCalledWith({ step: "identity" });
-  expect(mockRouterSetParams).toHaveBeenCalledWith({ step: "review" });
+  expect(mockRouterPush).toHaveBeenNthCalledWith(1, {
+    pathname: "/create-dj",
+    params: { step: "identity" },
+  });
+  expect(mockRouterPush).toHaveBeenNthCalledWith(2, {
+    pathname: "/create-dj",
+    params: { step: "review" },
+  });
+  expect(mockRouterSetParams).not.toHaveBeenCalled();
 
   mockSearchParams = { step: "identity" };
   await screen.rerender(<CreateDJScreen />);
   await waitFor(() => expect(screen.getByText("Step 2 of 3")).toBeTruthy());
+  expect(mockCreateDj).not.toHaveBeenCalled();
+
+  mockSearchParams = { step: "review" };
+  await screen.rerender(<CreateDJScreen />);
+  await waitFor(() => expect(screen.getByText("Step 3 of 3")).toBeTruthy());
+  expect(mockCreateDj).not.toHaveBeenCalled();
 });
 
 test("localizes progress, review labels, edit actions, visibility consequence, and CTA in Spanish", async () => {
