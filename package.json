@@ -41,6 +41,7 @@
     "check:beta-responsive": "node --import tsx scripts/check/beta-responsive-contract.ts",
     "check:beta-onboarding-browser": "node scripts/check/beta-onboarding-responsive-browser.cjs",
     "check:create-dj-browser": "node scripts/check/create-dj-responsive-browser.cjs",
+    "check:settings-browser": "node scripts/check/settings-responsive-browser.cjs",
     "check:security-remediation-migration": "node --import tsx scripts/check/security-remediation-migration.ts",
     "check:security-quota-invariants": "node --import tsx scripts/check/security-quota-invariants.ts",
     "check:private-media-e2e": "node --import tsx scripts/check/private-media-e2e.ts",

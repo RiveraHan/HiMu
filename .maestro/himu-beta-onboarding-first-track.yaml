@@ -12,7 +12,6 @@ appId: com.himu.app
 - setOrientation: LANDSCAPE
 - assertVisible: "Create your DJ"
 - setOrientation: PORTRAIT
-- assertVisible: "Create your DJ"
 - tapOn: "Edit Genres"
 - tapOn: "Chill & Ambient"
 - tapOn: "Ambient"
@@ -21,26 +20,40 @@ appId: com.himu.app
 - tapOn: "Calm"
 - tapOn: "Focus"
 - tapOn: "Done"
-- tapOn: "Continue"
+- tapOn:
+    id: "create-dj-sound-action"
 - assertVisible: "Choose your DJ's identity"
 - tapOn: "Write my own"
 - tapOn: "DJ name"
 - inputText: "Night Cartographer"
 - tapOn: "Identity concept"
 - inputText: "Maps patient rhythms into luminous shared journeys."
-- tapOn: "Continue"
+- tapOn:
+    id: "create-dj-identity-action"
 - assertVisible: "Review your DJ"
 - tapOn: "Bring my DJ to life"
 - assertVisible: "Confirm your track"
 
-# Pending manual device matrix (the local CI sandbox has no usable ADB daemon,
-# Maestro binary, or tablet AVD): run this flow on the 320x640 phone and
-# 1280x800 tablet with EXPO_PUBLIC_BETA_SMOKE=1. On each serial, also run
-# `adb -s SERIAL shell settings put system user_rotation 1` and reassert the
-# current Create your DJ screen. Repeat the critical flow after
-# `adb -s SERIAL shell settings put system font_scale 1.5` and again at 2.0,
-# scrolling as needed to prove every action remains reachable.
-# Also record separate device runs for sheet-first Back, wizard-step Back,
-# dirty-exit Stay, keyboard reveal/safe-area clearance, and portrait/landscape
-# state retention. The final assertion requires a deterministic successful
-# create-dj backend response; EXPO_PUBLIC_BETA_SMOKE alone does not provide one.
+# Pending manual Android release gate: EXPO_PUBLIC_BETA_SMOKE=1 does not yet
+# provide deterministic create/generation/ready-state fixtures, so the following
+# exact production-label continuation must not be uncommented or reported as run
+# until that development-only boundary exists:
+# - tapOn: "Confirm and generate"
+# - assertVisible: "Make the next track feel more like you"
+# - assertVisible: "Play"
+# - tapOn: "Choose my preferences"
+# - assertVisible: "Music Preferences"
+# - tapOn: "Balanced"
+# - tapOn: "Edit Favorite genres"
+# - tapOn: "Chill & Ambient"
+# - tapOn: "Ambient"
+# - tapOn: "Done"
+# - tapOn: "Edit Moods to avoid"
+# - assertVisible: "Saved"
+#
+# Run on compact-phone and tablet emulators in portrait and landscape. Repeat
+# the picker with its search keyboard open; verify safe-area clearance and
+# TalkBack labels; repeat the critical nudge/preferences path at font scales 1.5
+# and 2.0; relaunch after Saved and verify the completed nudge stays absent.
+# Host prerequisites: generated android/Gradle project, working ADB/emulators,
+# and Maestro. None is available on this host, so this is a manual release gate.

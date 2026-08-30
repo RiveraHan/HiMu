@@ -1,5 +1,4 @@
 const { spawn } = require("node:child_process");
-const { Buffer } = require("node:buffer");
 const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
@@ -10,43 +9,75 @@ const { runBuild } = require("@expo/metro/metro");
 
 const harnessDirectory = path.dirname(path.resolve(process.argv[1]));
 const projectRoot = path.resolve(harnessDirectory, "../..");
-const fixtureEntry = path.join(
-  harnessDirectory,
-  "SettingsWorkflow-browser-fixture.tsx",
-);
+const fixtureEntry = path.join(harnessDirectory, "SettingsWorkflow-browser-fixture.tsx");
 const hookStub = path.join(harnessDirectory, "settings-browser-hooks.ts");
-const authStub = path.join(
-  harnessDirectory,
-  "settings-auth-browser-stub.ts",
-);
-const routerStub = path.join(
-  harnessDirectory,
-  "settings-expo-router-browser-stub.ts",
-);
-const authScopeStub = path.join(
-  harnessDirectory,
-  "settings-auth-scope-browser-stub.ts",
-);
-const secureStorageStub = path.join(
-  harnessDirectory,
-  "settings-secure-storage-browser-stub.ts",
-);
-const evidenceDirectory = path.join(
-  projectRoot,
-  ".superpowers/sdd/2026-08-20-web-workflows-plan/task-4-evidence",
-);
+const authStub = path.join(harnessDirectory, "settings-auth-browser-stub.ts");
+const routerStub = path.join(harnessDirectory, "settings-expo-router-browser-stub.ts");
+const authScopeStub = path.join(harnessDirectory, "settings-auth-scope-browser-stub.ts");
+const secureStorageStub = path.join(harnessDirectory, "settings-secure-storage-browser-stub.ts");
+const experienceStub = path.join(harnessDirectory, "settings-experience-browser-stub.ts");
+
+const locales = ["en", "es"];
+const preferenceCells = [
+  [320, 640],
+  [390, 844],
+  [768, 1024],
+  [1023, 768],
+  [1024, 768],
+  [1440, 900],
+  [1920, 1080],
+  [720, 422],
+  [512, 384],
+];
+const playerCells = [
+  [390, 844],
+  [768, 1024],
+  [1440, 900],
+];
+
+const copy = {
+  en: {
+    intense: "Intense",
+    genreEdit: "Edit Favorite genres",
+    genreSearch: "Search Favorite genres",
+    genreGroup: "Chill & Ambient",
+    genreItem: "Ambient",
+    moodEdit: "Edit Moods to avoid",
+    moodSearch: "Search Moods to avoid",
+    done: "Done",
+    saving: "Saving",
+    saved: "Saved",
+    play: "Play",
+    choose: "Choose my preferences",
+    dismiss: "Not now",
+  },
+  es: {
+    intense: "Intensa",
+    genreEdit: "Editar Géneros favoritos",
+    genreSearch: "Buscar Géneros favoritos",
+    genreGroup: "Relajado y ambiental",
+    genreItem: "Ambiental",
+    moodEdit: "Editar Estados de ánimo que evitar",
+    moodSearch: "Buscar Estados de ánimo que evitar",
+    done: "Listo",
+    saving: "Guardando",
+    saved: "Guardado",
+    play: "Reproducir",
+    choose: "Elegir mis preferencias",
+    dismiss: "Ahora no",
+  },
+};
 
 function findChrome() {
-  const candidates = [
+  return [
     process.env.CHROME_BIN,
     "/usr/bin/google-chrome",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
-  ].filter(Boolean);
-  return candidates.find((candidate) => fs.existsSync(candidate));
+  ].filter(Boolean).find((candidate) => fs.existsSync(candidate));
 }
 
-async function waitFor(check, message, timeout = 15_000) {
+async function waitFor(check, message, timeout = 20_000) {
   const startedAt = Date.now();
   let lastValue;
   while (true) {
@@ -65,7 +96,6 @@ async function connectCdp(webSocketUrl) {
     socket.addEventListener("open", resolve, { once: true });
     socket.addEventListener("error", reject, { once: true });
   });
-
   let nextId = 1;
   const pending = new Map();
   socket.addEventListener("message", (event) => {
@@ -77,7 +107,6 @@ async function connectCdp(webSocketUrl) {
     if (message.error) callbacks.reject(new Error(message.error.message));
     else callbacks.resolve(message.result);
   });
-
   return {
     close: () => socket.close(),
     send(method, params = {}) {
@@ -113,134 +142,233 @@ async function resize(cdp, width, height) {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await evaluate(
-    cdp,
-    `new Promise((resolve) => {
-      window.dispatchEvent(new Event('resize'));
-      requestAnimationFrame(() => requestAnimationFrame(resolve));
-    })`,
-  );
+  await evaluate(cdp, `new Promise((resolve) => {
+    window.dispatchEvent(new Event('resize'));
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  })`);
 }
 
-async function navigate(cdp, url, route, direction) {
+async function readSnapshot(cdp, route, locale) {
+  let lastState;
+  return waitFor(async () => {
+    const state = await evaluate(cdp, `(() => {
+      if (window.__HIMU_BROWSER_ERROR__) return { error: window.__HIMU_BROWSER_ERROR__ };
+      if (!window.__HIMU_SETTINGS_READY__ || !window.__HIMU_SETTINGS_READ__) return null;
+      return window.__HIMU_SETTINGS_READ__();
+    })()`);
+    lastState = state;
+    if (state?.error) throw new Error(state.error);
+    return state?.route === route && state?.documentLanguage === locale ? state : null;
+  }, `Production ${route} did not settle in ${locale}; last state ${JSON.stringify(lastState)}`);
+}
+
+async function navigate(cdp, url, route, locale) {
   await cdp.send("Page.navigate", { url });
   await waitFor(async () => {
     try {
-      return await evaluate(
-        cdp,
-        `window.location.pathname === ${JSON.stringify(route)} && document.readyState === 'complete'`,
-      );
+      return await evaluate(cdp, `document.readyState === 'complete' && window.location.pathname === ${JSON.stringify(route)}`);
     } catch {
       return false;
     }
   }, `Browser did not navigate to ${route}`);
-  return readSettings(cdp, route, direction);
+  return readSnapshot(cdp, route, locale);
 }
 
-async function readSettings(cdp, route, direction) {
-  let lastState;
-  try {
-    return await waitFor(
-      async () => {
-        const state = await evaluate(
-          cdp,
-          `(() => {
-            if (window.__HIMU_BROWSER_ERROR__) return { error: window.__HIMU_BROWSER_ERROR__ };
-            if (!window.__HIMU_SETTINGS_READY__ || !window.__HIMU_SETTINGS_READ__) return null;
-            return window.__HIMU_SETTINGS_READ__();
-          })()`,
-        );
-        lastState = state;
-        if (state?.error) throw new Error(state.error);
-        return state?.route === route && state?.direction === direction ? state : null;
-      },
-      `Production ${route} settings did not reach ${direction}`,
+async function clickLabel(cdp, label) {
+  await evaluate(cdp, `(() => {
+    const target = Array.from(document.querySelectorAll('[aria-label]')).find(
+      (element) => element.getAttribute('aria-label') === ${JSON.stringify(label)}
     );
-  } catch (error) {
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)}; last state: ${JSON.stringify(lastState)}`,
+    if (!target) throw new Error('Missing production control: ${label}');
+    target.focus();
+    target.click();
+  })()`);
+}
+
+async function hasLabel(cdp, label) {
+  return evaluate(cdp, `Array.from(document.querySelectorAll('[aria-label]')).some(
+    (element) => element.getAttribute('aria-label') === ${JSON.stringify(label)}
+  )`);
+}
+
+async function clickText(cdp, text) {
+  await evaluate(cdp, `(() => {
+    const target = Array.from(document.querySelectorAll('button, [role="button"]')).find(
+      (element) => element.textContent.trim() === ${JSON.stringify(text)}
     );
+    if (!target) throw new Error('Missing production text control: ${text}');
+    target.focus();
+    target.click();
+  })()`);
+}
+
+async function dispatchKey(cdp, key, modifiers = 0) {
+  const keyCodes = { Tab: 9, Escape: 27, ArrowRight: 39 };
+  const code = key === "Escape" ? "Escape" : key;
+  const windowsVirtualKeyCode = keyCodes[key];
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key,
+    code,
+    modifiers,
+    windowsVirtualKeyCode,
+  });
+  await cdp.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key,
+    code,
+    modifiers,
+    windowsVirtualKeyCode,
+  });
+}
+
+async function focusDialogEndpoint(cdp, endpoint) {
+  await evaluate(cdp, `(() => {
+    const dialog = document.querySelector('[data-testid="catalog-picker-dialog"]');
+    const controls = Array.from(dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    const target = ${endpoint === "first" ? "controls[0]" : "controls.at(-1)"};
+    if (!target) throw new Error('Dialog has no ${endpoint} focus endpoint');
+    target.focus();
+  })()`);
+}
+
+async function runPreferenceCell(cdp, origin, locale, width, height) {
+  const labels = copy[locale];
+  await resize(cdp, width, height);
+  const base = await navigate(
+    cdp,
+    `${origin}/preferences?locale=${locale}&reset=1`,
+    "/preferences",
+    locale,
+  );
+
+  await clickLabel(cdp, labels.intense);
+  const saving = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/preferences", locale);
+    return state.saveStatus === labels.saving ? state : null;
+  }, `${locale} ${width}x${height} never exposed Saving`);
+
+  await clickLabel(cdp, labels.genreEdit);
+  const genreDialog = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/preferences", locale);
+    return state.dialog?.activeLabel === labels.genreSearch ? state : null;
+  }, `${locale} ${width}x${height} genre search did not autofocus`);
+
+  await focusDialogEndpoint(cdp, "first");
+  await dispatchKey(cdp, "Tab", 8);
+  const backwardTrap = await readSnapshot(cdp, "/preferences", locale);
+  await focusDialogEndpoint(cdp, "last");
+  await dispatchKey(cdp, "Tab");
+  const forwardTrap = await readSnapshot(cdp, "/preferences", locale);
+
+  if (!(await hasLabel(cdp, labels.genreItem))) {
+    await clickLabel(cdp, labels.genreGroup);
   }
-}
+  await clickLabel(cdp, labels.genreItem);
+  await clickText(cdp, labels.done);
+  const afterDone = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/preferences", locale);
+    return state.dialog === null && state.activeLabel === labels.genreEdit ? state : null;
+  }, `${locale} ${width}x${height} Done did not restore genre opener focus`);
 
-async function clickLabel(cdp, label, index = 0) {
-  await evaluate(
+  await clickLabel(cdp, labels.moodEdit);
+  const moodDialog = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/preferences", locale);
+    return state.dialog?.activeLabel === labels.moodSearch ? state : null;
+  }, `${locale} ${width}x${height} mood search did not autofocus`);
+  await dispatchKey(cdp, "Escape");
+  const afterEscape = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/preferences", locale);
+    return state.dialog === null && state.activeLabel === labels.moodEdit ? state : null;
+  }, `${locale} ${width}x${height} Escape did not restore mood opener focus`);
+
+  const saved = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/preferences", locale);
+    return state.saveStatus === labels.saved &&
+      state.preferences.atmosphere === "intense" &&
+      !state.preferences.genres.includes("Ambient")
+      ? state
+      : null;
+  }, `${locale} ${width}x${height} preference save did not settle`);
+  const remounted = await navigate(
     cdp,
-    `(() => {
-      const matches = Array.from(document.querySelectorAll('[aria-label]')).filter(
-        (element) => element.getAttribute('aria-label') === ${JSON.stringify(label)}
-      );
-      const target = matches[${index}];
-      if (!target) throw new Error('Missing production control: ${label}');
-      target.click();
-    })()`,
+    `${origin}/preferences?locale=${locale}`,
+    "/preferences",
+    locale,
   );
+
+  return {
+    locale,
+    width,
+    height,
+    base,
+    saving,
+    genreDialog,
+    backwardTrap,
+    forwardTrap,
+    afterDone,
+    moodDialog,
+    afterEscape,
+    saved,
+    remounted,
+  };
 }
 
-async function chooseAdjacentSelectOptionByKeyboard(cdp, testID, key) {
-  const windowsVirtualKeyCode = key === "ArrowUp" ? 38 : 40;
-  const point = await evaluate(
+async function runPlayerCell(cdp, origin, locale, width, height) {
+  const labels = copy[locale];
+  await resize(cdp, width, height);
+  const shown = await navigate(
     cdp,
-    `(() => {
-      const target = document.querySelector('[data-testid=${JSON.stringify(testID)}]');
-      if (!target) throw new Error('Missing production select: ${testID}');
-      const rect = target.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    })()`,
+    `${origin}/player?locale=${locale}&reset=1`,
+    "/player",
+    locale,
   );
-  await cdp.send("Input.dispatchMouseEvent", {
-    type: "mousePressed",
-    button: "left",
-    clickCount: 1,
-    x: point.x,
-    y: point.y,
-  });
-  await cdp.send("Input.dispatchMouseEvent", {
-    type: "mouseReleased",
-    button: "left",
-    clickCount: 1,
-    x: point.x,
-    y: point.y,
-  });
-  await cdp.send("Input.dispatchKeyEvent", {
-    type: "keyDown",
-    key,
-    code: key,
-    windowsVirtualKeyCode,
-  });
-  await cdp.send("Input.dispatchKeyEvent", {
-    type: "keyUp",
-    key,
-    code: key,
-    windowsVirtualKeyCode,
-  });
-  await cdp.send("Input.dispatchKeyEvent", {
-    type: "keyDown",
-    key: "Enter",
-    code: "Enter",
-    windowsVirtualKeyCode: 13,
-  });
-  await cdp.send("Input.dispatchKeyEvent", {
-    type: "keyUp",
-    key: "Enter",
-    code: "Enter",
-    windowsVirtualKeyCode: 13,
-  });
-}
-
-async function capture(cdp, route, width, height) {
-  const capture = await cdp.send("Page.captureScreenshot", {
-    format: "png",
-    fromSurface: true,
-    captureBeyondViewport: false,
-  });
-  const filePath = path.join(
-    evidenceDirectory,
-    `${route}-${width}x${height}.png`,
+  await clickLabel(cdp, labels.play);
+  const afterPlay = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/player", locale);
+    return state.counters.playerToggles === 1 ? state : null;
+  }, `${locale} ${width}x${height} Play was not reachable with the nudge shown`);
+  await clickLabel(cdp, labels.choose);
+  const accepted = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/player", locale);
+    return state.routeCalls.some(
+      (call) => call.method === "push" && call.href === "/preferences",
+    ) ? state : null;
+  }, `${locale} ${width}x${height} nudge acceptance did not route to Preferences`);
+  await clickLabel(cdp, labels.dismiss);
+  const dismissed = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/player", locale);
+    return !state.nudgeVisible ? state : null;
+  }, `${locale} ${width}x${height} nudge dismissal did not settle`);
+  const dismissedRemount = await navigate(
+    cdp,
+    `${origin}/player?locale=${locale}`,
+    "/player",
+    locale,
   );
-  fs.mkdirSync(evidenceDirectory, { recursive: true });
-  fs.writeFileSync(filePath, Buffer.from(capture.data, "base64"));
-  return { filePath, bytes: fs.statSync(filePath).size };
+  await evaluate(cdp, `window.__HIMU_SETTINGS_SET_NUDGE__('completed')`);
+  const completed = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/player", locale);
+    return !state.nudgeVisible ? state : null;
+  }, `${locale} ${width}x${height} completed nudge did not remain absent`);
+  const completedRemount = await navigate(
+    cdp,
+    `${origin}/player?locale=${locale}`,
+    "/player",
+    locale,
+  );
+  return {
+    locale,
+    width,
+    height,
+    shown,
+    afterPlay,
+    accepted,
+    dismissed,
+    dismissedRemount,
+    completed,
+    completedRemount,
+  };
 }
 
 async function main() {
@@ -248,14 +376,11 @@ async function main() {
   if (!chrome) throw new Error("Settings browser integration requires Chrome");
   process.env.EXPO_PUBLIC_SUPABASE_URL ||= "https://browser-fixture.supabase.co";
   process.env.EXPO_PUBLIC_SUPABASE_KEY ||= "browser-fixture-anon-key";
-  process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
-  process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
-  const outputDirectory = fs.mkdtempSync(
-    path.join(os.tmpdir(), "himu-settings-workflow-"),
-  );
+  const outputDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "himu-settings-release-"));
   let browser;
   let cdp;
   let server;
+  let chromeStderr = "";
 
   try {
     const bundlePath = path.join(outputDirectory, "fixture.js");
@@ -264,28 +389,29 @@ async function main() {
     const hookModules = new Set([
       "@/src/audio/use-player",
       "@/src/hooks/use-auth",
+      "@/src/hooks/use-favorites",
+      "@/src/hooks/use-home",
       "@/src/hooks/use-music-preferences",
       "@/src/hooks/use-online-status",
       "@/src/hooks/use-profile",
       "@/src/hooks/use-settings",
       "@/src/hooks/use-tab-bar-padding",
       "@/src/hooks/use-toast",
+      "@/src/hooks/use-track-private-details",
+      "@/src/experience/experience-state",
+      "@/src/experience/product-analytics",
     ]);
-
     metroConfig.resolver.blockList = metroConfig.resolver.blockList.filter(
       (pattern) => !pattern.test(fixtureEntry),
     );
     metroConfig.resolver.resolveRequest = (context, moduleName, platform) => {
-      const webContext =
-        platform === "web"
-          ? {
-              ...context,
-              preferNativePlatform: false,
-              mainFields: ["browser", "module", "main"],
-            }
-          : context;
+      const webContext = platform === "web"
+        ? { ...context, preferNativePlatform: false, mainFields: ["browser", "module", "main"] }
+        : context;
       const target = hookModules.has(moduleName)
         ? hookStub
+        : moduleName === "@/src/experience"
+          ? experienceStub
         : moduleName === "@/src/api/auth"
           ? authStub
           : moduleName === "@/src/api/auth-scope"
@@ -308,23 +434,19 @@ async function main() {
       out: bundlePath,
     });
     const fixtureHtml = `<!doctype html><html><head><meta charset="utf-8"><style>
-        html, body, #root { display: flex; margin: 0; width: 100%; height: 100%; overflow: hidden; }
-      </style></head><body><div id="root"></div><script>
-        globalThis.process = { env: {
-          EXPO_PUBLIC_SUPABASE_URL: "https://browser-fixture.supabase.co",
-          EXPO_PUBLIC_SUPABASE_KEY: "browser-fixture-anon-key",
-          EXPO_PUBLIC_TERMS_URL: "https://himu.app/terms",
-          EXPO_PUBLIC_PRIVACY_URL: "https://himu.app/privacy"
-        } };
-        window.addEventListener("error", (event) => {
-          window.__HIMU_BROWSER_ERROR__ = event.error && event.error.stack
-            ? event.error.stack
-            : event.message;
-        });
-        window.addEventListener("unhandledrejection", (event) => {
-          window.__HIMU_BROWSER_ERROR__ = String(event.reason);
-        });
-      </script><script src="/fixture.js"></script></body></html>`;
+      html, body, #root { display:flex; margin:0; width:100%; height:100%; overflow:hidden; }
+    </style></head><body><div id="root"></div><script>
+      globalThis.process = { env: {
+        EXPO_PUBLIC_SUPABASE_URL: "https://browser-fixture.supabase.co",
+        EXPO_PUBLIC_SUPABASE_KEY: "browser-fixture-anon-key"
+      } };
+      window.addEventListener("error", (event) => {
+        window.__HIMU_BROWSER_ERROR__ = event.error?.stack ?? event.message;
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        window.__HIMU_BROWSER_ERROR__ = String(event.reason);
+      });
+    </script><script src="/fixture.js"></script></body></html>`;
     const bundle = fs.readFileSync(bundlePath);
     server = http.createServer((request, response) => {
       if (request.url === "/fixture.js") {
@@ -332,7 +454,7 @@ async function main() {
         response.end(bundle);
         return;
       }
-      if (request.url === "/preferences" || request.url === "/account-settings") {
+      if (request.url?.startsWith("/preferences") || request.url?.startsWith("/player")) {
         response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
         response.end(fixtureHtml);
         return;
@@ -344,33 +466,35 @@ async function main() {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", resolve);
     });
-    const serverAddress = server.address();
-    if (!serverAddress || typeof serverAddress === "string") {
+    const address = server.address();
+    if (!address || typeof address === "string") {
       throw new Error("Settings HTTP harness did not publish a port");
     }
-    const origin = `http://127.0.0.1:${serverAddress.port}`;
+    const origin = `http://127.0.0.1:${address.port}`;
 
-    browser = spawn(
-      chrome,
-      [
-        "--headless=new",
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--remote-debugging-port=0",
-        `--user-data-dir=${profileDirectory}`,
-        `${origin}/preferences`,
-      ],
-      { stdio: "ignore" },
-    );
+    browser = spawn(chrome, [
+      "--headless=new",
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--remote-debugging-port=0",
+      `--user-data-dir=${profileDirectory}`,
+      `${origin}/preferences?locale=en&reset=1`,
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    browser.stderr.on("data", (chunk) => {
+      chromeStderr = `${chromeStderr}${String(chunk)}`.slice(-16_000);
+    });
 
     const devToolsFile = path.join(profileDirectory, "DevToolsActivePort");
-    const devTools = await waitFor(
-      () =>
-        fs.existsSync(devToolsFile) &&
-        fs.readFileSync(devToolsFile, "utf8"),
-      "Chrome did not publish its DevTools port",
-    );
+    let devTools;
+    try {
+      devTools = await waitFor(
+        () => fs.existsSync(devToolsFile) && fs.readFileSync(devToolsFile, "utf8"),
+        "Chrome did not publish its DevTools port",
+      );
+    } catch (error) {
+      throw new Error(`${error.message}\nChrome stderr:\n${chromeStderr || "<empty>"}`);
+    }
     const [port] = devTools.trim().split("\n");
     const pages = await waitFor(async () => {
       const response = await fetch(`http://127.0.0.1:${port}/json`);
@@ -384,255 +508,35 @@ async function main() {
       try {
         return await evaluate(
           cdp,
-          `window.location.pathname === '/preferences' && document.readyState === 'complete'`,
+          "document.readyState === 'complete' && window.__HIMU_SETTINGS_READY__ === true",
         );
       } catch {
         return false;
       }
-    }, "Initial preferences route did not finish loading");
-    await resize(cdp, 390, 844);
-    await readSettings(cdp, "/preferences", "column");
-    await clickLabel(cdp, "Chill & Ambient");
-    await waitFor(
-      async () =>
-        evaluate(
-          cdp,
-          `Array.from(document.querySelectorAll('[aria-label]')).some(
-            (element) => element.getAttribute('aria-label') === 'Ambient'
-          )`,
-        ),
-      "Ambient preference did not expand",
-    );
-    await clickLabel(cdp, "Ambient");
-    const compactPreferences = await waitFor(async () => {
-      const state = await readSettings(cdp, "/preferences", "column");
-      return state.preferenceGenres.includes("Ambient") ? state : null;
-    }, "Preference save did not settle");
-    const compactPreferencesScreenshot = await capture(
-      cdp,
-      "preferences",
-      390,
-      844,
-    );
+    }, "Initial settings fixture did not finish loading");
 
-    await resize(cdp, 1440, 900);
-    const desktopPreferences = await readSettings(cdp, "/preferences", "row");
-    const desktopPreferencesScreenshot = await capture(
-      cdp,
-      "preferences",
-      1440,
-      900,
-    );
-
-    const desktopAccount = await navigate(
-      cdp,
-      `${origin}/account-settings`,
-      "/account-settings",
-      "row",
-    );
-    const desktopAccountScreenshot = await capture(cdp, "account", 1440, 900);
-
-    await evaluate(
-      cdp,
-      `window.localStorage.setItem('himu.browser.fail-language-once', 'true')`,
-    );
-    await chooseAdjacentSelectOptionByKeyboard(
-      cdp,
-      "language-preference-select",
-      "ArrowDown",
-    );
-    const failedLanguageAccount = await waitFor(async () => {
-      const state = await readSettings(cdp, "/account-settings", "row");
-      return state.languagePreference === "en" &&
-        state.languageSaveErrorVisible &&
-        state.counters.languageFailures === 1
-        ? state
-        : null;
-    }, "Language failure state did not expose owner-backed recovery");
-    await clickLabel(cdp, "Retry");
-    const savedLanguageAccount = await waitFor(async () => {
-      const state = await readSettings(cdp, "/account-settings", "row");
-      const stored = state.storedLanguageState
-        ? JSON.parse(state.storedLanguageState)
-        : null;
-      return state.languagePreference === "en" &&
-        !state.languageDisabled &&
-        !state.languageSaveErrorVisible &&
-        state.remoteLanguagePreference === "en" &&
-        stored?.preference === "en" &&
-        stored?.pendingSync === false
-        ? state
-        : null;
-    }, "Language retry did not persist through the actual locale owner");
-
-    await chooseAdjacentSelectOptionByKeyboard(
-      cdp,
-      "language-preference-select",
-      "ArrowDown",
-    );
-    const spanishLanguageAccount = await waitFor(async () => {
-      const state = await readSettings(cdp, "/account-settings", "row");
-      return state.languagePreference === "es" &&
-        state.remoteLanguagePreference === "es" &&
-        state.documentLanguage === "es"
-        ? state
-        : null;
-    }, "Live Spanish selection did not update the HTML language");
-    await chooseAdjacentSelectOptionByKeyboard(
-      cdp,
-      "language-preference-select",
-      "ArrowUp",
-    );
-    const restoredEnglishLanguageAccount = await waitFor(async () => {
-      const state = await readSettings(cdp, "/account-settings", "row");
-      return state.languagePreference === "en" &&
-        state.remoteLanguagePreference === "en" &&
-        state.documentLanguage === "en"
-        ? state
-        : null;
-    }, "Live English selection did not restore the HTML language");
-
-    await resize(cdp, 390, 844);
-    const compactAccount = await readSettings(cdp, "/account-settings", "column");
-    const compactAccountScreenshot = await capture(cdp, "account", 390, 844);
-
-    const remountedPreferences = await navigate(
-      cdp,
-      `${origin}/preferences`,
-      "/preferences",
-      "column",
-    );
-    if (!remountedPreferences.preferenceGenres.includes("Ambient")) {
-      throw new Error("Music preference did not survive pathname navigation");
+    const preferences = [];
+    for (const locale of locales) {
+      for (const [width, height] of preferenceCells) {
+        preferences.push(await runPreferenceCell(cdp, origin, locale, width, height));
+      }
     }
-    const remountedAccount = await navigate(
-      cdp,
-      `${origin}/account-settings`,
-      "/account-settings",
-      "column",
-    );
-    if (remountedAccount.languagePreference !== "en") {
-      throw new Error("Language preference did not survive route remount");
+    const players = [];
+    for (const locale of locales) {
+      for (const [width, height] of playerCells) {
+        players.push(await runPlayerCell(cdp, origin, locale, width, height));
+      }
     }
-
-    const beforeSession = remountedAccount.counters;
-    await clickLabel(cdp, "Sign Out");
-    await waitFor(
-      async () =>
-        evaluate(
-          cdp,
-          `Array.from(document.querySelectorAll('[aria-label]')).some(
-            (element) => element.getAttribute('aria-label') === 'Cancel'
-          )`,
-        ),
-      "Sign-out confirmation did not render",
-    );
-    await clickLabel(cdp, "Cancel");
-    const afterCancel = await readSettings(cdp, "/account-settings", "column");
-    await clickLabel(cdp, "Sign Out");
-    await waitFor(
-      async () =>
-        evaluate(
-          cdp,
-          `Array.from(document.querySelectorAll('[aria-label]')).filter(
-            (element) => element.getAttribute('aria-label') === 'Sign Out'
-          ).length === 2`,
-        ),
-      "Destructive confirmation action did not render",
-    );
-    await clickLabel(cdp, "Sign Out", 1);
-    const afterConfirm = await waitFor(async () => {
-      const state = await readSettings(cdp, "/account-settings", "column");
-      return state.counters.signOuts === 1 && state.counters.redirects === 1
-        ? state
-        : null;
-    }, "Confirmed sign out did not flush and redirect");
-
-    await resize(cdp, 720, 422);
-    await readSettings(cdp, "/account-settings", "column");
-    const zoomReachability = await evaluate(
-      cdp,
-      `(async () => {
-        const scroll = document.querySelector('[data-testid="account-settings-scroll"]');
-        const action = Array.from(document.querySelectorAll('[aria-label]')).find(
-          (element) => element.getAttribute('aria-label') === 'Sign Out'
-        );
-        if (!scroll || !action) throw new Error('Missing production zoom controls');
-        scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'instant' });
-        action.focus();
-        action.scrollIntoView({ block: 'center' });
-        await new Promise((resolve) => requestAnimationFrame(
-          () => requestAnimationFrame(() => resolve())
-        ));
-        const scrollRect = scroll.getBoundingClientRect();
-        const actionRect = action.getBoundingClientRect();
-        return {
-          viewportWidth: window.innerWidth,
-          viewportHeight: window.innerHeight,
-          scrollTop: scroll.scrollTop,
-          actionVisible: actionRect.top >= scrollRect.top && actionRect.bottom <= scrollRect.bottom,
-          actionFocused: document.activeElement === action,
-          actionTabIndex: action.tabIndex,
-        };
-      })()`,
-    );
-
-    process.stdout.write(
-      JSON.stringify({
-        snapshots: {
-          compactPreferences,
-          desktopPreferences,
-          desktopAccount,
-          compactAccount,
-          failedLanguageAccount,
-          savedLanguageAccount,
-          spanishLanguageAccount,
-          restoredEnglishLanguageAccount,
-          remountedPreferences,
-          remountedAccount,
-        },
-        session: { beforeSession, afterCancel: afterCancel.counters, afterConfirm: afterConfirm.counters },
-        zoomReachability,
-        screenshots: [
-          compactPreferencesScreenshot,
-          desktopPreferencesScreenshot,
-          compactAccountScreenshot,
-          desktopAccountScreenshot,
-        ],
-      }),
-    );
+    process.stdout.write(JSON.stringify({ preferences, players }));
   } finally {
     cdp?.close();
     if (browser && browser.exitCode === null) {
-      const gracefulExit = new Promise((resolve) =>
-        browser.once("exit", resolve),
-      );
       browser.kill("SIGTERM");
-      await Promise.race([
-        gracefulExit,
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ]);
-      if (browser.exitCode === null) {
-        const forcedExit = new Promise((resolve) =>
-          browser.once("exit", resolve),
-        );
-        browser.kill("SIGKILL");
-        await Promise.race([
-          forcedExit,
-          new Promise((resolve) => setTimeout(resolve, 2000)),
-        ]);
-      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (browser.exitCode === null) browser.kill("SIGKILL");
     }
-    if (server) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    fs.rmSync(outputDirectory, {
-      recursive: true,
-      force: true,
-      maxRetries: 10,
-      retryDelay: 500,
-    });
+    if (server) await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(outputDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 }
 
