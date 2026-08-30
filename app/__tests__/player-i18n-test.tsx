@@ -5,6 +5,7 @@ import { StyleSheet, View as mockNativeView } from "react-native";
 import PlayerScreen from "@/app/player";
 import i18n from "@/src/i18n";
 import { BETA_SMOKE_TRACK } from "@/src/beta-smoke";
+import type { PlayerTrack } from "@/src/stores/player-store";
 
 const Viewport = mockNativeView;
 
@@ -17,7 +18,7 @@ const track = {
   duration: 180,
   genre: "House",
 };
-let mockTrack = track;
+let mockTrack: PlayerTrack = track;
 let mockShuffle = false;
 let mockRepeatMode: "off" | "all" | "one" = "off";
 const mockRegenerate = jest.fn();

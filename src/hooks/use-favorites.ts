@@ -118,6 +118,7 @@ export function useToggleFavorite() {
       }
     },
     onMutate: async ({ track, isFavorited }) => {
+      if (isBetaSmokeTrack(userId, track.id)) return undefined;
       const key = queryKeys.favorites.isFavorited(userId, track.id);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<boolean>(key);
@@ -129,7 +130,8 @@ export function useToggleFavorite() {
         qc.setQueryData(context.key, context.previous);
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, { track }) => {
+      if (isBetaSmokeTrack(userId, track.id)) return;
       if (!isCurrentMutationUser(userId)) return;
       qc.invalidateQueries({ queryKey: queryKeys.favorites.all(userId) });
     },

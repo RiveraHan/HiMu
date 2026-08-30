@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 
 import { BETA_SMOKE_TRACK_ID } from "@/src/beta-smoke";
 import { PostTrackExperience } from "../PostTrackExperience";
@@ -60,15 +60,21 @@ test("the exact local smoke nudge keeps experience local and never opens analyti
   const screen = await render(
     <PostTrackExperience trackId={BETA_SMOKE_TRACK_ID} isBetaSmokeFixture />,
   );
+  await act(async () => {});
 
   expect(screen.getByText("Make the next track feel more like you")).toBeTruthy();
   expect(mockClaim).not.toHaveBeenCalled();
   expect(mockTrackProductEvent).not.toHaveBeenCalled();
 
-  fireEvent.press(screen.getByRole("button", { name: "Choose my preferences" }));
-  fireEvent.press(screen.getByRole("button", { name: "Not now" }));
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Choose my preferences" }));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByRole("button", { name: "Not now" }));
+  });
 
   expect(mockDismiss).toHaveBeenCalledWith(BETA_SMOKE_TRACK_ID);
   expect(mockRouterPush).toHaveBeenCalledWith("/preferences");
   expect(mockTrackProductEvent).not.toHaveBeenCalled();
+  screen.unmount();
 });
