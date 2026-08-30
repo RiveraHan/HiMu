@@ -16,9 +16,26 @@ import { useTranslation } from "react-i18next";
 export type PostTrackExperienceProps = Readonly<{ trackId: string }>;
 
 const trackOwners = new Map<string, symbol>();
+const trackOwnerListeners = new Map<string, Set<() => void>>();
+
+function notifyTrackOwnerChange(trackId: string) {
+  trackOwnerListeners.get(trackId)?.forEach((listener) => listener());
+}
+
+function subscribeTrackOwner(trackId: string, listener: () => void) {
+  const listeners = trackOwnerListeners.get(trackId) ?? new Set<() => void>();
+  listeners.add(listener);
+  trackOwnerListeners.set(trackId, listeners);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) trackOwnerListeners.delete(trackId);
+  };
+}
 
 function releaseTrackOwner(trackId: string, owner: symbol) {
-  if (trackOwners.get(trackId) === owner) trackOwners.delete(trackId);
+  if (trackOwners.get(trackId) !== owner) return;
+  trackOwners.delete(trackId);
+  notifyTrackOwnerChange(trackId);
 }
 
 function platform() {
@@ -38,6 +55,7 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
   const attemptedTrackId = useRef<string | null>(null);
   const shownTrackedTrackId = useRef<string | null>(null);
   const [ownsTrack, setOwnsTrack] = useState(false);
+  const [ownerVersion, setOwnerVersion] = useState(0);
   const eligible = !state.isLoading
     && !state.isError
     && state.data?.preferenceNudgeStatus === "eligible"
@@ -51,6 +69,19 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
     locale: resolvedLanguage,
     platform: platform(),
   } as const), [resolvedLanguage]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeTrackOwner(trackId, () => {
+      setOwnerVersion((version) => version + 1);
+    });
+    return () => {
+      unsubscribe();
+      if (ownedTrackId.current === trackId) {
+        releaseTrackOwner(trackId, owner);
+        ownedTrackId.current = null;
+      }
+    };
+  }, [owner, trackId]);
 
   useEffect(() => {
     const participates = eligible || shown;
@@ -71,18 +102,13 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
     const trackOwner = trackOwners.get(trackId);
     if (!trackOwner) {
       trackOwners.set(trackId, owner);
+      notifyTrackOwnerChange(trackId);
       ownedTrackId.current = trackId;
       setOwnsTrack(true);
       return;
     }
     setOwnsTrack(trackOwner === owner);
-  }, [eligible, owner, shown, trackId]);
-
-  useEffect(() => () => {
-    if (ownedTrackId.current) {
-      releaseTrackOwner(ownedTrackId.current, owner);
-    }
-  }, [owner]);
+  }, [eligible, owner, ownerVersion, shown, trackId]);
 
   useEffect(() => {
     if (!eligible || !ownsTrack) return;

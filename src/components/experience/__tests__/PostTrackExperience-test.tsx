@@ -49,6 +49,15 @@ const eligibleState = {
   isError: false,
 };
 
+function MatchingBoundaries({ includeA }: { includeA: boolean }) {
+  return (
+    <>
+      {includeA ? <PostTrackExperience key="a" trackId="track-first" /> : null}
+      <PostTrackExperience key="b" trackId="track-first" />
+    </>
+  );
+}
+
 beforeEach(async () => {
   await i18n.changeLanguage("en");
   mockState = loadingState;
@@ -97,6 +106,23 @@ test("shares one claim and one shown card across matching mounted boundaries", a
   );
 
   await waitFor(() => expect(screen.getAllByText("Make the next track feel more like you")).toHaveLength(1));
+});
+
+test("transfers shown-card ownership when the claiming boundary unmounts", async () => {
+  mockState = eligibleState;
+  const screen = await render(<MatchingBoundaries includeA />);
+
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(1));
+  mockState = {
+    ...eligibleState,
+    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
+  };
+  await screen.rerender(<MatchingBoundaries includeA />);
+  await waitFor(() => expect(screen.getAllByText("Make the next track feel more like you")).toHaveLength(1));
+
+  await screen.rerender(<MatchingBoundaries includeA={false} />);
+  await waitFor(() => expect(screen.getAllByText("Make the next track feel more like you")).toHaveLength(1));
+  expect(mockClaim).toHaveBeenCalledTimes(1);
 });
 
 test("never renders or claims a nudge for a different current track", async () => {
