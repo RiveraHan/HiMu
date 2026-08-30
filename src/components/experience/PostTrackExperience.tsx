@@ -13,7 +13,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-export type PostTrackExperienceProps = Readonly<{ trackId: string }>;
+export type PostTrackExperienceProps = Readonly<{
+  trackId: string;
+  /** Set only by Player's exact local beta-smoke fixture boundary. */
+  isBetaSmokeFixture?: boolean;
+}>;
 
 type TrackNudgeState = {
   owner: symbol | null;
@@ -96,7 +100,10 @@ function platform() {
   return "ios" as const;
 }
 
-export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
+export function PostTrackExperience({
+  trackId,
+  isBetaSmokeFixture = false,
+}: PostTrackExperienceProps) {
   const { t } = useTranslation();
   const { resolvedLanguage } = useLocale();
   const state = useExperienceState();
@@ -177,18 +184,18 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
   useEffect(() => {
     if (!shown || !ownsTrack || !markTrackShown(trackId)) return;
 
-    void trackProductEvent("preference_nudge_shown", analytics);
-  }, [analytics, ownsTrack, shown, trackId]);
+    if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_shown", analytics);
+  }, [analytics, isBetaSmokeFixture, ownsTrack, shown, trackId]);
 
   if (!shown || !ownsTrack) return null;
 
   const accept = () => {
-    void trackProductEvent("preference_nudge_accepted", analytics);
+    if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_accepted", analytics);
     router.push("/preferences");
   };
   const dismissNudge = () => {
     dismiss.mutate(trackId);
-    void trackProductEvent("preference_nudge_dismissed", analytics);
+    if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_dismissed", analytics);
   };
 
   return (

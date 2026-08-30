@@ -57,6 +57,37 @@ export function isBetaSmokeUser(userId: string | null | undefined): boolean {
   );
 }
 
+/**
+ * The executable beta smoke fixture is deliberately narrower than the local
+ * smoke user.  Only this exact track may substitute Player data boundaries;
+ * a real track viewed by the same development user must keep its normal
+ * behaviour.
+ */
+export function isBetaSmokeTrackForEnvironment(
+  userId: string | null | undefined,
+  trackId: string | null | undefined,
+  development: boolean,
+  smokeFlag: string | undefined,
+): boolean {
+  return trackId === BETA_SMOKE_TRACK_ID && isBetaSmokeUserForEnvironment(
+    userId,
+    development,
+    smokeFlag,
+  );
+}
+
+export function isBetaSmokeTrack(
+  userId: string | null | undefined,
+  trackId: string | null | undefined,
+): boolean {
+  return isBetaSmokeTrackForEnvironment(
+    userId,
+    trackId,
+    __DEV__,
+    process.env.EXPO_PUBLIC_BETA_SMOKE,
+  );
+}
+
 export function betaSmokeExperienceState(
   status: BetaSmokeExperienceState["preferenceNudgeStatus"] = "ineligible",
 ): BetaSmokeExperienceState {

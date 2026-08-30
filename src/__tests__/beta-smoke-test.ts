@@ -3,6 +3,7 @@ import {
   BETA_SMOKE_TRACK,
   BETA_SMOKE_TRACK_ID,
   betaSmokeExperienceState,
+  isBetaSmokeTrackForEnvironment,
   isBetaSmokeUserForEnvironment,
   transitionBetaSmokeExperience,
 } from "@/src/beta-smoke";
@@ -13,6 +14,39 @@ describe("beta smoke boundary", () => {
     expect(isBetaSmokeUserForEnvironment("another-user", true, "1")).toBe(false);
     expect(isBetaSmokeUserForEnvironment("beta-smoke-local-user", false, "1")).toBe(false);
     expect(isBetaSmokeUserForEnvironment("beta-smoke-local-user", true, undefined)).toBe(false);
+  });
+
+  it("only substitutes the exact synthetic Player track", () => {
+    expect(isBetaSmokeTrackForEnvironment(
+      "beta-smoke-local-user",
+      BETA_SMOKE_TRACK_ID,
+      true,
+      "1",
+    )).toBe(true);
+    expect(isBetaSmokeTrackForEnvironment(
+      "beta-smoke-local-user",
+      "a-real-track",
+      true,
+      "1",
+    )).toBe(false);
+    expect(isBetaSmokeTrackForEnvironment(
+      "near-miss-user",
+      BETA_SMOKE_TRACK_ID,
+      true,
+      "1",
+    )).toBe(false);
+    expect(isBetaSmokeTrackForEnvironment(
+      "beta-smoke-local-user",
+      BETA_SMOKE_TRACK_ID,
+      false,
+      "1",
+    )).toBe(false);
+    expect(isBetaSmokeTrackForEnvironment(
+      "beta-smoke-local-user",
+      BETA_SMOKE_TRACK_ID,
+      true,
+      "0",
+    )).toBe(false);
   });
 
   it("uses stable DJ and ready-track identifiers for the executable smoke path", () => {

@@ -11,6 +11,7 @@ import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
 import { useTrackPrivateDetails } from "@/src/hooks/use-track-private-details";
 import { useToast } from "@/src/hooks/use-toast";
+import { isBetaSmokeTrack } from "@/src/beta-smoke";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -99,6 +100,11 @@ export default function PlayerScreen() {
   }, [track]);
 
   if (!track) return null;
+
+  // The synthetic Player fixture is the only path allowed to suppress its
+  // telemetry boundary. The owner id is part of the fixed local fixture, and
+  // the helper still requires development plus the explicit smoke flag.
+  const isBetaSmokeFixture = isBetaSmokeTrack(track.owner_id, track.id);
 
   // External tracks: Phase A's ephemeral Discover uses the "audius:<id>"
   // client prefix; Phase B's DJ-curated drop materializes a real uuid row
@@ -433,7 +439,10 @@ export default function PlayerScreen() {
             </View>
           </PlayerDesktopLayoutSlot>
         </PlayerDesktopLayout>
-        <PostTrackExperience trackId={track.id} />
+        <PostTrackExperience
+          trackId={track.id}
+          isBetaSmokeFixture={isBetaSmokeFixture}
+        />
       </ScrollView>
     </View>
   );

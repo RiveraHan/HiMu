@@ -4,6 +4,7 @@ import * as mockReact from "react";
 import { StyleSheet, View as mockNativeView } from "react-native";
 import PlayerScreen from "@/app/player";
 import i18n from "@/src/i18n";
+import { BETA_SMOKE_TRACK } from "@/src/beta-smoke";
 
 const Viewport = mockNativeView;
 
@@ -126,6 +127,7 @@ describe("PlayerScreen localization", () => {
 
   afterEach(() => {
     warnSpy.mockRestore();
+    delete process.env.EXPO_PUBLIC_BETA_SMOKE;
   });
 
   test("submits the current track ID and title for cover activity", async () => {
@@ -187,9 +189,27 @@ describe("PlayerScreen localization", () => {
     const screen = await render(<PlayerScreen />);
 
     expect(screen.getByTestId("player-nudge-boundary")).toBeTruthy();
-    expect(mockPostTrackExperience).toHaveBeenCalledWith({ trackId: "track-one" });
+    expect(mockPostTrackExperience).toHaveBeenCalledWith({
+      trackId: "track-one",
+      isBetaSmokeFixture: false,
+    });
     expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
+  });
+
+  test("only passes the no-analytics fixture boundary for the exact guarded synthetic track", async () => {
+    await i18n.changeLanguage("en");
+    process.env.EXPO_PUBLIC_BETA_SMOKE = "1";
+    mockTrack = BETA_SMOKE_TRACK;
+    mockOwnership = false;
+    mockPrivateDetails = null;
+
+    await render(<PlayerScreen />);
+
+    expect(mockPostTrackExperience).toHaveBeenCalledWith({
+      trackId: BETA_SMOKE_TRACK.id,
+      isBetaSmokeFixture: true,
+    });
   });
 
   test("keeps one compact-ordered stage while CSS maps it to a desktop two-column landmark", async () => {
