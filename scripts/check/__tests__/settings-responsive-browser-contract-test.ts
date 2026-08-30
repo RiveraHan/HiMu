@@ -56,8 +56,8 @@ describe("Task 6 settings release harness contract", () => {
       .filter((line) => !line.trimStart().startsWith("#"))
       .join("\n");
 
-    expect(executableFlow).toContain('tapOn: "Edit Favorite genres"');
-    expect(executableFlow).toContain('tapOn: "Edit Moods to avoid"');
+    expect(executableFlow).toContain('tapOn: "Choose genres"');
+    expect(executableFlow).toContain('tapOn: "Choose moods"');
     expect(executableFlow).toContain('tapOn: "Balanced"');
     expect(executableFlow).toContain('assertVisible: "Saved"');
     const continuation = executableFlow.slice(executableFlow.indexOf('- tapOn: "Confirm and generate"'));

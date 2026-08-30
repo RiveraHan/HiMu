@@ -8,12 +8,15 @@ type RpcError = { code?: string | null };
 
 export type ExperienceStateAdapterDependencies = {
   rpc(
-    functionName: "transition_user_experience",
+    functionName: "transition_user_experience" | "claim_user_preference_nudge",
     args: {
       p_user_id: string;
       p_action: ExperienceAction["action"];
       p_intro_version: number | null;
       p_track_id: string | null;
+    } | {
+      p_user_id: string;
+      p_track_id: string;
     },
   ): Promise<{ data: unknown; error: RpcError | null }>;
 };
@@ -34,6 +37,18 @@ async function transitionExperienceState(
   trackId: string | null,
   deps: ExperienceStateAdapterDependencies,
 ): Promise<unknown> {
+  if (action === "claim_nudge" && trackId) {
+    const { data, error } = await deps.rpc("claim_user_preference_nudge", {
+      p_user_id: userId,
+      p_track_id: trackId,
+    });
+    if (error) {
+      if (isStateConflict(error)) throw new ExperienceStateConflictError();
+      throw new Error("experience_state_transition_failed");
+    }
+    return Array.isArray(data) ? data[0] : data;
+  }
+
   const { data, error } = await deps.rpc("transition_user_experience", {
     p_user_id: userId,
     p_action: action,
@@ -45,7 +60,8 @@ async function transitionExperienceState(
     throw new Error("experience_state_transition_failed");
   }
 
-  return Array.isArray(data) ? data[0] : data;
+  const state = Array.isArray(data) ? data[0] : data;
+  return { state, applied: true };
 }
 
 export async function handleExperienceStateHttpRequest(
@@ -74,7 +90,5 @@ export async function handleExperienceStateHttpRequest(
         deps,
       ),
   });
-  return result.status === 200
-    ? { status: result.status, body: { state: result.body } }
-    : result;
+  return result;
 }

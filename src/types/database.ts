@@ -1379,6 +1379,13 @@ export type Database = {
           resource_id: string
         }[]
       }
+      claim_user_preference_nudge: {
+        Args: { p_track_id: string; p_user_id: string }
+        Returns: {
+          applied: boolean
+          state: Json
+        }[]
+      }
       retry_legacy_manual_generation_job: {
         Args: { p_dj_id: string; p_job_id: string; p_user_id: string }
         Returns: {

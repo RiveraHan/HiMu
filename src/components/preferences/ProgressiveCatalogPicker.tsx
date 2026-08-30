@@ -35,6 +35,9 @@ export function nextCatalogSelection(
 
 export function ProgressiveCatalogPicker({
   title,
+  chooseLabel,
+  editLabel,
+  emptyDescription,
   groups,
   selected,
   min,
@@ -76,6 +79,15 @@ export function ProgressiveCatalogPicker({
       );
       return;
     }
+    const change = onChange(result.next);
+    if (change && !change.accepted) {
+      setStatusAnnouncement(t(
+        change.reason === "offline"
+          ? "common.catalogPicker.offlineAnnouncement"
+          : "common.catalogPicker.changeRejected",
+      ));
+      return;
+    }
     setStatusAnnouncement(t(
       removing
         ? "common.catalogPicker.removedAnnouncement"
@@ -86,12 +98,18 @@ export function ProgressiveCatalogPicker({
         max,
       },
     ));
-    onChange(result.next);
   };
 
   return (
     <View style={styles.root}>
-      <Button label={t("common.catalogPicker.edit", { title })} variant="glass" onPress={open} disabled={disabled} />
+      <Button
+        label={selected.length === 0
+          ? chooseLabel ?? editLabel ?? t("common.catalogPicker.edit", { title })
+          : editLabel ?? t("common.catalogPicker.edit", { title })}
+        variant="glass"
+        onPress={open}
+        disabled={disabled}
+      />
       {selectedLabels.length > 0 ? (
         <Text
           accessibilityLabel={t("common.catalogPicker.selected", { items: selectedLabels.join(", ") })}
@@ -99,6 +117,10 @@ export function ProgressiveCatalogPicker({
           variant="bodyMd"
         >
           {t("common.catalogPicker.selected", { items: selectedLabels.join(", ") })}
+        </Text>
+      ) : emptyDescription ? (
+        <Text color="onSurfaceVariant" variant="bodyMd">
+          {emptyDescription}
         </Text>
       ) : null}
       <CatalogPickerSurface

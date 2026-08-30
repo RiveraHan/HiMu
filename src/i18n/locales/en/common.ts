@@ -32,6 +32,8 @@ export const common = {
     maximum: "Choose up to {{max}}",
     selectedAnnouncement: "Selected {{item}}. {{count}} of {{max}} selected.",
     removedAnnouncement: "Removed {{item}}. {{count}} of {{max}} selected.",
+    offlineAnnouncement: "Selection not changed. Reconnect to update your preferences.",
+    changeRejected: "Selection not changed.",
   },
   errors: {
     offline: "You're offline",

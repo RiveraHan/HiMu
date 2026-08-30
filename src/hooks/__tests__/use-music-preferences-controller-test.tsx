@@ -215,6 +215,53 @@ test("announces saving then saved and completes the nudge with bucket-only analy
   });
 });
 
+test("surfaces a failed nudge completion and retries it after a later save in the same visit", async () => {
+  mockCompleteNudge
+    .mockRejectedValueOnce(new Error("temporary failure"))
+    .mockResolvedValueOnce(undefined);
+  const hook = await renderHook(() => useMusicPreferencesController());
+
+  await act(async () => {
+    hook.result.current.setAtmosphere("calm");
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(mockCompleteNudge).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(hook.result.current.nudgeCompletionError).toBe(true));
+
+  await act(async () => {
+    hook.result.current.setAtmosphere("intense");
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  await waitFor(() => expect(mockCompleteNudge).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(hook.result.current.nudgeCompletionError).toBe(false));
+});
+
+test("offers an explicit retry after nudge completion fails", async () => {
+  mockCompleteNudge
+    .mockRejectedValueOnce(new Error("temporary failure"))
+    .mockResolvedValueOnce(undefined);
+  const hook = await renderHook(() => useMusicPreferencesController());
+
+  await act(async () => {
+    hook.result.current.setAtmosphere("calm");
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(hook.result.current.nudgeCompletionError).toBe(true));
+
+  await act(async () => {
+    hook.result.current.retryNudgeCompletion();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(mockCompleteNudge).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(hook.result.current.nudgeCompletionError).toBe(false));
+});
+
 test("does not complete a terminal nudge after a later successful preference save", async () => {
   mockExperienceState = {
     data: { preferenceNudgeStatus: "completed" },

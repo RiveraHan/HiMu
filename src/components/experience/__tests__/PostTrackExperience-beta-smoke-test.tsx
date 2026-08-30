@@ -21,7 +21,7 @@ jest.mock("@/src/experience/experience-state", () => ({
     isLoading: false,
     isError: false,
   }),
-  useClaimPreferenceNudge: () => ({ mutate: mockClaim, isPending: false }),
+  useClaimPreferenceNudge: () => ({ mutateAsync: mockClaim, isPending: false }),
   useDismissPreferenceNudge: () => ({ mutate: mockDismiss }),
 }));
 jest.mock("@/src/experience/product-analytics", () => ({

@@ -8,7 +8,7 @@ import {
   type UserPreferencesPatch,
 } from "@/src/types/preferences";
 
-type NudgeStatus = "shown" | "dismissed" | "completed";
+type NudgeStatus = "eligible" | "shown" | "dismissed" | "completed";
 
 const initialPreferences: MusicPreferences = {
   // Intentional legacy-shaped over-limit rows: production must keep every
@@ -40,7 +40,7 @@ function readRemoteLanguage(): LanguagePreference {
 }
 
 let preferences = readMusicPreferences();
-let nudgeStatus: NudgeStatus = "shown";
+let nudgeStatus: NudgeStatus = "eligible";
 let experienceValue = createExperienceSnapshot();
 const preferenceListeners = new Set<() => void>();
 const experienceListeners = new Set<() => void>();
@@ -78,9 +78,11 @@ export function prepareSettingsBrowserFixture(locale: "en" | "es", reset: boolea
   }
   preferences = readMusicPreferences();
   const storedNudge = window.localStorage.getItem(NUDGE_KEY);
-  nudgeStatus = storedNudge === "dismissed" || storedNudge === "completed"
+  nudgeStatus = storedNudge === "shown"
+    || storedNudge === "dismissed"
+    || storedNudge === "completed"
     ? storedNudge
-    : "shown";
+    : "eligible";
   experienceValue = createExperienceSnapshot();
   window.__HIMU_SETTINGS_COUNTERS__ = undefined;
 }
@@ -108,7 +110,9 @@ export function useUpdateMusicPreferences() {
   return {
     mutateAsync: async (next: MusicPreferences) => {
       increment("preferenceSaves");
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      // Keep the production saving state observable across the runner's 50 ms
+      // CDP polling interval instead of making this contract timing-dependent.
+      await new Promise((resolve) => setTimeout(resolve, 120));
       preferences = next;
       window.localStorage.setItem(MUSIC_KEY, JSON.stringify(next));
       emit(preferenceListeners);
@@ -196,7 +200,20 @@ export function useExperienceState() {
 }
 
 export function useClaimPreferenceNudge() {
-  return { mutate: () => undefined, isPending: false, isError: false };
+  return {
+    mutateAsync: async () => {
+      const applied = nudgeStatus === "eligible";
+      if (applied) {
+        nudgeStatus = "shown";
+        window.localStorage.setItem(NUDGE_KEY, nudgeStatus);
+        experienceValue = createExperienceSnapshot();
+        emit(experienceListeners);
+      }
+      return { state: experienceValue.data, applied };
+    },
+    isPending: false,
+    isError: false,
+  };
 }
 
 export function useDismissPreferenceNudge() {

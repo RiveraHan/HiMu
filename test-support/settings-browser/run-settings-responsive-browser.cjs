@@ -39,11 +39,11 @@ const copy = {
   en: {
     balanced: "Balanced",
     intense: "Intense",
-    genreEdit: "Edit Favorite genres",
+    genreEdit: "Edit genres",
     genreSearch: "Search Favorite genres",
     genreGroup: "Chill & Ambient",
     genreItem: "Ambient",
-    moodEdit: "Edit Moods to avoid",
+    moodEdit: "Edit moods",
     moodSearch: "Search Moods to avoid",
     done: "Done",
     saving: "Saving",
@@ -55,11 +55,11 @@ const copy = {
   es: {
     balanced: "Equilibrada",
     intense: "Intensa",
-    genreEdit: "Editar Géneros favoritos",
+    genreEdit: "Editar géneros",
     genreSearch: "Buscar Géneros favoritos",
     genreGroup: "Relajado y ambiental",
     genreItem: "Ambiental",
-    moodEdit: "Editar Estados de ánimo que evitar",
+    moodEdit: "Editar estados de ánimo",
     moodSearch: "Buscar Estados de ánimo que evitar",
     done: "Listo",
     saving: "Guardando",
@@ -246,15 +246,17 @@ async function runPreferenceCell(cdp, origin, locale, width, height) {
 
   await clickLabel(cdp, labels.balanced);
   await dispatchKey(cdp, "ArrowRight");
+  let saving;
   const arrowed = await waitFor(async () => {
     const state = await readSnapshot(cdp, "/preferences", locale);
+    if (state.saveStatus === labels.saving) saving = state;
     return state.selectedAtmosphereLabel === labels.intense &&
       state.selectedAtmosphereTabIndex === 0 &&
       state.activeLabel === labels.intense
       ? state
       : null;
   }, `${locale} ${width}x${height} ArrowRight did not move the atmosphere radio focus and selection`);
-  const saving = await waitFor(async () => {
+  saving ??= await waitFor(async () => {
     const state = await readSnapshot(cdp, "/preferences", locale);
     return state.saveStatus === labels.saving ? state : null;
   }, `${locale} ${width}x${height} never exposed Saving`);

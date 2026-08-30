@@ -13,7 +13,7 @@ let mockState: Record<string, unknown>;
 
 jest.mock("@/src/experience/experience-state", () => ({
   useExperienceState: () => mockState,
-  useClaimPreferenceNudge: () => ({ mutate: mockClaim, isPending: false }),
+  useClaimPreferenceNudge: () => ({ mutateAsync: mockClaim, isPending: false }),
   useDismissPreferenceNudge: () => ({ mutate: mockDismiss }),
 }));
 jest.mock("@/src/experience/product-analytics", () => ({
@@ -58,10 +58,26 @@ function MatchingBoundaries({ includeA }: { includeA: boolean }) {
   );
 }
 
+async function renderClaimedNudge() {
+  mockState = eligibleState;
+  const screen = await render(<PostTrackExperience trackId="track-first" />);
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledWith("track-first"));
+  mockState = {
+    ...eligibleState,
+    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
+  };
+  await screen.rerender(<PostTrackExperience trackId="track-first" />);
+  await waitFor(() => expect(screen.getByText("Make the next track feel more like you")).toBeTruthy());
+  return screen;
+}
+
 beforeEach(async () => {
   await i18n.changeLanguage("en");
   mockState = loadingState;
-  mockClaim.mockReset();
+  mockClaim.mockReset().mockResolvedValue({
+    state: { ...eligibleState.data, preferenceNudgeStatus: "shown" },
+    applied: true,
+  });
   mockDismiss.mockReset();
   mockTrackProductEvent.mockReset();
   mockRouterPush.mockReset();
@@ -73,7 +89,7 @@ test("claims a matching eligible track before the preference card appears", asyn
 
   mockState = eligibleState;
   await screen.rerender(<PostTrackExperience trackId="track-first" />);
-  await waitFor(() => expect(mockClaim).toHaveBeenCalledWith("track-first", expect.any(Object)));
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledWith("track-first"));
   expect(screen.queryByText("Make the next track feel more like you")).toBeNull();
 
   mockState = {
@@ -82,6 +98,28 @@ test("claims a matching eligible track before the preference card appears", asyn
   };
   await screen.rerender(<PostTrackExperience trackId="track-first" />);
   expect(screen.getByText("Make the next track feel more like you")).toBeTruthy();
+});
+
+test("does not render when another device already won the server claim", async () => {
+  mockClaim.mockResolvedValueOnce({
+    state: { ...eligibleState.data, preferenceNudgeStatus: "shown" },
+    applied: false,
+  });
+  mockState = eligibleState;
+  const screen = await render(<PostTrackExperience trackId="track-first" />);
+
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(1));
+  mockState = {
+    ...eligibleState,
+    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
+  };
+  await screen.rerender(<PostTrackExperience trackId="track-first" />);
+
+  expect(screen.queryByText("Make the next track feel more like you")).toBeNull();
+  expect(mockTrackProductEvent).not.toHaveBeenCalledWith(
+    "preference_nudge_shown",
+    expect.any(Object),
+  );
 });
 
 test("shares one claim and one shown card across matching mounted boundaries", async () => {
@@ -149,12 +187,15 @@ test("transfers shown-card ownership when the claiming boundary unmounts", async
 });
 
 test("emits the shown event once when ownership transfers after the card is shown", async () => {
+  mockState = eligibleState;
+  const screen = await render(<MatchingBoundaries includeA />);
+
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(1));
   mockState = {
     ...eligibleState,
     data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
   };
-  const screen = await render(<MatchingBoundaries includeA />);
-
+  await screen.rerender(<MatchingBoundaries includeA />);
   await waitFor(() => expect(mockTrackProductEvent).toHaveBeenCalledWith(
     "preference_nudge_shown",
     expect.any(Object),
@@ -182,11 +223,7 @@ test("does not block the player when the claim cannot become shown", async () =>
 });
 
 test("emits a privacy-safe shown event only after the claim has succeeded", async () => {
-  mockState = {
-    ...eligibleState,
-    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
-  };
-  await render(<PostTrackExperience trackId="track-first" />);
+  await renderClaimedNudge();
 
   expect(mockTrackProductEvent).toHaveBeenCalledWith("preference_nudge_shown", {
     flowVersion: 1,
@@ -196,11 +233,7 @@ test("emits a privacy-safe shown event only after the claim has succeeded", asyn
 });
 
 test("emits privacy-safe acceptance analytics and navigates without hiding the shown card", async () => {
-  mockState = {
-    ...eligibleState,
-    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
-  };
-  const screen = await render(<PostTrackExperience trackId="track-first" />);
+  const screen = await renderClaimedNudge();
 
   fireEvent.press(screen.getByRole("button", { name: "Choose my preferences" }));
 
@@ -214,11 +247,7 @@ test("emits privacy-safe acceptance analytics and navigates without hiding the s
 });
 
 test("dismisses the shown card with privacy-safe analytics", async () => {
-  mockState = {
-    ...eligibleState,
-    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
-  };
-  const screen = await render(<PostTrackExperience trackId="track-first" />);
+  const screen = await renderClaimedNudge();
 
   fireEvent.press(screen.getByRole("button", { name: "Not now" }));
 
@@ -243,11 +272,14 @@ test.each(["dismissed", "completed"] as const)("does not render a terminal %s nu
 
 test("provides Spanish copy and accessible actions", async () => {
   await i18n.changeLanguage("es");
+  mockState = eligibleState;
+  const screen = await render(<PostTrackExperience trackId="track-first" />);
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(1));
   mockState = {
     ...eligibleState,
     data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
   };
-  const screen = await render(<PostTrackExperience trackId="track-first" />);
+  await screen.rerender(<PostTrackExperience trackId="track-first" />);
 
   expect(screen.getByRole("header", { name: "Haz que la próxima pista se parezca más a ti" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Elegir mis preferencias" })).toBeTruthy();

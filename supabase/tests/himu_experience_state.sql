@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select plan(29);
+select plan(34);
 
 insert into auth.users (
   instance_id,
@@ -80,6 +80,26 @@ select is(
   'service role can execute transitions'
 );
 
+select is(
+  has_function_privilege(
+    'authenticated',
+    'public.claim_user_preference_nudge(uuid,uuid)',
+    'EXECUTE'
+  ),
+  false,
+  'authenticated cannot execute the preference nudge claim'
+);
+
+select is(
+  has_function_privilege(
+    'service_role',
+    'public.claim_user_preference_nudge(uuid,uuid)',
+    'EXECUTE'
+  ),
+  true,
+  'service role can execute the preference nudge claim'
+);
+
 set local role service_role;
 select lives_ok(
   $$select public.transition_user_experience('10000000-0000-0000-0000-000000000001', 'sync_intro', 2, null)$$,
@@ -90,6 +110,55 @@ select lives_ok(
   'service role can create a second user state'
 );
 reset role;
+
+insert into public.tracks (
+  id, title, artist, is_ai_generated, owner_id, is_public, dj_id, created_at
+)
+values (
+  '30000000-0000-0000-0000-000000000009',
+  'Nudge Claim Track',
+  'Test',
+  true,
+  '10000000-0000-0000-0000-000000000001',
+  false,
+  '20000000-0000-0000-0000-000000000001',
+  '2026-08-24 10:00:00+00'
+);
+
+set local role service_role;
+update public.user_experience_state
+set
+  preference_nudge_status = 'eligible',
+  preference_nudge_track_id = '30000000-0000-0000-0000-000000000009'
+where user_id = '10000000-0000-0000-0000-000000000001';
+
+select results_eq(
+  $$select applied from public.claim_user_preference_nudge(
+    '10000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000009'
+  )$$,
+  $$values (true)$$,
+  'the first client wins the preference nudge claim'
+);
+select results_eq(
+  $$select applied from public.claim_user_preference_nudge(
+    '10000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000009'
+  )$$,
+  $$values (false)$$,
+  'a second client sees the shown row but does not win the claim'
+);
+reset role;
+
+select is(
+  (
+    select preference_nudge_status
+    from public.user_experience_state
+    where user_id = '10000000-0000-0000-0000-000000000001'
+  ),
+  'shown',
+  'the winning claim advances the authoritative nudge state once'
+);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);

@@ -43,11 +43,11 @@ export default function MusicPreferencesScreen() {
 
   const updateGenres = useCallback((next: string[]) => {
     const value = changedValue(prefs.genres, next);
-    if (value) controller.toggleGenre(value);
+    return value ? controller.toggleGenre(value) : { accepted: true as const };
   }, [controller, prefs.genres]);
   const updateExcludedMoods = useCallback((next: string[]) => {
     const value = changedValue(prefs.excludedMoods, next);
-    if (value) controller.toggleExcludedMood(value);
+    return value ? controller.toggleExcludedMood(value) : { accepted: true as const };
   }, [controller, prefs.excludedMoods]);
 
   const status = controller.saveStatus === "saving"
@@ -94,6 +94,9 @@ export default function MusicPreferencesScreen() {
           <PrefSection title={t("dj.preferences.favoriteGenres")}>
             <ProgressiveCatalogPicker
               title={t("dj.preferences.favoriteGenres")}
+              chooseLabel={t("dj.preferences.chooseGenres")}
+              editLabel={t("dj.preferences.editGenres")}
+              emptyDescription={t("dj.preferences.emptyGenres")}
               groups={GENRE_GROUPS}
               selected={prefs.genres}
               min={0}
@@ -126,6 +129,9 @@ export default function MusicPreferencesScreen() {
           <PrefSection title={t("dj.preferences.moodsToAvoid")}>
             <ProgressiveCatalogPicker
               title={t("dj.preferences.moodsToAvoid")}
+              chooseLabel={t("dj.preferences.chooseMoods")}
+              editLabel={t("dj.preferences.editMoods")}
+              emptyDescription={t("dj.preferences.emptyMoods")}
               groups={MOOD_GROUPS}
               selected={prefs.excludedMoods}
               min={0}
@@ -146,6 +152,15 @@ export default function MusicPreferencesScreen() {
                 : "common.errors.offline")}
               actionLabel={t("common.actions.retry")}
               onAction={() => void controller.refetch()}
+            />
+          ) : null}
+          {controller.nudgeCompletionError ? (
+            <StateNotice
+              compact
+              kind="error"
+              title={t("dj.preferences.completionFailed")}
+              actionLabel={t("common.actions.retry")}
+              onAction={controller.retryNudgeCompletion}
             />
           ) : null}
           <Text accessibilityLiveRegion="polite" style={styles.status}>{status}</Text>

@@ -6,6 +6,10 @@ const names = readdirSync(resolve("supabase/migrations"))
   .filter((name) => name.endsWith("_himu_experience_state.sql"));
 assert.equal(names.length, 1, "expected one experience-state migration");
 const sql = readFileSync(resolve("supabase/migrations", names[0]), "utf8");
+const allSql = readdirSync(resolve("supabase/migrations"))
+  .filter((name) => name.endsWith(".sql"))
+  .map((name) => readFileSync(resolve("supabase/migrations", name), "utf8"))
+  .join("\n");
 assert.match(sql, /create table public\.user_experience_state/i);
 assert.match(sql, /alter table public\.user_experience_state enable row level security/i);
 assert.match(sql, /for select to authenticated[\s\S]*auth\.uid\(\)[\s\S]*user_id/i);
@@ -15,4 +19,8 @@ assert.match(sql, /transition_user_experience/i);
 assert.match(sql, /grant execute on function public\.transition_user_experience[\s\S]*to service_role/i);
 assert.match(sql, /capture_first_owned_track_ready/i);
 assert.match(sql, /after update of status, track_id on public\.generation_jobs/i);
+assert.match(allSql, /create function public\.claim_user_preference_nudge/i);
+assert.match(allSql, /returns table[\s\S]*applied boolean/i);
+assert.match(allSql, /get diagnostics[\s\S]*row_count/i);
+assert.match(allSql, /grant execute on function public\.claim_user_preference_nudge[\s\S]*to service_role/i);
 assert.doesNotMatch(sql, /alter table public\.user_onboarding/i);

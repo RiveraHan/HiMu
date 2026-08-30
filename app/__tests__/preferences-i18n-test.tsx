@@ -4,8 +4,10 @@ import MusicPreferencesScreen from "@/app/preferences";
 import i18n from "@/src/i18n";
 
 const mockRefetch = jest.fn();
+const mockRetryNudgeCompletion = jest.fn();
 let mockPreferencesQuery: Record<string, unknown>;
 let mockOnline = true;
+let mockNudgeCompletionError = false;
 
 jest.mock("@/src/hooks/use-music-preferences-controller", () => ({
   useMusicPreferencesController: () => ({
@@ -17,6 +19,8 @@ jest.mock("@/src/hooks/use-music-preferences-controller", () => ({
     showCachedNotice: Boolean(mockPreferencesQuery.data) && (!mockOnline || mockPreferencesQuery.isError),
     cachedNoticeKind: mockPreferencesQuery.isError ? "error" : "offline",
     saveStatus: "idle",
+    nudgeCompletionError: mockNudgeCompletionError,
+    retryNudgeCompletion: mockRetryNudgeCompletion,
     toggleGenre: jest.fn(),
     setAtmosphere: jest.fn(),
     toggleExcludedMood: jest.fn(),
@@ -26,7 +30,9 @@ jest.mock("@/src/hooks/use-music-preferences-controller", () => ({
 
 beforeEach(() => {
   mockOnline = true;
+  mockNudgeCompletionError = false;
   mockRefetch.mockReset();
+  mockRetryNudgeCompletion.mockReset();
   mockPreferencesQuery = {
     data: { genres: [], excludedMoods: [], atmosphere: "balanced" },
     isPending: false,
@@ -55,7 +61,22 @@ jest.mock("@/src/components", () => {
       actionLabel && onAction ? React.createElement(Pressable, { accessibilityRole: "button", accessibilityLabel: actionLabel, onPress: onAction }, React.createElement(Text, null, actionLabel)) : null,
     ),
     PrefSection: ({ title, children }: { title: string; children: React.ReactNode }) => React.createElement(View, null, React.createElement(Text, null, title), children),
-    ProgressiveCatalogPicker: ({ title }: { title: string }) => React.createElement(Text, null, `picker:${title}`),
+    ProgressiveCatalogPicker: ({ title, selected, chooseLabel, editLabel, emptyDescription }: {
+      title: string;
+      selected: readonly string[];
+      chooseLabel?: string;
+      editLabel?: string;
+      emptyDescription?: string;
+    }) => React.createElement(View, null,
+      React.createElement(Text, null, `picker:${title}`),
+      React.createElement(Pressable, {
+        accessibilityRole: "button",
+        accessibilityLabel: selected.length === 0 ? chooseLabel : editLabel,
+      }, React.createElement(Text, null, selected.length === 0 ? chooseLabel : editLabel)),
+      selected.length === 0 && emptyDescription
+        ? React.createElement(Text, null, emptyDescription)
+        : null,
+    ),
     AtmosphereChoice: () => React.createElement(View, { accessibilityRole: "radiogroup" }, ["Calm", "Balanced", "Intense"].map((label) => React.createElement(Pressable, { key: label, accessibilityRole: "radio", accessibilityLabel: label }, React.createElement(Text, null, label)))),
     MusicPreferenceSkeletons: () => React.createElement(View, { testID: "preferences-skeletons" }),
     Text: ({ children }: { children: React.ReactNode }) => React.createElement(Text, null, children),
@@ -72,6 +93,65 @@ test("renders exactly the compact preference sections and atmosphere radios", as
   expect(screen.queryByText("Vibe Mapping")).toBeNull();
   expect(screen.queryByText("AI frequency")).toBeNull();
   expect(screen.getAllByRole("radio")).toHaveLength(3);
+});
+
+test.each([
+  {
+    locale: "en",
+    chooseGenres: "Choose genres",
+    editGenres: "Edit genres",
+    emptyGenres: "No preference: we'll explore different genres.",
+    chooseMoods: "Choose moods",
+    editMoods: "Edit moods",
+    emptyMoods: "No preference: we won't avoid any mood.",
+  },
+  {
+    locale: "es",
+    chooseGenres: "Elegir géneros",
+    editGenres: "Editar géneros",
+    emptyGenres: "Sin preferencia: exploraremos distintos géneros.",
+    chooseMoods: "Elegir estados de ánimo",
+    editMoods: "Editar estados de ánimo",
+    emptyMoods: "Sin preferencia: no evitaremos ningún estado de ánimo.",
+  },
+])("renders meaningful empty and selected picker actions in $locale", async ({
+  locale,
+  chooseGenres,
+  editGenres,
+  emptyGenres,
+  chooseMoods,
+  editMoods,
+  emptyMoods,
+}) => {
+  await i18n.changeLanguage(locale);
+  const emptyScreen = await render(<MusicPreferencesScreen />);
+
+  expect(emptyScreen.getByRole("button", { name: chooseGenres })).toBeTruthy();
+  expect(emptyScreen.getByRole("button", { name: chooseMoods })).toBeTruthy();
+  expect(emptyScreen.getByText(emptyGenres)).toBeTruthy();
+  expect(emptyScreen.getByText(emptyMoods)).toBeTruthy();
+  await emptyScreen.unmount();
+
+  mockPreferencesQuery.data = {
+    genres: ["Ambient"],
+    excludedMoods: ["Angry"],
+    atmosphere: "balanced",
+  };
+  const selectedScreen = await render(<MusicPreferencesScreen />);
+  expect(selectedScreen.getByRole("button", { name: editGenres })).toBeTruthy();
+  expect(selectedScreen.getByRole("button", { name: editMoods })).toBeTruthy();
+  expect(selectedScreen.queryByText(emptyGenres)).toBeNull();
+  expect(selectedScreen.queryByText(emptyMoods)).toBeNull();
+});
+
+test("surfaces a retry action when nudge completion fails after preferences save", async () => {
+  await i18n.changeLanguage("en");
+  mockNudgeCompletionError = true;
+  const screen = await render(<MusicPreferencesScreen />);
+
+  expect(screen.getByText("Your preferences were saved, but setup is not finished yet.")).toBeTruthy();
+  fireEvent.press(screen.getByRole("button", { name: "Retry" }));
+  expect(mockRetryNudgeCompletion).toHaveBeenCalledTimes(1);
 });
 
 test("shows offline state before preference skeletons", async () => {

@@ -49,7 +49,11 @@ export function useMusicPreferencesController() {
   const { mutateAsync: update } = useUpdateMusicPreferences();
   const experienceState = useExperienceState();
   const { mutateAsync: completeNudge } = useCompletePreferenceNudge();
-  const nudgeCompletionAttemptedForUser = useRef(new Set<string>());
+  const nudgeCompletionCompletedForUser = useRef(new Set<string>());
+  const nudgeCompletionInFlightForUser = useRef(new Set<string>());
+  const currentUserId = useRef(userId);
+  currentUserId.current = userId;
+  const [nudgeCompletionErrorUserId, setNudgeCompletionErrorUserId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<PreferenceSaveStatus>("idle");
   const initialBaseline = useRef<MusicPreferences>(
     preferencesQuery.data ?? DEFAULT_MUSIC_PREFERENCES,
@@ -61,6 +65,35 @@ export function useMusicPreferencesController() {
     () => queryKeys.musicPreferences.me(userId),
     [userId],
   );
+
+  const retryNudgeCompletion = useCallback(() => {
+    const attemptUserId = userId;
+    const nudgeStatus = experienceState.data?.preferenceNudgeStatus;
+    if (
+      attemptUserId === null
+      || nudgeCompletionCompletedForUser.current.has(attemptUserId)
+      || nudgeCompletionInFlightForUser.current.has(attemptUserId)
+      || (nudgeStatus !== "eligible" && nudgeStatus !== "shown" && nudgeStatus !== "dismissed")
+    ) {
+      return;
+    }
+
+    nudgeCompletionInFlightForUser.current.add(attemptUserId);
+    if (currentUserId.current === attemptUserId) setNudgeCompletionErrorUserId(null);
+    void completeNudge(undefined).then(
+      () => {
+        nudgeCompletionInFlightForUser.current.delete(attemptUserId);
+        nudgeCompletionCompletedForUser.current.add(attemptUserId);
+        if (currentUserId.current === attemptUserId) setNudgeCompletionErrorUserId(null);
+      },
+      () => {
+        nudgeCompletionInFlightForUser.current.delete(attemptUserId);
+        if (currentUserId.current === attemptUserId) {
+          setNudgeCompletionErrorUserId(attemptUserId);
+        }
+      },
+    );
+  }, [completeNudge, experienceState.data?.preferenceNudgeStatus, userId]);
 
   const queue = useMemo(
     () => getOrCreatePreferenceCommitQueue(queryClient, userId, {
@@ -74,15 +107,7 @@ export function useMusicPreferencesController() {
         if (status !== "saved") return;
 
         const snapshot = currentPrefs.current;
-        const nudgeStatus = experienceState.data?.preferenceNudgeStatus;
-        if (
-          userId !== null
-          && !nudgeCompletionAttemptedForUser.current.has(userId)
-          && (nudgeStatus === "eligible" || nudgeStatus === "shown" || nudgeStatus === "dismissed")
-        ) {
-          nudgeCompletionAttemptedForUser.current.add(userId);
-          void completeNudge(undefined).catch(() => undefined);
-        }
+        retryNudgeCompletion();
         void trackProductEvent("music_preferences_saved", {
           flowVersion: 1,
           platform: platform(),
@@ -97,7 +122,7 @@ export function useMusicPreferencesController() {
         t("common.errors.saveRestoredMessage"),
       ),
     }),
-    [completeNudge, experienceState.data?.preferenceNudgeStatus, queryClient, queryKey, resolvedLanguage, t, toast, update, userId],
+    [queryClient, queryKey, resolvedLanguage, retryNudgeCompletion, t, toast, update, userId],
   );
 
   useEffect(() => {
@@ -162,6 +187,8 @@ export function useMusicPreferencesController() {
     prefs: preferencesQuery.data ?? DEFAULT_MUSIC_PREFERENCES,
     ready: hasData,
     saveStatus,
+    nudgeCompletionError: nudgeCompletionErrorUserId === userId,
+    retryNudgeCompletion,
     initialLoading,
     offlineWithoutData,
     blockingError,

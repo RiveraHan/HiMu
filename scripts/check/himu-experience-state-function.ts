@@ -24,7 +24,7 @@ async function main() {
   const deps = {
     transition: async (...args: unknown[]) => {
       transitionCalls.push(args);
-      return expectedState;
+      return { state: expectedState, applied: true };
     },
   };
 
@@ -34,7 +34,7 @@ async function main() {
       USER_ID,
       deps,
     ),
-    { status: 200, body: expectedState },
+    { status: 200, body: { state: expectedState, applied: true } },
   );
   assert.deepEqual(transitionCalls[0], [USER_ID, "claim_nudge", null, TRACK_ID]);
   assert.deepEqual(
@@ -67,7 +67,7 @@ async function main() {
       USER_ID,
       deps,
     ),
-    { status: 200, body: expectedState },
+    { status: 200, body: { state: expectedState, applied: true } },
   );
   assert.deepEqual(transitionCalls[1], [USER_ID, "dismiss_nudge", null, TRACK_ID]);
   assert.deepEqual(
@@ -76,7 +76,7 @@ async function main() {
       USER_ID,
       deps,
     ),
-    { status: 200, body: expectedState },
+    { status: 200, body: { state: expectedState, applied: true } },
   );
   assert.deepEqual(transitionCalls[2], [USER_ID, "complete_nudge", null, null]);
   assert.deepEqual(
@@ -85,7 +85,7 @@ async function main() {
       USER_ID,
       deps,
     ),
-    { status: 200, body: expectedState },
+    { status: 200, body: { state: expectedState, applied: true } },
   );
   assert.deepEqual(transitionCalls[3], [USER_ID, "sync_intro", 2, null]);
 
@@ -103,7 +103,7 @@ async function main() {
   const sharedClaim: ExperienceAction = experienceActions.claimNudge(TRACK_ID);
   assert.deepEqual(
     await handleExperienceStateRequest(sharedClaim, USER_ID, deps),
-    { status: 200, body: expectedState },
+    { status: 200, body: { state: expectedState, applied: true } },
   );
   assert.deepEqual(transitionCalls[4], [USER_ID, "claim_nudge", null, TRACK_ID]);
 
@@ -118,7 +118,12 @@ async function main() {
   const adapterDeps = {
     rpc: async (...args: unknown[]) => {
       rpcCalls.push(args);
-      return { data: [databaseState], error: null };
+      return {
+        data: args[0] === "claim_user_preference_nudge"
+          ? [{ state: databaseState, applied: true }]
+          : [databaseState],
+        error: null,
+      };
     },
   };
   assert.deepEqual(
@@ -130,12 +135,10 @@ async function main() {
       USER_ID,
       adapterDeps,
     ),
-    { status: 200, body: { state: databaseState } },
+    { status: 200, body: { state: databaseState, applied: true } },
   );
-  assert.deepEqual(rpcCalls, [["transition_user_experience", {
+  assert.deepEqual(rpcCalls, [["claim_user_preference_nudge", {
     p_user_id: USER_ID,
-    p_action: "claim_nudge",
-    p_intro_version: null,
     p_track_id: TRACK_ID,
   }]]);
   assert.deepEqual(

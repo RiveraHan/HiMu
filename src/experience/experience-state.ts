@@ -32,6 +32,11 @@ export type ExperienceState = {
   preferenceNudgeTrackId: string | null;
 };
 
+export type ExperienceMutationOutcome = Readonly<{
+  state: ExperienceState;
+  applied: boolean;
+}>;
+
 const EXPERIENCE_STATE_COLUMNS = [
   "intro_version_seen",
   "first_owned_track_id",
@@ -87,6 +92,17 @@ export function parseExperienceState(raw: unknown): ExperienceState {
   };
 }
 
+function parseExperienceMutationOutcome(raw: unknown): ExperienceMutationOutcome {
+  const value = record(raw);
+  if (!value || typeof value.applied !== "boolean") {
+    throw new Error("Invalid experience mutation response");
+  }
+  return {
+    state: parseExperienceState(value.state),
+    applied: value.applied,
+  };
+}
+
 export function useExperienceState() {
   const user = useCurrentUser();
   const userId = user?.id ?? null;
@@ -116,23 +132,33 @@ function useExperienceMutation<T>(operation: string, toAction: (value: T) => Exp
 
   return useMutation({
     mutationKey: authMutationKey(operation, userId),
-    mutationFn: async (value: T): Promise<ExperienceState> => {
+    mutationFn: async (value: T): Promise<ExperienceMutationOutcome> => {
       const action = toAction(value);
       if (isBetaSmokeUser(userId)) {
-        return applyBetaSmokeExperienceAction(userId, action);
+        const before = await readBetaSmokeExperienceState(userId);
+        const state = await applyBetaSmokeExperienceAction(userId, action);
+        const applied = action.action !== "claim_nudge" || (
+          before.preferenceNudgeStatus === "eligible"
+          && before.preferenceNudgeTrackId === action.trackId
+          && state.preferenceNudgeStatus === "shown"
+        );
+        return { state, applied };
       }
-      const { data, error } = await invokeWithAuthScope<{ state: unknown }>(
+      const { data, error } = await invokeWithAuthScope<{
+        state: unknown;
+        applied: unknown;
+      }>(
         supabase.functions,
         captureAuthScope(userId),
         "experience-state",
         { body: action },
       );
       if (error) throw error;
-      return parseExperienceState(data?.state);
+      return parseExperienceMutationOutcome(data);
     },
-    onSuccess: (state) => {
+    onSuccess: (outcome) => {
       if (!isCurrentMutationUser(userId)) return;
-      queryClient.setQueryData(queryKey, state);
+      queryClient.setQueryData(queryKey, outcome.state);
     },
   });
 }

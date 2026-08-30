@@ -7,6 +7,9 @@ export type CatalogGroup = Readonly<{
 
 export type ProgressiveCatalogPickerProps = Readonly<{
   title: string;
+  chooseLabel?: string;
+  editLabel?: string;
+  emptyDescription?: string;
   groups: readonly CatalogGroup[];
   selected: readonly string[];
   min: number;
@@ -14,7 +17,10 @@ export type ProgressiveCatalogPickerProps = Readonly<{
   disabled?: boolean;
   getGroupLabel(value: string): string;
   getItemLabel(value: string): string;
-  onChange(selected: string[]): void;
+  onChange(selected: string[]): void | Readonly<{
+    accepted: boolean;
+    reason?: "offline" | "limit";
+  }>;
 }>;
 
 export type CatalogPickerSurfaceProps = ProgressiveCatalogPickerProps & Readonly<{

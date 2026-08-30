@@ -8,7 +8,7 @@ export type ExperienceStateDependencies = {
     action: ExperienceAction["action"],
     introVersion: number | null,
     trackId: string | null,
-  ): Promise<unknown>;
+  ): Promise<{ state: unknown; applied: boolean }>;
 };
 
 export class ExperienceStateConflictError extends Error {}
@@ -74,9 +74,11 @@ export async function handleExperienceStateRequest(
     : null;
 
   try {
-    const state = await deps.transition(userId, action.action, introVersion, trackId);
-    const body = object(state);
-    return body ? { status: 200, body } : error(503, "state_unavailable");
+    const outcome = await deps.transition(userId, action.action, introVersion, trackId);
+    const state = object(outcome.state);
+    return state && typeof outcome.applied === "boolean"
+      ? { status: 200, body: { state, applied: outcome.applied } }
+      : error(503, "state_unavailable");
   } catch (caught) {
     return caught instanceof ExperienceStateConflictError
       ? error(409, "state_conflict")

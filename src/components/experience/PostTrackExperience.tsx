@@ -23,6 +23,7 @@ type TrackNudgeState = {
   owner: symbol | null;
   claimAttempted: boolean;
   claimInFlight: boolean;
+  claimWon: boolean;
   shownTracked: boolean;
 };
 
@@ -37,6 +38,7 @@ function trackNudgeState(trackId: string): TrackNudgeState {
     owner: null,
     claimAttempted: false,
     claimInFlight: false,
+    claimWon: false,
     shownTracked: false,
   };
   trackNudgeStates.set(trackId, created);
@@ -82,6 +84,14 @@ function resetTrackClaim(trackId: string) {
   if (!state.claimAttempted && !state.claimInFlight) return;
   state.claimAttempted = false;
   state.claimInFlight = false;
+  state.claimWon = false;
+  notifyTrackOwnerChange(trackId);
+}
+
+function settleTrackClaim(trackId: string, applied: boolean) {
+  const state = trackNudgeState(trackId);
+  state.claimInFlight = false;
+  state.claimWon = applied;
   notifyTrackOwnerChange(trackId);
 }
 
@@ -178,16 +188,21 @@ export function PostTrackExperience({
     }
     if (claim.isPending || !startTrackClaim(trackId)) return;
 
-    claim.mutate(trackId, { onError: () => resetTrackClaim(trackId) });
+    void claim.mutateAsync(trackId).then(
+      (outcome) => settleTrackClaim(trackId, outcome.applied),
+      () => resetTrackClaim(trackId),
+    );
   }, [claim, eligible, ownsTrack, trackId]);
 
   useEffect(() => {
-    if (!shown || !ownsTrack || !markTrackShown(trackId)) return;
+    const claimWon = trackNudgeState(trackId).claimWon || isBetaSmokeFixture;
+    if (!shown || !ownsTrack || !claimWon || !markTrackShown(trackId)) return;
 
     if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_shown", analytics);
   }, [analytics, isBetaSmokeFixture, ownsTrack, shown, trackId]);
 
-  if (!shown || !ownsTrack) return null;
+  const claimWon = trackNudgeState(trackId).claimWon || isBetaSmokeFixture;
+  if (!shown || !ownsTrack || !claimWon) return null;
 
   const accept = () => {
     if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_accepted", analytics);

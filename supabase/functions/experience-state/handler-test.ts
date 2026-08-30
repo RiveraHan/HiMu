@@ -21,12 +21,13 @@ Deno.test("uses the verified user and valid action payload", async () => {
     {
       transition: async (...args: unknown[]) => {
         calls.push(args);
-        return state;
+        return { state, applied: true };
       },
     },
   );
 
   if (result.status !== 200) throw new Error("expected success");
+  if (result.body.applied !== true) throw new Error("expected claim winner outcome");
   if (calls.length !== 1) throw new Error("expected one RPC transition");
   if (calls[0]?.[0] !== USER_ID) throw new Error("expected verified user ID");
   if (calls[0]?.[1] !== "claim_nudge") throw new Error("expected claim action");
@@ -36,7 +37,7 @@ Deno.test("rejects sync versions outside PostgreSQL integer range", async () => 
   const result = await handleExperienceStateRequest(
     { action: "sync_intro", version: 2_147_483_648 },
     USER_ID,
-    { transition: async () => ({}) },
+    { transition: async () => ({ state: {}, applied: true }) },
   );
 
   if (result.status !== 400 || result.body.code !== "invalid_input") {

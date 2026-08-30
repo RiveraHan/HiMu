@@ -125,7 +125,7 @@ test("reads only the current user's experience state into its dedicated query ke
 
 test("claims a nudge through the captured user's Edge authorization", async () => {
   jest.mocked(supabase.functions.invoke).mockResolvedValue({
-    data: { state: rowA },
+    data: { state: rowA, applied: true },
     error: null,
   } as never);
   const queryClient = client();
@@ -133,7 +133,8 @@ test("claims a nudge through the captured user's Edge authorization", async () =
     wrapper: wrapper(queryClient),
   });
 
-  await act(async () => { await view.result.current.mutateAsync(trackId); });
+  let outcome!: Awaited<ReturnType<typeof view.result.current.mutateAsync>>;
+  await act(async () => { outcome = await view.result.current.mutateAsync(trackId); });
 
   expect(supabase.functions.invoke).toHaveBeenCalledWith("experience-state", {
     body: experienceActions.claimNudge(trackId),
@@ -146,11 +147,47 @@ test("claims a nudge through the captured user's Edge authorization", async () =
     preferenceNudgeStatus: "eligible",
     preferenceNudgeTrackId: trackId,
   });
+  expect(outcome.applied).toBe(true);
   await view.unmount();
 });
 
+test("reports only the server claim winner across isolated query clients", async () => {
+  const shownRow = { ...rowA, preference_nudge_status: "shown" };
+  jest.mocked(supabase.functions.invoke)
+    .mockResolvedValueOnce({ data: { state: shownRow, applied: true }, error: null } as never)
+    .mockResolvedValueOnce({ data: { state: shownRow, applied: false }, error: null } as never);
+  const firstClient = client();
+  const secondClient = client();
+  const first = await renderHook(() => useClaimPreferenceNudge(), {
+    wrapper: wrapper(firstClient),
+  });
+  const second = await renderHook(() => useClaimPreferenceNudge(), {
+    wrapper: wrapper(secondClient),
+  });
+
+  let firstOutcome!: Awaited<ReturnType<typeof first.result.current.mutateAsync>>;
+  let secondOutcome!: Awaited<ReturnType<typeof second.result.current.mutateAsync>>;
+  await act(async () => {
+    [firstOutcome, secondOutcome] = await Promise.all([
+      first.result.current.mutateAsync(trackId),
+      second.result.current.mutateAsync(trackId),
+    ]);
+  });
+
+  expect(firstOutcome.applied).toBe(true);
+  expect(secondOutcome.applied).toBe(false);
+  expect(firstClient.getQueryData(queryKeys.experienceState.me(userA))).toMatchObject({
+    preferenceNudgeStatus: "shown",
+  });
+  expect(secondClient.getQueryData(queryKeys.experienceState.me(userA))).toMatchObject({
+    preferenceNudgeStatus: "shown",
+  });
+  await first.unmount();
+  await second.unmount();
+});
+
 test("does not write a completed mutation into a new user's experience cache", async () => {
-  const request = deferred<{ data: { state: unknown }; error: null }>();
+  const request = deferred<{ data: { state: unknown; applied: boolean }; error: null }>();
   jest.mocked(supabase.functions.invoke).mockReturnValue(request.promise as never);
   const queryClient = client();
   const view = await renderHook(() => useClaimPreferenceNudge(), {
@@ -166,7 +203,7 @@ test("does not write a completed mutation into a new user's experience cache", a
   mockUserId = userB;
   await view.rerender(undefined);
   await act(async () => {
-    request.resolve({ data: { state: rowA }, error: null });
+    request.resolve({ data: { state: rowA, applied: true }, error: null });
     await mutation;
   });
 

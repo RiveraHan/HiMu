@@ -53,6 +53,74 @@ describe("ProgressiveCatalogPicker", () => {
     expect(screen.getByText("Choose up to 1")).toBeTruthy();
   });
 
+  it("announces a rejected offline change without changing checkbox semantics", async () => {
+    const screen = await render(
+      <ProgressiveCatalogPicker
+        title="Genres"
+        groups={groups}
+        selected={[]}
+        min={0}
+        max={3}
+        getGroupLabel={(value) => value}
+        getItemLabel={(value) => value}
+        chooseLabel="Choose Genres"
+        onChange={() => ({ accepted: false, reason: "offline" })}
+      />,
+    );
+
+    await fireEvent.press(screen.getByRole("button", { name: "Choose Genres" }));
+    const house = screen.getByRole("checkbox", { name: "House" });
+    await fireEvent.press(house);
+
+    expect(house.props.accessibilityState.checked).toBe(false);
+    expect(screen.getByTestId("catalog-picker-status")).toHaveTextContent(
+      "Selection not changed. Reconnect to update your preferences.",
+    );
+    expect(screen.queryByText("Selected House. 1 of 3 selected.")).toBeNull();
+  });
+
+  it.each([
+    {
+      locale: "en",
+      choose: "Choose genres",
+      edit: "Edit genres",
+      empty: "No preference: we'll explore different genres.",
+    },
+    {
+      locale: "es",
+      choose: "Elegir géneros",
+      edit: "Editar géneros",
+      empty: "Sin preferencia: exploraremos distintos géneros.",
+    },
+  ])("uses caller-localized empty and selected controls in $locale", async ({ locale, choose, edit, empty }) => {
+    await act(async () => i18n.changeLanguage(locale));
+    const props = {
+      title: locale === "es" ? "Géneros favoritos" : "Favorite genres",
+      groups,
+      min: 0,
+      max: 3,
+      getGroupLabel: (value: string) => value,
+      getItemLabel: (value: string) => value,
+      onChange: jest.fn(),
+      chooseLabel: choose,
+      editLabel: edit,
+      emptyDescription: empty,
+    };
+    const emptyScreen = await render(
+      <ProgressiveCatalogPicker {...props} selected={[]} />,
+    );
+
+    expect(emptyScreen.getByRole("button", { name: choose })).toBeTruthy();
+    expect(emptyScreen.getByText(empty)).toBeTruthy();
+    await emptyScreen.unmount();
+
+    const selectedScreen = await render(
+      <ProgressiveCatalogPicker {...props} selected={["Ambient"]} />,
+    );
+    expect(selectedScreen.getByRole("button", { name: edit })).toBeTruthy();
+    expect(selectedScreen.queryByText(empty)).toBeNull();
+  });
+
   it("keeps the final required selection when a user removes it from the checked option", async () => {
     function RequiredSelectionHarness() {
       const [selected, setSelected] = useState<string[]>(["Ambient"]);
