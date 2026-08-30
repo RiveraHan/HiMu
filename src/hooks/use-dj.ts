@@ -2,6 +2,7 @@ import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
+import { BETA_SMOKE_DJ, isBetaSmokeUser } from "@/src/beta-smoke";
 
 type DJDetails = {
   id: string;
@@ -37,6 +38,9 @@ export function useDJ(id: string) {
     queryKey: queryKeys.djs.details(user?.id ?? null, id),
     enabled: !!id,
     queryFn: async () => {
+      if (isBetaSmokeUser(user?.id) && id === BETA_SMOKE_DJ.id) {
+        return BETA_SMOKE_DJ;
+      }
       const { data, error } = await supabase
         .from("djs")
         .select(

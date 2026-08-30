@@ -11,6 +11,11 @@ import {
   MusicPreferences,
 } from "@/src/types/music-preferences";
 import { useCurrentUser } from "./use-auth";
+import { isBetaSmokeUser } from "@/src/beta-smoke";
+import {
+  readBetaSmokeMusicPreferences,
+  writeBetaSmokeMusicPreferences,
+} from "@/src/beta-smoke-storage";
 
 export function useMusicPreferences() {
   const user = useCurrentUser();
@@ -19,6 +24,9 @@ export function useMusicPreferences() {
     queryKey: queryKeys.musicPreferences.me(user?.id ?? null),
     enabled: !!user,
     queryFn: async (): Promise<MusicPreferences> => {
+      if (isBetaSmokeUser(user?.id)) {
+        return readBetaSmokeMusicPreferences(user!.id);
+      }
       const { data, error } = await supabase
         .from("music_preferences")
         .select("genres, moods, atmosphere")
@@ -39,6 +47,10 @@ export function useUpdateMusicPreferences() {
   return useMutation({
     mutationKey: authMutationKey("update-music-preferences", userId),
     mutationFn: async (next: MusicPreferences) => {
+      if (isBetaSmokeUser(userId)) {
+        await writeBetaSmokeMusicPreferences(userId, next);
+        return;
+      }
       const scope = captureAuthScope(userId);
       const { error } = await setAuthScopeHeader(
         supabase.from("music_preferences").upsert(

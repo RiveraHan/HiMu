@@ -4,6 +4,7 @@ import { activityMutationKeys } from "@/src/activity/mutation-keys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
 import { captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
+import { BETA_SMOKE_DJ_ID, isBetaSmokeUser } from "@/src/beta-smoke";
 
 export type CreateDJInput = {
   name: string;
@@ -24,6 +25,9 @@ export function useCreateDJ() {
     mutationKey: activityMutationKeys.createDj(userId),
     gcTime: Infinity,
     mutationFn: async (input: CreateDJInput) => {
+      if (isBetaSmokeUser(userId)) {
+        return { djId: BETA_SMOKE_DJ_ID, avatarReady: true };
+      }
       const scope = captureAuthScope(userId);
       const { data, error } = await invokeWithAuthScope<{
         djId: string;

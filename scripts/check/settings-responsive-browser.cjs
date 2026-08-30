@@ -106,6 +106,9 @@ async function main() {
     assert.equal(cell.base.atmosphereRadioCount, 3, `${context} atmosphere count mismatch`);
     assert.equal(cell.base.selectedAtmosphereLabel, labels.balanced, `${context} did not default to Balanced`);
     assert.equal(cell.base.selectedAtmosphereTabIndex, 0, `${context} checked radio left the roving tab stop`);
+    assert.equal(cell.arrowed.selectedAtmosphereLabel, cell.locale === "en" ? "Intense" : "Intensa", `${context} ArrowRight did not select the next atmosphere`);
+    assert.equal(cell.arrowed.selectedAtmosphereTabIndex, 0, `${context} ArrowRight left the roving tab stop behind`);
+    assert.equal(cell.arrowed.activeLabel, cell.locale === "en" ? "Intense" : "Intensa", `${context} ArrowRight did not move focus to the checked radio`);
     assert.deepEqual(
       cell.base.preferences.genres,
       ["Ambient", "Drone", "Lo-Fi", "Chillhop", "Downtempo", "Trip-Hop"],

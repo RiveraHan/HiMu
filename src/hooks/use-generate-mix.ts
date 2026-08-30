@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
 import { authMutationKey, captureAuthScope, invokeWithAuthScope, isCurrentMutationUser } from "@/src/api/auth-scope";
 import type { ConfirmedGenerationBrief } from "@/src/types/creative-generation";
+import { BETA_SMOKE_TRACK_ID, isBetaSmokeUser } from "@/src/beta-smoke";
 
 type GenerateMixInput = {
   djId: string;
@@ -46,6 +47,14 @@ export function useGenerateMix() {
     mutationKey: authMutationKey("generate-mix", userId),
     mutationFn: async (input: GenerateMixInput) => {
       const { djId, brief, sourceTrackId = null } = input;
+      if (isBetaSmokeUser(userId)) {
+        return {
+          jobId: `beta-smoke-job-${BETA_SMOKE_TRACK_ID}`,
+          isPublic: false,
+          brief,
+          sourceTrackId,
+        };
+      }
       const scope = captureAuthScope(userId);
       const { data, error } = await invokeWithAuthScope<GenerateMixResponse>(
         supabase.functions,

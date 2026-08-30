@@ -10,6 +10,7 @@ import type {
   CreativeDraftResponse,
   TrackDraftKind,
 } from "@/src/types/creative-generation";
+import { isBetaSmokeUser } from "@/src/beta-smoke";
 import { useMutation } from "@tanstack/react-query";
 import { useCurrentUser } from "./use-auth";
 
@@ -35,11 +36,73 @@ function boundedExclusions(values: string[] | undefined): string[] {
   return [...unique.values()].slice(-10);
 }
 
+function betaSmokeDraft(
+  kind: CreativeDraftResponse["kind"],
+): CreativeDraftResponse {
+  if (kind === "dj-identity") {
+    return {
+      version: 1,
+      kind,
+      draft: {
+        candidates: [
+          { name: "Night Cartographer", identityConcept: "Maps patient rhythms into luminous shared journeys." },
+          { name: "Quiet Meridian", identityConcept: "Finds warm horizons inside slow-moving sound." },
+          { name: "Lumen Atlas", identityConcept: "Guides ambient textures toward calm discovery." },
+        ],
+      },
+    };
+  }
+  if (kind === "track-brief") {
+    return {
+      version: 1,
+      kind,
+      draft: {
+        title: "First Light",
+        creativeDirection: "A gentle ambient journey for beginning something new.",
+        lyricTheme: null,
+        lyrics: null,
+        productionPlan: {
+          bpm: 80,
+          key: "C",
+          meter: "4/4",
+          sections: [],
+          leadInstruments: ["soft synth"],
+          rhythmInstruments: ["subtle pulse"],
+          textureInstruments: ["wide pads"],
+          energyArc: "steady",
+          productionCharacter: ["luminous", "calm"],
+          vocalDirection: null,
+          visual: {
+            concept: "A first sunrise over a quiet city.",
+            subject: "soft horizon",
+            medium: "digital painting",
+            composition: "wide horizon",
+            palette: ["blue", "gold"],
+            lighting: "gentle dawn",
+            texture: "soft grain",
+          },
+          novelty: { coreMotifs: ["first light"], avoidRecentMotifs: [] },
+        },
+      },
+    };
+  }
+  if (kind === "track-title") {
+    return { version: 1, kind, draft: { title: "First Light" } };
+  }
+  if (kind === "creative-direction") {
+    return { version: 1, kind, draft: { creativeDirection: "A gentle ambient journey for beginning something new." } };
+  }
+  return { version: 1, kind, draft: { lyricTheme: null, lyrics: null } };
+}
+
 function useDraftMutation(kind: CreativeDraftResponse["kind"]) {
   const userId = useCurrentUser()?.id ?? "";
   return useMutation({
     mutationKey: queryKeys.creativeDraft.mutation(userId, kind),
     mutationFn: async (variables: IdentityVariables | TrackVariables) => {
+      if (isBetaSmokeUser(userId)) {
+        return betaSmokeDraft(kind);
+      }
       const scope = captureAuthScope(userId);
       const body = {
         ...variables,

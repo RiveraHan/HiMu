@@ -33,24 +33,24 @@ appId: com.himu.app
 - assertVisible: "Review your DJ"
 - tapOn: "Bring my DJ to life"
 - assertVisible: "Confirm your track"
+- tapOn: "Confirm and generate"
+- assertVisible: "Make the next track feel more like you"
+- assertVisible: "Play"
+- tapOn: "Choose my preferences"
+- assertVisible: "Music Preferences"
+- tapOn: "Balanced"
+- tapOn: "Edit Favorite genres"
+- tapOn: "Chill & Ambient"
+- tapOn: "Ambient"
+- tapOn: "Done"
+- tapOn: "Edit Moods to avoid"
+- tapOn: "Focus"
+- tapOn: "Done"
+- assertVisible: "Saved"
 
-# Pending manual Android release gate: EXPO_PUBLIC_BETA_SMOKE=1 does not yet
-# provide deterministic create/generation/ready-state fixtures, so the following
-# exact production-label continuation must not be uncommented or reported as run
-# until that development-only boundary exists:
-# - tapOn: "Confirm and generate"
-# - assertVisible: "Make the next track feel more like you"
-# - assertVisible: "Play"
-# - tapOn: "Choose my preferences"
-# - assertVisible: "Music Preferences"
-# - tapOn: "Balanced"
-# - tapOn: "Edit Favorite genres"
-# - tapOn: "Chill & Ambient"
-# - tapOn: "Ambient"
-# - tapOn: "Done"
-# - tapOn: "Edit Moods to avoid"
-# - assertVisible: "Saved"
-#
+# Pending manual Android release gate: this executable flow still requires a
+# generated Android project, working ADB/emulators, and Maestro on the release
+# host before its native evidence can be recorded.
 # Run on compact-phone and tablet emulators in portrait and landscape. Repeat
 # the picker with its search keyboard open; verify safe-area clearance and
 # TalkBack labels; repeat the critical nudge/preferences path at font scales 1.5

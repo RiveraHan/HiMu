@@ -37,6 +37,7 @@ const playerCells = [
 
 const copy = {
   en: {
+    balanced: "Balanced",
     intense: "Intense",
     genreEdit: "Edit Favorite genres",
     genreSearch: "Search Favorite genres",
@@ -52,6 +53,7 @@ const copy = {
     dismiss: "Not now",
   },
   es: {
+    balanced: "Equilibrada",
     intense: "Intensa",
     genreEdit: "Editar Géneros favoritos",
     genreSearch: "Buscar Géneros favoritos",
@@ -242,7 +244,16 @@ async function runPreferenceCell(cdp, origin, locale, width, height) {
     locale,
   );
 
-  await clickLabel(cdp, labels.intense);
+  await clickLabel(cdp, labels.balanced);
+  await dispatchKey(cdp, "ArrowRight");
+  const arrowed = await waitFor(async () => {
+    const state = await readSnapshot(cdp, "/preferences", locale);
+    return state.selectedAtmosphereLabel === labels.intense &&
+      state.selectedAtmosphereTabIndex === 0 &&
+      state.activeLabel === labels.intense
+      ? state
+      : null;
+  }, `${locale} ${width}x${height} ArrowRight did not move the atmosphere radio focus and selection`);
   const saving = await waitFor(async () => {
     const state = await readSnapshot(cdp, "/preferences", locale);
     return state.saveStatus === labels.saving ? state : null;
@@ -302,6 +313,7 @@ async function runPreferenceCell(cdp, origin, locale, width, height) {
     width,
     height,
     base,
+    arrowed,
     saving,
     genreDialog,
     backwardTrap,

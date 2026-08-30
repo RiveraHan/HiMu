@@ -8,6 +8,11 @@ import {
 } from "@/src/api/auth-scope";
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
+import { isBetaSmokeUser } from "@/src/beta-smoke";
+import {
+  applyBetaSmokeExperienceAction,
+  readBetaSmokeExperienceState,
+} from "@/src/beta-smoke-storage";
 import { useCurrentUser } from "@/src/hooks/use-auth";
 import {
   experienceActions,
@@ -90,6 +95,9 @@ export function useExperienceState() {
     queryKey: queryKeys.experienceState.me(userId),
     enabled: !!userId,
     queryFn: async (): Promise<ExperienceState | null> => {
+      if (isBetaSmokeUser(userId)) {
+        return readBetaSmokeExperienceState(userId!);
+      }
       const { data, error } = await supabase
         .from("user_experience_state")
         .select(EXPERIENCE_STATE_COLUMNS)
@@ -110,6 +118,9 @@ function useExperienceMutation<T>(operation: string, toAction: (value: T) => Exp
     mutationKey: authMutationKey(operation, userId),
     mutationFn: async (value: T): Promise<ExperienceState> => {
       const action = toAction(value);
+      if (isBetaSmokeUser(userId)) {
+        return applyBetaSmokeExperienceAction(userId, action);
+      }
       const { data, error } = await invokeWithAuthScope<{ state: unknown }>(
         supabase.functions,
         captureAuthScope(userId),

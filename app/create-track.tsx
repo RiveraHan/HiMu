@@ -17,6 +17,9 @@ import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useTrackPrivateDetails } from "@/src/hooks/use-track-private-details";
+import { BETA_SMOKE_TRACK, isBetaSmokeUser } from "@/src/beta-smoke";
+import { markBetaSmokeTrackReady } from "@/src/beta-smoke-storage";
+import { usePlayerStore } from "@/src/stores/player-store";
 import { useLocale } from "@/src/i18n/use-locale";
 import type {
   CreativeProductionPlanV1,
@@ -117,6 +120,7 @@ export default function CreateTrackScreen() {
   const paddingBottom = useMiniPlayerPadding();
   const online = useOnlineStatus();
   const user = useCurrentUser();
+  const setNowPlaying = usePlayerStore((store) => store.setNowPlaying);
   const djQuery = useDJ(djId);
   const dj = djQuery.data;
   const owned = !!dj && !!user?.id && dj.owner_id === user.id;
@@ -391,7 +395,13 @@ export default function CreateTrackScreen() {
         sourceTrackId: sourceTrackId ?? null,
       });
       if (submitFlight.current !== flight) return;
-      router.replace({ pathname: "/dj/[id]", params: { id: djId } });
+      if (isBetaSmokeUser(user?.id) && djId === "beta-smoke-dj") {
+        await markBetaSmokeTrackReady(user?.id ?? "");
+        setNowPlaying(BETA_SMOKE_TRACK, [BETA_SMOKE_TRACK], 0);
+        router.replace("/player");
+      } else {
+        router.replace({ pathname: "/dj/[id]", params: { id: djId } });
+      }
     } catch {
       if (submitFlight.current === flight) {
         setSubmitError(true);

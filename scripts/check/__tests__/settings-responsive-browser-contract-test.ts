@@ -51,11 +51,19 @@ describe("Task 6 settings release harness contract", () => {
 
   it("uses concrete localized Maestro labels and records the manual Android gate", async () => {
     const flow = await source(".maestro/himu-beta-onboarding-first-track.yaml");
+    const executableFlow = flow
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
 
-    expect(flow).toContain('tapOn: "Edit Favorite genres"');
-    expect(flow).toContain('tapOn: "Edit Moods to avoid"');
-    expect(flow).toContain('tapOn: "Balanced"');
-    expect(flow).toContain('assertVisible: "Saved"');
+    expect(executableFlow).toContain('tapOn: "Edit Favorite genres"');
+    expect(executableFlow).toContain('tapOn: "Edit Moods to avoid"');
+    expect(executableFlow).toContain('tapOn: "Balanced"');
+    expect(executableFlow).toContain('assertVisible: "Saved"');
+    const continuation = executableFlow.slice(executableFlow.indexOf('- tapOn: "Confirm and generate"'));
+    expect(continuation).toContain('assertVisible: "Make the next track feel more like you"');
+    expect(continuation).toContain('tapOn: "Choose my preferences"');
+    expect(continuation).not.toMatch(/^\s*#.*Confirm and generate/m);
     expect(flow).toContain("Pending manual Android release gate");
     expect((flow.match(/tapOn:\s*["']Continue["']/g) ?? [])).toHaveLength(2);
   });

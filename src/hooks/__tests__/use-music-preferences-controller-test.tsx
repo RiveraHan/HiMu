@@ -244,7 +244,7 @@ test("completes the current nudge once for each authenticated user after an auth
   await waitFor(() => expect(mockCompleteNudge).toHaveBeenCalledTimes(1));
 
   mockUserId = "user-b";
-  await hook.rerender();
+  await hook.rerender(undefined);
   await act(async () => {
     hook.result.current.setAtmosphere("intense");
     await Promise.resolve();

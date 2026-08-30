@@ -3,8 +3,9 @@ import { renderHook } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 
 import { useTasteProfile } from "@/src/hooks/use-taste-profile";
+import type { MusicPreferences } from "@/src/types/music-preferences";
 
-let mockPreferences = {
+let mockPreferences: MusicPreferences = {
   genres: ["Ambient"],
   excludedMoods: ["Focus"],
   atmosphere: "balanced" as const,
@@ -41,7 +42,7 @@ test("keeps excluded moods stable across a recreated atmosphere-only preference"
     excludedMoods: ["Focus"],
     atmosphere: "intense",
   };
-  await hook.rerender();
+  await hook.rerender(undefined);
 
   expect(hook.result.current.atmosphere).toBe("intense");
   expect(hook.result.current.excludedMoods).toBe(excludedMoods);
