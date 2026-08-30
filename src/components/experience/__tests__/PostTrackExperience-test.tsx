@@ -73,7 +73,7 @@ test("claims a matching eligible track before the preference card appears", asyn
 
   mockState = eligibleState;
   await screen.rerender(<PostTrackExperience trackId="track-first" />);
-  await waitFor(() => expect(mockClaim).toHaveBeenCalledWith("track-first"));
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledWith("track-first", expect.any(Object)));
   expect(screen.queryByText("Make the next track feel more like you")).toBeNull();
 
   mockState = {
@@ -108,6 +108,29 @@ test("shares one claim and one shown card across matching mounted boundaries", a
   await waitFor(() => expect(screen.getAllByText("Make the next track feel more like you")).toHaveLength(1));
 });
 
+test("retains an in-flight eligible claim when its owning boundary unmounts", async () => {
+  mockState = eligibleState;
+  const screen = await render(<MatchingBoundaries includeA />);
+
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(1));
+  await screen.rerender(<MatchingBoundaries includeA={false} />);
+
+  expect(mockClaim).toHaveBeenCalledTimes(1);
+});
+
+test("retries a shared claim after unavailable experience state recovers", async () => {
+  mockState = eligibleState;
+  const screen = await render(<PostTrackExperience trackId="track-first" />);
+
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(1));
+  mockState = { ...eligibleState, isError: true };
+  await screen.rerender(<PostTrackExperience trackId="track-first" />);
+  mockState = eligibleState;
+  await screen.rerender(<PostTrackExperience trackId="track-first" />);
+
+  await waitFor(() => expect(mockClaim).toHaveBeenCalledTimes(2));
+});
+
 test("transfers shown-card ownership when the claiming boundary unmounts", async () => {
   mockState = eligibleState;
   const screen = await render(<MatchingBoundaries includeA />);
@@ -123,6 +146,23 @@ test("transfers shown-card ownership when the claiming boundary unmounts", async
   await screen.rerender(<MatchingBoundaries includeA={false} />);
   await waitFor(() => expect(screen.getAllByText("Make the next track feel more like you")).toHaveLength(1));
   expect(mockClaim).toHaveBeenCalledTimes(1);
+});
+
+test("emits the shown event once when ownership transfers after the card is shown", async () => {
+  mockState = {
+    ...eligibleState,
+    data: { ...eligibleState.data, preferenceNudgeStatus: "shown" as const },
+  };
+  const screen = await render(<MatchingBoundaries includeA />);
+
+  await waitFor(() => expect(mockTrackProductEvent).toHaveBeenCalledWith(
+    "preference_nudge_shown",
+    expect.any(Object),
+  ));
+  await screen.rerender(<MatchingBoundaries includeA={false} />);
+  await waitFor(() => expect(screen.getAllByText("Make the next track feel more like you")).toHaveLength(1));
+
+  expect(mockTrackProductEvent.mock.calls.filter(([name]) => name === "preference_nudge_shown")).toHaveLength(1);
 });
 
 test("never renders or claims a nudge for a different current track", async () => {

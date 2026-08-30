@@ -15,8 +15,29 @@ import { useTranslation } from "react-i18next";
 
 export type PostTrackExperienceProps = Readonly<{ trackId: string }>;
 
-const trackOwners = new Map<string, symbol>();
+type TrackNudgeState = {
+  owner: symbol | null;
+  claimAttempted: boolean;
+  claimInFlight: boolean;
+  shownTracked: boolean;
+};
+
+const trackNudgeStates = new Map<string, TrackNudgeState>();
 const trackOwnerListeners = new Map<string, Set<() => void>>();
+
+function trackNudgeState(trackId: string): TrackNudgeState {
+  const existing = trackNudgeStates.get(trackId);
+  if (existing) return existing;
+
+  const created: TrackNudgeState = {
+    owner: null,
+    claimAttempted: false,
+    claimInFlight: false,
+    shownTracked: false,
+  };
+  trackNudgeStates.set(trackId, created);
+  return created;
+}
 
 function notifyTrackOwnerChange(trackId: string) {
   trackOwnerListeners.get(trackId)?.forEach((listener) => listener());
@@ -32,10 +53,41 @@ function subscribeTrackOwner(trackId: string, listener: () => void) {
   };
 }
 
+function clearUnobservedTrackState(trackId: string) {
+  if (!trackOwnerListeners.has(trackId)) trackNudgeStates.delete(trackId);
+}
+
 function releaseTrackOwner(trackId: string, owner: symbol) {
-  if (trackOwners.get(trackId) !== owner) return;
-  trackOwners.delete(trackId);
+  const state = trackNudgeState(trackId);
+  if (state.owner !== owner) return;
+  state.owner = null;
   notifyTrackOwnerChange(trackId);
+}
+
+function startTrackClaim(trackId: string): boolean {
+  const state = trackNudgeState(trackId);
+  if (state.claimAttempted || state.claimInFlight) return false;
+  state.claimAttempted = true;
+  state.claimInFlight = true;
+  notifyTrackOwnerChange(trackId);
+  return true;
+}
+
+function resetTrackClaim(trackId: string) {
+  const state = trackNudgeState(trackId);
+  if (!state.claimAttempted && !state.claimInFlight) return;
+  state.claimAttempted = false;
+  state.claimInFlight = false;
+  notifyTrackOwnerChange(trackId);
+}
+
+function markTrackShown(trackId: string): boolean {
+  const state = trackNudgeState(trackId);
+  state.claimInFlight = false;
+  if (state.shownTracked) return false;
+  state.shownTracked = true;
+  notifyTrackOwnerChange(trackId);
+  return true;
 }
 
 function platform() {
@@ -52,8 +104,6 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
   const dismiss = useDismissPreferenceNudge();
   const owner = useRef(Symbol("post-track-experience")).current;
   const ownedTrackId = useRef<string | null>(null);
-  const attemptedTrackId = useRef<string | null>(null);
-  const shownTrackedTrackId = useRef<string | null>(null);
   const [ownsTrack, setOwnsTrack] = useState(false);
   const [ownerVersion, setOwnerVersion] = useState(0);
   const eligible = !state.isLoading
@@ -71,15 +121,18 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
   } as const), [resolvedLanguage]);
 
   useEffect(() => {
+    let active = true;
     const unsubscribe = subscribeTrackOwner(trackId, () => {
-      setOwnerVersion((version) => version + 1);
+      if (active) setOwnerVersion((version) => version + 1);
     });
     return () => {
-      unsubscribe();
+      active = false;
       if (ownedTrackId.current === trackId) {
         releaseTrackOwner(trackId, owner);
         ownedTrackId.current = null;
       }
+      unsubscribe();
+      clearUnobservedTrackState(trackId);
     };
   }, [owner, trackId]);
 
@@ -90,42 +143,40 @@ export function PostTrackExperience({ trackId }: PostTrackExperienceProps) {
       ownedTrackId.current = null;
     }
     if (!participates) {
+      if (state.isError) resetTrackClaim(trackId);
       if (ownedTrackId.current) {
         releaseTrackOwner(ownedTrackId.current, owner);
         ownedTrackId.current = null;
       }
-      attemptedTrackId.current = null;
       setOwnsTrack(false);
       return;
     }
 
-    const trackOwner = trackOwners.get(trackId);
-    if (!trackOwner) {
-      trackOwners.set(trackId, owner);
+    const nudgeState = trackNudgeState(trackId);
+    if (!nudgeState.owner) {
+      nudgeState.owner = owner;
       notifyTrackOwnerChange(trackId);
       ownedTrackId.current = trackId;
       setOwnsTrack(true);
       return;
     }
-    setOwnsTrack(trackOwner === owner);
-  }, [eligible, owner, ownerVersion, shown, trackId]);
+    setOwnsTrack(nudgeState.owner === owner);
+  }, [eligible, owner, ownerVersion, shown, state.isError, trackId]);
 
   useEffect(() => {
     if (!eligible || !ownsTrack) return;
     if (claim.isError) {
-      attemptedTrackId.current = null;
+      resetTrackClaim(trackId);
       return;
     }
-    if (claim.isPending || attemptedTrackId.current === trackId) return;
+    if (claim.isPending || !startTrackClaim(trackId)) return;
 
-    attemptedTrackId.current = trackId;
-    claim.mutate(trackId);
+    claim.mutate(trackId, { onError: () => resetTrackClaim(trackId) });
   }, [claim, eligible, ownsTrack, trackId]);
 
   useEffect(() => {
-    if (!shown || !ownsTrack || shownTrackedTrackId.current === trackId) return;
+    if (!shown || !ownsTrack || !markTrackShown(trackId)) return;
 
-    shownTrackedTrackId.current = trackId;
     void trackProductEvent("preference_nudge_shown", analytics);
   }, [analytics, ownsTrack, shown, trackId]);
 
