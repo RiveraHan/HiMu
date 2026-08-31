@@ -55,6 +55,7 @@ export function resolveFormLayout({
 
   return {
     ...presentation,
+    lowHeight: layout.lowHeight,
     useDocumentFlowActions: layout.useDocumentFlowActions,
   } as const;
 }

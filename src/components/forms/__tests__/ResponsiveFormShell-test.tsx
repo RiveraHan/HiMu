@@ -50,17 +50,18 @@ function FormShellFixture({
 
 describe("ResponsiveFormShell", () => {
   it.each([
-    [390, 844, "column", "none", "relative", true],
-    [1024, 599, "column", "none", "relative", true],
-    [1024, 600, "row", "flex", "sticky", false],
+    [390, 844, "column", "none", "relative", true, false],
+    [1024, 599, "column", "none", "relative", true, true],
+    [1024, 600, "row", "flex", "sticky", false, false],
   ] as const)(
     "resolves form action placement from the shared %i×%i layout contract",
-    (width, height, direction, railDisplay, reviewPosition, documentFlow) => {
+    (width, height, direction, railDisplay, reviewPosition, documentFlow, lowHeight) => {
       expect(resolveFormLayout({ width, height })).toEqual({
         contentDirection: direction,
         railDisplay,
         reviewPosition,
         footerPosition: "relative",
+        lowHeight,
         useDocumentFlowActions: documentFlow,
       });
     },
