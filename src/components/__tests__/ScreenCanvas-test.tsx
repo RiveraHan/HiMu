@@ -1,15 +1,16 @@
 import { render } from "@testing-library/react-native";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ScreenCanvas } from "@/src/components/ScreenCanvas";
 
 let mockWindowWidth = 390;
+let mockWindowHeight = 844;
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
   default: () => ({
     width: mockWindowWidth,
-    height: 844,
+    height: mockWindowHeight,
     scale: 1,
     fontScale: 1,
   }),
@@ -18,6 +19,7 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
 describe("ScreenCanvas", () => {
   beforeEach(() => {
     mockWindowWidth = 390;
+    mockWindowHeight = 844;
   });
 
   it.each([
@@ -76,4 +78,42 @@ describe("ScreenCanvas", () => {
       }),
     );
   });
+
+  it.each([
+    [390, 844, "stretch"],
+    [1440, 599, "stretch"],
+    [1440, 900, "flex-end"],
+  ] as const)(
+    "keeps actions after content with reachable placement at %i×%i",
+    async (width, height, alignSelf) => {
+      mockWindowWidth = width;
+      mockWindowHeight = height;
+      const screen = await render(
+        <ScreenCanvas
+          testID="canvas"
+          actions={(
+            <Pressable accessibilityRole="button" accessibilityLabel="Continue">
+              <Text>Continue</Text>
+            </Pressable>
+          )}
+        >
+          <View testID="canvas-content" />
+        </ScreenCanvas>,
+      );
+
+      const actions = screen.getByTestId("screen-canvas-actions");
+      expect(screen.getByTestId("canvas").children).toEqual([
+        screen.getByTestId("canvas-content"),
+        actions,
+      ]);
+      expect(StyleSheet.flatten(actions.props.style)).toEqual(
+        expect.objectContaining({
+          position: "relative",
+          alignSelf,
+          maxWidth: "100%",
+        }),
+      );
+      expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
+    },
+  );
 });

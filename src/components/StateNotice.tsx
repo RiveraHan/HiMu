@@ -62,7 +62,9 @@ export function StateNotice({
         </View>
       )}
       {actionLabel && onAction ? (
-        <Button label={actionLabel} onPress={onAction} variant="ghost" />
+        <View style={styles.action} testID="state-notice-action">
+          <Button label={actionLabel} onPress={onAction} variant="ghost" />
+        </View>
       ) : null}
     </GlassCard>
   );
@@ -80,5 +82,10 @@ const styles = StyleSheet.create((theme) => ({
   },
   copy: {
     gap: theme.spacing.stackXs,
+    minWidth: 0,
+  },
+  action: {
+    alignSelf: "stretch",
+    minWidth: 0,
   },
 }));

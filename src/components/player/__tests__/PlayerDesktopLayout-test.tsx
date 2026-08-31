@@ -7,8 +7,18 @@ import {
   PlayerDesktopLayoutSlot,
 } from "../PlayerDesktopLayout";
 import { PlayerArtwork } from "../PlayerArtwork";
-import { breakpoints } from "@/src/theme/breakpoints";
 import { darkTheme } from "@/src/theme/theme";
+
+let mockWindowDimensions = { width: 390, height: 844 };
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({
+    ...mockWindowDimensions,
+    scale: 1,
+    fontScale: 1,
+  }),
+}));
 
 jest.mock("expo-image", () => ({
   Image: ({ onLoad, onDisplay, onError, ...props }: Record<string, unknown>) => {
@@ -23,6 +33,7 @@ describe("Player desktop stage", () => {
   let warnSpy: jest.SpyInstance;
 
   beforeEach(() => {
+    mockWindowDimensions = { width: 390, height: 844 };
     warnSpy = jest.spyOn(console, "warn").mockImplementation();
   });
 
@@ -30,7 +41,7 @@ describe("Player desktop stage", () => {
     warnSpy.mockRestore();
   });
 
-  it("keeps one source-ordered stage while CSS maps it to two columns at desktop widths", async () => {
+  it("keeps one source-ordered stage while compact presentation stays in document flow", async () => {
     const screen = await render(
       <PlayerDesktopLayout>
         <PlayerDesktopLayoutSlot slot="artwork">
@@ -44,7 +55,7 @@ describe("Player desktop stage", () => {
 
     const stage = screen.getByTestId("player-desktop-stage");
     expect(StyleSheet.flatten(stage.props.style)).toEqual(
-      expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }),
+      expect.objectContaining({ flexDirection: "column" }),
     );
     expect(screen.getByTestId("player-desktop-artwork")).toBeTruthy();
     expect(screen.getByTestId("player-desktop-playback")).toBeTruthy();
@@ -70,33 +81,60 @@ describe("Player desktop stage", () => {
     for (const slot of ["artwork", "playback"]) {
       expect(StyleSheet.flatten(screen.getByTestId(`player-desktop-${slot}`).props.style))
         .toEqual(expect.objectContaining({
-          flexBasis: { xs: "auto", xl: 0 },
-          flexGrow: { xs: 0, xl: 1 },
-          flexShrink: { xs: 0, xl: 1 },
+          flexBasis: "auto",
+          flexGrow: 0,
+          flexShrink: 0,
         }));
     }
   });
 
+  it.each([
+    [390, 844, "column"],
+    [1440, 599, "column"],
+    [1440, 900, "row"],
+  ] as const)(
+    "uses document-flow player order at %i×%i",
+    async (width, height, direction) => {
+      mockWindowDimensions = { width, height };
+      const screen = await render(
+        <PlayerDesktopLayout>
+          <PlayerDesktopLayoutSlot slot="artwork"><Text>Artwork</Text></PlayerDesktopLayoutSlot>
+          <PlayerDesktopLayoutSlot slot="playback"><Text>Playback</Text></PlayerDesktopLayoutSlot>
+        </PlayerDesktopLayout>,
+      );
+
+      expect(StyleSheet.flatten(screen.getByTestId("player-desktop-stage").props.style))
+        .toEqual(expect.objectContaining({ flexDirection: direction }));
+      if (height < 600) {
+        for (const slot of ["artwork", "playback"]) {
+          expect(StyleSheet.flatten(
+            screen.getByTestId(`player-desktop-${slot}`).props.style,
+          )).toEqual(expect.objectContaining({
+            flexBasis: "auto",
+            flexGrow: 0,
+            flexShrink: 0,
+          }));
+        }
+      }
+    },
+  );
+
   test.each([
-    [390, "column"],
-    [1280, "row"],
-    [1920, "row"],
-    [640, "column"], // 1280px at 200% zoom
-  ])("maps a %ipx effective viewport to the expected stage direction", async (width, direction) => {
+    [390, 844, "column"],
+    [1280, 800, "row"],
+    [1920, 1080, "row"],
+    [640, 422, "column"], // 1280px at 200% zoom
+  ])("maps a %i×%i effective viewport to the expected stage direction", async (width, height, direction) => {
+    mockWindowDimensions = { width, height };
     const screen = await render(
       <PlayerDesktopLayout>
         <PlayerDesktopLayoutSlot slot="artwork"><Text>Artwork</Text></PlayerDesktopLayoutSlot>
         <PlayerDesktopLayoutSlot slot="playback"><Text>Playback</Text></PlayerDesktopLayoutSlot>
       </PlayerDesktopLayout>,
     );
-    const directions = StyleSheet.flatten(
+    expect(StyleSheet.flatten(
       screen.getByTestId("player-desktop-stage").props.style,
-    ).flexDirection as Record<keyof typeof breakpoints, "column" | "row">;
-    const resolved = (Object.entries(breakpoints) as [keyof typeof breakpoints, number][])
-      .filter(([, breakpoint]) => breakpoint <= width)
-      .reduce<"column" | "row">((current, [name]) => directions[name] ?? current, "column");
-
-    expect(resolved).toBe(direction);
+    ).flexDirection).toBe(direction);
   });
 
   it("keeps a square fallback reserved when a cover is absent", async () => {

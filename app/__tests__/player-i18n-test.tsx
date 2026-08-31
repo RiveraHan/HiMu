@@ -213,13 +213,13 @@ describe("PlayerScreen localization", () => {
     });
   });
 
-  test("keeps one compact-ordered stage while CSS maps it to a desktop two-column landmark", async () => {
+  test("keeps one compact-ordered stage and source-ordered player landmarks", async () => {
     await i18n.changeLanguage("en");
     const screen = await render(<PlayerScreen />);
 
     const stage = screen.getByTestId("player-desktop-stage");
     expect(StyleSheet.flatten(stage.props.style)).toEqual(
-      expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }),
+      expect.objectContaining({ flexDirection: "column" }),
     );
     expect(screen.getByTestId("player-desktop-stage").children).toEqual([
       screen.getByTestId("player-desktop-artwork"),

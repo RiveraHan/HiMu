@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { View } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { useWebCorePresentation } from "@/src/components/web-core-presentation";
 
@@ -21,16 +22,36 @@ type SlotProps = {
  */
 export function PlayerDesktopLayout({ children }: Props) {
   useWebCorePresentation("himu-web-core-presentation/player-stage");
+  const { width, height } = useWindowDimensions();
+  const layout = resolveBetaVisualLayout({ width, height });
+
   return (
-    <View testID="player-desktop-stage" style={styles.root}>
+    <View
+      testID="player-desktop-stage"
+      style={[
+        styles.root,
+        layout.useDocumentFlowActions
+          ? styles.documentFlow
+          : styles.desktop,
+      ]}
+    >
       {children}
     </View>
   );
 }
 
 export function PlayerDesktopLayoutSlot({ slot, children }: SlotProps) {
+  const { width, height } = useWindowDimensions();
+  const layout = resolveBetaVisualLayout({ width, height });
+
   return (
-    <View testID={`player-desktop-${slot}`} style={styles[slot]}>
+    <View
+      testID={`player-desktop-${slot}`}
+      style={[
+        styles[slot],
+        layout.useDocumentFlowActions && styles.documentFlowSlot,
+      ]}
+    >
       {children}
     </View>
   );
@@ -39,10 +60,20 @@ export function PlayerDesktopLayoutSlot({ slot, children }: SlotProps) {
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
-    flexDirection: { xs: "column", xl: "row" },
     alignItems: "stretch",
     gap: { xs: theme.spacing.stackLg, xl: theme.spacing.stackLg * 2 },
     minWidth: 0,
+  },
+  documentFlow: {
+    flexDirection: "column",
+  },
+  desktop: {
+    flexDirection: "row",
+  },
+  documentFlowSlot: {
+    flexBasis: "auto",
+    flexGrow: 0,
+    flexShrink: 0,
   },
   artwork: {
     flexBasis: { xs: "auto", xl: 0 },

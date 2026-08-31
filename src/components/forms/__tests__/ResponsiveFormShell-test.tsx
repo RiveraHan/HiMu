@@ -4,7 +4,10 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FormStepRail } from "../FormStepRail";
 import { ResponsiveFormShell } from "../ResponsiveFormShell";
 import { StickyReviewPanel } from "../StickyReviewPanel";
-import { resolveResponsiveFormStyle } from "../form-layout";
+import {
+  resolveFormLayout,
+  resolveResponsiveFormStyle,
+} from "../form-layout";
 
 const steps = [
   { id: "traits", label: "Traits" },
@@ -46,6 +49,23 @@ function FormShellFixture({
 }
 
 describe("ResponsiveFormShell", () => {
+  it.each([
+    [390, 844, "column", "none", "relative", true],
+    [1024, 599, "column", "none", "relative", true],
+    [1024, 600, "row", "flex", "sticky", false],
+  ] as const)(
+    "resolves form action placement from the shared %i×%i layout contract",
+    (width, height, direction, railDisplay, reviewPosition, documentFlow) => {
+      expect(resolveFormLayout({ width, height })).toEqual({
+        contentDirection: direction,
+        railDisplay,
+        reviewPosition,
+        footerPosition: "relative",
+        useDocumentFlowActions: documentFlow,
+      });
+    },
+  );
+
   it("keeps the shared back action disabled while its workflow is pending", async () => {
     const screen = await render(<FormShellFixture headerDisabled />);
 
