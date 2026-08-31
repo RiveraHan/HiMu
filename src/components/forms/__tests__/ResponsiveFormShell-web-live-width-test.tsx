@@ -4,10 +4,11 @@ import { Platform, Pressable, StyleSheet, Text } from "react-native";
 import { ResponsiveFormShell } from "../ResponsiveFormShell";
 
 let mockWidth = 390;
+let mockHeight = 844;
 
 jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
-  default: () => ({ width: mockWidth, height: 844, scale: 1, fontScale: 1 }),
+  default: () => ({ width: mockWidth, height: mockHeight, scale: 1, fontScale: 1 }),
 }));
 
 const originalPlatform = Object.getOwnPropertyDescriptor(Platform, "OS");
@@ -57,6 +58,7 @@ describe("ResponsiveFormShell live web viewport contract", () => {
 
   it("resolves compact and desktop presentation from the live width without replacing the tree", async () => {
     mockWidth = 390;
+    mockHeight = 844;
     const screen = await render(fixture());
     const compact = resolvedStyles(screen);
 
@@ -72,5 +74,17 @@ describe("ResponsiveFormShell live web viewport contract", () => {
     expect(desktop.rail.display).toBe("flex");
     expect(desktop.review.position).toBe("sticky");
     expect(screen.getAllByRole("button", { includeHiddenElements: true })).toHaveLength(2);
+  });
+
+  it("renders wide low-height forms in document flow", async () => {
+    mockWidth = 1024;
+    mockHeight = 599;
+    const screen = await render(fixture());
+    const styles = resolvedStyles(screen);
+
+    expect(styles.content.flexDirection).toBe("column");
+    expect(styles.rail.display).toBe("none");
+    expect(styles.review.position).toBe("relative");
+    expect(styles.review.top).toBe(0);
   });
 });

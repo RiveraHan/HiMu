@@ -10,7 +10,7 @@ import {
   formLayoutContract,
   formScrollViewProps,
   responsiveFormStyle,
-  resolveResponsiveFormStyle,
+  resolveFormLayout,
 } from "./form-layout";
 import { StickyReviewPanel } from "./StickyReviewPanel";
 
@@ -40,7 +40,9 @@ export function ResponsiveFormShell({
   review,
   footer,
 }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const layout = resolveFormLayout({ width, height });
+  const resolvedLayoutStyle = layout.lowHeight || Platform.OS === "web";
 
   return (
     <ScrollView
@@ -57,12 +59,7 @@ export function ResponsiveFormShell({
           testID="responsive-form-content"
           style={[
             styles.content,
-            Platform.OS === "web" ? {
-              flexDirection: resolveResponsiveFormStyle(
-                formLayoutContract.contentDirection,
-                width,
-              ),
-            } : undefined,
+            resolvedLayoutStyle ? { flexDirection: layout.contentDirection } : undefined,
           ]}
         >
           <FormStepRail steps={steps} activeStep={activeStep} />
@@ -70,12 +67,9 @@ export function ResponsiveFormShell({
             testID="responsive-form-editor"
             style={[
               styles.editor,
-              Platform.OS === "web" ? {
-                flex: resolveResponsiveFormStyle(
-                  formLayoutContract.editorFlex,
-                  width,
-                ),
-              } : undefined,
+              resolvedLayoutStyle
+                ? { flex: layout.useDocumentFlowActions ? 0 : 1 }
+                : undefined,
             ]}
           >
             {form}
