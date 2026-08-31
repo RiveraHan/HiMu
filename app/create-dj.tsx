@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { getEdgeErrorPayload, type EdgeErrorPayload } from "@/src/api/edge-errors";
 import { isCurrentMutationUser } from "@/src/api/auth-scope";
 import { Button } from "@/src/components/Button";
-import { Text } from "@/src/components/Text";
+import { StateNotice } from "@/src/components/StateNotice";
 import { CreateDjIdentityStep } from "@/src/components/dj/CreateDjIdentityStep";
 import { CreateDjReview } from "@/src/components/dj/CreateDjReview";
 import { CreateDjWizardLayout } from "@/src/components/dj/CreateDjWizardLayout";
@@ -305,6 +305,15 @@ export default function CreateDJScreen() {
     />
   ) : state.step === "review" ? (
     <>
+      {submitError ? (
+        <StateNotice
+          compact
+          kind="error"
+          message={t(errorMessageKey(submitError))}
+          testID="create-dj-validation"
+          title={t("dj.create.errorTitle")}
+        />
+      ) : null}
       <Button
         testID="create-dj-submit"
         label={t("dj.create.submit")}
@@ -313,12 +322,6 @@ export default function CreateDJScreen() {
         disabled={submissionPending || !isCreateDjWizardValid(state)}
         onPress={submit}
       />
-      {submitError ? (
-        <>
-          <Text accessibilityRole="alert">{t("dj.create.errorTitle")}</Text>
-          <Text>{t(errorMessageKey(submitError))}</Text>
-        </>
-      ) : null}
     </>
   ) : null;
 

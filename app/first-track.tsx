@@ -360,6 +360,7 @@ export function FirstTrackGate() {
 
   const content = activeStorageError ? (
     <StateNotice
+      testID="first-track-state"
       kind="error"
       title={t("onboarding.firstTrack.storageUnavailable")}
       actionLabel={t("common.actions.retry")}
@@ -369,22 +370,20 @@ export function FirstTrackGate() {
     />
   ) : ownedDjs.isError ? (
     <StateNotice
+      testID="first-track-state"
       kind="error"
       title={t("onboarding.firstTrack.unavailable")}
       actionLabel={t("common.actions.retry")}
       onAction={() => void ownedDjs.refetch()}
     />
   ) : (
-    <View style={styles.loadingCopy}>
+    <View style={styles.loadingCopy} testID="first-track-state">
       <ActivityIndicator
         accessible
         accessibilityLabel={t("onboarding.firstTrack.checking")}
         accessibilityRole="progressbar"
         color={theme.colors.primary}
       />
-      <Text color="onSurfaceVariant" variant="bodyMd">
-        {t("onboarding.firstTrack.checking")}
-      </Text>
     </View>
   );
 
@@ -404,8 +403,16 @@ export function FirstTrackGate() {
       testID="first-track-scroll"
     >
       <View style={styles.card} testID="first-track-card">
+        <Text
+          accessibilityRole="header"
+          testID="first-track-heading"
+          variant="h1"
+        >
+          {t("onboarding.firstTrack.checking")}
+        </Text>
         {content}
         <Button
+          testID="first-track-action"
           variant="ghost"
           label={t("common.actions.cancel")}
           onPress={() => {

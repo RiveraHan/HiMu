@@ -437,6 +437,14 @@ export default function CreateTrackScreen() {
         form: null,
         review: (
           <View style={styles.confirmation}>
+            {submitError ? (
+              <StateNotice
+                compact
+                kind="error"
+                testID="create-track-validation"
+                title={t("dj.profile.genericError")}
+              />
+            ) : null}
             <GenerationConfirmation
               brief={state.confirmed}
               disabled={!online || generationBlocked || isStarting || isSubmitting}
@@ -449,9 +457,6 @@ export default function CreateTrackScreen() {
               }}
               onGenerate={() => void onGenerate()}
             />
-            {submitError ? (
-              <StateNotice kind="error" title={t("dj.profile.genericError")} compact />
-            ) : null}
           </View>
         ),
         footer: null,

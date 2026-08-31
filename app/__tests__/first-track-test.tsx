@@ -639,6 +639,23 @@ describe("FirstTrackGate", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   });
 
+  it("keeps the gate heading and state before the cancel action", async () => {
+    const screen = await render(<FirstTrackScreen />);
+    const renderedTree = JSON.stringify(screen.toJSON());
+    const positions = [
+      "first-track-heading",
+      "first-track-state",
+      "first-track-action",
+    ].map((testID) => renderedTree.indexOf(`\"testID\":\"${testID}\"`));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+    expect(screen.getByTestId("first-track-heading")).toHaveProp(
+      "accessibilityRole",
+      "header",
+    );
+  });
+
   it.each([
     { height: 384, fontScale: 1.5 },
     { height: 844, fontScale: 2 },

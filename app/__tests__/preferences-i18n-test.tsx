@@ -95,6 +95,20 @@ test("renders exactly the compact preference sections and atmosphere radios", as
   expect(screen.getAllByRole("radio")).toHaveLength(3);
 });
 
+test("keeps preference heading, effective content, and save status in source order", async () => {
+  await i18n.changeLanguage("en");
+  const screen = await render(<MusicPreferencesScreen />);
+  const renderedTree = JSON.stringify(screen.toJSON());
+  const positions = [
+    "preferences-heading",
+    "preferences-content",
+    "preferences-save-status",
+  ].map((testID) => renderedTree.indexOf(`\"testID\":\"${testID}\"`));
+
+  expect(positions.every((position) => position >= 0)).toBe(true);
+  expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+});
+
 test.each([
   {
     locale: "en",

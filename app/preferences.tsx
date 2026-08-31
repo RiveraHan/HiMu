@@ -66,31 +66,34 @@ export default function MusicPreferencesScreen() {
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
     >
-      <ScreenHeader
-        kicker={t("dj.preferences.kicker")}
-        title={t("dj.preferences.title")}
-        subtitle={t("dj.preferences.subtitle")}
-      />
+      <View testID="preferences-heading">
+        <ScreenHeader
+          kicker={t("dj.preferences.kicker")}
+          title={t("dj.preferences.title")}
+          subtitle={t("dj.preferences.subtitle")}
+        />
+      </View>
 
-      {controller.offlineWithoutData ? (
-        <StateNotice
-          kind="offline"
-          title={t("common.errors.offline")}
-          message={t("common.errors.reconnect")}
-          actionLabel={t("common.actions.retry")}
-          onAction={() => void controller.refetch()}
-        />
-      ) : controller.initialLoading ? (
-        <MusicPreferenceSkeletons />
-      ) : controller.blockingError ? (
-        <StateNotice
-          kind="error"
-          title={t("common.errors.generic")}
-          actionLabel={t("common.actions.retry")}
-          onAction={() => void controller.refetch()}
-        />
-      ) : (
-        <View style={styles.sections}>
+      <View testID="preferences-content">
+        {controller.offlineWithoutData ? (
+          <StateNotice
+            kind="offline"
+            title={t("common.errors.offline")}
+            message={t("common.errors.reconnect")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void controller.refetch()}
+          />
+        ) : controller.initialLoading ? (
+          <MusicPreferenceSkeletons />
+        ) : controller.blockingError ? (
+          <StateNotice
+            kind="error"
+            title={t("common.errors.generic")}
+            actionLabel={t("common.actions.retry")}
+            onAction={() => void controller.refetch()}
+          />
+        ) : (
+          <View style={styles.sections}>
           <PrefSection title={t("dj.preferences.favoriteGenres")}>
             <ProgressiveCatalogPicker
               title={t("dj.preferences.favoriteGenres")}
@@ -163,9 +166,12 @@ export default function MusicPreferencesScreen() {
               onAction={controller.retryNudgeCompletion}
             />
           ) : null}
-          <Text accessibilityLiveRegion="polite" style={styles.status}>{status}</Text>
-        </View>
-      )}
+            <View testID="preferences-save-status">
+              <Text accessibilityLiveRegion="polite" style={styles.status}>{status}</Text>
+            </View>
+          </View>
+        )}
+      </View>
     </ScreenScrollView>
   );
 }

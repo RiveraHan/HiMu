@@ -568,6 +568,15 @@ test("maps only bounded create errors and keeps localized Review state without r
   expect(screen.getByText("Night Cartographer")).toBeTruthy();
   expect(screen.getByText("El servicio de creación no está disponible. Inténtalo de nuevo.")).toBeTruthy();
   expect(screen.queryByText(/raw provider secret/i)).toBeNull();
+  const renderedTree = JSON.stringify(screen.toJSON());
+  const validationPosition = renderedTree.indexOf(
+    `\"testID\":\"create-dj-validation\"`,
+  );
+  const actionPosition = renderedTree.indexOf(
+    `\"testID\":\"create-dj-submit\"`,
+  );
+  expect(validationPosition).toBeGreaterThanOrEqual(0);
+  expect(actionPosition).toBeGreaterThan(validationPosition);
   expect(mockRouterReplace).not.toHaveBeenCalled();
   expect(mockTrackProductEvent).toHaveBeenCalledWith(
     "dj_creation_failed",

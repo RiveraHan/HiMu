@@ -385,6 +385,16 @@ describe("CreateTrackScreen", () => {
       screen.getByText("Something went wrong. Please try again."),
     ).toBeTruthy());
     expect(screen.getByRole("button", { name: "Confirm and generate" })).toBeEnabled();
+
+    const renderedTree = JSON.stringify(screen.toJSON());
+    const validationPosition = renderedTree.indexOf(
+      `\"testID\":\"create-track-validation\"`,
+    );
+    const actionPosition = renderedTree.indexOf(
+      `\"accessibilityLabel\":\"Confirm and generate\"`,
+    );
+    expect(validationPosition).toBeGreaterThanOrEqual(0);
+    expect(actionPosition).toBeGreaterThan(validationPosition);
   });
 
   it("does not let a late title suggestion overwrite a newer manual edit", async () => {

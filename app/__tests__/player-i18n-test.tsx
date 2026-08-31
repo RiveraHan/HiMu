@@ -229,6 +229,22 @@ describe("PlayerScreen localization", () => {
     expect(screen.getAllByRole("button", { name: "Next" })).toHaveLength(1);
   });
 
+  test("keeps metadata before playback and post-track actions without truncating identity", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const renderedTree = JSON.stringify(screen.toJSON());
+    const positions = [
+      "player-metadata",
+      "player-playback-controls",
+      "player-post-track",
+    ].map((testID) => renderedTree.indexOf(`\"testID\":\"${testID}\"`));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+    expect(screen.getByText("Signal Bloom").props.numberOfLines).toBeUndefined();
+    expect(screen.getByText("DJ One").props.numberOfLines).toBeUndefined();
+  });
+
   test("keeps compact artwork and playback wrappers at their natural height", async () => {
     await i18n.changeLanguage("en");
     const screen = await render(<PlayerScreen />);

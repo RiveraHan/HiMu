@@ -159,6 +159,22 @@ describe("Login translations", () => {
     expect(screen.queryByText(/Invitado|Guest/)).toBeNull();
   });
 
+  it("keeps the product promise before sign-in action and supporting links", async () => {
+    mockWindowWidth = 1440;
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+    const renderedTree = JSON.stringify(screen.toJSON());
+    const positions = [
+      "login-hero-promise",
+      "login-primary-actions",
+      "login-supporting-links",
+    ].map((testID) => renderedTree.indexOf(`\"testID\":\"${testID}\"`));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+  });
+
   it("keeps the capped compact sign-in content-sized at 700px", async () => {
     mockWindowWidth = 700;
     process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";

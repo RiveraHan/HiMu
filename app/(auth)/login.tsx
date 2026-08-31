@@ -75,7 +75,7 @@ export default function LoginScreen() {
 
   return (
     <LoginHero>
-      <View style={styles.methods}>
+      <View style={styles.methods} testID="login-primary-actions">
         <Button
           variant="glass"
           loading={loading}
@@ -98,7 +98,7 @@ export default function LoginScreen() {
       </View>
 
       {legalLinks.length > 0 ? (
-        <View style={styles.footer}>
+        <View style={styles.footer} testID="login-supporting-links">
           <View style={styles.legal}>
             {legalLinks.map((item, index) => (
               <Fragment key={item.url}>

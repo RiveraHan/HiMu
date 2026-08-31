@@ -283,7 +283,7 @@ export default function PlayerScreen() {
 
           <PlayerDesktopLayoutSlot slot="playback">
             <View testID="player-playback-wrap" style={styles.bottom}>
-              <View style={styles.meta}>
+              <View testID="player-metadata" style={styles.meta}>
                 <View style={styles.badge}>
                   <Sparkle size={14} color={theme.colors.primary} />
                   <Text variant="labelCaps" color="primary">
@@ -292,10 +292,10 @@ export default function PlayerScreen() {
                       : t("playback.player.source.himu")}
                   </Text>
                 </View>
-                <Text variant="h1" numberOfLines={1} style={styles.title}>
+                <Text accessibilityRole="header" variant="h1" style={styles.title}>
                   {track.title}
                 </Text>
-                <Text variant="bodyLg" color="onSurfaceVariant" numberOfLines={1}>
+                <Text variant="bodyLg" color="onSurfaceVariant" style={styles.artist}>
                   {track.artist}
                 </Text>
                 {privateDetails.data ? (
@@ -345,7 +345,7 @@ export default function PlayerScreen() {
                 </View>
               </View>
 
-              <View style={styles.controls}>
+              <View testID="player-playback-controls" style={styles.controls}>
                 <Pressable
                   onPress={withHaptic(toggleShuffle)}
                   style={styles.ctrlSm}
@@ -439,10 +439,12 @@ export default function PlayerScreen() {
             </View>
           </PlayerDesktopLayoutSlot>
         </PlayerDesktopLayout>
-        <PostTrackExperience
-          trackId={track.id}
-          isBetaSmokeFixture={isBetaSmokeFixture}
-        />
+        <View testID="player-post-track" style={styles.postTrack}>
+          <PostTrackExperience
+            trackId={track.id}
+            isBetaSmokeFixture={isBetaSmokeFixture}
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -585,6 +587,10 @@ const styles = StyleSheet.create((theme) => ({
     width: "100%",
     paddingHorizontal: theme.spacing.stackMd,
   },
+  artist: {
+    textAlign: "center",
+    width: "100%",
+  },
   versionAction: {
     minHeight: 44,
     justifyContent: "center",
@@ -631,6 +637,10 @@ const styles = StyleSheet.create((theme) => ({
     ...(process.env.EXPO_OS === "ios"
       ? { boxShadow: "0 10px 30px rgba(129,140,248,0.3)" }
       : { elevation: 12 }),
+  },
+  postTrack: {
+    minWidth: 0,
+    width: "100%",
   },
   playPressed: { transform: [{ scale: 1.05 }] },
 }));
