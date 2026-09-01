@@ -11,7 +11,9 @@ const runner = runnerArgument === -1
 
 const requiredCells = new Map([
   ["320x640", { width: 320, height: 640, zoomPercent: 100 }],
+  ["390x844", { width: 390, height: 844, zoomPercent: 100 }],
   ["768x1024", { width: 768, height: 1024, zoomPercent: 100 }],
+  ["1024x768", { width: 1024, height: 768, zoomPercent: 100 }],
   ["1440x900", { width: 1440, height: 900, zoomPercent: 100 }],
   ["720x422", { width: 720, height: 422, zoomPercent: 100 }],
   ["200% zoom", { width: 720, height: 900, zoomPercent: 200 }],
@@ -28,11 +30,32 @@ function isExactReverse(forward, backward) {
     forward.every((entry, index) => entry === backward[backward.length - index - 1]);
 }
 
+function isNear(actual, expected, tolerance = 1) {
+  return typeof actual === "number" && Math.abs(actual - expected) <= tolerance;
+}
+
 function verifySurface(cell, surface) {
   const prefix = `${cell.label} ${surface?.name ?? "unknown surface"}`;
+  const expectedScale = cell.zoomPercent / 100;
+  const expectedVisualWidth = cell.width / expectedScale;
+  const expectedVisualHeight = cell.height / expectedScale;
+  const reportedEffectiveScale =
+    surface?.visualViewport?.scale * surface?.visualViewport?.devicePixelRatio;
+  invariant(
+    isNear(surface?.visualViewport?.width, expectedVisualWidth) &&
+      isNear(surface?.visualViewport?.height, expectedVisualHeight) &&
+      isNear(reportedEffectiveScale, expectedScale, 0.01),
+    `${prefix} did not report the effective visual viewport at ${cell.zoomPercent}% zoom: ` +
+      `${JSON.stringify(surface?.visualViewport)}.`,
+  );
   invariant(surface?.noHorizontalOverflow === true, `${prefix} has horizontal overflow.`);
   invariant(surface?.primaryActionVisible === true, `${prefix} primary action is not visible.`);
   invariant(surface?.primaryActionReachable === true, `${prefix} primary action is not reachable.`);
+  invariant(
+    surface?.primaryActionBoundedByVisualViewport === true,
+    `${prefix} primary action is not bounded by the user-visible visual viewport: ` +
+      `${JSON.stringify({ visualViewport: surface?.visualViewport, actionRect: surface?.actionRect })}.`,
+  );
   invariant(
     surface?.focusForward?.includes("Back") && surface.focusForward.includes("Continue"),
     `${prefix} focus evidence must traverse Back through Continue.`,
@@ -46,6 +69,10 @@ function verifySurface(cell, surface) {
     `${prefix} does not preserve header/content/state/action source order.`,
   );
   invariant(surface?.dialog?.bounded === true, `${prefix} dialog is not bounded by the viewport.`);
+  invariant(
+    surface?.dialog?.boundedByVisualViewport === true,
+    `${prefix} dialog is not bounded by the user-visible visual viewport.`,
+  );
   invariant(
     surface?.dialog?.focusForward?.includes("Done") &&
       surface.dialog.focusForward.some((entry) => /^Search\s/.test(entry)),

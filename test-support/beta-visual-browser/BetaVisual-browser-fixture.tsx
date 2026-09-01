@@ -81,6 +81,33 @@ function isVisible(element: HTMLElement) {
   return value.display !== "none" && value.visibility !== "hidden" && box.width > 0 && box.height > 0;
 }
 
+function readVisualViewport() {
+  const viewport = window.visualViewport;
+  const width = viewport?.width ?? window.innerWidth;
+  const height = viewport?.height ?? window.innerHeight;
+  const pageLeft = viewport?.pageLeft ?? window.scrollX;
+  const pageTop = viewport?.pageTop ?? window.scrollY;
+  return {
+    width,
+    height,
+    scale: viewport?.scale ?? 1,
+    devicePixelRatio: window.devicePixelRatio,
+    pageLeft,
+    pageTop,
+    right: pageLeft + width,
+    bottom: pageTop + height,
+  };
+}
+
+function isBoundedByVisualViewport(value: Rect, viewport = readVisualViewport()) {
+  const pageLeft = value.left + window.scrollX;
+  const pageTop = value.top + window.scrollY;
+  return pageLeft >= viewport.pageLeft - 1 &&
+    pageTop >= viewport.pageTop - 1 &&
+    pageLeft + value.width <= viewport.right + 1 &&
+    pageTop + value.height <= viewport.bottom + 1;
+}
+
 function orderedNames(entries: Array<readonly [string, Element]>) {
   return [...entries]
     .sort(([, left], [, right]) =>
@@ -100,6 +127,7 @@ function readDialog() {
     throw new Error("Production catalog dialog is missing title, done, search, or option content");
   }
   const dialogRect = rect(dialog)!;
+  const visualViewport = readVisualViewport();
   return {
     rect: dialogRect,
     bounded:
@@ -107,6 +135,7 @@ function readDialog() {
       dialogRect.top >= 0 &&
       dialogRect.right <= window.innerWidth + 1 &&
       dialogRect.bottom <= window.innerHeight + 1,
+    boundedByVisualViewport: isBoundedByVisualViewport(dialogRect, visualViewport),
     sourceOrder: orderedNames([
       ["title", title],
       ["done", done],
@@ -128,16 +157,19 @@ function readSurface() {
   const scroll = testElement(route === "activation" ? "responsive-form-scroll-view" : "beta-visual-scroll");
   const actionRect = rect(action)!;
   const scrollRect = rect(scroll)!;
+  const visualViewport = readVisualViewport();
   return {
     name: route,
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
+    visualViewport,
     documentScrollWidth: document.documentElement.scrollWidth,
     documentClientWidth: document.documentElement.clientWidth,
     noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
     primaryActionVisible: isVisible(action),
     primaryActionReachable:
       actionRect.top >= scrollRect.top - 1 && actionRect.bottom <= scrollRect.bottom + 1,
+    primaryActionBoundedByVisualViewport: isBoundedByVisualViewport(actionRect, visualViewport),
     activeLabel: label(document.activeElement),
     sourceOrder: orderedNames([
       ["header", header],

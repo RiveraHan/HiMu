@@ -10,23 +10,31 @@ const checker = path.join(projectRoot, "scripts/check/beta-visual-browser.cjs");
 
 const requiredCells = [
   ["320x640", 320, 640, 100],
+  ["390x844", 390, 844, 100],
   ["768x1024", 768, 1024, 100],
+  ["1024x768", 1024, 768, 100],
   ["1440x900", 1440, 900, 100],
   ["720x422", 720, 422, 100],
   ["200% zoom", 720, 900, 200],
 ] as const;
 
-function surface(name: "activation" | "primary") {
+function surface(
+  name: "activation" | "primary",
+  visualViewport: { width: number; height: number; scale: number; devicePixelRatio: number },
+) {
   return {
     name,
+    visualViewport,
     noHorizontalOverflow: true,
     primaryActionVisible: true,
     primaryActionReachable: true,
+    primaryActionBoundedByVisualViewport: true,
     focusForward: ["Back", "Edit genres", "Continue"],
     focusBackward: ["Continue", "Edit genres", "Back"],
     sourceOrder: ["header", "content", "state", "action"],
     dialog: {
       bounded: true,
+      boundedByVisualViewport: true,
       focusForward: ["Search Genres", "Done"],
       focusBackward: ["Done", "Search Genres"],
       sourceOrder: ["title", "done", "search", "options"],
@@ -41,7 +49,20 @@ function validReport() {
       width,
       height,
       zoomPercent,
-      surfaces: [surface("activation"), surface("primary")],
+      surfaces: [
+        surface("activation", {
+          width: width / (zoomPercent / 100),
+          height: height / (zoomPercent / 100),
+          scale: 1,
+          devicePixelRatio: zoomPercent / 100,
+        }),
+        surface("primary", {
+          width: width / (zoomPercent / 100),
+          height: height / (zoomPercent / 100),
+          scale: 1,
+          devicePixelRatio: zoomPercent / 100,
+        }),
+      ],
     })),
   };
 }
@@ -70,6 +91,34 @@ describe("beta visual browser evidence checker", () => {
     const report = validReport();
     report.matrix = report.matrix.filter((cell) => cell.label !== "720x422");
     await expect(runWithReport(report)).rejects.toThrow(/720x422/);
+  });
+
+  it.each(["390x844", "1024x768"])(
+    "rejects a matrix that omits the mandatory %s cell",
+    async (missingLabel) => {
+      const report = validReport();
+      report.matrix = report.matrix.filter((cell) => cell.label !== missingLabel);
+      await expect(runWithReport(report)).rejects.toThrow(new RegExp(missingLabel));
+    },
+  );
+
+  it("rejects 200% evidence measured only against the layout viewport", async () => {
+    const report = validReport();
+    const zoom = report.matrix.find((cell) => cell.label === "200% zoom")!;
+    for (const evidence of zoom.surfaces) {
+      evidence.visualViewport = { width: 720, height: 900, scale: 1, devicePixelRatio: 1 };
+    }
+    await expect(runWithReport(report)).rejects.toThrow(/visual viewport|200%/i);
+  });
+
+  it("rejects clipped actions and dialogs even with correct 200% visual viewport metrics", async () => {
+    const report = validReport();
+    const zoom = report.matrix.find((cell) => cell.label === "200% zoom")!;
+    for (const evidence of zoom.surfaces) {
+      evidence.primaryActionBoundedByVisualViewport = false;
+      evidence.dialog.boundedByVisualViewport = false;
+    }
+    await expect(runWithReport(report)).rejects.toThrow(/bounded.*user-visible visual viewport/i);
   });
 
   it("rejects overflow, unreachable actions, and broken reverse focus order", async () => {

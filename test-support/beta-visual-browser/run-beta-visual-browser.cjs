@@ -110,13 +110,14 @@ async function dispatchTab(cdp, shift = false) {
 }
 
 async function resize(cdp, width, height, zoomPercent) {
+  const zoomScale = zoomPercent / 100;
+  await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
   await cdp.send("Emulation.setDeviceMetricsOverride", {
-    width,
-    height,
-    deviceScaleFactor: 1,
+    width: Math.round(width / zoomScale),
+    height: Math.round(height / zoomScale),
+    deviceScaleFactor: zoomScale,
     mobile: false,
   });
-  await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: zoomPercent / 100 });
 }
 
 async function navigate(cdp, origin, route) {
@@ -190,8 +191,9 @@ async function dialogSequence(cdp, controls, shift) {
   return sequence;
 }
 
-async function runSurface(cdp, origin, surfaceName) {
+async function runSurface(cdp, origin, surfaceName, viewport) {
   await navigate(cdp, origin, surfaceName);
+  await resize(cdp, viewport.width, viewport.height, viewport.zoomPercent);
   await evaluate(cdp, `(() => {
     const action = document.querySelector('[data-testid="beta-visual-primary-action"]');
     action.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -217,14 +219,19 @@ async function runSurface(cdp, origin, surfaceName) {
 
   return {
     name: surfaceName,
+    visualViewport: reached.visualViewport,
+    actionRect: reached.actionRect,
+    scrollRect: reached.scrollRect,
     noHorizontalOverflow: reached.noHorizontalOverflow,
     primaryActionVisible: reached.primaryActionVisible,
     primaryActionReachable: reached.primaryActionReachable,
+    primaryActionBoundedByVisualViewport: reached.primaryActionBoundedByVisualViewport,
     focusForward,
     focusBackward,
     sourceOrder: reached.sourceOrder,
     dialog: {
       bounded: withDialog.dialog.bounded,
+      boundedByVisualViewport: withDialog.dialog.boundedByVisualViewport,
       focusForward: dialogFocusForward,
       focusBackward: dialogFocusBackward,
       sourceOrder: withDialog.dialog.sourceOrder,
@@ -277,7 +284,7 @@ async function main() {
       out: bundlePath,
     });
     const bundle = fs.readFileSync(bundlePath);
-    const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
       html, body, #root { margin: 0; width: 100%; min-width: 0; height: 100%; }
       body { overflow: hidden; }
       #root { display: flex; }
@@ -345,15 +352,15 @@ async function main() {
 
     const matrix = [];
     for (const [label, width, height, zoomPercent] of cells) {
-      await resize(cdp, width, height, zoomPercent);
+      const viewport = { width, height, zoomPercent };
       matrix.push({
         label,
         width,
         height,
         zoomPercent,
         surfaces: [
-          await runSurface(cdp, origin, "activation"),
-          await runSurface(cdp, origin, "primary"),
+          await runSurface(cdp, origin, "activation", viewport),
+          await runSurface(cdp, origin, "primary", viewport),
         ],
       });
     }
