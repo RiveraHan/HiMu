@@ -49,10 +49,11 @@ import {
   Trash2,
 } from "lucide-react-native";
 import { useEffect, useMemo } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 
 export default function DJProfileScreen() {
   const { t } = useTranslation();
@@ -64,6 +65,8 @@ export default function DJProfileScreen() {
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
+  const { width, height } = useWindowDimensions();
+  const visualLayout = resolveBetaVisualLayout({ width, height });
 
   const djQuery = useDJ(id);
   const tracksQuery = useDJTracks(id);
@@ -275,6 +278,10 @@ export default function DJProfileScreen() {
             { paddingTop: insets.top + theme.spacing.stackMd },
           ]}
         >
+          <View
+            testID="dj-profile-content"
+            style={[styles.surface, visualLayout.lowHeight && styles.surfaceLowHeight]}
+          >
           <DjDesktopLayout>
             <DjDesktopTopRegion>
             <DjDesktopLayoutSlot slot="hero">
@@ -498,6 +505,7 @@ export default function DJProfileScreen() {
               )}
             </DjDesktopLayoutSlot>
           </DjDesktopLayout>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -512,6 +520,14 @@ const styles = StyleSheet.create((theme) => ({
     alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
+    minWidth: 0,
+  },
+  surface: {
+    minWidth: 0,
+    width: "100%",
+  },
+  surfaceLowHeight: {
+    gap: theme.spacing.stackMd,
   },
   statsRow: {
     flexDirection: "row",

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, within } from "@testing-library/react-native";
 import ProfileScreen from "@/app/(app)/profile";
 import { queryKeys } from "@/src/api/queries";
 import i18n from "@/src/i18n";
@@ -488,6 +488,12 @@ describe("ProfileScreen", () => {
     expect(screen.getByTestId("profile-desktop-settings")).toBeTruthy();
     expect(screen.getByLabelText("Account Details")).toBeTruthy();
     expect(screen.getByLabelText("Music Preferences")).toBeTruthy();
+  });
+
+  it("keeps Profile sections inside one bounded content surface", async () => {
+    const screen = await render(<ProfileScreen />);
+
+    expect(within(screen.getByTestId("profile-content")).getByTestId("profile-desktop-layout")).toBeTruthy();
   });
 
   it("keeps community DJs out of the listener-owned profile grid", async () => {

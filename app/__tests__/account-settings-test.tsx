@@ -487,4 +487,12 @@ describe("AccountSettingsScreen", () => {
       .toEqual(["Language", "Sign out"]);
     expect(screen.getByTestId("account-destructive-section")).toBeTruthy();
   });
+
+  it("keeps the settings grid inside the bounded content surface", async () => {
+    const screen = await render(<AccountSettingsScreen />);
+
+    expect(screen.getByTestId("account-settings-content").children).toContain(
+      screen.getByTestId("account-settings-grid"),
+    );
+  });
 });

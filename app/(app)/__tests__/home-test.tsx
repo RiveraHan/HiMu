@@ -323,6 +323,13 @@ describe("HomeScreen", () => {
     expect(screen.getByTestId("home-desktop-grid")).toBeTruthy();
   });
 
+  it("keeps the Home content surface bounded around the responsive grid", async () => {
+    const screen = await render(<HomeScreen />);
+
+    const content = screen.getByTestId("home-content");
+    expect(within(content).getByTestId("home-desktop-grid")).toBeTruthy();
+  });
+
   it.each([
     [390, "scroll"],
     [1440, "scroll"],

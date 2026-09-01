@@ -28,16 +28,19 @@ import {
   Smartphone,
   ShieldCheck,
 } from "lucide-react-native";
-import { Linking, Pressable } from "react-native";
+import { Linking, Pressable, View, useWindowDimensions } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 
 export default function AccountSettingsScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const { theme } = useUnistyles();
+  const { width, height } = useWindowDimensions();
+  const visualLayout = resolveBetaVisualLayout({ width, height });
   const user = useCurrentUser();
   const online = useOnlineStatus();
   const profileQuery = useProfile();
@@ -110,6 +113,10 @@ export default function AccountSettingsScreen() {
         subtitle={t("settings.header.subtitle")}
       />
 
+      <View
+        testID="account-settings-content"
+        style={[styles.surface, visualLayout.lowHeight && styles.surfaceLowHeight]}
+      >
       <SettingsDesktopGrid testID="account-settings-grid">
         <SettingsDesktopGridItem testID="account-identity-zone">
           <SettingsSection title={t("settings.sections.account")}>
@@ -219,6 +226,7 @@ export default function AccountSettingsScreen() {
           </SettingsSection>
         </SettingsDesktopGridItem>
       </SettingsDesktopGrid>
+      </View>
     </ScreenScrollView>
   );
 }
@@ -231,6 +239,13 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
+  },
+  surface: {
+    minWidth: 0,
+    width: "100%",
+  },
+  surfaceLowHeight: {
+    gap: theme.spacing.stackMd,
   },
   signOut: {
     minHeight: 44,

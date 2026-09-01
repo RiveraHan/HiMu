@@ -13,14 +13,17 @@ import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useRouter } from "expo-router";
-import { View } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 
 export default function FavoritesScreen() {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const { width, height } = useWindowDimensions();
+  const visualLayout = resolveBetaVisualLayout({ width, height });
   const insets = useSafeAreaInsets();
   const paddingBottom = useMiniPlayerPadding();
   const favoritesQuery = useFavorites();
@@ -58,6 +61,10 @@ export default function FavoritesScreen() {
         title={t("profile.favorites.title")}
       />
 
+      <View
+        testID="favorites-content"
+        style={[styles.surface, visualLayout.lowHeight && styles.surfaceLowHeight]}
+      >
       {favoritesOfflineWithoutData ? (
         <StateNotice
           kind="offline"
@@ -117,6 +124,7 @@ export default function FavoritesScreen() {
           onAction={() => router.replace("/(app)/discover")}
         />
       )}
+      </View>
     </ScreenScrollView>
   );
 }
@@ -126,6 +134,13 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
+  },
+  surface: {
+    minWidth: 0,
+    width: "100%",
+  },
+  surfaceLowHeight: {
+    gap: theme.spacing.stackMd,
   },
   list: { gap: theme.spacing.stackMd },
 }));

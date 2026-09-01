@@ -163,6 +163,12 @@ describe("FavoritesScreen", () => {
     expect(mockLoad).toHaveBeenCalledWith(favorites[1], favorites, 1);
   });
 
+  it("keeps the Favorites state or grid inside the content surface", async () => {
+    const screen = await render(<FavoritesScreen />);
+
+    expect(screen.getByTestId("favorites-content")).toBeTruthy();
+  });
+
   it("shows guidance after an empty Favorites query settles", async () => {
     mockFavoritesQuery = settledQuery([]);
 

@@ -155,6 +155,13 @@ describe("DiscoverScreen", () => {
     expect(screen.getAllByTestId("tour-target-discover.search")).toHaveLength(1);
   });
 
+  it("keeps the search header first in the Discover content surface", async () => {
+    const screen = await render(<DiscoverScreen />);
+
+    const content = screen.getByTestId("discover-content");
+    expect(content.children[0]).toBe(screen.getByTestId("discover-search-header"));
+  });
+
   it("registers readiness from settled content and cleans up when it becomes unavailable", async () => {
     const firstCleanup = jest.fn();
     const secondCleanup = jest.fn();

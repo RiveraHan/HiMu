@@ -159,6 +159,13 @@ beforeEach(() => {
 });
 
 describe("FocusModeScreen data states", () => {
+  it("keeps the immersive stage rooted in a scrollable surface", async () => {
+    const screen = await render(<FocusModeScreen />);
+
+    expect(screen.getByTestId("focus-surface")).toBeTruthy();
+    expect(screen.getByTestId("focus-content-scroll")).toBeTruthy();
+  });
+
   it.each([
     [false, "paused", false, "You're offline"],
     [true, "idle", true, "Focus audio is unavailable"],

@@ -15,11 +15,12 @@ import { useKeepAwake } from "expo-keep-awake";
 import { router } from "expo-router";
 import { Check, Pause, Play, SkipBack, SkipForward, X } from "lucide-react-native";
 import { useEffect, useMemo, useRef } from "react";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import Animated, { FadeIn, FadeOut, useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 
 export default function FocusModeScreen() {
   useWebCorePresentation("himu-web-core-presentation/focus-stage");
@@ -27,6 +28,8 @@ export default function FocusModeScreen() {
   useKeepAwake();
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const { width, height } = useWindowDimensions();
+  const visualLayout = resolveBetaVisualLayout({ width, height });
   const online = useOnlineStatus();
   const reduceMotion = useReducedMotion();
 
@@ -128,7 +131,7 @@ export default function FocusModeScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} testID="focus-surface">
       <FocusAtmosphere />
 
       <ScrollView
@@ -136,6 +139,7 @@ export default function FocusModeScreen() {
         style={styles.contentScroll}
         contentContainerStyle={[
           styles.content,
+          visualLayout.lowHeight && styles.contentLowHeight,
           { paddingTop: insets.top + theme.spacing.stackMd },
         ]}
         showsVerticalScrollIndicator
@@ -347,6 +351,10 @@ const styles = StyleSheet.create((theme) => ({
     alignSelf: "center",
     paddingHorizontal: theme.spacing.pageMargin,
     justifyContent: "space-between",
+    minWidth: 0,
+  },
+  contentLowHeight: {
+    justifyContent: "flex-start",
   },
   header: {
     flexDirection: "row",
@@ -376,6 +384,7 @@ const styles = StyleSheet.create((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     marginTop: "-5%",
+    minWidth: 0,
   },
   focusContent: {
     alignItems: "center",

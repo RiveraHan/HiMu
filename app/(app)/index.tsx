@@ -57,15 +57,18 @@ import { weightedShuffle } from "@/src/utils/weighted-shuffle";
 import { router } from "expo-router";
 import { ChevronRight, Music2, Play, Plus } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 
 export default function HomeScreen() {
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const { theme } = useUnistyles();
+  const { width, height } = useWindowDimensions();
+  const visualLayout = resolveBetaVisualLayout({ width, height });
   const insets = useSafeAreaInsets();
   const user = useCurrentUser();
   const online = useOnlineStatus();
@@ -389,6 +392,10 @@ export default function HomeScreen() {
         { paddingTop: insets.top + theme.spacing.stackMd, paddingBottom },
       ]}
     >
+        <View
+          testID="home-content"
+          style={[styles.surface, visualLayout.lowHeight && styles.surfaceLowHeight]}
+        >
         {/* Header: greeting + profile shortcut */}
         <View style={styles.header}>
           <View style={styles.greeting}>
@@ -863,6 +870,7 @@ export default function HomeScreen() {
         </HomeDesktopGridSlot>
         </HomeDesktopGridSlot>
         </HomeDesktopGrid>
+        </View>
     </ScreenScrollView>
   );
 }
@@ -875,6 +883,13 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
+  },
+  surface: {
+    minWidth: 0,
+    width: "100%",
+  },
+  surfaceLowHeight: {
+    gap: theme.spacing.stackMd,
   },
   header: {
     flexDirection: "row",
