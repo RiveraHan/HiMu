@@ -15,7 +15,25 @@ type FixtureOptions = {
   ownedGuard?: string;
   ownedUserId?: string;
   unguardedEmptyReturn?: boolean;
+  visualFlow?: string;
 };
+
+const VALID_VISUAL_FLOW = `appId: com.himu.app
+---
+- launchApp
+- assertVisible: "Music Preferences"
+- tapOn: "Edit genres"
+- assertVisible: "Favorite genres"
+- tapOn: "Done"
+- pressKey: BACK
+- assertVisible: "Personalized Library"
+- assertVisible: "Music Preferences"
+- tapOn: "Editar géneros"
+- assertVisible: "Géneros favoritos"
+- tapOn: "Listo"
+# EXTERNAL_ANDROID_GATE: requires physical phone and tablet, portrait/landscape,
+# font scale 1.5/2.0, keyboard/safe-area, Back ordering, and TalkBack.
+`;
 
 async function writeFixtureFile(root: string, relativePath: string, contents: string) {
   const absolutePath = path.join(root, relativePath);
@@ -106,6 +124,11 @@ async function createFixture(options: FixtureOptions = {}) {
     ),
     writeFixtureFile(
       fixtureRoot,
+      ".maestro/himu-beta-visual-polish.yaml",
+      options.visualFlow ?? VALID_VISUAL_FLOW,
+    ),
+    writeFixtureFile(
+      fixtureRoot,
       "test-support/beta-onboarding-browser/PublicIntro-browser-fixture.tsx",
       `import WelcomeScreen from "../../app/welcome";
        export default WelcomeScreen;`,
@@ -180,5 +203,14 @@ describe("beta responsive smoke-boundary checker", () => {
     await withFixture({ unguardedEmptyReturn: true }, async (fixtureRoot) => {
       await expect(runChecker(fixtureRoot)).rejects.toThrow(/unguarded empty-owned/i);
     });
+  });
+
+  it("rejects stale visual-polish picker labels instead of claiming native coverage", async () => {
+    await withFixture(
+      { visualFlow: VALID_VISUAL_FLOW.replace('tapOn: "Edit genres"', 'tapOn: "Choose genres"') },
+      async (fixtureRoot) => {
+        await expect(runChecker(fixtureRoot)).rejects.toThrow(/Edit genres/);
+      },
+    );
   });
 });

@@ -364,6 +364,39 @@ async function verifyMaestroFlow() {
   );
 }
 
+async function verifyVisualPolishMaestroFlow() {
+  const flow = await source(".maestro/himu-beta-visual-polish.yaml");
+  const required = [
+    "appId: com.himu.app",
+    'assertVisible: "Music Preferences"',
+    'tapOn: "Edit genres"',
+    'assertVisible: "Favorite genres"',
+    'tapOn: "Done"',
+    "pressKey: BACK",
+    'assertVisible: "Personalized Library"',
+    'tapOn: "Editar géneros"',
+    'assertVisible: "Géneros favoritos"',
+    'tapOn: "Listo"',
+  ];
+  let prior = -1;
+  for (const marker of required) {
+    const index = flow.indexOf(marker);
+    invariant(index > prior, `Visual-polish Maestro flow is missing or misorders ${JSON.stringify(marker)}.`);
+    prior = index;
+  }
+  invariant(
+    /EXTERNAL_ANDROID_GATE/.test(flow) &&
+      /physical phone and tablet/i.test(flow) &&
+      /font scale 1\.5\/2\.0/i.test(flow) &&
+      /TalkBack/i.test(flow),
+    "Visual-polish Maestro flow must state the unavailable external Android phone/tablet, font-scale, and TalkBack gate.",
+  );
+  invariant(
+    !/tapOn:\s*["']Choose genres["']/.test(flow),
+    'Visual-polish Maestro flow must use the current "Edit genres" label.',
+  );
+}
+
 async function verifyBrowserFixtureContract() {
   const fixture = await source(
     "test-support/beta-onboarding-browser/PublicIntro-browser-fixture.tsx",
@@ -383,6 +416,7 @@ async function main() {
   await verifyRoutes();
   await verifySmokeBoundary();
   await verifyMaestroFlow();
+  await verifyVisualPolishMaestroFlow();
   await verifyBrowserFixtureContract();
   console.log(
     "Beta responsive contract verified: orientation, tablet/edge-to-edge parity, route protection, guarded local smoke boundary, real browser fixture, and Maestro scope.",
