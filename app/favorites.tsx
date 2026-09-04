@@ -138,6 +138,7 @@ const styles = StyleSheet.create((theme) => ({
   surface: {
     minWidth: 0,
     width: "100%",
+    gap: theme.spacing.stackLg,
   },
   surfaceLowHeight: {
     gap: theme.spacing.stackMd,

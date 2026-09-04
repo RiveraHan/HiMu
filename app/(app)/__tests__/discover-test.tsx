@@ -2,6 +2,7 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import DiscoverScreen from "@/app/(app)/discover";
 import i18n from "@/src/i18n";
+import { StyleSheet } from "react-native";
 
 const mockUseAudiusSearch = jest.fn();
 const mockUseAudiusTrending = jest.fn();
@@ -11,6 +12,7 @@ const mockSearchRefetch = jest.fn();
 const mockLoad = jest.fn();
 const mockSetRepeatMode = jest.fn();
 let mockOnline = true;
+let mockWindowHeight = 900;
 
 jest.mock("@/src/hooks/use-audius", () => ({
   useAudiusSearch: (...args: unknown[]) => mockUseAudiusSearch(...args),
@@ -85,6 +87,15 @@ jest.mock("@tanstack/react-query", () => ({
 jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: () => ({
+    width: 390,
+    height: mockWindowHeight,
+    scale: 1,
+    fontScale: 1,
+  }),
+}));
 
 describe("DiscoverScreen", () => {
   beforeEach(() => {
@@ -109,6 +120,7 @@ describe("DiscoverScreen", () => {
     mockLoad.mockReset();
     mockSetRepeatMode.mockReset();
     mockOnline = true;
+    mockWindowHeight = 900;
   });
 
   it("renders the Discover surface in Spanish", async () => {
@@ -160,6 +172,15 @@ describe("DiscoverScreen", () => {
 
     const content = screen.getByTestId("discover-content");
     expect(content.children[0]).toBe(screen.getByTestId("discover-search-header"));
+  });
+
+  it("keeps normal and low-height Discover sections separated by the layout contract", async () => {
+    const normal = await render(<DiscoverScreen />);
+    expect(StyleSheet.flatten(normal.getByTestId("discover-content").props.style).gap).toBe(32);
+
+    mockWindowHeight = 599;
+    const lowHeight = await render(<DiscoverScreen />);
+    expect(StyleSheet.flatten(lowHeight.getByTestId("discover-content").props.style).gap).toBe(16);
   });
 
   it("registers readiness from settled content and cleans up when it becomes unavailable", async () => {
