@@ -19,6 +19,9 @@ describe("publicTrackMomentUrl", () => {
     ["an origin with a fragment", "https://himu.app#share"],
     ["a protocol-relative origin", "//himu.app"],
     ["an origin with embedded whitespace", "https://himu.app\n.evil"],
+    ["an origin with a leading space", " https://himu.app"],
+    ["an origin with a trailing space", "https://himu.app "],
+    ["an origin with surrounding tabs and newlines", "\thttps://himu.app\n"],
     ["an invalid origin", "not a URL"],
     ["an absent origin", undefined],
   ])("rejects %s", (_case, origin) => {

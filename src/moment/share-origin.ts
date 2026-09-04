@@ -10,6 +10,7 @@ export function publicTrackMomentUrl(
   if (!origin || !UUID_PATTERN.test(trackId)) return null;
 
   const candidate = origin.trim();
+  if (candidate !== origin) return null;
   if (!ROOT_HTTPS_ORIGIN_PATTERN.test(candidate)) return null;
 
   try {
