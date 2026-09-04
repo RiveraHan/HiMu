@@ -65,15 +65,24 @@ function baseDependencies(
       calls.push("abort");
       return true;
     },
+    enqueueCleanup: async () => {
+      calls.push("queue-cleanup");
+      return true;
+    },
+    listPendingCleanup: async () => [],
+    acknowledgeCleanup: async () => {
+      calls.push("ack-cleanup");
+      return true;
+    },
+    deleteOwnedCleanup: async () => {
+      calls.push("delete-cleanup");
+    },
     unpublish: async () => ({
       outcome: "unpublished",
       privateAudioRef: PRIVATE_REF,
       publicAudioUrl: PUBLIC_REF,
       publicObjectKey: PUBLIC_KEY,
     }),
-    deleteOwnedPromotion: async () => {
-      calls.push("delete-owned");
-    },
     deleteValidatedPublic: async () => {
       calls.push("delete-public");
     },
@@ -182,21 +191,21 @@ Deno.test("keeps the row private and compensates its own object on copy, verify,
     await handleTrackMomentRequest({ action: "set_visibility", trackId: TRACK_ID, visibility: "public" }, OWNER_ID, copyFailure),
     { status: 503, body: { error: "promotion_failed", code: "promotion_failed" } },
   );
-  assertEquals(copyFailure.calls, ["claim", "abort", "delete-public"]);
+  assertEquals(copyFailure.calls, ["claim", "abort"]);
 
   const verifyFailure = baseDependencies({ verifyPublicTrack: async () => false });
   assertEquals(
     await handleTrackMomentRequest({ action: "set_visibility", trackId: TRACK_ID, visibility: "public" }, OWNER_ID, verifyFailure),
     { status: 503, body: { error: "promotion_failed", code: "promotion_failed" } },
   );
-  assertEquals(verifyFailure.calls, ["claim", "copy", "abort", "delete-owned"]);
+  assertEquals(verifyFailure.calls, ["claim", "copy", "abort"]);
 
   const finalizeFailure = baseDependencies({ finalizePublish: async () => false });
   assertEquals(
     await handleTrackMomentRequest({ action: "set_visibility", trackId: TRACK_ID, visibility: "public" }, OWNER_ID, finalizeFailure),
     { status: 503, body: { error: "finalize_failed", code: "finalize_failed" } },
   );
-  assertEquals(finalizeFailure.calls, ["claim", "copy", "verify", "abort", "delete-owned"]);
+  assertEquals(finalizeFailure.calls, ["claim", "copy", "verify", "abort"]);
 });
 
 Deno.test("an ambiguous finalize never deletes media without an atomic private abort", async () => {
@@ -232,7 +241,7 @@ Deno.test("an ambiguous finalize never deletes media without an atomic private a
     ),
     { status: 503, body: { error: "finalize_failed", code: "finalize_failed" } },
   );
-  assertEquals(deps.calls, ["claim", "copy", "verify", "finalize", "abort"]);
+  assertEquals(deps.calls, ["claim", "copy", "verify", "finalize", "abort", "queue-cleanup"]);
 });
 
 Deno.test("a concurrent loser never deletes the winner object", async () => {
@@ -266,7 +275,72 @@ Deno.test("a stale concurrent loser compensates only its unique object after a w
     ),
     { status: 200, body: { trackId: TRACK_ID, visibility: "public", audioUrl: winnerRef, albumArtUrl: null } },
   );
-  assertEquals(deps.calls, ["claim", "copy", "verify", "delete-owned"]);
+  assertEquals(deps.calls, ["claim", "copy", "verify", "queue-cleanup"]);
+});
+
+Deno.test("persists a failed bounded cleanup and retries only its losing operation", async () => {
+  const loserToken = "50000000-0000-4000-8000-000000000001";
+  const winnerToken = "50000000-0000-4000-8000-000000000002";
+  const loserKey = trackMomentPublicKey(PRIVATE_REF, loserToken)!;
+  const winnerRef =
+    `https://media.example/tracks/generated/job-1/attempt.moment-${winnerToken}.mp3`;
+  let hasPending = false;
+  let deleteCalls = 0;
+  let reads = 0;
+  const deps = baseDependencies({
+    loadTrack: async () => {
+      reads += 1;
+      return reads <= 2
+        ? { id: TRACK_ID, ownerId: OWNER_ID, isPublic: false, isAiGenerated: true, isReady: true, audioRef: PRIVATE_REF, albumArtRef: null }
+        : { id: TRACK_ID, ownerId: OWNER_ID, isPublic: true, isAiGenerated: true, isReady: true, audioRef: winnerRef, albumArtRef: null };
+    },
+    finalizePublish: async () => false,
+    abortPublish: async () => {
+      deps.calls.push("abort");
+      hasPending = true;
+      return true;
+    },
+    listPendingCleanup: async () => hasPending
+      ? [{ operationToken: loserToken, publicObjectKey: loserKey }]
+      : [],
+    // One strict R2 call represents its two bounded DELETE attempts. It
+    // reports failure instead of swallowing it, leaving this row pending.
+    deleteOwnedCleanup: async (target) => {
+      assertEquals(target.publicObjectKey, loserKey, "never delete the winner key");
+      assertEquals(target.operationToken, loserToken, "cleanup stays operation-owned");
+      deleteCalls += 1;
+      if (deleteCalls === 1) throw new Error("both DELETE attempts failed");
+    },
+    acknowledgeCleanup: async (input) => {
+      assertEquals(input.publicObjectKey, loserKey);
+      assertEquals(input.operationToken, loserToken);
+      hasPending = false;
+      deps.calls.push("ack-cleanup");
+      return true;
+    },
+  });
+
+  assertEquals(
+    await handleTrackMomentRequest(
+      { action: "set_visibility", trackId: TRACK_ID, visibility: "public" },
+      OWNER_ID,
+      deps,
+    ),
+    { status: 503, body: { error: "finalize_failed", code: "finalize_failed" } },
+  );
+  assertEquals(hasPending, true, "failed cleanup remains durable");
+  assertEquals(deleteCalls, 1, "first strict cleanup reports both failed tries");
+
+  assertEquals(
+    await handleTrackMomentRequest(
+      { action: "set_visibility", trackId: TRACK_ID, visibility: "public" },
+      OWNER_ID,
+      deps,
+    ),
+    { status: 200, body: { trackId: TRACK_ID, visibility: "public", audioUrl: winnerRef, albumArtUrl: null } },
+  );
+  assertEquals(deleteCalls, 2, "a safe retry deletes the retained loser only");
+  assertEquals(hasPending, false, "acknowledgement follows verified deletion");
 });
 
 Deno.test("publish retry is idempotent after durable public state", async () => {

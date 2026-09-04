@@ -3,9 +3,17 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const migrations = readdirSync("supabase/migrations")
-  .filter((name) => name.endsWith("_himu_track_moment.sql"));
-assert.equal(migrations.length, 1, "one track Moment migration is required");
-const sql = readFileSync(join("supabase/migrations", migrations[0]!), "utf8");
+  .filter((name) => /_himu_track_moment(?:_cleanup_outbox)?\.sql$/.test(name));
+assert.equal(migrations.length, 2, "base and cleanup track Moment migrations are required");
+const migrationSql = Object.fromEntries(migrations.map((name) => [
+  name,
+  readFileSync(join("supabase/migrations", name), "utf8"),
+]));
+const sql = Object.values(migrationSql).join("\n");
+const cleanupSql = Object.entries(migrationSql).find(([name]) =>
+  name.endsWith("_himu_track_moment_cleanup_outbox.sql")
+)?.[1];
+assert.ok(cleanupSql, "cleanup outbox migration is required");
 
 for (const pattern of [
   /create table public\.track_experience_feedback/i,
@@ -30,10 +38,24 @@ for (const pattern of [
   /create function public\.abort_track_moment_publish/i,
   /create function public\.unpublish_track_moment/i,
   /grant execute on function public\.claim_track_moment_publish[\s\S]*to service_role/i,
+  /create table public\.track_moment_cleanup_outbox/i,
+  /alter table public\.track_moment_cleanup_outbox enable row level security/i,
+  /revoke all on table public\.track_moment_cleanup_outbox from anon, authenticated/i,
+  /create (?:or replace )?function public\.queue_track_moment_cleanup/i,
+  /create function public\.list_track_moment_cleanup/i,
+  /create function public\.acknowledge_track_moment_cleanup/i,
+  /create or replace function public\.abort_track_moment_publish/i,
+  /on conflict \(track_id, operation_token\) do nothing/i,
+  /grant execute on function public\.queue_track_moment_cleanup[\s\S]*to service_role/i,
 ]) {
   assert.match(sql, pattern);
 }
 
 assert.doesNotMatch(sql, /grant[^;]*track_experience_feedback[^;]*to anon/i);
 assert.doesNotMatch(sql, /security definer[\s\S]*grant execute[^;]*to (?:public|anon|authenticated)/i);
+assert.doesNotMatch(
+  cleanupSql,
+  /grant[^;]*track_moment_cleanup_outbox[^;]*to (?:anon|authenticated)/i,
+  "cleanup outbox must remain server-only",
+);
 console.log("track moment migration checks passed");

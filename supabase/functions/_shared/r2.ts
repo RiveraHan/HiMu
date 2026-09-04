@@ -82,6 +82,28 @@ export async function r2Delete(
   }
 }
 
+// Most callers deliberately use the best-effort cleanup above. Moment
+// promotions are different: a copied private track is public until we can
+// prove its deletion, so the workflow needs a failure signal it can persist
+// and retry. Keep that stricter contract isolated from legacy cleanup calls.
+export async function r2DeleteStrict(
+  keys: string[],
+  access: R2Access,
+): Promise<void> {
+  const del = (key: string) =>
+    r2.fetch(storageTarget(access, key, environment).objectUrl, {
+      method: "DELETE",
+    });
+
+  await Promise.all(keys.map(async (key) => {
+    let res = await del(key);
+    if (!res.ok && res.status !== 404) res = await del(key); // bounded retry
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`R2 DELETE ${key} (${res.status})`);
+    }
+  }));
+}
+
 // Only our own generated assets are ever deletable.
 const GENERATED_KEY_RE = /^(tracks|captions|covers|avatars)\/generated\//;
 
@@ -198,7 +220,7 @@ export async function r2DeleteOwnedTrackPromotion(
   if (!parsed || parsed.key !== promotion.publicKey) {
     throw new Error("invalid owned track promotion");
   }
-  await r2Delete([parsed.key], "public");
+  await r2DeleteStrict([parsed.key], "public");
 }
 
 export async function r2DeleteValidatedPublicTrack(
@@ -209,7 +231,23 @@ export async function r2DeleteValidatedPublicTrack(
   if (!parsed || parsed.kind !== "track" || parsed.key !== publicObjectKey) {
     throw new Error("invalid public track cleanup target");
   }
-  await r2Delete([parsed.key], "public");
+  await r2DeleteStrict([parsed.key], "public");
+}
+
+export async function r2DeleteOwnedTrackMomentCleanup(input: Readonly<{
+  operationToken: string;
+  publicObjectKey: string;
+}>): Promise<void> {
+  const publicRef = `${R2_PUBLIC_BASE.replace(/\/+$/, "")}/${input.publicObjectKey}`;
+  const parsed = parseOwnedTrackPromotion(
+    publicRef,
+    R2_PUBLIC_BASE,
+    input.operationToken,
+  );
+  if (!parsed || parsed.key !== input.publicObjectKey) {
+    throw new Error("invalid owned track moment cleanup target");
+  }
+  await r2DeleteStrict([parsed.key], "public");
 }
 
 export type { R2Access } from "./r2-contract.ts";

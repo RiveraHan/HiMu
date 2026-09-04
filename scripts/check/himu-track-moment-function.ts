@@ -33,6 +33,11 @@ async function main() {
   assert.match(index, /serveAuthed\s*\(/, "entrypoint must authenticate a real user");
   const r2 = readFileSync("supabase/functions/_shared/r2.ts", "utf8");
   assert.doesNotMatch(r2, /private-media-runner/, "Edge code must not import a migration runner");
+  assert.match(
+    r2,
+    /export async function r2DeleteStrict[\s\S]*await Promise\.all[\s\S]*if \(!res\.ok && res\.status !== 404\) res = await del\(key\)[\s\S]*throw new Error\(`R2 DELETE/,
+    "Moment cleanup must report a bounded R2 delete failure",
+  );
   console.log(`track moment function checks passed (${tests.length} cases)`);
 }
 

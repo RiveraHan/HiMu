@@ -1,6 +1,6 @@
 import {
   r2CopyPrivateGeneratedTrack,
-  r2DeleteOwnedTrackPromotion,
+  r2DeleteOwnedTrackMomentCleanup,
   r2DeleteValidatedPublicTrack,
   R2_PUBLIC_BASE,
   r2VerifyPublicGeneratedTrack,
@@ -90,6 +90,48 @@ export const trackMomentDependencies: TrackMomentDependencies = {
     rpcFailure(error);
     return data === true;
   },
+  enqueueCleanup: async (input) => {
+    const { data, error } = await admin.rpc("queue_track_moment_cleanup", {
+      p_track_id: input.trackId,
+      p_user_id: input.userId,
+      p_operation_token: input.operationToken,
+      p_public_object_key: input.publicObjectKey,
+    });
+    rpcFailure(error);
+    return data === true;
+  },
+  listPendingCleanup: async (input) => {
+    const { data, error } = await admin.rpc("list_track_moment_cleanup", {
+      p_track_id: input.trackId,
+      p_user_id: input.userId,
+    });
+    rpcFailure(error);
+    if (!Array.isArray(data)) throw new Error("invalid_cleanup_list_response");
+    return data.map((row) => {
+      const record = firstRecord(row);
+      if (
+        !record || typeof record.operation_token !== "string" ||
+        typeof record.public_object_key !== "string"
+      ) {
+        throw new Error("invalid_cleanup_list_response");
+      }
+      return {
+        operationToken: record.operation_token,
+        publicObjectKey: record.public_object_key,
+      };
+    });
+  },
+  acknowledgeCleanup: async (input) => {
+    const { data, error } = await admin.rpc("acknowledge_track_moment_cleanup", {
+      p_track_id: input.trackId,
+      p_user_id: input.userId,
+      p_operation_token: input.operationToken,
+      p_public_object_key: input.publicObjectKey,
+    });
+    rpcFailure(error);
+    return data === true;
+  },
+  deleteOwnedCleanup: r2DeleteOwnedTrackMomentCleanup,
   unpublish: async (input) => {
     const { data, error } = await admin.rpc("unpublish_track_moment", {
       p_track_id: input.trackId,
@@ -107,7 +149,6 @@ export const trackMomentDependencies: TrackMomentDependencies = {
       publicObjectKey: row.public_object_key,
     } as UnpublishOutcome;
   },
-  deleteOwnedPromotion: r2DeleteOwnedTrackPromotion,
   deleteValidatedPublic: r2DeleteValidatedPublicTrack,
 };
 

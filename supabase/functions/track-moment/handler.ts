@@ -32,6 +32,11 @@ export type PublishClaim = Readonly<{
     | "invalid_state";
 }>;
 
+export type TrackMomentCleanupTarget = Readonly<{
+  operationToken: string;
+  publicObjectKey: string;
+}>;
+
 export type UnpublishOutcome = Readonly<{
   outcome:
     | "unpublished"
@@ -74,8 +79,24 @@ export type TrackMomentDependencies = {
     userId: string;
     operationToken: string;
   }): Promise<boolean>;
+  enqueueCleanup(input: {
+    trackId: string;
+    userId: string;
+    operationToken: string;
+    publicObjectKey: string;
+  }): Promise<boolean>;
+  listPendingCleanup(input: {
+    trackId: string;
+    userId: string;
+  }): Promise<TrackMomentCleanupTarget[]>;
+  acknowledgeCleanup(input: {
+    trackId: string;
+    userId: string;
+    operationToken: string;
+    publicObjectKey: string;
+  }): Promise<boolean>;
+  deleteOwnedCleanup(target: TrackMomentCleanupTarget): Promise<void>;
   unpublish(input: { trackId: string; userId: string }): Promise<UnpublishOutcome>;
-  deleteOwnedPromotion(promotion: TrackPromotionObject): Promise<void>;
   deleteValidatedPublic(publicAudioUrl: string, publicObjectKey: string): Promise<void>;
 };
 
@@ -133,26 +154,74 @@ async function safeAbort(
   }
 }
 
-async function safeOwnedDelete(
-  deps: TrackMomentDependencies,
-  promotion: TrackPromotionObject,
-): Promise<void> {
-  try {
-    await deps.deleteOwnedPromotion(promotion);
-  } catch {
-    // Compensation is best-effort and may only target this operation's unique key.
+function validCleanupTarget(
+  target: TrackMomentCleanupTarget,
+  publicBase: string,
+): boolean {
+  if (!UUID.test(target.operationToken) || typeof target.publicObjectKey !== "string") {
+    return false;
   }
+  const publicRef = safePublicHttpsUrl(
+    `${publicBase.replace(/\/+$/, "")}/${target.publicObjectKey}`,
+  );
+  const owned = publicRef
+    ? parseOwnedTrackPromotion(publicRef, publicBase, target.operationToken)
+    : null;
+  return owned?.key === target.publicObjectKey;
 }
 
-async function safeValidatedDelete(
+async function drainPendingCleanup(
   deps: TrackMomentDependencies,
-  publicAudioUrl: string,
-  publicObjectKey: string,
-): Promise<void> {
+  trackId: string,
+  userId: string,
+): Promise<boolean> {
+  let pending: TrackMomentCleanupTarget[];
   try {
-    await deps.deleteValidatedPublic(publicAudioUrl, publicObjectKey);
+    pending = await deps.listPendingCleanup({ trackId, userId });
   } catch {
-    // Cleanup is best-effort and the key is unique to this operation token.
+    return false;
+  }
+  for (const target of pending) {
+    if (!validCleanupTarget(target, deps.publicBase)) return false;
+    try {
+      await deps.deleteOwnedCleanup(target);
+    } catch {
+      // The row deliberately stays pending. A later transition retries this
+      // exact operation-owned key; it can never refer to a later winner.
+      return false;
+    }
+    try {
+      const acknowledged = await deps.acknowledgeCleanup({
+        trackId,
+        userId,
+        operationToken: target.operationToken,
+        publicObjectKey: target.publicObjectKey,
+      });
+      if (!acknowledged) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function queueAndDrainCleanup(
+  deps: TrackMomentDependencies,
+  trackId: string,
+  userId: string,
+  operationToken: string,
+  publicObjectKey: string,
+): Promise<boolean> {
+  try {
+    const queued = await deps.enqueueCleanup({
+      trackId,
+      userId,
+      operationToken,
+      publicObjectKey,
+    });
+    return queued && await drainPendingCleanup(deps, trackId, userId);
+  } catch {
+    return false;
   }
 }
 
@@ -204,6 +273,13 @@ export async function handleTrackMomentRequest(
   if (track.ownerId !== userId) return error(403, "not_owner");
   if (!track.isAiGenerated) return error(409, "track_ineligible");
   if (!track.isReady) return error(409, "track_not_ready");
+
+  // Drain before either direction changes visibility. This makes orphaned
+  // promotion cleanup durable across retries without ever touching a winner:
+  // the server validates every target against its original operation token.
+  if (!(await drainPendingCleanup(deps, trackId, userId))) {
+    return error(503, "cleanup_pending");
+  }
 
   if (visibility === "private") {
     const alreadyPrivate = !track.isPublic
@@ -343,8 +419,18 @@ export async function handleTrackMomentRequest(
   try {
     promotion = await deps.copyPrivateTrack(track.audioRef, operationToken);
   } catch {
-    await safeAbort(deps, trackId, userId, operationToken);
-    await safeValidatedDelete(deps, expectedPublicUrl, expectedPublicKey);
+    const aborted = await safeAbort(deps, trackId, userId, operationToken);
+    if (aborted) {
+      await drainPendingCleanup(deps, trackId, userId);
+    } else {
+      await queueAndDrainCleanup(
+        deps,
+        trackId,
+        userId,
+        operationToken,
+        expectedPublicKey,
+      );
+    }
     return error(503, "promotion_failed");
   }
   const owned = parseOwnedTrackPromotion(
@@ -360,8 +446,18 @@ export async function handleTrackMomentRequest(
     !owned || owned.key !== promotion.publicKey ||
     !Number.isSafeInteger(promotion.contentLength) || promotion.contentLength <= 0
   ) {
-    await safeAbort(deps, trackId, userId, operationToken);
-    await safeOwnedDelete(deps, promotion);
+    const aborted = await safeAbort(deps, trackId, userId, operationToken);
+    if (aborted) {
+      await drainPendingCleanup(deps, trackId, userId);
+    } else {
+      await queueAndDrainCleanup(
+        deps,
+        trackId,
+        userId,
+        operationToken,
+        expectedPublicKey,
+      );
+    }
     return error(503, "promotion_failed");
   }
 
@@ -372,13 +468,22 @@ export async function handleTrackMomentRequest(
     verified = false;
   }
   if (!verified) {
-    await safeAbort(deps, trackId, userId, operationToken);
-    await safeOwnedDelete(deps, promotion);
+    const aborted = await safeAbort(deps, trackId, userId, operationToken);
+    if (aborted) {
+      await drainPendingCleanup(deps, trackId, userId);
+    } else {
+      await queueAndDrainCleanup(
+        deps,
+        trackId,
+        userId,
+        operationToken,
+        expectedPublicKey,
+      );
+    }
     return error(503, "promotion_failed");
   }
 
   let finalized = false;
-  let finalizeAmbiguous = false;
   try {
     finalized = await deps.finalizePublish({
       trackId,
@@ -388,22 +493,35 @@ export async function handleTrackMomentRequest(
       publicObjectKey: promotion.publicKey,
     });
   } catch {
-    finalizeAmbiguous = true;
     finalized = false;
   }
   if (!finalized) {
     const authoritative = await authoritativePublicSuccess(deps, trackId);
     if (authoritative) {
       if (authoritative.audioUrl !== promotion.publicRef) {
-        await safeOwnedDelete(deps, promotion);
+        await queueAndDrainCleanup(
+          deps,
+          trackId,
+          userId,
+          operationToken,
+          promotion.publicKey,
+        );
       }
       return authoritative.result;
     }
     const aborted = await safeAbort(deps, trackId, userId, operationToken);
     // A thrown finalize response may mean its transaction committed. Deleting
     // is safe only when the serialized abort proves the track stayed private.
-    if (!finalizeAmbiguous || aborted) {
-      await safeOwnedDelete(deps, promotion);
+    if (aborted) {
+      await drainPendingCleanup(deps, trackId, userId);
+    } else {
+      await queueAndDrainCleanup(
+        deps,
+        trackId,
+        userId,
+        operationToken,
+        promotion.publicKey,
+      );
     }
     return error(503, "finalize_failed");
   }
