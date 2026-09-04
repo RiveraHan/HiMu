@@ -1,6 +1,9 @@
 import { AwsClient } from "npm:aws4fetch";
 import {
+  parseGeneratedPublicKey,
+  parseOwnedTrackPromotion,
   parsePrivateMediaReference,
+  trackMomentPublicKey,
 } from "./media-reference.ts";
 import {
   storageTarget,
@@ -112,6 +115,101 @@ export async function r2PresignPrivateGet(
     aws: { signQuery: true },
   });
   return signed.url.toString();
+}
+
+export type TrackPromotionObject = Readonly<{
+  operationToken: string;
+  sourceKey: string;
+  publicKey: string;
+  publicRef: string;
+  contentLength: number;
+}>;
+
+function encodedKey(key: string): string {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+async function r2Head(key: string, access: R2Access): Promise<Response> {
+  return r2.fetch(storageTarget(access, key, environment).objectUrl, {
+    method: "HEAD",
+  });
+}
+
+export async function r2CopyPrivateGeneratedTrack(
+  privateReference: string,
+  operationToken: string,
+): Promise<TrackPromotionObject> {
+  const source = parsePrivateMediaReference(privateReference, "track");
+  const publicKey = trackMomentPublicKey(privateReference, operationToken);
+  if (!source || !publicKey) throw new Error("invalid track promotion source");
+
+  const sourceHead = await r2Head(source.key, "private");
+  const rawLength = sourceHead.headers.get("content-length");
+  const contentLength = rawLength === null ? NaN : Number(rawLength);
+  if (!sourceHead.ok || !Number.isSafeInteger(contentLength) || contentLength <= 0) {
+    throw new Error("private track source unavailable");
+  }
+
+  const target = storageTarget("public", publicKey, environment);
+  const copied = await r2.fetch(target.objectUrl, {
+    method: "PUT",
+    headers: {
+      "x-amz-copy-source": `/${encodeURIComponent(R2_PRIVATE_BUCKET)}/${encodedKey(source.key)}`,
+      "x-amz-metadata-directive": "REPLACE",
+      "Content-Type": "audio/mpeg",
+      "Cache-Control": "public, max-age=300",
+    },
+  });
+  if (!copied.ok) throw new Error(`R2 track copy (${copied.status})`);
+  return {
+    operationToken,
+    sourceKey: source.key,
+    publicKey,
+    publicRef: target.reference,
+    contentLength,
+  };
+}
+
+export async function r2VerifyPublicGeneratedTrack(
+  promotion: TrackPromotionObject,
+): Promise<boolean> {
+  const parsed = parseOwnedTrackPromotion(
+    promotion.publicRef,
+    R2_PUBLIC_BASE,
+    promotion.operationToken,
+  );
+  if (!parsed || parsed.key !== promotion.publicKey) return false;
+  const response = await r2Head(parsed.key, "public");
+  const rawLength = response.headers.get("content-length");
+  const contentLength = rawLength === null ? NaN : Number(rawLength);
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  return response.ok && contentLength === promotion.contentLength &&
+    contentLength > 0 && contentType.startsWith("audio/");
+}
+
+export async function r2DeleteOwnedTrackPromotion(
+  promotion: TrackPromotionObject,
+): Promise<void> {
+  const parsed = parseOwnedTrackPromotion(
+    promotion.publicRef,
+    R2_PUBLIC_BASE,
+    promotion.operationToken,
+  );
+  if (!parsed || parsed.key !== promotion.publicKey) {
+    throw new Error("invalid owned track promotion");
+  }
+  await r2Delete([parsed.key], "public");
+}
+
+export async function r2DeleteValidatedPublicTrack(
+  publicReference: string,
+  publicObjectKey: string,
+): Promise<void> {
+  const parsed = parseGeneratedPublicKey(publicReference, R2_PUBLIC_BASE);
+  if (!parsed || parsed.kind !== "track" || parsed.key !== publicObjectKey) {
+    throw new Error("invalid public track cleanup target");
+  }
+  await r2Delete([parsed.key], "public");
 }
 
 export type { R2Access } from "./r2-contract.ts";

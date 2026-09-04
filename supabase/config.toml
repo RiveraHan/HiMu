@@ -409,5 +409,8 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 [functions.private-media-url]
 verify_jwt = true
 
+[functions.track-moment]
+verify_jwt = true
+
 [functions.product-events]
 verify_jwt = false

@@ -5,6 +5,8 @@ const TRACK_KEY =
 const CAPTION_KEY =
   /^captions\/generated\/[A-Za-z0-9._%:-]+\/[A-Za-z0-9._%:-]+\.mp3$/;
 const PRIVATE_PREFIX = "r2-private://";
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function generatedKind(key: string): PrivateMediaKind | null {
   if (
@@ -46,4 +48,45 @@ export function parseGeneratedPublicKey(
   const key = value.slice(base.length + 1);
   const kind = generatedKind(key);
   return kind ? { key, kind } : null;
+}
+
+export function safePublicHttpsUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0 || value !== value.trim()) {
+    return null;
+  }
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function trackMomentPublicKey(
+  privateReference: unknown,
+  operationToken: unknown,
+): string | null {
+  const parsed = parsePrivateMediaReference(privateReference, "track");
+  if (!parsed || typeof operationToken !== "string" || !UUID.test(operationToken)) {
+    return null;
+  }
+  return `${parsed.key.slice(0, -4)}.moment-${operationToken.toLowerCase()}.mp3`;
+}
+
+export function parseOwnedTrackPromotion(
+  publicReference: unknown,
+  publicBase: string,
+  operationToken: unknown,
+): { key: string; kind: "track" } | null {
+  if (typeof operationToken !== "string" || !UUID.test(operationToken)) return null;
+  const parsed = parseGeneratedPublicKey(publicReference, publicBase);
+  if (
+    !parsed || parsed.kind !== "track" ||
+    !parsed.key.endsWith(`.moment-${operationToken.toLowerCase()}.mp3`)
+  ) {
+    return null;
+  }
+  return { key: parsed.key, kind: "track" };
 }
