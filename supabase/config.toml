@@ -412,5 +412,8 @@ verify_jwt = true
 [functions.track-moment]
 verify_jwt = true
 
+[functions.public-track]
+verify_jwt = false
+
 [functions.product-events]
 verify_jwt = false

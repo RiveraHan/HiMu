@@ -81,6 +81,7 @@ function NavigatorShell() {
             <Stack.Screen name="(auth)" />
           </Stack.Protected>
           <Stack.Screen name="welcome" />
+          <Stack.Screen name="track/[id]" />
           <Stack.Protected guard={!!session}>
             <Stack.Screen name="(app)" />
             <Stack.Screen

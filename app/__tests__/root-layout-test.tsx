@@ -327,6 +327,7 @@ describe("root layout ownership and route protection", () => {
   it.each([
     ["auth", null, "(auth)", ["(auth)", "login"]],
     ["welcome", null, "welcome", ["welcome"]],
+    ["public track", null, "track/[id]", ["track", "track-id"]],
     ["first-track", "user-a", "first-track", ["first-track"]],
   ] as const)(
     "does not mount ActivityPanel on the chrome-hidden %s route",
@@ -405,6 +406,17 @@ describe("root layout ownership and route protection", () => {
     expect(signedIn.getByTestId("route-welcome")).toBeTruthy();
     expect(signedIn.queryByTestId("route-(app)")).toBeNull();
     expect(signedIn.queryByTestId("desktop-rail")).toBeNull();
+  });
+
+  it("declares the shared track landing as public without exposing private routes", async () => {
+    mockRequestedRoute = "track/[id]";
+    mockSegments = ["track", "track-id"];
+
+    const screen = await render(<RootLayout />);
+
+    expect(screen.getByTestId("route-track/[id]")).toBeTruthy();
+    expect(screen.queryByTestId("route-(auth)")).toBeNull();
+    expect(screen.queryByTestId("route-(app)")).toBeNull();
   });
 
   it("observes the exact welcome-to-Login transition for the scoped handoff", async () => {

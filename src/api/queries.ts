@@ -30,6 +30,9 @@ export const queryKeys = {
     privateDetails: (userId: string | null, id: string) =>
       ["tracks", "private-details", userId, id] as const,
   },
+  publicTracks: {
+    detail: (id: string) => ["public-track", id] as const,
+  },
   generationJobs: {
     detail: (userId: string | null, jobId: string | null) =>
       ["generation-job", userId, jobId] as const,

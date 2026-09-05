@@ -50,6 +50,15 @@ export const playback = {
       notNow: "Not now",
     },
   },
+  publicTrack: {
+    kicker: "SHARED WITH HIMU",
+    loading: "Loading shared track…",
+    unavailableTitle: "Track unavailable",
+    unavailableBody: "This link is unavailable or is no longer public.",
+    buffering: "Buffering…",
+    playbackError: "This track couldn't be played.",
+    retryPlayback: "Try playback again",
+  },
   focus: {
     title: "Focus Mode",
     unavailable: "Focus audio is unavailable",
