@@ -22,6 +22,39 @@ function assertEquals(actual: unknown, expected: unknown, message = "values diff
   }
 }
 
+type StrictR2Delete = (keys: string[], access: "public" | "private") => Promise<void>;
+
+function strictR2Delete(): StrictR2Delete {
+  const value = (globalThis as typeof globalThis & {
+    __himuTrackMomentStrictR2Delete?: StrictR2Delete;
+  }).__himuTrackMomentStrictR2Delete;
+  if (!value) throw new Error("strict R2 delete test bridge unavailable");
+  return value;
+}
+
+async function withR2DeleteResponses<T>(
+  statuses: number[],
+  run: () => Promise<T>,
+): Promise<{ result?: T; error?: unknown; requests: Array<{ url: string; method: string }> }> {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; method: string }> = [];
+  let position = 0;
+  globalThis.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    requests.push({ url: request.url, method: request.method });
+    const status = statuses[position++];
+    if (status == null) throw new Error("unexpected R2 DELETE request");
+    return new Response(null, { status });
+  };
+  try {
+    return { result: await run(), requests };
+  } catch (error) {
+    return { error, requests };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 function baseDependencies(
   overrides: Partial<TrackMomentDependencies> = {},
 ): TrackMomentDependencies & { calls: string[] } {
@@ -285,7 +318,7 @@ Deno.test("persists a failed bounded cleanup and retries only its losing operati
   const winnerRef =
     `https://media.example/tracks/generated/job-1/attempt.moment-${winnerToken}.mp3`;
   let hasPending = false;
-  let deleteCalls = 0;
+  const deletedRequests: Array<{ url: string; method: string }> = [];
   let reads = 0;
   const deps = baseDependencies({
     loadTrack: async () => {
@@ -303,13 +336,15 @@ Deno.test("persists a failed bounded cleanup and retries only its losing operati
     listPendingCleanup: async () => hasPending
       ? [{ operationToken: loserToken, publicObjectKey: loserKey }]
       : [],
-    // One strict R2 call represents its two bounded DELETE attempts. It
-    // reports failure instead of swallowing it, leaving this row pending.
     deleteOwnedCleanup: async (target) => {
       assertEquals(target.publicObjectKey, loserKey, "never delete the winner key");
       assertEquals(target.operationToken, loserToken, "cleanup stays operation-owned");
-      deleteCalls += 1;
-      if (deleteCalls === 1) throw new Error("both DELETE attempts failed");
+      const statuses = hasPending && deletedRequests.length === 0 ? [400, 400] : [204];
+      const attempt = await withR2DeleteResponses(statuses, async () => {
+        await strictR2Delete()([target.publicObjectKey], "public");
+      });
+      deletedRequests.push(...attempt.requests);
+      if (attempt.error) throw attempt.error;
     },
     acknowledgeCleanup: async (input) => {
       assertEquals(input.publicObjectKey, loserKey);
@@ -329,7 +364,22 @@ Deno.test("persists a failed bounded cleanup and retries only its losing operati
     { status: 503, body: { error: "finalize_failed", code: "finalize_failed" } },
   );
   assertEquals(hasPending, true, "failed cleanup remains durable");
-  assertEquals(deleteCalls, 1, "first strict cleanup reports both failed tries");
+  assertEquals(deletedRequests.length, 2, "strict cleanup retries one failed DELETE");
+  assertEquals(
+    deletedRequests.map((request) => request.method),
+    ["DELETE", "DELETE"],
+    "both bounded attempts use DELETE",
+  );
+  assertEquals(
+    deletedRequests.every((request) => request.url.endsWith(`/${loserKey}`)),
+    true,
+    "failed cleanup targets only the losing object",
+  );
+  assertEquals(
+    deletedRequests.some((request) => request.url.includes(winnerToken)),
+    false,
+    "the winning public object is never deleted",
+  );
 
   assertEquals(
     await handleTrackMomentRequest(
@@ -339,7 +389,12 @@ Deno.test("persists a failed bounded cleanup and retries only its losing operati
     ),
     { status: 200, body: { trackId: TRACK_ID, visibility: "public", audioUrl: winnerRef, albumArtUrl: null } },
   );
-  assertEquals(deleteCalls, 2, "a safe retry deletes the retained loser only");
+  assertEquals(deletedRequests.length, 3, "a safe retry deletes the retained loser once");
+  assertEquals(
+    deletedRequests.every((request) => request.url.endsWith(`/${loserKey}`)),
+    true,
+    "retry never targets the winner object",
+  );
   assertEquals(hasPending, false, "acknowledgement follows verified deletion");
 });
 
