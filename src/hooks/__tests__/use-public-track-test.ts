@@ -39,6 +39,7 @@ describe("fetchPublicTrackMoment", () => {
     expect(url).toBe(`https://project.example/functions/v1/public-track?id=${TRACK_ID}`);
     expect(init).toEqual({
       method: "GET",
+      credentials: "omit",
       headers: { Accept: "application/json", apikey: "public-key" },
     });
     expect(JSON.stringify(init)).not.toContain("Authorization");

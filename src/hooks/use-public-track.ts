@@ -101,6 +101,7 @@ export async function fetchPublicTrackMoment(
   try {
     response = await dependencies.request(endpoint.toString(), {
       method: "GET",
+      credentials: "omit",
       headers: {
         Accept: "application/json",
         apikey: dependencies.publishableKey,
