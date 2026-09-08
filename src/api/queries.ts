@@ -33,6 +33,13 @@ export const queryKeys = {
   publicTracks: {
     detail: (id: string) => ["public-track", id] as const,
   },
+  trackMoments: {
+    all: (userId: string | null) => ["track-moments", userId] as const,
+    owner: (userId: string | null, id: string) =>
+      ["track-moments", userId, "owner", id] as const,
+    feedback: (userId: string | null, id: string) =>
+      ["track-moments", userId, "feedback", id] as const,
+  },
   generationJobs: {
     detail: (userId: string | null, jobId: string | null) =>
       ["generation-job", userId, jobId] as const,

@@ -39,6 +39,45 @@ Deno.test("rejects unknown or creative property keys", () => {
   }
 });
 
+Deno.test("accepts only the exact bounded properties for each Moment event", () => {
+  const trackId = "00000000-0000-4000-8000-000000000021";
+  const cases = [
+    ["moment_shown", { trackId, visibility: "private" }],
+    ["moment_visibility_opened", { trackId, visibility: "public" }],
+    ["moment_visibility_completed", { trackId, visibility: "public", elapsedMs: 12 }],
+    ["moment_visibility_failed", { trackId, visibility: "private", errorCategory: "network" }],
+    ["moment_share_selected", { trackId, shareMethod: "native_share" }],
+    ["moment_share_outcome", { trackId, shareMethod: "clipboard", outcome: "copied" }],
+    ["moment_feedback_answered", { trackId, question: "would_share", answer: false }],
+  ] as const;
+
+  for (const [name, properties] of cases) {
+    const parsed = parseProductEventEnvelope(envelope({ name, properties }));
+    if (!parsed.ok || parsed.value.name !== name) {
+      throw new Error(`expected ${name} to pass validation`);
+    }
+  }
+});
+
+Deno.test("rejects missing, malformed, cross-event, or sensitive Moment properties", () => {
+  const trackId = "00000000-0000-4000-8000-000000000021";
+  for (const [name, properties] of [
+    ["moment_shown", { visibility: "private" }],
+    ["moment_shown", { trackId: "not-a-uuid", visibility: "private" }],
+    ["moment_feedback_answered", { trackId, question: "surprised" }],
+    ["moment_feedback_answered", { trackId, question: "surprised", answer: "yes" }],
+    ["moment_visibility_completed", { trackId, visibility: "public", answer: true }],
+    ["moment_share_outcome", { trackId, shareMethod: "clipboard", outcome: "copied", url: "https://private.example" }],
+    ["moment_share_selected", { trackId, shareMethod: "native_share", recipient: "contact" }],
+    ["moment_visibility_failed", { trackId, visibility: "public", rawError: "provider body" }],
+  ] as const) {
+    const parsed = parseProductEventEnvelope(envelope({ name, properties }));
+    if (parsed.ok || parsed.code !== "invalid_input") {
+      throw new Error(`expected ${name} to reject invalid properties`);
+    }
+  }
+});
+
 Deno.test("returns accepted then duplicate without a second store insertion", async () => {
   const eventIds = new Set<string>();
   let insertions = 0;

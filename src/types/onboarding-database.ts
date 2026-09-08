@@ -56,6 +56,30 @@ type UserOnboardingTable = {
 
 type GeneratedPublic = GeneratedDatabase["public"];
 
+type TrackExperienceFeedbackTable = {
+  Row: {
+    user_id: string;
+    track_id: string;
+    surprised: boolean | null;
+    would_share: boolean | null;
+    created_at: string;
+    updated_at: string;
+  };
+  Insert: {
+    user_id: string;
+    track_id: string;
+    surprised?: boolean | null;
+    would_share?: boolean | null;
+    created_at?: string;
+    updated_at?: string;
+  };
+  Update: {
+    surprised?: boolean | null;
+    would_share?: boolean | null;
+  };
+  Relationships: [];
+};
+
 /**
  * Tracked supplement for migrations that cannot enter the generated database
  * file until local/linked Supabase type generation is available.
@@ -64,6 +88,7 @@ export type OnboardingDatabase = Omit<GeneratedDatabase, "public"> & {
   public: Omit<GeneratedPublic, "Tables"> & {
     Tables: GeneratedPublic["Tables"] & {
       user_onboarding: UserOnboardingTable;
+      track_experience_feedback: TrackExperienceFeedbackTable;
     };
   };
 };

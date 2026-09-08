@@ -1,9 +1,20 @@
 export type TrackMomentVisibility = "private" | "public";
 
-export type TrackMomentFeedbackPatch = Readonly<{
+export type TrackMomentFeedbackPatch = Readonly<
+  | { trackId: string; surprised: boolean; wouldShare?: never }
+  | { trackId: string; surprised?: never; wouldShare: boolean }
+>;
+
+export type TrackMomentFeedback = Readonly<{
+  surprised: boolean | null;
+  wouldShare: boolean | null;
+}>;
+
+export type OwnerTrackMoment = Readonly<{
   trackId: string;
-  surprised?: boolean;
-  wouldShare?: boolean;
+  visibility: TrackMomentVisibility;
+  audioUrl: string;
+  albumArtUrl: string | null;
 }>;
 
 export type PublicTrackMoment = Readonly<{

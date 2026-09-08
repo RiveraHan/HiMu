@@ -1,4 +1,7 @@
-import type { ProductEventEnvelope } from "../../../supabase/functions/product-events/handler";
+import {
+  parseProductEventEnvelope,
+  type ProductEventEnvelope,
+} from "../../../supabase/functions/product-events/handler";
 import { secureStorage } from "@/src/lib/secure-storage";
 import { randomUUID } from "expo-crypto";
 import {
@@ -177,6 +180,101 @@ test("rejects unknown events, unknown properties, and cross-event property value
 
   expect(transport).not.toHaveBeenCalled();
   expect(storage.setItem).not.toHaveBeenCalled();
+});
+
+test("delivers a bounded Moment event without track content or share data", async () => {
+  const { client, transport } = harness();
+
+  await client.trackProductEvent("moment_feedback_answered", {
+    trackId: "00000000-0000-4000-8000-000000000021",
+    question: "surprised",
+    answer: true,
+    platform: "android",
+    locale: "es",
+  });
+
+  expect(transport).toHaveBeenCalledWith(expect.objectContaining({
+    name: "moment_feedback_answered",
+    properties: {
+      trackId: "00000000-0000-4000-8000-000000000021",
+      question: "surprised",
+      answer: true,
+      platform: "android",
+      locale: "es",
+    },
+  }));
+  expect(JSON.stringify(transport.mock.calls)).not.toMatch(
+    /title|artist|audio|url|recipient|clipboard|lyrics|prompt|rawError|freeText/i,
+  );
+});
+
+test("the collector accepts each complete Moment schema and rejects missing required fields", () => {
+  const trackId = "00000000-0000-4000-8000-000000000021";
+  const cases = [
+    ["moment_shown", { trackId, visibility: "private" }],
+    ["moment_visibility_opened", { trackId, visibility: "public" }],
+    ["moment_visibility_completed", { trackId, visibility: "public", elapsedMs: 12 }],
+    ["moment_visibility_failed", { trackId, visibility: "private", errorCategory: "network" }],
+    ["moment_share_selected", { trackId, shareMethod: "native_share" }],
+    ["moment_share_outcome", { trackId, shareMethod: "clipboard", outcome: "copied" }],
+    ["moment_feedback_answered", { trackId, question: "would_share", answer: false }],
+  ] as const;
+
+  for (const [index, [name, properties]] of cases.entries()) {
+    const parsed = parseProductEventEnvelope({
+      ...TRANSPORT_EVENT,
+      eventId: UUIDS[index + 10],
+      name,
+      properties,
+    });
+    expect(parsed).toEqual(expect.objectContaining({ ok: true }));
+  }
+
+  expect(parseProductEventEnvelope({
+    ...TRANSPORT_EVENT,
+    name: "moment_feedback_answered",
+    properties: { trackId, question: "surprised" },
+  })).toEqual({ ok: false, code: "invalid_input" });
+});
+
+test("drops Moment events with unknown, creative, identifying, or cross-event properties", async () => {
+  const { client, transport } = harness();
+  const trackId = "00000000-0000-4000-8000-000000000021";
+
+  await client.trackProductEvent("moment_feedback_answered", {
+    trackId,
+    question: "surprised",
+    answer: true,
+    title: "private title",
+  } as never);
+  await client.trackProductEvent("moment_share_outcome", {
+    trackId,
+    shareMethod: "clipboard",
+    outcome: "copied",
+    clipboard: "https://private.example/track",
+  } as never);
+  await client.trackProductEvent("moment_visibility_completed", {
+    trackId,
+    visibility: "public",
+    answer: true,
+  } as never);
+
+  expect(transport).not.toHaveBeenCalled();
+});
+
+test("Moment event names and properties remain closed at compile time", () => {
+  if (false) {
+    void trackProductEvent("moment_shown", {
+      trackId: "00000000-0000-4000-8000-000000000021",
+      visibility: "private",
+    });
+    // @ts-expect-error Titles are never valid analytics properties.
+    void trackProductEvent("moment_shown", { title: "private" });
+    // @ts-expect-error Raw share URLs are never valid analytics properties.
+    void trackProductEvent("moment_share_selected", { url: "https://private.example" });
+  }
+
+  expect(typeof trackProductEvent).toBe("function");
 });
 
 test("the public API rejects unknown event and property names at compile time", () => {

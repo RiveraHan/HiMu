@@ -19,7 +19,14 @@ export type ProductEventName =
   | "preference_nudge_shown"
   | "preference_nudge_accepted"
   | "preference_nudge_dismissed"
-  | "music_preferences_saved";
+  | "music_preferences_saved"
+  | "moment_shown"
+  | "moment_visibility_opened"
+  | "moment_visibility_completed"
+  | "moment_visibility_failed"
+  | "moment_share_selected"
+  | "moment_share_outcome"
+  | "moment_feedback_answered";
 
 export type ProductEventProperties = Readonly<{
   flowVersion?: number;
@@ -38,6 +45,21 @@ export type ProductEventProperties = Readonly<{
     | "rate_limited"
     | "validation"
     | "unknown";
+  trackId?: string;
+  visibility?: "private" | "public";
+  shareMethod?:
+    | "native_share"
+    | "web_share"
+    | "clipboard"
+    | "selectable_url";
+  outcome?:
+    | "shared"
+    | "copied"
+    | "copy_unavailable"
+    | "cancelled"
+    | "unavailable";
+  question?: "surprised" | "would_share";
+  answer?: boolean;
 }>;
 
 export type ProductEventEnvelope = Readonly<{
@@ -112,6 +134,13 @@ const EVENT_NAMES = new Set<ProductEventName>([
   "preference_nudge_accepted",
   "preference_nudge_dismissed",
   "music_preferences_saved",
+  "moment_shown",
+  "moment_visibility_opened",
+  "moment_visibility_completed",
+  "moment_visibility_failed",
+  "moment_share_selected",
+  "moment_share_outcome",
+  "moment_feedback_answered",
 ]);
 
 type PropertyName = keyof ProductEventProperties;
@@ -139,6 +168,45 @@ const EVENT_PROPERTIES: Record<ProductEventName, ReadonlySet<PropertyName>> = {
   preference_nudge_accepted: new Set(COMMON_PROPERTIES),
   preference_nudge_dismissed: new Set(COMMON_PROPERTIES),
   music_preferences_saved: new Set([...COMMON_PROPERTIES, "selectedCountBucket"]),
+  moment_shown: new Set([...COMMON_PROPERTIES, "trackId", "visibility"]),
+  moment_visibility_opened: new Set([...COMMON_PROPERTIES, "trackId", "visibility"]),
+  moment_visibility_completed: new Set([
+    ...COMMON_PROPERTIES,
+    "trackId",
+    "visibility",
+    "elapsedMs",
+  ]),
+  moment_visibility_failed: new Set([
+    ...COMMON_PROPERTIES,
+    "trackId",
+    "visibility",
+    "errorCategory",
+  ]),
+  moment_share_selected: new Set([...COMMON_PROPERTIES, "trackId", "shareMethod"]),
+  moment_share_outcome: new Set([
+    ...COMMON_PROPERTIES,
+    "trackId",
+    "shareMethod",
+    "outcome",
+  ]),
+  moment_feedback_answered: new Set([
+    ...COMMON_PROPERTIES,
+    "trackId",
+    "question",
+    "answer",
+  ]),
+};
+
+const EVENT_REQUIRED_PROPERTIES: Partial<
+  Record<ProductEventName, ReadonlySet<PropertyName>>
+> = {
+  moment_shown: new Set(["trackId", "visibility"]),
+  moment_visibility_opened: new Set(["trackId", "visibility"]),
+  moment_visibility_completed: new Set(["trackId", "visibility"]),
+  moment_visibility_failed: new Set(["trackId", "visibility", "errorCategory"]),
+  moment_share_selected: new Set(["trackId", "shareMethod"]),
+  moment_share_outcome: new Set(["trackId", "shareMethod", "outcome"]),
+  moment_feedback_answered: new Set(["trackId", "question", "answer"]),
 };
 
 function error(status: number, code: string): ProductEventHttpResult {
@@ -205,6 +273,29 @@ function validProperty(name: PropertyName, value: unknown): boolean {
         "validation",
         "unknown",
       ]);
+    case "trackId":
+      return typeof value === "string" && UUID.test(value);
+    case "visibility":
+      return allowedString(value, ["private", "public"]);
+    case "shareMethod":
+      return allowedString(value, [
+        "native_share",
+        "web_share",
+        "clipboard",
+        "selectable_url",
+      ]);
+    case "outcome":
+      return allowedString(value, [
+        "shared",
+        "copied",
+        "copy_unavailable",
+        "cancelled",
+        "unavailable",
+      ]);
+    case "question":
+      return allowedString(value, ["surprised", "would_share"]);
+    case "answer":
+      return typeof value === "boolean";
   }
 }
 
@@ -235,6 +326,11 @@ function validEventProperties(
         : [];
       if (!allowedOutcomes.includes(value as string)) return null;
     }
+  }
+
+  const required = EVENT_REQUIRED_PROPERTIES[eventName];
+  if (required && [...required].some((key) => !Object.hasOwn(properties, key))) {
+    return null;
   }
 
   return { ...properties } as ProductEventProperties;
