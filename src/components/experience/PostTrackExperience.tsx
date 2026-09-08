@@ -9,12 +9,16 @@ import { trackProductEvent } from "@/src/experience/product-analytics";
 import { useLocale } from "@/src/i18n/use-locale";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { QueryClientContext } from "@tanstack/react-query";
 import { Platform, Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { HiMuMomentCard, type HiMuMomentTrack } from "./HiMuMomentCard";
+import { usePlayerStore } from "@/src/stores/player-store";
 
 export type PostTrackExperienceProps = Readonly<{
   trackId: string;
+  track?: HiMuMomentTrack;
   /** Set only by Player's exact local beta-smoke fixture boundary. */
   isBetaSmokeFixture?: boolean;
 }>;
@@ -112,9 +116,14 @@ function platform() {
 
 export function PostTrackExperience({
   trackId,
+  track,
   isBetaSmokeFixture = false,
 }: PostTrackExperienceProps) {
   const { t } = useTranslation();
+  const currentPlayerTrack = usePlayerStore((current) => current.currentTrack);
+  const momentTrack = track ?? (currentPlayerTrack && currentPlayerTrack.id === trackId
+    ? currentPlayerTrack
+    : undefined);
   const { resolvedLanguage } = useLocale();
   const state = useExperienceState();
   const claim = useClaimPreferenceNudge();
@@ -202,18 +211,7 @@ export function PostTrackExperience({
   }, [analytics, isBetaSmokeFixture, ownsTrack, shown, trackId]);
 
   const claimWon = trackNudgeState(trackId).claimWon || isBetaSmokeFixture;
-  if (!shown || !ownsTrack || !claimWon) return null;
-
-  const accept = () => {
-    if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_accepted", analytics);
-    router.push("/preferences");
-  };
-  const dismissNudge = () => {
-    dismiss.mutate(trackId);
-    if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_dismissed", analytics);
-  };
-
-  return (
+  const nudge = shown && ownsTrack && claimWon ? (
     <GlassCard level={1} style={styles.card} testID="post-track-preference-nudge">
       <View accessibilityRole="header" accessible accessibilityLabel={t("playback.preferenceNudge.title")}>
         <Text variant="h2">{t("playback.preferenceNudge.title")}</Text>
@@ -228,9 +226,7 @@ export function PostTrackExperience({
           onPress={accept}
           style={({ pressed }) => [styles.action, styles.primaryAction, pressed && styles.pressed]}
         >
-          <Text color="onPrimaryContainer" variant="labelCaps">
-            {t("playback.preferenceNudge.actions.choose")}
-          </Text>
+          <Text color="onPrimaryContainer" variant="labelCaps">{t("playback.preferenceNudge.actions.choose")}</Text>
         </Pressable>
         <Pressable
           accessibilityLabel={t("playback.preferenceNudge.actions.notNow")}
@@ -238,12 +234,52 @@ export function PostTrackExperience({
           onPress={dismissNudge}
           style={({ pressed }) => [styles.action, styles.secondaryAction, pressed && styles.pressed]}
         >
-          <Text color="onSurface" variant="labelCaps">
-            {t("playback.preferenceNudge.actions.notNow")}
-          </Text>
+          <Text color="onSurface" variant="labelCaps">{t("playback.preferenceNudge.actions.notNow")}</Text>
         </Pressable>
       </View>
     </GlassCard>
+  ) : null;
+
+  return (
+    <>
+      {nudge}
+      {momentTrack ? <MomentBoundary track={momentTrack} trackId={trackId} /> : null}
+    </>
+  );
+
+  function accept() {
+    if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_accepted", analytics);
+    router.push("/preferences");
+  };
+  function dismissNudge() {
+    dismiss.mutate(trackId);
+    if (!isBetaSmokeFixture) void trackProductEvent("preference_nudge_dismissed", analytics);
+  };
+
+}
+
+function MomentBoundary({ track, trackId }: { track: HiMuMomentTrack; trackId: string }) {
+  const queryClient = useContext(QueryClientContext);
+  if (!queryClient) return null;
+  return <MomentData track={track} trackId={trackId} />;
+}
+
+function MomentData({ track, trackId }: { track: HiMuMomentTrack; trackId: string }) {
+  // Keep the data hook behind the QueryClient boundary. This also lets the
+  // lightweight preference-nudge fixture render without app providers.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useTrackMoment } = require("@/src/hooks/use-track-moment") as typeof import("@/src/hooks/use-track-moment");
+  const moment = useTrackMoment(trackId);
+  if (moment.owner.isLoading || moment.feedback.isLoading || moment.owner.isError || moment.feedback.isError) return null;
+  if (!moment.owner.data || !moment.feedback.data) return null;
+  return (
+    <HiMuMomentCard
+      track={track}
+      moment={moment.owner.data}
+      feedback={moment.feedback.data}
+      setVisibility={moment.setVisibility}
+      setFeedback={moment.setFeedback}
+    />
   );
 }
 
