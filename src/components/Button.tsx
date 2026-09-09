@@ -1,5 +1,5 @@
-import { ReactNode } from "react";
-import { Pressable, StyleProp, ViewStyle } from "react-native";
+import { forwardRef, ReactNode } from "react";
+import { Pressable, StyleProp, View, ViewStyle } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { GlassCard } from "./GlassCard";
 import { Text } from "./Text";
@@ -20,7 +20,7 @@ interface Props {
   testID?: string;
 }
 
-export function Button({
+export const Button = forwardRef<View, Props>(function Button({
   variant = "primary",
   onPress,
   label,
@@ -32,7 +32,7 @@ export function Button({
   loadingLabel = "Loading...",
   style,
   testID,
-}: Props) {
+}: Props, ref) {
   const isDisabled = disabled || loading;
   const text = loading ? loadingLabel : label;
 
@@ -60,6 +60,7 @@ export function Button({
   if (variant === "glass") {
     return (
       <Pressable
+        ref={ref}
         accessibilityLabel={text}
         accessibilityRole="button"
         accessibilityState={{ disabled: isDisabled, busy: loading }}
@@ -82,6 +83,7 @@ export function Button({
   if (variant === "ghost") {
     return (
       <Pressable
+        ref={ref}
         accessibilityLabel={text}
         accessibilityRole="button"
         accessibilityState={{ disabled: isDisabled, busy: loading }}
@@ -102,6 +104,7 @@ export function Button({
 
   return (
     <Pressable
+      ref={ref}
       accessibilityLabel={text}
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled, busy: loading }}
@@ -119,7 +122,7 @@ export function Button({
       {content}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create((theme) => ({
   primary: {

@@ -11,7 +11,7 @@ import type {
   TrackMomentVisibility,
 } from "@/src/moment/moment-types";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
-import { Share, Platform, Pressable, View } from "react-native";
+import { AccessibilityInfo, findNodeHandle, Share, Platform, Pressable, View } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
@@ -19,6 +19,7 @@ import { Globe2, LockKeyhole } from "lucide-react-native";
 import { GlassCard } from "../GlassCard";
 import { Text } from "../Text";
 import { Button } from "../Button";
+import { useRovingRadioGroup } from "../preferences/use-roving-radio-group";
 
 export type HiMuMomentTrack = Readonly<{
   id: string;
@@ -83,12 +84,20 @@ function Choice({
   selected,
   disabled,
   onPress,
-}: Readonly<{ label: string; selected: boolean; disabled: boolean; onPress(): void }>) {
+  radioProps,
+}: Readonly<{
+  label: string;
+  selected: boolean;
+  disabled: boolean;
+  onPress(): void;
+  radioProps: ReturnType<ReturnType<typeof useRovingRadioGroup<"yes" | "no">>>;
+}>) {
   return (
     <Pressable
+      {...radioProps}
       accessibilityRole="radio"
       accessibilityLabel={label}
-      accessibilityState={{ selected, disabled }}
+      accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
       onPress={onPress}
       style={[styles.choice, selected && styles.choiceSelected, disabled && styles.disabled]}
@@ -112,8 +121,13 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
   const [wouldShare, setWouldShare] = useState<boolean | null>(feedback.wouldShare);
   const [shareError, setShareError] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
-  const [feedbackError, setFeedbackError] = useState<"surprised" | "wouldShare" | null>(null);
+  const [feedbackStatus, setFeedbackStatus] = useState<Record<"surprised" | "wouldShare", "idle" | "saved" | "error">>({
+    surprised: "idle",
+    wouldShare: "idle",
+  });
   const shown = useRef(false);
+  const publishRef = useRef<View>(null);
+  const makePrivateRef = useRef<View>(null);
 
   useEffect(() => {
     setVisibilityState(moment.visibility);
@@ -140,18 +154,31 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
     }
     : null;
 
-  const changeVisibility = async (next: TrackMomentVisibility) => {
+  const restoreActionFocus = (ref: { current: View | null }) => () => {
+    if (Platform.OS === "web") return;
+    const handle = findNodeHandle(ref.current);
+    if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
+  };
+
+  const changeVisibility = async (next: TrackMomentVisibility, returnFocus: () => void) => {
+    if (next === "public" && !content) {
+      toast.warning(t("playback.moment.title"), t("playback.moment.shareUnavailable"));
+      return;
+    }
+    void trackProductEvent("moment_visibility_opened", { trackId: track.id, visibility: next });
     const ok = await confirm(next === "public"
       ? {
         title: t("playback.moment.confirmPublishTitle"),
         message: t("playback.moment.confirmPublishBody"),
         confirmLabel: t("playback.moment.confirmPublishAction"),
+        returnFocus,
       }
       : {
         title: t("playback.moment.confirmUnpublishTitle"),
         message: t("playback.moment.confirmUnpublishBody"),
         confirmLabel: t("playback.moment.confirmUnpublishAction"),
         destructive: true,
+        returnFocus,
       });
     if (!ok) return;
     try {
@@ -161,7 +188,7 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
       void trackProductEvent("moment_visibility_completed", { trackId: track.id, visibility: next, elapsedMs: 0 });
       if (next === "public" && content) await share();
     } catch {
-      void trackProductEvent("moment_visibility_failed", { trackId: track.id, visibility: visibility, errorCategory: "network" });
+      void trackProductEvent("moment_visibility_failed", { trackId: track.id, visibility: next, errorCategory: "network" });
       toast.error(t("playback.moment.title"), t("playback.moment.visibilityError"));
     }
   };
@@ -174,11 +201,24 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
     setShareBusy(true);
     setShareError(false);
     try {
+      const webDeps = browserDependencies();
       const deps = Platform.OS === "android"
         ? { platform: "android" as const, nativeShare: nativeShare(content) }
-        : { platform: "web" as const, ...browserDependencies() };
+        : { platform: "web" as const, ...webDeps };
+      const shareMethod = Platform.OS === "android"
+        ? "native_share" as const
+        : webDeps.isSecureContext && webDeps.webShare
+          ? "web_share" as const
+          : webDeps.copy
+            ? "clipboard" as const
+            : "selectable_url" as const;
+      void trackProductEvent("moment_share_selected", { trackId: track.id, shareMethod });
       const result = await shareTrackMoment(content, deps);
-      void trackProductEvent("moment_share_outcome", { trackId: track.id, shareMethod: result.outcome === "copied" ? "clipboard" : "native_share", outcome: result.outcome });
+      void trackProductEvent("moment_share_outcome", {
+        trackId: track.id,
+        shareMethod: result.outcome === "copied" ? "clipboard" : shareMethod,
+        outcome: result.outcome,
+      });
       if (result.outcome === "copied" || result.outcome === "shared") {
         toast.info(t("playback.moment.title"), t("playback.moment.shareSuccess"));
       } else if (result.outcome !== "cancelled") {
@@ -190,16 +230,17 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
   };
 
   const answer = async (question: "surprised" | "wouldShare", value: boolean) => {
-    setFeedbackError(null);
+    setFeedbackStatus((current) => ({ ...current, [question]: "idle" }));
     if (question === "surprised") setSurprised(value);
     else setWouldShare(value);
     try {
       await setFeedback.mutateAsync(question === "surprised"
         ? { trackId: track.id, surprised: value }
         : { trackId: track.id, wouldShare: value });
+      setFeedbackStatus((current) => ({ ...current, [question]: "saved" }));
       void trackProductEvent("moment_feedback_answered", { trackId: track.id, question: question === "wouldShare" ? "would_share" : question, answer: value });
     } catch {
-      setFeedbackError(question);
+      setFeedbackStatus((current) => ({ ...current, [question]: "error" }));
     }
   };
 
@@ -246,18 +287,39 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
           </View>
           {visibility === "private" ? (
             <Button
+              ref={publishRef}
               testID="moment-publish"
               label={t("playback.moment.publishAndShare")}
-              onPress={() => void changeVisibility("public")}
+              onPress={() => void changeVisibility("public", restoreActionFocus(publishRef))}
               loading={setVisibility.isPending}
               loadingLabel={t("playback.moment.saving")}
+              disabled={!content}
             />
           ) : (
             <View style={styles.actions}>
-              <Button testID="moment-share" label={t("playback.moment.shareMoment")} onPress={() => void share()} loading={shareBusy} loadingLabel={t("playback.moment.sharing")} />
-              <Button variant="ghost" testID="moment-make-private" label={t("playback.moment.makePrivate")} onPress={() => void changeVisibility("private")} loading={setVisibility.isPending} />
+              <Button
+                testID="moment-share"
+                label={t("playback.moment.shareMoment")}
+                onPress={() => void share()}
+                loading={shareBusy}
+                loadingLabel={t("playback.moment.sharing")}
+                disabled={!content}
+              />
+              <Button
+                ref={makePrivateRef}
+                variant="ghost"
+                testID="moment-make-private"
+                label={t("playback.moment.makePrivate")}
+                onPress={() => void changeVisibility("private", restoreActionFocus(makePrivateRef))}
+                loading={setVisibility.isPending}
+              />
             </View>
           )}
+          {!content ? (
+            <Text accessibilityLiveRegion="polite" color="onSurfaceVariant" variant="bodyMd">
+              {t("playback.moment.shareUnavailable")}
+            </Text>
+          ) : null}
           {shareError && content ? (
             <View style={styles.recovery} accessibilityLiveRegion="polite">
               <Text color="onError" variant="bodyMd">{t("playback.moment.shareError")}</Text>
@@ -270,16 +332,16 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
             label={t("playback.moment.surprised")}
             value={surprised}
             disabled={setFeedback.isPending}
+            status={feedbackStatus.surprised}
             onChange={(value) => void answer("surprised", value)}
           />
-          {feedbackError === "surprised" ? <Text color="onError" variant="bodyMd">{t("playback.moment.feedbackError")}</Text> : null}
           <FeedbackQuestion
             label={t("playback.moment.wouldShare")}
             value={wouldShare}
             disabled={setFeedback.isPending}
+            status={feedbackStatus.wouldShare}
             onChange={(value) => void answer("wouldShare", value)}
           />
-          {feedbackError === "wouldShare" ? <Text color="onError" variant="bodyMd">{t("playback.moment.feedbackError")}</Text> : null}
           {audioUrl ? null : <Text color="onError" variant="bodyMd">{t("playback.moment.audioUnavailable")}</Text>}
         </>
       )}
@@ -287,14 +349,34 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
   );
 }
 
-function FeedbackQuestion({ label, value, disabled, onChange }: Readonly<{ label: string; value: boolean | null; disabled: boolean; onChange(value: boolean): void }>) {
+function FeedbackQuestion({ label, value, disabled, status, onChange }: Readonly<{
+  label: string;
+  value: boolean | null;
+  disabled: boolean;
+  status: "idle" | "saved" | "error";
+  onChange(value: boolean): void;
+}>) {
+  const { t } = useTranslation();
+  const radioValue = value === null ? null : value ? "yes" as const : "no" as const;
+  const radioProps = useRovingRadioGroup(
+    ["yes", "no"] as const,
+    radioValue,
+    disabled,
+    (next) => onChange(next === "yes"),
+  );
+
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={styles.question}>
       <Text variant="bodyMd">{label}</Text>
       <View style={styles.choices}>
-        <Choice label="Yes" selected={value === true} disabled={disabled} onPress={() => onChange(true)} />
-        <Choice label="No" selected={value === false} disabled={disabled} onPress={() => onChange(false)} />
+        <Choice label={t("playback.moment.yes")} selected={value === true} disabled={disabled} onPress={() => onChange(true)} radioProps={radioProps(0)} />
+        <Choice label={t("playback.moment.no")} selected={value === false} disabled={disabled} onPress={() => onChange(false)} radioProps={radioProps(1)} />
       </View>
+      {status === "idle" ? null : (
+        <Text accessibilityLiveRegion="polite" color={status === "error" ? "onError" : "onSurfaceVariant"} variant="bodyMd">
+          {status === "error" ? t("playback.moment.feedbackError") : t("playback.moment.feedbackSaved")}
+        </Text>
+      )}
     </View>
   );
 }
