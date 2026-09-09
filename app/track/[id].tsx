@@ -14,11 +14,9 @@ function single(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-export default function PublicTrackScreen() {
+export function PublicTrackLanding({ trackId }: Readonly<{ trackId: string | undefined }>) {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
-  const parameters = useLocalSearchParams<{ id?: string | string[] }>();
-  const trackId = single(parameters.id);
   const query = usePublicTrack(trackId);
 
   if (query.isLoading) {
@@ -75,6 +73,11 @@ export default function PublicTrackScreen() {
       <PublicTrackAudio track={track} />
     </ScreenScrollView>
   );
+}
+
+export default function PublicTrackScreen() {
+  const parameters = useLocalSearchParams<{ id?: string | string[] }>();
+  return <PublicTrackLanding trackId={single(parameters.id)} />;
 }
 
 const styles = StyleSheet.create((theme) => ({

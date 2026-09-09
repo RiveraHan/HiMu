@@ -1,5 +1,5 @@
 import { forwardRef, ReactNode } from "react";
-import { Pressable, StyleProp, View, ViewStyle } from "react-native";
+import { GestureResponderEvent, Pressable, StyleProp, View, ViewStyle } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { GlassCard } from "./GlassCard";
 import { Text } from "./Text";
@@ -8,7 +8,7 @@ type Variant = "primary" | "glass" | "ghost";
 
 interface Props {
   variant?: Variant;
-  onPress?: () => void;
+  onPress?: (event: GestureResponderEvent) => void;
   label: string;
   loading?: boolean;
   disabled?: boolean;

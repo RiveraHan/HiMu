@@ -9,10 +9,13 @@ const { installSignalCleanup } = require("../beta-onboarding-browser/signal-clea
 
 const root = path.resolve(__dirname, "../..");
 const fixture = path.join(__dirname, "Moment-browser-fixture.tsx");
+const publicTrackFixture = path.join(__dirname, "PublicTrackRoute-browser-fixture.tsx");
 const analyticsStub = path.join(__dirname, "product-analytics-browser-stub.ts");
 const cells = [["320x640", 320, 640, 100], ["390x844", 390, 844, 100], ["768x1024", 768, 1024, 100], ["1024x768", 1024, 768, 100], ["1440x900", 1440, 900, 100], ["720x422", 720, 422, 100], ["200% zoom", 720, 900, 200]];
 const chrome = [process.env.CHROME_BIN, "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"].find((candidate) => candidate && fs.existsSync(candidate));
 const originalShareOrigin = process.env.EXPO_PUBLIC_SHARE_ORIGIN;
+const originalSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const originalSupabaseKey = process.env.EXPO_PUBLIC_SUPABASE_KEY;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function waitFor(fn, message) {
@@ -81,12 +84,31 @@ async function navigate(cdp, origin, route) {
   }
 }
 
+async function navigatePublicTrack(cdp, origin, trackId) {
+  await cdp.send("Page.navigate", { url: `${origin}/track/${trackId}` });
+  try {
+    await waitFor(async () => await evaluate(cdp, "document.readyState === 'complete' && window.__HIMU_PUBLIC_TRACK_READY__ === true && Boolean(document.querySelector('[role=alert]'))"), `Public track route did not settle for ${trackId}`);
+  } catch (error) {
+    const state = await evaluate(cdp, "({ready:document.readyState,error:window.__HIMU_BROWSER_ERROR__,text:document.body.textContent?.slice(0,500)})");
+    throw new Error(`${error.message}; ${JSON.stringify(state)}`);
+  }
+}
+
 async function read(cdp) {
   return evaluate(cdp, "window.__HIMU_BROWSER_ERROR__ ? Promise.reject(new Error(window.__HIMU_BROWSER_ERROR__)) : window.__HIMU_MOMENT_READ__()");
 }
 
+async function readPublicTrack(cdp) {
+  return evaluate(cdp, "window.__HIMU_BROWSER_ERROR__ ? Promise.reject(new Error(window.__HIMU_BROWSER_ERROR__)) : window.__HIMU_PUBLIC_TRACK_READ__()");
+}
+
 async function click(cdp, id) {
   await evaluate(cdp, `(() => { const el=document.querySelector('[data-testid="${id}"]'); if(!el) throw new Error('Missing ${id}'); el.focus(); el.click(); })()`);
+  await delay(25);
+}
+
+async function clickWithoutFocus(cdp, id) {
+  await evaluate(cdp, `(() => { const el=document.querySelector('[data-testid="${id}"]'); if(!el) throw new Error('Missing ${id}'); document.body.tabIndex=-1; document.body.focus(); el.click(); })()`);
   await delay(25);
 }
 
@@ -130,7 +152,9 @@ async function readLocales(cdp, origin) {
 
 async function scenario(cdp, origin) {
   await navigate(cdp, origin, "/moment");
-  await click(cdp, "moment-publish");
+  // Exercise the real accessibility/programmatic activation path: a DOM click
+  // can open the dialog while focus remains elsewhere.
+  await clickWithoutFocus(cdp, "moment-publish");
   let state = await read(cdp);
   const privateConfirmation = {
     role: state.dialog?.role,
@@ -153,6 +177,7 @@ async function scenario(cdp, origin) {
   state = await read(cdp);
   privateConfirmation.escapeCancelled = state.dialog === null;
   privateConfirmation.focusReturned = state.activeTestId === "moment-publish";
+  privateConfirmation.programmaticFocusReturned = state.activeTestId === "moment-publish";
 
   await navigate(cdp, origin, "/moment");
   await installShare(cdp, "share");
@@ -189,6 +214,21 @@ async function scenario(cdp, origin) {
     clipboardDenied,
     invalidOrigin,
   };
+}
+
+async function publicRouteScenario(cdp, origin, requests) {
+  const cases = {
+    private: "00000000-0000-4000-8000-000000000081",
+    missing: "00000000-0000-4000-8000-000000000082",
+    noMedia: "00000000-0000-4000-8000-000000000083",
+  };
+  const snapshots = {};
+  for (const [name, trackId] of Object.entries(cases)) {
+    await navigatePublicTrack(cdp, origin, trackId);
+    snapshots[name] = await readPublicTrack(cdp);
+  }
+  const routeRequests = requests.filter((request) => Object.values(cases).includes(request.id));
+  return { snapshots, requests: routeRequests };
 }
 
 function configureResolver(config) {
@@ -258,13 +298,17 @@ async function removeTemporaryDirectory(directory, output) {
   throw new Error(`Could not remove Moment browser profile ${directory}: ${lastError?.message ?? "directory still exists"}. Chrome stdout=${JSON.stringify(output.stdout)} stderr=${JSON.stringify(output.stderr)}`);
 }
 
-async function buildFixture(name, output, shareOrigin) {
+async function buildFixture(name, output, shareOrigin, entry = fixture, supabaseUrl) {
   process.env.EXPO_PUBLIC_SHARE_ORIGIN = shareOrigin;
+  if (supabaseUrl) {
+    process.env.EXPO_PUBLIC_SUPABASE_URL = supabaseUrl;
+    process.env.EXPO_PUBLIC_SUPABASE_KEY = "browser-public-key";
+  }
   const config = getDefaultConfig(root);
   config.resetCache = true;
   config.cacheVersion = `moment-${name}-${Date.now()}`;
   configureResolver(config);
-  await runBuild(config, { entry: fixture, platform: "web", dev: false, minify: false, out: output });
+  await runBuild(config, { entry, platform: "web", dev: false, minify: false, out: output });
 }
 
 async function main() {
@@ -275,6 +319,7 @@ async function main() {
   let server;
   let signals;
   let browserOutput = { stdout: "", stderr: "" };
+  const publicTrackRequests = [];
   const cleanup = async () => {
     cdp?.close();
     if (browser) await stopBrowser(browser, browserOutput);
@@ -282,21 +327,45 @@ async function main() {
     await removeTemporaryDirectory(tmp, browserOutput);
     if (originalShareOrigin === undefined) delete process.env.EXPO_PUBLIC_SHARE_ORIGIN;
     else process.env.EXPO_PUBLIC_SHARE_ORIGIN = originalShareOrigin;
+    if (originalSupabaseUrl === undefined) delete process.env.EXPO_PUBLIC_SUPABASE_URL;
+    else process.env.EXPO_PUBLIC_SUPABASE_URL = originalSupabaseUrl;
+    if (originalSupabaseKey === undefined) delete process.env.EXPO_PUBLIC_SUPABASE_KEY;
+    else process.env.EXPO_PUBLIC_SUPABASE_KEY = originalSupabaseKey;
   };
   try {
     signals = installSignalCleanup(cleanup);
-    const bundles = { valid: path.join(tmp, "fixture.js"), invalid: path.join(tmp, "fixture-invalid-origin.js") };
-    await buildFixture("valid", bundles.valid, "https://himu.test");
-    await buildFixture("invalid", bundles.invalid, "https://himu.test/path");
+    const bundles = { valid: path.join(tmp, "fixture.js"), invalid: path.join(tmp, "fixture-invalid-origin.js"), publicTrack: path.join(tmp, "fixture-public-track.js") };
     const html = "<!doctype html><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>html,body,#root{margin:0;width:100%;min-width:0;min-height:100%;}body{overflow:auto}</style><div id=\"root\"></div><script>window.addEventListener('error',e=>window.__HIMU_BROWSER_ERROR__=e.error?.stack||e.message)</script><script src=\"__FIXTURE__\"></script>";
     server = http.createServer((req, res) => {
-      if (req.url === "/fixture.js" || req.url === "/fixture-invalid-origin.js") {
-        const bundle = req.url === "/fixture.js" ? bundles.valid : bundles.invalid;
+      const requestUrl = new URL(req.url ?? "/", "http://fixture.test");
+      if (requestUrl.pathname === "/functions/v1/public-track") {
+        publicTrackRequests.push({
+          id: requestUrl.searchParams.get("id"),
+          apikey: req.headers.apikey ?? null,
+          authorization: req.headers.authorization ?? null,
+          cookie: req.headers.cookie ?? null,
+        });
+        // These three server outcomes intentionally share an exact public
+        // response. The real hook and real route must expose one UI state.
+        res.writeHead(404, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+        res.end(JSON.stringify({ code: "not_found" }));
+        return;
+      }
+      if (["/fixture.js", "/fixture-invalid-origin.js", "/fixture-public-track.js"].includes(requestUrl.pathname)) {
+        const bundle = requestUrl.pathname === "/fixture.js"
+          ? bundles.valid
+          : requestUrl.pathname === "/fixture-invalid-origin.js"
+            ? bundles.invalid
+            : bundles.publicTrack;
         res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
         res.end(fs.readFileSync(bundle));
         return;
       }
-      const fixtureUrl = req.url?.startsWith("/moment-invalid-origin") ? "/fixture-invalid-origin.js" : "/fixture.js";
+      const fixtureUrl = requestUrl.pathname.startsWith("/track/")
+        ? "/fixture-public-track.js"
+        : requestUrl.pathname.startsWith("/moment-invalid-origin")
+          ? "/fixture-invalid-origin.js"
+          : "/fixture.js";
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(html.replace("__FIXTURE__", fixtureUrl));
     });
@@ -305,6 +374,9 @@ async function main() {
       server.listen(0, "127.0.0.1", resolve);
     });
     const origin = `http://127.0.0.1:${server.address().port}`;
+    await buildFixture("valid", bundles.valid, "https://himu.test");
+    await buildFixture("invalid", bundles.invalid, "https://himu.test/path");
+    await buildFixture("public-track", bundles.publicTrack, "https://himu.test", publicTrackFixture, origin);
     const profile = path.join(tmp, "chrome");
     browser = spawn(chrome, ["--headless=new", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=0", `--user-data-dir=${profile}`, `${origin}/moment`], {
       detached: process.platform !== "win32",
@@ -326,8 +398,9 @@ async function main() {
       matrix.push({ label, width, height, zoomPercent, noHorizontalOverflow: snapshot.noHorizontalOverflow, momentVisible: snapshot.momentVisible, visualViewport: snapshot.visualViewport });
     }
     const cases = await scenario(cdp, origin);
+    const publicRoute = await publicRouteScenario(cdp, origin, publicTrackRequests);
     const locales = await readLocales(cdp, origin);
-    process.stdout.write(JSON.stringify({ matrix, cases, locales }));
+    process.stdout.write(JSON.stringify({ matrix, cases, locales, publicRoute }));
   } finally {
     signals?.dispose();
     await cleanup();

@@ -189,7 +189,10 @@ test("restores focus to the initiating action when web activation did not focus 
   Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
   try {
     const focus = jest.fn();
-    restoreMomentActionFocus({ current: { focus } as never })();
+    restoreMomentActionFocus(
+      { current: null },
+      { currentTarget: { focus } } as never,
+    )();
     expect(focus).toHaveBeenCalledTimes(1);
   } finally {
     if (originalPlatform) Object.defineProperty(Platform, "OS", originalPlatform);

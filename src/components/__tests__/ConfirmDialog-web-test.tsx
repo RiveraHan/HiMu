@@ -68,4 +68,27 @@ describe("ConfirmDialogHost.web", () => {
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
     expect(document.activeElement).toBe(opener);
   });
+
+  it("keeps an explicit return target after programmatic activation", async () => {
+    const priorFocus = document.createElement("button");
+    priorFocus.textContent = "Previous control";
+    document.body.appendChild(priorFocus);
+    priorFocus.focus();
+    let result!: Promise<boolean>;
+
+    act(() => {
+      result = useConfirmStore.getState().request({
+        title: "Make this track public?",
+        returnFocus: () => opener.focus(),
+      });
+    });
+    // A click dispatched by assistive technology or automation does not have
+    // to move DOM focus to its source first. The explicit Moment target must
+    // therefore win over the dialog's generic opener cleanup.
+    act(() => useConfirmStore.getState().resolve(false));
+
+    await expect(result).resolves.toBe(false);
+    expect(document.activeElement).toBe(opener);
+    priorFocus.remove();
+  });
 });

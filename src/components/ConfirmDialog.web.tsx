@@ -17,6 +17,7 @@ export function ConfirmDialogHost() {
 
   useEffect(() => {
     if (!pending) return;
+    const returnFocus = pending.returnFocus;
     openerRef.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
@@ -39,7 +40,11 @@ export function ConfirmDialogHost() {
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown);
       background.forEach((element) => element.removeAttribute("inert"));
-      openerRef.current?.focus();
+      // Restore after portal removal, when the concrete Moment action is
+      // focusable again. The explicit target wins; generic dialogs retain
+      // opener restoration when callers do not provide one.
+      if (returnFocus) returnFocus();
+      else openerRef.current?.focus();
     };
   }, [pending, resolve]);
 

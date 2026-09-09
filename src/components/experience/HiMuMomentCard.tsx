@@ -11,7 +11,7 @@ import type {
   TrackMomentVisibility,
 } from "@/src/moment/moment-types";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
-import { AccessibilityInfo, findNodeHandle, Share, Platform, Pressable, View } from "react-native";
+import { AccessibilityInfo, findNodeHandle, Share, Platform, Pressable, View, type GestureResponderEvent } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
@@ -284,7 +284,7 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
               ref={publishRef}
               testID="moment-publish"
               label={t("playback.moment.publishAndShare")}
-              onPress={() => void changeVisibility("public", restoreMomentActionFocus(publishRef))}
+              onPress={(event) => void changeVisibility("public", restoreMomentActionFocus(publishRef, event, "moment-publish"))}
               loading={setVisibility.isPending}
               loadingLabel={t("playback.moment.saving")}
               disabled={!content}
@@ -304,7 +304,7 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
                 variant="ghost"
                 testID="moment-make-private"
                 label={t("playback.moment.makePrivate")}
-                onPress={() => void changeVisibility("private", restoreMomentActionFocus(makePrivateRef))}
+                onPress={(event) => void changeVisibility("private", restoreMomentActionFocus(makePrivateRef, event, "moment-make-private"))}
                 loading={setVisibility.isPending}
               />
             </View>
@@ -343,13 +343,25 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
   );
 }
 
-export function restoreMomentActionFocus(ref: { current: View | null }) {
+export function restoreMomentActionFocus(
+  ref: { current: View | null },
+  event?: Pick<GestureResponderEvent, "currentTarget">,
+  testID?: string,
+) {
   return () => {
     // Browser automation and assistive technology can activate a button
     // without first moving DOM focus to it (for example, HTMLElement.click()).
     // Keep the exact initiating action as the focus target in that case too.
     if (Platform.OS === "web") {
-      const node = ref.current as unknown as { focus?: () => void } | null;
+      const explicitTarget = testID && typeof document !== "undefined"
+        ? document.querySelector<HTMLElement>(`[data-testid="${testID}"]`)
+        : null;
+      const eventTarget = event?.currentTarget as unknown as { focus?: () => void } | null;
+      const node = explicitTarget ?? (
+        eventTarget?.focus
+          ? eventTarget
+          : ref.current as unknown as { focus?: () => void } | null
+      );
       node?.focus?.();
       return;
     }

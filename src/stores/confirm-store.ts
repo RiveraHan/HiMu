@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { Platform } from "react-native";
 
 export type ConfirmOptions = {
   title: string;
@@ -45,6 +46,8 @@ export const useConfirmStore = create<State>((set, get) => ({
     const pending = get().pending;
     pending?.resolve(ok);
     set({ pending: null });
-    pending?.returnFocus?.();
+    // The web host restores focus after its portal is removed. Native has no
+    // DOM portal lifecycle, so it keeps the immediate accessibility return.
+    if (Platform.OS !== "web") pending?.returnFocus?.();
   },
 }));

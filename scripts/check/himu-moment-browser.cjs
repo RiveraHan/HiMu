@@ -21,7 +21,7 @@ function verify(report) {
   invariant(value?.privateConfirmation?.opened && value.privateConfirmation.role === "dialog", "private-confirmation lacks a semantic dialog.");
   invariant(value.privateConfirmation.initialFocusInDialog === true, "private-confirmation did not move focus into the dialog.");
   invariant(Array.isArray(value.privateConfirmation.traversal) && value.privateConfirmation.traversal.length >= 4 && value.privateConfirmation.traversal.every((step)=>step.inDialog === true), "private-confirmation does not keep Tab and Shift+Tab traversal inside the dialog.");
-  invariant(value.privateConfirmation.escapeCancelled && value.privateConfirmation.focusReturned, "private-confirmation must close with Escape and restore focus.");
+  invariant(value.privateConfirmation.escapeCancelled && value.privateConfirmation.focusReturned && value.privateConfirmation.programmaticFocusReturned, "private-confirmation must close with Escape and restore focus after programmatic activation.");
   invariant(value?.publicShare?.shareCalls === 1 && value.publicShare.visible, "public-share did not use secure browser sharing.");
   invariant(value?.clipboardFallback?.copyCalls === 1, "clipboard-fallback did not copy once.");
   invariant(value?.clipboardDenied?.copyCalls === 1 && value.clipboardDenied.recovery === true, "clipboard-denied did not expose recovery.");
@@ -33,6 +33,23 @@ function verify(report) {
   invariant(spanish?.publishLabel === "Hacer pública y compartir" && spanish.yesLabels?.length === 2 && spanish.yesLabels.every((label)=>label === "Sí"), "Spanish Moment controls are not translated from production i18n.");
   invariant(english.feedbackLabels?.join("|") === "Did this result surprise you?|Would you share it?", "English Moment questions are missing.");
   invariant(spanish.feedbackLabels?.join("|") === "¿Te sorprendió este resultado?|¿Lo compartirías?", "Spanish Moment questions are missing.");
+  const publicRoute = report.publicRoute;
+  const publicCases = ["private", "missing", "noMedia"];
+  invariant(publicRoute?.snapshots && typeof publicRoute.snapshots === "object", "missing production public-route snapshots.");
+  const publicSnapshots = publicCases.map((name) => publicRoute.snapshots[name]);
+  invariant(publicSnapshots.every((snapshot) => typeof snapshot?.alert?.label === "string" && typeof snapshot?.alert?.text === "string" && typeof snapshot?.body === "string"), "production public route did not render the unavailable alert.");
+  const unavailableState = JSON.stringify({
+    alert: publicSnapshots[0].alert,
+    body: publicSnapshots[0].body,
+  });
+  invariant(publicSnapshots.every((snapshot) => JSON.stringify({ alert: snapshot.alert, body: snapshot.body }) === unavailableState), "private, missing, and no-media tracks must render the same unavailable public state.");
+  invariant(Array.isArray(publicRoute.requests) && publicRoute.requests.length === publicCases.length, "public route did not issue one request per unavailable case.");
+  const requestIds = new Set();
+  for (const request of publicRoute.requests) {
+    requestIds.add(request?.id);
+    invariant(request?.apikey === "browser-public-key" && request?.authorization === null && request?.cookie === null, "public route must use the anonymous apikey boundary without credentials.");
+  }
+  invariant(requestIds.size === publicCases.length, "public route unavailable requests were not distinct.");
 }
 async function main() {
   let stdout;
