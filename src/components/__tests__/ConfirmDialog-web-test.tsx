@@ -63,8 +63,7 @@ describe("ConfirmDialogHost.web", () => {
     act(() => {
       result = useConfirmStore.getState().request({ title: "Make this track public?" });
     });
-    const dialog = document.body.querySelector<HTMLElement>("[role='dialog']");
-    act(() => dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    act(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     await expect(result).resolves.toBe(false);
     expect(document.body.querySelector("[role='dialog']")).toBeNull();
     expect(document.activeElement).toBe(opener);

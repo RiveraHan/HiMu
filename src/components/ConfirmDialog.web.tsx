@@ -12,6 +12,7 @@ export function ConfirmDialogHost() {
   const resolve = useConfirmStore((state) => state.resolve);
   const openerRef = useRef<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -25,11 +26,22 @@ export function ConfirmDialogHost() {
     );
     background.forEach((element) => element.setAttribute("inert", ""));
 
+    // Keep Escape handling at the document boundary. Browser key events can
+    // originate from the focused title, a button, or a portal descendant;
+    // handling them here makes cancellation independent of that focus target.
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !dialogRef.current) return;
+      event.preventDefault();
+      resolve(false);
+    };
+    document.addEventListener("keydown", onDocumentKeyDown);
+
     return () => {
+      document.removeEventListener("keydown", onDocumentKeyDown);
       background.forEach((element) => element.removeAttribute("inert"));
       openerRef.current?.focus();
     };
-  }, [pending]);
+  }, [pending, resolve]);
 
   if (!pending) return null;
 
@@ -59,6 +71,7 @@ export function ConfirmDialogHost() {
     <div ref={rootRef} data-confirm-dialog-root="">
       <div aria-hidden="true" onClick={() => resolve(false)} style={styles.backdrop} />
       <div
+        ref={dialogRef}
         aria-labelledby="confirm-dialog-title"
         aria-modal="true"
         onKeyDown={onKeyDown}
