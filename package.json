@@ -38,6 +38,7 @@
     "check:himu-product-events-migration": "node --import tsx scripts/check/himu-product-events-migration.ts",
     "check:himu-product-events-function": "node --import tsx scripts/check/himu-product-events-function.ts",
     "check:himu-public-track-function": "node --import tsx scripts/check/himu-public-track-function.ts",
+    "check:himu-public-tracks-rls": "node --import tsx scripts/check/himu-public-tracks-rls.ts",
     "check:himu-music-preferences-migration": "node --import tsx scripts/check/himu-music-preferences-migration.ts",
     "check:beta-responsive": "node --import tsx scripts/check/beta-responsive-contract.ts",
     "check:beta-onboarding-browser": "node scripts/check/beta-onboarding-responsive-browser.cjs",
