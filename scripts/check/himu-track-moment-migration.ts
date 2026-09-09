@@ -3,8 +3,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const migrations = readdirSync("supabase/migrations")
-  .filter((name) => /_himu_track_moment(?:_cleanup_outbox)?\.sql$/.test(name));
-assert.equal(migrations.length, 2, "base and cleanup track Moment migrations are required");
+  .filter((name) => /_himu_track_moment(?:_(?:cleanup_outbox|unpublish_cleanup))?\.sql$/.test(name));
+assert.equal(migrations.length, 3, "base, cleanup, and unpublish safety Moment migrations are required");
 const migrationSql = Object.fromEntries(migrations.map((name) => [
   name,
   readFileSync(join("supabase/migrations", name), "utf8"),
@@ -13,7 +13,11 @@ const sql = Object.values(migrationSql).join("\n");
 const cleanupSql = Object.entries(migrationSql).find(([name]) =>
   name.endsWith("_himu_track_moment_cleanup_outbox.sql")
 )?.[1];
+const unpublishCleanupSql = Object.entries(migrationSql).find(([name]) =>
+  name.endsWith("_himu_track_moment_unpublish_cleanup.sql")
+ )?.[1];
 assert.ok(cleanupSql, "cleanup outbox migration is required");
+assert.ok(unpublishCleanupSql, "unpublish cleanup safety migration is required");
 
 for (const pattern of [
   /create table public\.track_experience_feedback/i,
@@ -45,6 +49,7 @@ for (const pattern of [
   /create function public\.list_track_moment_cleanup/i,
   /create function public\.acknowledge_track_moment_cleanup/i,
   /create or replace function public\.abort_track_moment_publish/i,
+  /create or replace function public\.unpublish_track_moment/i,
   /on conflict \(track_id, operation_token\) do nothing/i,
   /grant execute on function public\.queue_track_moment_cleanup[\s\S]*to service_role/i,
 ]) {
@@ -57,5 +62,25 @@ assert.doesNotMatch(
   cleanupSql,
   /grant[^;]*track_moment_cleanup_outbox[^;]*to (?:anon|authenticated)/i,
   "cleanup outbox must remain server-only",
+);
+assert.match(
+  unpublishCleanupSql,
+  /v_operation_public_key := pg_catalog\.regexp_replace[\s\S]*\.moment-' \|\| v_publication\.operation_token::text/i,
+  "cancelling a claim must derive only its operation-owned public key",
+);
+assert.match(
+  unpublishCleanupSql,
+  /insert into public\.track_moment_cleanup_outbox[\s\S]*v_operation_public_key[\s\S]*on conflict \(track_id, operation_token\) do nothing/i,
+  "cancelling a claim must durably enqueue cleanup before clearing it",
+);
+assert.match(
+  unpublishCleanupSql,
+  /v_existing_cleanup_key is distinct from v_operation_public_key[\s\S]*'conflict'/i,
+  "a mismatched reused token must not erase its cleanup target",
+);
+assert.match(
+  unpublishCleanupSql,
+  /v_track\.is_public[\s\S]*state = 'publishing'[\s\S]*insert into public\.track_moment_cleanup_outbox/i,
+  "only a still-private publishing claim can become cleanup",
 );
 console.log("track moment migration checks passed");

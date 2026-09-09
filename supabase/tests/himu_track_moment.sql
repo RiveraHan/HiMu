@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(61);
+select plan(64);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -230,6 +230,13 @@ select results_eq(
   'private intent cancels an in-flight publish claim'
 );
 select is(
+  (select public_object_key from public.track_moment_cleanup_outbox
+    where track_id = '73000000-0000-4000-8000-000000000002'
+      and operation_token = '75000000-0000-4000-8000-000000000003'),
+  'tracks/generated/job/other.moment-75000000-0000-4000-8000-000000000003.mp3',
+  'cancelling a publishing claim durably retains its operation-owned cleanup target'
+);
+select is(
   public.finalize_track_moment_publish(
     '73000000-0000-4000-8000-000000000002',
     '71000000-0000-4000-8000-000000000002',
@@ -295,6 +302,13 @@ select is(
   'winner finalization never clears the losing cleanup target'
 );
 select is(
+  (select count(*) from public.track_moment_cleanup_outbox
+    where track_id = '73000000-0000-4000-8000-000000000002'
+      and operation_token = '75000000-0000-4000-8000-000000000003'),
+  1::bigint,
+  'a later winner never clears cleanup queued by a cancelled publishing claim'
+);
+select is(
   public.queue_track_moment_cleanup(
     '73000000-0000-4000-8000-000000000002',
     '71000000-0000-4000-8000-000000000002',
@@ -337,6 +351,13 @@ select is(
       and operation_token = '75000000-0000-4000-8000-000000000004'),
   0::bigint,
   'acknowledged cleanup is no longer retried'
+);
+select is(
+  (select count(*) from public.track_moment_cleanup_outbox
+    where track_id = '73000000-0000-4000-8000-000000000002'
+      and operation_token = '75000000-0000-4000-8000-000000000003'),
+  1::bigint,
+  'acknowledging another losing operation never deletes the cancelled claim target'
 );
 select results_eq(
   $$select outcome from public.unpublish_track_moment(

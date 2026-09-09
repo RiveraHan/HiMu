@@ -330,6 +330,12 @@ export async function handleTrackMomentRequest(
         } catch {
           // The track remains private; a later retry can attempt cleanup again.
         }
+      } else {
+        // Cancelling a publishing claim can have copied a public object before
+        // finalization. The RPC has atomically queued that exact operation key;
+        // try it now, but preserve a successful privacy transition if R2 is
+        // temporarily unavailable so the next Moment request can retry it.
+        await drainPendingCleanup(deps, trackId, userId);
       }
       return success(
         trackId,

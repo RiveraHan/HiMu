@@ -1,5 +1,6 @@
 import {
   handleTrackMomentRequest,
+  type TrackMomentCleanupTarget,
   type TrackMomentDependencies,
 } from "./handler.ts";
 import {
@@ -396,6 +397,88 @@ Deno.test("persists a failed bounded cleanup and retries only its losing operati
     "retry never targets the winner object",
   );
   assertEquals(hasPending, false, "acknowledgement follows verified deletion");
+});
+
+Deno.test("a cancelled publish retries only its persisted loser after a later winner", async () => {
+  const loserToken = "50000000-0000-4000-8000-000000000003";
+  const winnerToken = "50000000-0000-4000-8000-000000000004";
+  const loserKey = trackMomentPublicKey(PRIVATE_REF, loserToken)!;
+  const winnerRef =
+    `https://media.example/tracks/generated/job-1/attempt.moment-${winnerToken}.mp3`;
+  let cancelledCleanupPending = false;
+  let cleanupAttempts = 0;
+  let reads = 0;
+  const deleted: TrackMomentCleanupTarget[] = [];
+  const deps = baseDependencies({
+    loadTrack: async () => {
+      reads += 1;
+      return reads === 1
+        ? { id: TRACK_ID, ownerId: OWNER_ID, isPublic: false, isAiGenerated: true, isReady: true, audioRef: PRIVATE_REF, albumArtRef: null }
+        : { id: TRACK_ID, ownerId: OWNER_ID, isPublic: true, isAiGenerated: true, isReady: true, audioRef: winnerRef, albumArtRef: null };
+    },
+    unpublish: async () => {
+      deps.calls.push("unpublish");
+      // The database atomically queued the operation key while cancelling its
+      // publishing state. It intentionally returns no client-cleanup target.
+      cancelledCleanupPending = true;
+      return { outcome: "already_private", privateAudioRef: PRIVATE_REF };
+    },
+    listPendingCleanup: async () => cancelledCleanupPending
+      ? [{ operationToken: loserToken, publicObjectKey: loserKey }]
+      : [],
+    deleteOwnedCleanup: async (target) => {
+      deleted.push(target);
+      assertEquals(target.operationToken, loserToken);
+      assertEquals(target.publicObjectKey, loserKey);
+      cleanupAttempts += 1;
+      if (cleanupAttempts === 1) throw new Error("R2 retry needed");
+    },
+    acknowledgeCleanup: async (target) => {
+      assertEquals(target.operationToken, loserToken);
+      assertEquals(target.publicObjectKey, loserKey);
+      cancelledCleanupPending = false;
+      deps.calls.push("ack-cleanup");
+      return true;
+    },
+  });
+
+  assertEquals(
+    await handleTrackMomentRequest(
+      { action: "set_visibility", trackId: TRACK_ID, visibility: "private" },
+      OWNER_ID,
+      deps,
+    ),
+    { status: 200, body: { trackId: TRACK_ID, visibility: "private", audioUrl: PRIVATE_REF, albumArtUrl: null } },
+  );
+  assertEquals(
+    deleted,
+    [{ operationToken: loserToken, publicObjectKey: loserKey }],
+    "the cancelled request attempts only its durable loser cleanup",
+  );
+  assertEquals(cancelledCleanupPending, true, "failed cancellation cleanup remains durable for retry");
+
+  assertEquals(
+    await handleTrackMomentRequest(
+      { action: "set_visibility", trackId: TRACK_ID, visibility: "public" },
+      OWNER_ID,
+      deps,
+    ),
+    { status: 200, body: { trackId: TRACK_ID, visibility: "public", audioUrl: winnerRef, albumArtUrl: null } },
+  );
+  assertEquals(
+    deleted,
+    [
+      { operationToken: loserToken, publicObjectKey: loserKey },
+      { operationToken: loserToken, publicObjectKey: loserKey },
+    ],
+    "the later request retries only the persisted losing object",
+  );
+  assertEquals(
+    deleted.some((target) => target.publicObjectKey.includes(winnerToken)),
+    false,
+    "retry never deletes the later winner object",
+  );
+  assertEquals(cancelledCleanupPending, false, "only the acknowledged loser leaves the outbox");
 });
 
 Deno.test("publish retry is idempotent after durable public state", async () => {
