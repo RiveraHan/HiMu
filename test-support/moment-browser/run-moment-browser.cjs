@@ -5,12 +5,10 @@ const os = require("node:os");
 const path = require("node:path");
 const { getDefaultConfig } = require("@expo/metro-config");
 const { runBuild } = require("@expo/metro/metro");
-const { installSignalCleanup, stopChild } = require("../beta-onboarding-browser/signal-cleanup.cjs");
+const { installSignalCleanup } = require("../beta-onboarding-browser/signal-cleanup.cjs");
 
 const root = path.resolve(__dirname, "../..");
 const fixture = path.join(__dirname, "Moment-browser-fixture.tsx");
-const routerStub = path.join(__dirname, "expo-router-browser-stub.ts");
-const publicStub = path.join(__dirname, "public-track-browser-stub.ts");
 const analyticsStub = path.join(__dirname, "product-analytics-browser-stub.ts");
 const cells = [["320x640", 320, 640, 100], ["390x844", 390, 844, 100], ["768x1024", 768, 1024, 100], ["1024x768", 1024, 768, 100], ["1440x900", 1440, 900, 100], ["720x422", 720, 422, 100], ["200% zoom", 720, 900, 200]];
 const chrome = [process.env.CHROME_BIN, "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"].find((candidate) => candidate && fs.existsSync(candidate));
@@ -62,8 +60,15 @@ async function evaluate(cdp, expression) {
 
 async function resize(cdp, width, height, zoom) {
   const scale = zoom / 100;
-  await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
-  await cdp.send("Emulation.setDeviceMetricsOverride", { width: Math.round(width / scale), height: Math.round(height / scale), deviceScaleFactor: scale, mobile: false });
+  // Page scale is the browser's zoom mechanism. Device pixel ratio is not a
+  // substitute: it affects raster density without exercising zoomed layout.
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width,
+    height,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await cdp.send("Emulation.setPageScaleFactor", { pageScaleFactor: scale });
 }
 
 async function navigate(cdp, origin, route) {
@@ -105,24 +110,49 @@ async function confirmPublic(cdp) {
   await evaluate(cdp, "(() => { const el=Array.from(document.querySelectorAll('[role=dialog] *')).find((item)=>item.getAttribute('aria-label')==='Make public'||item.textContent?.trim()==='Make public'); if (!el) throw new Error('missing publish confirm'); el.dispatchEvent(new MouseEvent('click',{bubbles:true})); return true; })()");
 }
 
+async function activeInDialog(cdp) {
+  return evaluate(cdp, "(() => { const dialog=document.querySelector('[role=dialog]'); return Boolean(dialog && dialog.contains(document.activeElement)); })()");
+}
+
+async function readLocales(cdp, origin) {
+  const result = [];
+  for (const locale of ["en", "es"]) {
+    await navigate(cdp, origin, `/moment?locale=${locale}`);
+    result.push({
+      locale,
+      publishLabel: await evaluate(cdp, "document.querySelector('[data-testid=moment-publish]')?.getAttribute('aria-label') ?? null"),
+      yesLabels: await evaluate(cdp, "Array.from(document.querySelectorAll('[role=radio]')).filter((item) => item.getAttribute('aria-label') === 'Yes' || item.getAttribute('aria-label') === 'Sí').map((item) => item.getAttribute('aria-label'))"),
+      feedbackLabels: await evaluate(cdp, "Array.from(document.querySelectorAll('[role=radiogroup]')).map((item) => item.getAttribute('aria-label'))"),
+    });
+  }
+  return result;
+}
+
 async function scenario(cdp, origin) {
   await navigate(cdp, origin, "/moment");
   await click(cdp, "moment-publish");
   let state = await read(cdp);
-  const privateConfirmation = { role: state.dialog?.role, opened: Boolean(state.dialog), title: state.dialog?.title };
+  const privateConfirmation = {
+    role: state.dialog?.role,
+    opened: Boolean(state.dialog),
+    title: state.dialog?.title,
+    initialFocusInDialog: await activeInDialog(cdp),
+    traversal: [],
+  };
+  await tab(cdp);
+  privateConfirmation.traversal.push({ label: (await read(cdp)).activeLabel, inDialog: await activeInDialog(cdp) });
+  await tab(cdp);
+  privateConfirmation.traversal.push({ label: (await read(cdp)).activeLabel, inDialog: await activeInDialog(cdp) });
+  await tab(cdp, true);
+  privateConfirmation.traversal.push({ label: (await read(cdp)).activeLabel, inDialog: await activeInDialog(cdp) });
+  await tab(cdp, true);
+  privateConfirmation.traversal.push({ label: (await read(cdp)).activeLabel, inDialog: await activeInDialog(cdp) });
   await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
   await delay(30);
   state = await read(cdp);
   privateConfirmation.escapeCancelled = state.dialog === null;
   privateConfirmation.focusReturned = state.activeTestId === "moment-publish";
-
-  await navigate(cdp, origin, "/moment");
-  await evaluate(cdp, "document.querySelector('[data-testid=moment-publish]').focus()");
-  await tab(cdp);
-  privateConfirmation.tabForward = (await read(cdp)).activeLabel;
-  await tab(cdp, true);
-  privateConfirmation.shiftTabReturn = (await read(cdp)).activeTestId;
 
   await navigate(cdp, origin, "/moment");
   await installShare(cdp, "share");
@@ -152,25 +182,17 @@ async function scenario(cdp, origin) {
     sharePresent: await evaluate(cdp, "Boolean(document.querySelector('[data-testid=moment-share]'))"),
   };
 
-  const unavailable = [];
-  for (const id of ["private", "missing"]) {
-    await navigate(cdp, origin, `/track/${id}`);
-    unavailable.push(await read(cdp));
-  }
   return {
     privateConfirmation,
     publicShare,
     clipboardFallback,
     clipboardDenied,
     invalidOrigin,
-    publicUnavailable: { privateBody: unavailable[0].body, missingBody: unavailable[1].body, same: unavailable[0].body === unavailable[1].body },
   };
 }
 
 function configureResolver(config) {
   config.resolver.resolveRequest = (context, name, platform) => {
-    if (name === "expo-router") return { filePath: routerStub, type: "sourceFile" };
-    if (name === "@/src/hooks/use-public-track") return { filePath: publicStub, type: "sourceFile" };
     if (name === "@/src/experience/product-analytics") return { filePath: analyticsStub, type: "sourceFile" };
     return context.resolveRequest(
       { ...context, preferNativePlatform: platform !== "web", mainFields: ["browser", "module", "main"] },
@@ -178,6 +200,62 @@ function configureResolver(config) {
       platform,
     );
   };
+}
+
+function childOutput(child) {
+  const output = { stdout: "", stderr: "" };
+  for (const [name, stream] of [["stdout", child.stdout], ["stderr", child.stderr]]) {
+    stream?.on("data", (chunk) => {
+      output[name] = `${output[name]}${String(chunk)}`.slice(-8_192);
+    });
+  }
+  return output;
+}
+
+async function waitForChild(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return true;
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    const finish = (value) => {
+      clearTimeout(timeout);
+      child.removeListener("exit", onExit);
+      resolve(value);
+    };
+    const onExit = () => finish(true);
+    child.once("exit", onExit);
+  });
+}
+
+async function stopBrowser(child, output) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const send = (signal) => {
+    try {
+      // Chrome is deliberately the leader of a dedicated process group, so
+      // renderer/GPU descendants cannot retain the temporary profile.
+      process.kill(-child.pid, signal);
+    } catch {
+      child.kill(signal);
+    }
+  };
+  send("SIGTERM");
+  if (await waitForChild(child, 4_000)) return;
+  send("SIGKILL");
+  if (await waitForChild(child, 4_000)) return;
+  throw new Error(`Chrome did not terminate. stdout=${JSON.stringify(output.stdout)} stderr=${JSON.stringify(output.stderr)}`);
+}
+
+async function removeTemporaryDirectory(directory, output) {
+  let lastError;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      if (!fs.existsSync(directory)) return;
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(250 * (attempt + 1));
+  }
+  throw new Error(`Could not remove Moment browser profile ${directory}: ${lastError?.message ?? "directory still exists"}. Chrome stdout=${JSON.stringify(output.stdout)} stderr=${JSON.stringify(output.stderr)}`);
 }
 
 async function buildFixture(name, output, shareOrigin) {
@@ -196,11 +274,12 @@ async function main() {
   let cdp;
   let server;
   let signals;
+  let browserOutput = { stdout: "", stderr: "" };
   const cleanup = async () => {
     cdp?.close();
-    if (browser) await stopChild(browser);
+    if (browser) await stopBrowser(browser, browserOutput);
     if (server) await new Promise((resolve) => server.close(resolve));
-    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 20, retryDelay: 200 });
+    await removeTemporaryDirectory(tmp, browserOutput);
     if (originalShareOrigin === undefined) delete process.env.EXPO_PUBLIC_SHARE_ORIGIN;
     else process.env.EXPO_PUBLIC_SHARE_ORIGIN = originalShareOrigin;
   };
@@ -213,12 +292,12 @@ async function main() {
     server = http.createServer((req, res) => {
       if (req.url === "/fixture.js" || req.url === "/fixture-invalid-origin.js") {
         const bundle = req.url === "/fixture.js" ? bundles.valid : bundles.invalid;
-        res.writeHead(200, { "content-type": "text/javascript" });
+        res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
         res.end(fs.readFileSync(bundle));
         return;
       }
       const fixtureUrl = req.url?.startsWith("/moment-invalid-origin") ? "/fixture-invalid-origin.js" : "/fixture.js";
-      res.writeHead(200, { "content-type": "text/html" });
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       res.end(html.replace("__FIXTURE__", fixtureUrl));
     });
     await new Promise((resolve, reject) => {
@@ -227,7 +306,11 @@ async function main() {
     });
     const origin = `http://127.0.0.1:${server.address().port}`;
     const profile = path.join(tmp, "chrome");
-    browser = spawn(chrome, ["--headless=new", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=0", `--user-data-dir=${profile}`, `${origin}/moment`], { stdio: "ignore" });
+    browser = spawn(chrome, ["--headless=new", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=0", `--user-data-dir=${profile}`, `${origin}/moment`], {
+      detached: process.platform !== "win32",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    browserOutput = childOutput(browser);
     const port = (await waitFor(() => fs.existsSync(path.join(profile, "DevToolsActivePort")) && fs.readFileSync(path.join(profile, "DevToolsActivePort"), "utf8"), "Chrome CDP unavailable")).trim().split("\n")[0];
     const pages = await waitFor(async () => {
       const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
@@ -243,7 +326,8 @@ async function main() {
       matrix.push({ label, width, height, zoomPercent, noHorizontalOverflow: snapshot.noHorizontalOverflow, momentVisible: snapshot.momentVisible, visualViewport: snapshot.visualViewport });
     }
     const cases = await scenario(cdp, origin);
-    process.stdout.write(JSON.stringify({ matrix, cases, locales: ["en", "es"] }));
+    const locales = await readLocales(cdp, origin);
+    process.stdout.write(JSON.stringify({ matrix, cases, locales }));
   } finally {
     signals?.dispose();
     await cleanup();

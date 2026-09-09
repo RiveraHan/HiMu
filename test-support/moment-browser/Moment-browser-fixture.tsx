@@ -5,7 +5,6 @@ import { createRoot } from "react-dom/client";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useState } from "react";
 
-import PublicTrackScreen from "../../app/track/[id]";
 import { ConfirmDialogHost } from "../../src/components/ConfirmDialog";
 import { HiMuMomentCard } from "../../src/components/experience/HiMuMomentCard";
 import type { OwnerTrackMoment } from "../../src/moment/moment-types";
@@ -89,7 +88,7 @@ async function start() {
   if (!root) throw new Error("Missing Moment browser root");
   createRoot(root).render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }, insets: { top: 0, right: 0, bottom: 0, left: 0 } }}>
-      {window.location.pathname.startsWith("/track/") ? <PublicTrackScreen /> : <MomentFixture />}
+      <MomentFixture />
     </SafeAreaProvider>,
   );
   window.__HIMU_MOMENT_READ__ = read;

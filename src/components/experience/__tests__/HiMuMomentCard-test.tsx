@@ -2,6 +2,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Platform, StyleSheet as RNStyleSheet } from "react-native";
 
 import i18n from "@/src/i18n";
+import { parseProductEventEnvelope } from "../../../../supabase/functions/product-events/handler";
 import { HiMuMomentCard, restoreMomentActionFocus } from "../HiMuMomentCard";
 
 const mockConfirm = jest.fn();
@@ -255,6 +256,51 @@ test("emits only bounded visibility-opened and share-selected analytics at user 
     shareMethod: expect.stringMatching(/^(native_share|web_share|clipboard|selectable_url)$/),
   });
   expect(JSON.stringify(mockAnalytics.mock.calls)).not.toMatch(/Signal Bloom|DJ One|himu\.test\/track|clipboardContents|recipient/);
+});
+
+test("validates Moment interaction analytics with the production allowlist before transport", async () => {
+  process.env.EXPO_PUBLIC_SHARE_ORIGIN = VALID_SHARE_ORIGIN;
+  mockConfirm.mockResolvedValue(false);
+  const screen = await render(
+    <HiMuMomentCard
+      track={track}
+      moment={privateMoment}
+      feedback={{ surprised: null, wouldShare: null }}
+      setVisibility={mutation(privateMoment)}
+      setFeedback={mutation({ surprised: true, wouldShare: null })}
+    />,
+  );
+
+  await act(async () => { fireEvent.press(screen.getByTestId("moment-publish")); });
+  await act(async () => { fireEvent.press(screen.getAllByRole("radio", { name: "Yes" })[0]!); });
+
+  await screen.rerender(
+    <HiMuMomentCard
+      track={track}
+      moment={{ ...privateMoment, visibility: "public", audioUrl: "https://media.himu.test/generated.mp3" }}
+      feedback={{ surprised: true, wouldShare: null }}
+      setVisibility={mutation(privateMoment)}
+      setFeedback={mutation({ surprised: true, wouldShare: null })}
+    />,
+  );
+  await act(async () => { fireEvent.press(screen.getByTestId("moment-share")); });
+
+  const relevant = mockAnalytics.mock.calls.filter(([name]) => String(name).startsWith("moment_"));
+  expect(relevant.length).toBeGreaterThanOrEqual(3);
+  for (const [index, [name, properties]] of relevant.entries()) {
+    expect(parseProductEventEnvelope({
+      eventId: `00000000-0000-4000-8000-${String(index + 61).padStart(12, "0")}`,
+      installationId: "00000000-0000-4000-8000-000000000041",
+      sessionId: "00000000-0000-4000-8000-000000000042",
+      name,
+      occurredAt: "2026-09-08T12:00:00.000Z",
+      properties,
+    })).toEqual(expect.objectContaining({ ok: true }));
+    expect(Object.keys(properties as Record<string, unknown>)).not.toEqual(
+      expect.arrayContaining(["title", "artist", "audioUrl", "url", "clipboard", "lyrics", "prompt", "recipient"]),
+    );
+    expect(JSON.stringify(properties)).not.toMatch(/Signal Bloom|DJ One|himu\.test\/track|clipboardContents|recipient/i);
+  }
 });
 
 test("collapses locally without removing feedback controls from the player", async () => {
