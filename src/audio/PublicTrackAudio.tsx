@@ -3,7 +3,7 @@ import { Button } from "@/src/components/Button";
 import { Text } from "@/src/components/Text";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 
@@ -12,13 +12,23 @@ export function PublicTrackAudio({ track }: { track: PublicTrackMoment }) {
   const player = useAudioPlayer({ uri: track.audioUrl });
   const status = useAudioPlayerStatus(player);
   const [playbackFailed, setPlaybackFailed] = useState(false);
+  const playbackAttempt = useRef(0);
 
   const play = () => {
+    const attempt = ++playbackAttempt.current;
     setPlaybackFailed(false);
     try {
-      player.play();
+      // expo-audio types play() as void, while browser-backed players can still
+      // return the HTMLMediaElement promise at runtime. Consume that boundary so
+      // autoplay, network, and media rejections become a recoverable UI state.
+      const result = player.play() as unknown;
+      if (isPromiseLike(result)) {
+        void Promise.resolve(result).catch(() => {
+          if (playbackAttempt.current === attempt) setPlaybackFailed(true);
+        });
+      }
     } catch {
-      setPlaybackFailed(true);
+      if (playbackAttempt.current === attempt) setPlaybackFailed(true);
     }
   };
 
@@ -54,6 +64,15 @@ export function PublicTrackAudio({ track }: { track: PublicTrackMoment }) {
         />
       )}
     </View>
+  );
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null
+    && (typeof value === "object" || typeof value === "function")
+    && "then" in value
+    && typeof value.then === "function"
   );
 }
 
