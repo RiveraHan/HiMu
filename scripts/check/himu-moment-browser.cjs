@@ -1,0 +1,17 @@
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
+const path = require("node:path");
+const run = promisify(execFile);
+const root = path.resolve(__dirname, "../..");
+const runnerIndex = process.argv.indexOf("--runner");
+const runner = runnerIndex < 0 ? path.join(root, "test-support/moment-browser/run-moment-browser.cjs") : path.resolve(process.argv[runnerIndex + 1] || "");
+const cells = [["320x640",320,640,100],["390x844",390,844,100],["768x1024",768,1024,100],["1024x768",1024,768,100],["1440x900",1440,900,100],["720x422",720,422,100],["200% zoom",720,900,200]];
+function invariant(value, message) { if (!value) throw new Error(`HiMu Moment browser check failed: ${message}`); }
+function verify(report) {
+  invariant(Array.isArray(report?.matrix), "runner did not return a matrix.");
+  for (const [label,width,height,zoom] of cells) { const cell=report.matrix.find((item)=>item?.label===label); invariant(cell,`missing ${label}.`); invariant(cell.width===width&&cell.height===height&&cell.zoomPercent===zoom,`${label} dimensions are wrong.`); invariant(cell.noHorizontalOverflow===true,`${label} overflows horizontally.`); invariant(cell.momentVisible===true,`${label} does not render the production Moment card.`); const scale=(cell.visualViewport?.scale ?? 1)*(cell.visualViewport?.devicePixelRatio ?? 1); invariant(Math.abs(scale-zoom/100)<.05,`${label} lacks effective zoom evidence.`); }
+  const value=report.cases; invariant(value?.privateConfirmation?.opened && value.privateConfirmation.role === "dialog", "private-confirmation lacks a semantic dialog."); invariant(value.privateConfirmation.escapeCancelled && value.privateConfirmation.focusReturned, "private-confirmation must close with Escape and restore focus."); invariant(value.privateConfirmation.tabForward && value.privateConfirmation.shiftTabReturn === "moment-publish", "private-confirmation lacks Tab/Shift+Tab evidence."); invariant(value?.publicShare?.shareCalls === 1 && value.publicShare.visible, "public-share did not use secure browser sharing."); invariant(value?.clipboardFallback?.copyCalls === 1, "clipboard-fallback did not copy once."); invariant(value?.clipboardDenied?.copyCalls === 1 && value.clipboardDenied.recovery === true, "clipboard-denied did not expose recovery."); invariant(value?.invalidOrigin?.publishDisabled === true && value.invalidOrigin.sharePresent === false, "invalid origin can publish or share."); invariant(value?.publicUnavailable?.same === true && value.publicUnavailable.privateBody === value.publicUnavailable.missingBody, "public-unavailable reveals different private/missing landing states."); invariant(Array.isArray(report.locales) && report.locales.includes("en") && report.locales.includes("es"), "missing localization evidence.");
+}
+async function main() { const {stdout}=await run(process.execPath,[runner],{cwd:root,timeout:180000,maxBuffer:32*1024*1024}); let report; try { report=JSON.parse(stdout); } catch { throw new Error("HiMu Moment browser check failed: runner did not emit JSON."); } verify(report); process.stdout.write("HiMu Moment browser matrix verified: responsive, focus, share, clipboard, invalid-origin, and uniform public-unavailable evidence passed.\n"); }
+module.exports = { verify };
+if (require.main === module) main().catch((error)=>{process.stderr.write(`${error.stack||error}\n`);process.exitCode=1;});

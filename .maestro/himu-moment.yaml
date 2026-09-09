@@ -1,0 +1,28 @@
+appId: com.himu.app
+---
+# Manual Android release gate. Run after creating a ready, AI-generated owner track.
+- launchApp:
+    clearState: false
+- assertVisible: "Moment HiMu"
+- assertVisible: "Make public and share"
+- tapOn: "Make public and share"
+- assertVisible: "Make this track public?"
+- pressKey: BACK
+- assertVisible: "Make public and share"
+- tapOn: "Make public and share"
+- tapOn: "Make public"
+- assertVisible: "Share moment"
+- tapOn: "Share moment"
+# Cancel the native Android share sheet and verify the card remains usable.
+- assertVisible: "Did this result surprise you?"
+- tapOn: "Yes"
+- assertVisible: "Answer saved."
+- tapOn: "Make private"
+- assertVisible: "Make this track private?"
+- pressKey: BACK
+
+# Release manual matrix: compact phone and tablet, portrait and landscape;
+# font scale 1.5 and 2.0; keyboard/safe-area clearance; native-share cancellation;
+# TalkBack reaches Moment status, both confirmation actions, both labelled Yes/No
+# radio groups, saved/error announcements, and copy fallback. Do not mark this
+# scenario passed until those devices, Maestro, and a valid HTTPS share origin exist.

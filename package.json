@@ -44,6 +44,7 @@
     "check:create-dj-browser": "node scripts/check/create-dj-responsive-browser.cjs",
     "check:settings-browser": "node scripts/check/settings-responsive-browser.cjs",
     "check:beta-visual-browser": "node scripts/check/beta-visual-browser.cjs",
+    "check:himu-moment-browser": "node scripts/check/himu-moment-browser.cjs",
     "check:security-remediation-migration": "node --import tsx scripts/check/security-remediation-migration.ts",
     "check:security-quota-invariants": "node --import tsx scripts/check/security-quota-invariants.ts",
     "check:private-media-e2e": "node --import tsx scripts/check/private-media-e2e.ts",
