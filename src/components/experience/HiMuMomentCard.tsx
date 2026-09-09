@@ -154,12 +154,6 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
     }
     : null;
 
-  const restoreActionFocus = (ref: { current: View | null }) => () => {
-    if (Platform.OS === "web") return;
-    const handle = findNodeHandle(ref.current);
-    if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
-  };
-
   const changeVisibility = async (next: TrackMomentVisibility, returnFocus: () => void) => {
     if (next === "public" && !content) {
       toast.warning(t("playback.moment.title"), t("playback.moment.shareUnavailable"));
@@ -290,7 +284,7 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
               ref={publishRef}
               testID="moment-publish"
               label={t("playback.moment.publishAndShare")}
-              onPress={() => void changeVisibility("public", restoreActionFocus(publishRef))}
+              onPress={() => void changeVisibility("public", restoreMomentActionFocus(publishRef))}
               loading={setVisibility.isPending}
               loadingLabel={t("playback.moment.saving")}
               disabled={!content}
@@ -310,7 +304,7 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
                 variant="ghost"
                 testID="moment-make-private"
                 label={t("playback.moment.makePrivate")}
-                onPress={() => void changeVisibility("private", restoreActionFocus(makePrivateRef))}
+                onPress={() => void changeVisibility("private", restoreMomentActionFocus(makePrivateRef))}
                 loading={setVisibility.isPending}
               />
             </View>
@@ -347,6 +341,21 @@ export function HiMuMomentCard({ track, moment, feedback, setVisibility, setFeed
       )}
     </GlassCard>
   );
+}
+
+export function restoreMomentActionFocus(ref: { current: View | null }) {
+  return () => {
+    // Browser automation and assistive technology can activate a button
+    // without first moving DOM focus to it (for example, HTMLElement.click()).
+    // Keep the exact initiating action as the focus target in that case too.
+    if (Platform.OS === "web") {
+      const node = ref.current as unknown as { focus?: () => void } | null;
+      node?.focus?.();
+      return;
+    }
+    const handle = findNodeHandle(ref.current);
+    if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
+  };
 }
 
 function FeedbackQuestion({ label, value, disabled, status, onChange }: Readonly<{

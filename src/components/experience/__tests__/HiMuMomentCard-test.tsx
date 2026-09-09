@@ -2,7 +2,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Platform, StyleSheet as RNStyleSheet } from "react-native";
 
 import i18n from "@/src/i18n";
-import { HiMuMomentCard } from "../HiMuMomentCard";
+import { HiMuMomentCard, restoreMomentActionFocus } from "../HiMuMomentCard";
 
 const mockConfirm = jest.fn();
 const mockToast = { info: jest.fn(), warning: jest.fn(), error: jest.fn() };
@@ -178,6 +178,18 @@ test("uses roving arrow navigation for each feedback radiogroup on web", async (
     await fireEvent(firstYes, "keyDown", { key: "ArrowRight", preventDefault: jest.fn() });
     expect(screen.getAllByRole("radio", { name: "No" })[0]).toHaveProp("accessibilityState", expect.objectContaining({ checked: true }));
     expect(screen.getAllByRole("radio", { name: "No" })[0]!.props.tabIndex).toBe(0);
+  } finally {
+    if (originalPlatform) Object.defineProperty(Platform, "OS", originalPlatform);
+  }
+});
+
+test("restores focus to the initiating action when web activation did not focus it first", () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(Platform, "OS");
+  Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+  try {
+    const focus = jest.fn();
+    restoreMomentActionFocus({ current: { focus } as never })();
+    expect(focus).toHaveBeenCalledTimes(1);
   } finally {
     if (originalPlatform) Object.defineProperty(Platform, "OS", originalPlatform);
   }
