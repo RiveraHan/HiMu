@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(64);
+select plan(66);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -246,6 +246,27 @@ select is(
   ),
   false,
   'a cancelled publish claim cannot later re-publicize the track'
+);
+select results_eq(
+  $$select outcome from public.claim_track_moment_publish(
+    '73000000-0000-4000-8000-000000000002',
+    '71000000-0000-4000-8000-000000000002',
+    '75000000-0000-4000-8000-000000000006',
+    'r2-private://tracks/generated/job/other.mp3'
+  )$$,
+  $$values ('claimed'::text)$$,
+  'a valid private .mp3 source can start another publishing claim'
+);
+select results_eq(
+  $$select outcome, private_audio_ref from public.unpublish_track_moment(
+    '73000000-0000-4000-8000-000000000002',
+    '71000000-0000-4000-8000-000000000002'
+  )$$,
+  $$values (
+    'already_private'::text,
+    'r2-private://tracks/generated/job/other.mp3'::text
+  )$$,
+  'an ordinary private .mp3 key cancels publishing without a conflict'
 );
 select results_eq(
   $$select outcome from public.claim_track_moment_publish(

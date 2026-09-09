@@ -83,4 +83,14 @@ assert.match(
   /v_track\.is_public[\s\S]*state = 'publishing'[\s\S]*insert into public\.track_moment_cleanup_outbox/i,
   "only a still-private publishing claim can become cleanup",
 );
+assert.equal(
+  unpublishCleanupSql.split(String.raw`\.mp3`).length - 1,
+  4,
+  "unpublish cleanup must use the canonical single-backslash .mp3 regexp in every media boundary",
+);
+assert.equal(
+  unpublishCleanupSql.split(String.raw`\\.mp3`).length - 1,
+  0,
+  "unpublish cleanup must not use the double-backslash .mp3 regexp that rejects ordinary private keys",
+);
 console.log("track moment migration checks passed");

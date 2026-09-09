@@ -47,7 +47,7 @@ begin
   end if;
 
   if not v_track.is_public then
-    if v_track.audio_url !~ '^r2-private://tracks/generated/[A-Za-z0-9._%:-]+/[A-Za-z0-9._%:-]+\\.mp3$' then
+    if v_track.audio_url !~ '^r2-private://tracks/generated/[A-Za-z0-9._%:-]+/[A-Za-z0-9._%:-]+\.mp3$' then
       return query select 'invalid_media'::text, null::text, null::text, null::text;
       return;
     end if;
@@ -75,11 +75,11 @@ begin
           '^r2-private://',
           ''
         ),
-        '\\.mp3$',
+        '\.mp3$',
         '.moment-' || v_publication.operation_token::text || '.mp3'
       );
 
-      if v_operation_public_key !~ '^tracks/generated/[A-Za-z0-9._%:-]+/[A-Za-z0-9._%:-]+\\.mp3$'
+      if v_operation_public_key !~ '^tracks/generated/[A-Za-z0-9._%:-]+/[A-Za-z0-9._%:-]+\.mp3$'
         or pg_catalog.strpos(
           v_operation_public_key,
           '.moment-' || v_publication.operation_token::text || '.mp3'
@@ -149,7 +149,7 @@ begin
   if not found
     or v_publication.owner_id is distinct from p_user_id
     or v_publication.state <> 'public'
-    or v_publication.private_audio_ref !~ '^r2-private://tracks/generated/[A-Za-z0-9._%:-]+/[A-Za-z0-9._%:-]+\\.mp3$'
+    or v_publication.private_audio_ref !~ '^r2-private://tracks/generated/[A-Za-z0-9._%:-]+/[A-Za-z0-9._%:-]+\.mp3$'
     or v_publication.public_audio_url is distinct from v_track.audio_url
     or v_publication.public_object_key is null
   then
