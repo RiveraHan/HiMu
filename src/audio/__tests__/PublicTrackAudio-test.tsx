@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react-native";
 
 import { PublicTrackAudio } from "../PublicTrackAudio";
 
@@ -53,6 +53,16 @@ test("shows a recoverable error and retries when public playback rejects asynchr
   });
 
   expect(mockPlayer.play).toHaveBeenCalledTimes(2);
+});
+
+test("keeps the playback error announcement separate from the retry action", async () => {
+  mockPlayer.play.mockRejectedValueOnce(new Error("media could not load"));
+  const screen = await render(<PublicTrackAudio track={track} />);
+
+  await fireEvent.press(screen.getByLabelText("Play"));
+  const alert = await screen.findByRole("alert");
+  expect(within(alert).queryByRole("button", { name: "Try playback again" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Try playback again" })).toBeTruthy();
 });
 
 test("ignores an earlier async rejection after a newer public playback attempt", async () => {

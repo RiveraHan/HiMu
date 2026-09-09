@@ -35,15 +35,17 @@ export function PublicTrackAudio({ track }: { track: PublicTrackMoment }) {
   return (
     <View style={styles.root} testID="public-track-audio">
       {playbackFailed ? (
-        <View
-          accessible
-          accessibilityLiveRegion="polite"
-          accessibilityRole="alert"
-          style={styles.failure}
-        >
-          <Text selectable variant="bodyMd" color="onSurfaceVariant">
-            {t("playback.publicTrack.playbackError")}
-          </Text>
+        <View style={styles.failure}>
+          <View
+            accessible
+            accessibilityLabel={t("playback.publicTrack.playbackError")}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            <Text selectable variant="bodyMd" color="onSurfaceVariant">
+              {t("playback.publicTrack.playbackError")}
+            </Text>
+          </View>
           <Button
             variant="ghost"
             label={t("playback.publicTrack.retryPlayback")}
