@@ -3,11 +3,28 @@ import { Button } from "@/src/components/Button";
 import { Text } from "@/src/components/Text";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { useRef, useState } from "react";
-import { View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Platform, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 export function PublicTrackAudio({ track }: { track: PublicTrackMoment }) {
+  // expo-audio creates browser audio during the hook call. Render the same
+  // inert shell on the server and on the first client pass, then enable it
+  // after hydration to keep public sharing routes server-renderable.
+  const [audioReady, setAudioReady] = useState(Platform.OS !== "web");
+
+  useEffect(() => {
+    setAudioReady(true);
+  }, []);
+
+  if (!audioReady) {
+    return <View style={styles.root} testID="public-track-audio" />;
+  }
+
+  return <PublicTrackAudioPlayer track={track} />;
+}
+
+function PublicTrackAudioPlayer({ track }: { track: PublicTrackMoment }) {
   const { t } = useTranslation();
   const player = useAudioPlayer({ uri: track.audioUrl });
   const status = useAudioPlayerStatus(player);

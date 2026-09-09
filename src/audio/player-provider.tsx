@@ -23,8 +23,9 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { PlaybackConfirmation } from "./playback-confirmation";
 import { resolveTrackPlaybackUrl } from "./private-media";
 
@@ -99,7 +100,24 @@ type PlayerControls = {
 
 export const PlayerContext = createContext<PlayerControls | null>(null);
 
+/**
+ * expo-audio creates an HTMLAudioElement on web. The server renderer has no
+ * Audio global, so defer the real provider until after the first client mount.
+ * Native does not server-render and keeps the existing eager player lifecycle.
+ */
 export function PlayerProvider({ children }: { children: ReactNode }) {
+  const [audioReady, setAudioReady] = useState(Platform.OS !== "web");
+
+  useEffect(() => {
+    setAudioReady(true);
+  }, []);
+
+  if (!audioReady) return <>{children}</>;
+
+  return <AudioPlayerProvider>{children}</AudioPlayerProvider>;
+}
+
+function AudioPlayerProvider({ children }: { children: ReactNode }) {
   // keepAudioSessionActive keeps the iOS audio session active across the
   // silent gap between tracks. Without it, expo-audio deactivates the session
   // the instant a track ends (AudioModule.swift onPlaybackComplete), which
