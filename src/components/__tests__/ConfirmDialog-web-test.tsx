@@ -48,6 +48,8 @@ describe("ConfirmDialogHost.web", () => {
     expect(document.activeElement).toBe(title);
     expect(container.hasAttribute("inert")).toBe(true);
 
+    act(() => title?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true })));
+    expect(document.activeElement).toBe(buttons.at(-1));
     act(() => buttons[0]?.focus());
     act(() => buttons[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true })));
     expect(document.activeElement).toBe(buttons.at(-1));

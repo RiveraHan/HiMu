@@ -46,7 +46,7 @@ export function ConfirmDialogHost() {
     const first = focusables[0];
     const last = focusables.at(-1);
     if (!first || !last) return;
-    if (event.shiftKey && document.activeElement === first) {
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === titleRef.current)) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
