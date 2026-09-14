@@ -58,3 +58,7 @@ reference/
 
 # Disposable native QA credentials and reports
 .native-e2e/
+
+# Keep internal specifications and implementation plans local
+/docs/**/specs/
+/docs/**/plans/
