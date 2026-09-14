@@ -26,7 +26,11 @@ jest.mock("@/src/api/supabase", () => ({
 
 function createQueryClient() {
   return new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: Infinity },
+      // MutationCache.clear() removes entries but does not cancel their GC timers.
+      mutations: { retry: false, gcTime: Infinity },
+    },
   });
 }
 
@@ -73,7 +77,7 @@ test("the exact smoke Player fixture never reaches Supabase ownership, private-d
   });
   expect(supabase.from).not.toHaveBeenCalled();
   expect(supabase.functions.invoke).not.toHaveBeenCalled();
-  view.unmount();
+  await view.unmount();
   client.clear();
 });
 
@@ -102,6 +106,6 @@ test("a smoke favorite press does not invalidate an active favorites observer or
 
   expect(invalidateQueries).not.toHaveBeenCalled();
   expect(supabase.from).not.toHaveBeenCalled();
-  view.unmount();
+  await view.unmount();
   client.clear();
 });

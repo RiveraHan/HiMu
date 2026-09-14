@@ -52,7 +52,11 @@
     "migrate:private-media": "node --env-file=.env --import tsx scripts/migrate/private-media-runner.ts",
     "check:web-foundation": "node --import tsx scripts/check/web-foundation.ts",
     "check:web-core-routes": "node --import tsx scripts/check/web-core-routes.ts",
-    "check:web-route-matrix": "node --import tsx scripts/check/web-route-matrix.ts"
+    "check:web-route-matrix": "node --import tsx scripts/check/web-route-matrix.ts",
+    "typecheck": "tsc --noEmit",
+    "build:web": "expo export --platform web",
+    "privacy:retention": "node --env-file=.env scripts/privacy/retention.mjs",
+    "check:privacy-retention": "node scripts/check/privacy-retention.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -103,6 +107,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "29.5.14",
     "@types/node": "^25.8.0",

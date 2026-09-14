@@ -7,6 +7,7 @@ import { usePlayerStore } from "@/src/stores/player-store";
 
 let mockSession = session("user-a", "token-a");
 let mockStatus = audioStatus(0);
+let mockToggle: (() => void) | null = null;
 let mockFlushListeningStats: (() => Promise<void>) | null = null;
 const mockRpc = jest.fn();
 const mockPlayer = {
@@ -53,6 +54,7 @@ jest.mock("expo-audio", () => ({
 
 function CaptureControls() {
   mockFlushListeningStats = usePlayer().flushListeningStats;
+  mockToggle = usePlayer().toggle;
   return <View />;
 }
 
@@ -113,7 +115,10 @@ describe("PlayerProvider session ownership", () => {
 
     expect(usePlayerStore.getState().currentTrack).toBeNull();
     expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
-    expect(mockPlayer.replace).toHaveBeenCalledWith(null);
+    expect(mockPlayer.replace).not.toHaveBeenCalledWith(null);
+    mockPlayer.play.mockClear();
+    mockToggle?.();
+    expect(mockPlayer.play).not.toHaveBeenCalled();
     expect(mockPlayer.clearLockScreenControls).toHaveBeenCalledTimes(1);
   });
 

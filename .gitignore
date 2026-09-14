@@ -55,3 +55,6 @@ docs/*
 !docs/research/*.md
 
 reference/
+
+# Disposable native QA credentials and reports
+.native-e2e/

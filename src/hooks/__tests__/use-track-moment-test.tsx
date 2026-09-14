@@ -162,10 +162,10 @@ test("upserts only the changed feedback answer so the database preserves the oth
     track_id: TRACK_ID,
     surprised: false,
   }, { onConflict: "user_id,track_id" });
-  expect(view.result.current.setFeedback.data).toEqual({
+  await waitFor(() => expect(view.result.current.setFeedback.data).toEqual({
     surprised: false,
     wouldShare: true,
-  });
+  }));
   expect(client.getQueryData(queryKeys.trackMoments.feedback(USER_ID, TRACK_ID)))
     .toEqual({ surprised: false, wouldShare: true });
   await view.unmount();

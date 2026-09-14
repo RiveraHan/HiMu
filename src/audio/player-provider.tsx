@@ -180,7 +180,8 @@ function AudioPlayerProvider({ children }: { children: ReactNode }) {
     playbackConfirmationRef.current.dispose();
 
     player.pause();
-    player.replace(null);
+    // expo-audio 1.1 rejects null in Android replace(). Keep the old source
+    // paused until the next load replaces it; controls require a current track.
     store.getState().reset();
 
     // Tear down the media session/foreground service for the outgoing owner.
@@ -375,9 +376,10 @@ function AudioPlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const toggle = useCallback(() => {
+    if (!store.getState().currentTrack) return;
     if (player.playing) player.pause();
     else player.play();
-  }, [player]);
+  }, [player, store]);
 
   const next = useCallback(() => {
     const { queue, index, repeatMode, shuffle, shuffleOrder } =
@@ -423,6 +425,7 @@ function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
   // Sync status -> store
   useEffect(() => {
+    if (!store.getState().currentTrack) return;
     statusSequenceRef.current += 1;
     // Accumulate playback time based on position changes.
     // Skips and track changes cause jumps (negative or > 2 s) that are ignored:

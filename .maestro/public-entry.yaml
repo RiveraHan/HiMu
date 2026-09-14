@@ -1,0 +1,18 @@
+appId: com.himu.app
+name: Public introduction to login
+---
+# Requires a signed-out app; see NATIVE_TESTING.md.
+- launchApp
+- openLink: himu://welcome
+- extendedWaitUntil:
+    visible:
+      id: public-intro-existing-action
+    timeout: 30000
+- takeScreenshot: public-intro
+- tapOn:
+    id: public-intro-existing-action
+- extendedWaitUntil:
+    visible:
+      id: login-primary-actions
+    timeout: 15000
+- takeScreenshot: login
