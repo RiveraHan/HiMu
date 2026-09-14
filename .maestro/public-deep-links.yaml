@@ -1,0 +1,22 @@
+appId: com.himu.app
+name: Public deep links cold and warm
+---
+# Requires the signed-out standalone preview/release build described in NATIVE_TESTING.md.
+- stopApp
+- openLink: himu://welcome
+- extendedWaitUntil:
+    visible:
+      id: public-intro-existing-action
+    timeout: 30000
+- tapOn:
+    id: public-intro-existing-action
+- extendedWaitUntil:
+    visible:
+      id: login-primary-actions
+    timeout: 15000
+# Re-enter while the process is already alive.
+- openLink: himu://welcome
+- extendedWaitUntil:
+    visible:
+      id: public-intro-existing-action
+    timeout: 15000

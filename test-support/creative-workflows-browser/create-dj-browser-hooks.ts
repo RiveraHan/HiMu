@@ -16,15 +16,28 @@ const candidates = [
   },
 ];
 
+declare global {
+  interface Window {
+    __HIMU_CREATE_CALLS__?: number;
+    __HIMU_CREATE_INPUT__?: unknown;
+    __HIMU_IDENTITY_REQUESTS__?: number;
+    __HIMU_UPDATE_CALLS__?: number;
+    __HIMU_UPDATE_INPUT__?: unknown;
+  }
+}
+
+window.__HIMU_CREATE_CALLS__ = 0;
+window.__HIMU_IDENTITY_REQUESTS__ = 0;
+window.__HIMU_UPDATE_CALLS__ = 0;
+delete window.__HIMU_CREATE_INPUT__;
+delete window.__HIMU_UPDATE_INPUT__;
+
 export function useCreateDJ() {
   return {
     isPending: false,
-    mutate: () => {
-      const browserWindow = window as typeof window & {
-        __HIMU_CREATE_CALLS__?: number;
-      };
-      browserWindow.__HIMU_CREATE_CALLS__ =
-        (browserWindow.__HIMU_CREATE_CALLS__ ?? 0) + 1;
+    mutate: (input: unknown) => {
+      window.__HIMU_CREATE_CALLS__ = (window.__HIMU_CREATE_CALLS__ ?? 0) + 1;
+      window.__HIMU_CREATE_INPUT__ = input;
     },
   };
 }
@@ -33,11 +46,15 @@ export function useDjIdentityDrafts() {
   return {
     error: null,
     isPending: false,
-    mutateAsync: async () => ({
-      version: 1 as const,
-      kind: "dj-identity" as const,
-      draft: { candidates },
-    }),
+    mutateAsync: async () => {
+      window.__HIMU_IDENTITY_REQUESTS__ =
+        (window.__HIMU_IDENTITY_REQUESTS__ ?? 0) + 1;
+      return {
+        version: 1 as const,
+        kind: "dj-identity" as const,
+        draft: { candidates },
+      };
+    },
   };
 }
 
@@ -65,7 +82,7 @@ export function useDJ() {
       owner_id: "browser-owner",
       is_public: false,
       personality_traits: {
-        energy: 6,
+        energy: 7,
         vibe: "Patient night drive",
         isInstrumental: true,
       },
@@ -90,12 +107,9 @@ export function usePhaseRotation(phases: readonly string[]) {
 export function useUpdateDJ() {
   return {
     isPending: false,
-    mutate: () => {
-      const browserWindow = window as typeof window & {
-        __HIMU_UPDATE_CALLS__?: number;
-      };
-      browserWindow.__HIMU_UPDATE_CALLS__ =
-        (browserWindow.__HIMU_UPDATE_CALLS__ ?? 0) + 1;
+    mutate: (input: unknown) => {
+      window.__HIMU_UPDATE_CALLS__ = (window.__HIMU_UPDATE_CALLS__ ?? 0) + 1;
+      window.__HIMU_UPDATE_INPUT__ = input;
     },
   };
 }

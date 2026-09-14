@@ -1,6 +1,7 @@
 import { getEdgeErrorPayload } from "@/src/api/edge-errors";
 import { usePlayer } from "@/src/audio/use-player";
 import { IconButton, SeekBar, Text } from "@/src/components";
+import { PostTrackExperience } from "@/src/experience";
 import { PlayerArtwork } from "@/src/components/player/PlayerArtwork";
 import {
   PlayerDesktopLayout,
@@ -10,6 +11,7 @@ import { useIsFavorited, useToggleFavorite } from "@/src/hooks/use-favorites";
 import { useRegenerateCover, useTrackOwnership } from "@/src/hooks/use-home";
 import { useTrackPrivateDetails } from "@/src/hooks/use-track-private-details";
 import { useToast } from "@/src/hooks/use-toast";
+import { isBetaSmokeTrack } from "@/src/beta-smoke";
 import { usePlayerStore } from "@/src/stores/player-store";
 import { formatTime } from "@/src/utils/format-time";
 import * as Haptics from "expo-haptics";
@@ -98,6 +100,11 @@ export default function PlayerScreen() {
   }, [track]);
 
   if (!track) return null;
+
+  // The synthetic Player fixture is the only path allowed to suppress its
+  // telemetry boundary. The owner id is part of the fixed local fixture, and
+  // the helper still requires development plus the explicit smoke flag.
+  const isBetaSmokeFixture = isBetaSmokeTrack(track.owner_id, track.id);
 
   // External tracks: Phase A's ephemeral Discover uses the "audius:<id>"
   // client prefix; Phase B's DJ-curated drop materializes a real uuid row
@@ -276,7 +283,7 @@ export default function PlayerScreen() {
 
           <PlayerDesktopLayoutSlot slot="playback">
             <View testID="player-playback-wrap" style={styles.bottom}>
-              <View style={styles.meta}>
+              <View testID="player-metadata" style={styles.meta}>
                 <View style={styles.badge}>
                   <Sparkle size={14} color={theme.colors.primary} />
                   <Text variant="labelCaps" color="primary">
@@ -285,10 +292,10 @@ export default function PlayerScreen() {
                       : t("playback.player.source.himu")}
                   </Text>
                 </View>
-                <Text variant="h1" numberOfLines={1} style={styles.title}>
+                <Text accessibilityRole="header" variant="h1" style={styles.title}>
                   {track.title}
                 </Text>
-                <Text variant="bodyLg" color="onSurfaceVariant" numberOfLines={1}>
+                <Text variant="bodyLg" color="onSurfaceVariant" style={styles.artist}>
                   {track.artist}
                 </Text>
                 {privateDetails.data ? (
@@ -338,7 +345,7 @@ export default function PlayerScreen() {
                 </View>
               </View>
 
-              <View style={styles.controls}>
+              <View testID="player-playback-controls" style={styles.controls}>
                 <Pressable
                   onPress={withHaptic(toggleShuffle)}
                   style={styles.ctrlSm}
@@ -432,6 +439,12 @@ export default function PlayerScreen() {
             </View>
           </PlayerDesktopLayoutSlot>
         </PlayerDesktopLayout>
+        <View testID="player-post-track" style={styles.postTrack}>
+          <PostTrackExperience
+            trackId={track.id}
+            isBetaSmokeFixture={isBetaSmokeFixture}
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -574,6 +587,10 @@ const styles = StyleSheet.create((theme) => ({
     width: "100%",
     paddingHorizontal: theme.spacing.stackMd,
   },
+  artist: {
+    textAlign: "center",
+    width: "100%",
+  },
   versionAction: {
     minHeight: 44,
     justifyContent: "center",
@@ -620,6 +637,10 @@ const styles = StyleSheet.create((theme) => ({
     ...(process.env.EXPO_OS === "ios"
       ? { boxShadow: "0 10px 30px rgba(129,140,248,0.3)" }
       : { elevation: 12 }),
+  },
+  postTrack: {
+    minWidth: 0,
+    width: "100%",
   },
   playPressed: { transform: [{ scale: 1.05 }] },
 }));

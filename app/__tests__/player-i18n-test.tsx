@@ -4,6 +4,8 @@ import * as mockReact from "react";
 import { StyleSheet, View as mockNativeView } from "react-native";
 import PlayerScreen from "@/app/player";
 import i18n from "@/src/i18n";
+import { BETA_SMOKE_TRACK } from "@/src/beta-smoke";
+import type { PlayerTrack } from "@/src/stores/player-store";
 
 const Viewport = mockNativeView;
 
@@ -16,7 +18,7 @@ const track = {
   duration: 180,
   genre: "House",
 };
-let mockTrack = track;
+let mockTrack: PlayerTrack = track;
 let mockShuffle = false;
 let mockRepeatMode: "off" | "all" | "one" = "off";
 const mockRegenerate = jest.fn();
@@ -28,6 +30,9 @@ let mockPrivateDetails: null | { trackId: string; confirmedLyrics: string; djId:
   djId: "dj-one",
 };
 const mockToastError = jest.fn();
+const mockPostTrackExperience = jest.fn(({ trackId }: { trackId: string }) => (
+  mockReact.createElement(mockNativeView, { testID: "player-nudge-boundary", accessibilityLabel: trackId })
+));
 let mockEdgePayload = {
   code: null as string | null,
   dailyLimit: null as number | null,
@@ -86,6 +91,9 @@ jest.mock("@/src/hooks/use-toast", () => ({
 jest.mock("@/src/api/edge-errors", () => ({
   getEdgeErrorPayload: jest.fn(async () => mockEdgePayload),
 }));
+jest.mock("@/src/experience", () => ({
+  PostTrackExperience: (props: { trackId: string }) => mockPostTrackExperience(props),
+}));
 jest.mock("expo-router", () => ({
   router: {
     canDismiss: () => true,
@@ -120,6 +128,7 @@ describe("PlayerScreen localization", () => {
 
   afterEach(() => {
     warnSpy.mockRestore();
+    delete process.env.EXPO_PUBLIC_BETA_SMOKE;
   });
 
   test("submits the current track ID and title for cover activity", async () => {
@@ -176,13 +185,41 @@ describe("PlayerScreen localization", () => {
     expect(screen.getByText("DJ One")).toBeTruthy();
   });
 
-  test("keeps one compact-ordered stage while CSS maps it to a desktop two-column landmark", async () => {
+  test("keeps core player controls operable when the post-track extension is present", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+
+    expect(screen.getByTestId("player-nudge-boundary")).toBeTruthy();
+    expect(mockPostTrackExperience).toHaveBeenCalledWith({
+      trackId: "track-one",
+      isBetaSmokeFixture: false,
+    });
+    expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
+  });
+
+  test("only passes the no-analytics fixture boundary for the exact guarded synthetic track", async () => {
+    await i18n.changeLanguage("en");
+    process.env.EXPO_PUBLIC_BETA_SMOKE = "1";
+    mockTrack = BETA_SMOKE_TRACK;
+    mockOwnership = false;
+    mockPrivateDetails = null;
+
+    await render(<PlayerScreen />);
+
+    expect(mockPostTrackExperience).toHaveBeenCalledWith({
+      trackId: BETA_SMOKE_TRACK.id,
+      isBetaSmokeFixture: true,
+    });
+  });
+
+  test("keeps one compact-ordered stage and source-ordered player landmarks", async () => {
     await i18n.changeLanguage("en");
     const screen = await render(<PlayerScreen />);
 
     const stage = screen.getByTestId("player-desktop-stage");
     expect(StyleSheet.flatten(stage.props.style)).toEqual(
-      expect.objectContaining({ flexDirection: { xs: "column", xl: "row" } }),
+      expect.objectContaining({ flexDirection: "column" }),
     );
     expect(screen.getByTestId("player-desktop-stage").children).toEqual([
       screen.getByTestId("player-desktop-artwork"),
@@ -190,6 +227,22 @@ describe("PlayerScreen localization", () => {
     ]);
     expect(screen.getAllByRole("button", { name: "Pause" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Next" })).toHaveLength(1);
+  });
+
+  test("keeps metadata before playback and post-track actions without truncating identity", async () => {
+    await i18n.changeLanguage("en");
+    const screen = await render(<PlayerScreen />);
+    const renderedTree = JSON.stringify(screen.toJSON());
+    const positions = [
+      "player-metadata",
+      "player-playback-controls",
+      "player-post-track",
+    ].map((testID) => renderedTree.indexOf(`\"testID\":\"${testID}\"`));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
+    expect(screen.getByText("Signal Bloom").props.numberOfLines).toBeUndefined();
+    expect(screen.getByText("DJ One").props.numberOfLines).toBeUndefined();
   });
 
   test("keeps compact artwork and playback wrappers at their natural height", async () => {

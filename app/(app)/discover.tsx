@@ -16,10 +16,11 @@ import { TourTarget, useAppTour } from "@/src/onboarding";
 import { PlayerTrack, usePlayerStore } from "@/src/stores/player-store";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 
 // Curated Audius genres (exact API strings), chosen for overlap with HiMu's DJs.
 const GENRES: { titleKey: string; genre?: string }[] = [
@@ -37,6 +38,8 @@ const GENRES: { titleKey: string; genre?: string }[] = [
 export default function DiscoverScreen() {
   const { t } = useTranslation();
   const { theme } = useUnistyles();
+  const { width, height } = useWindowDimensions();
+  const visualLayout = resolveBetaVisualLayout({ width, height });
   const insets = useSafeAreaInsets();
   const paddingBottom = useTabBarPadding();
   const online = useOnlineStatus();
@@ -109,6 +112,10 @@ export default function DiscoverScreen() {
       ]}
       keyboardShouldPersistTaps="handled"
     >
+        <View
+          testID="discover-content"
+          style={[styles.surface, visualLayout.lowHeight && styles.surfaceLowHeight]}
+        >
         <View style={styles.searchHeader} testID="discover-search-header">
           <View style={styles.header}>
             <Text variant="h1">{t("discover.title")}</Text>
@@ -218,6 +225,7 @@ export default function DiscoverScreen() {
             </Text>
           </>
         )}
+        </View>
     </ScreenScrollView>
   );
 }
@@ -228,6 +236,14 @@ const styles = StyleSheet.create((theme) => ({
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
   },
+  surface: {
+    minWidth: 0,
+    width: "100%",
+    gap: theme.spacing.stackLg,
+  },
+  surfaceLowHeight: {
+    gap: theme.spacing.stackMd,
+  },
   searchHeader: {
     flexDirection: { xs: "column", xl: "row" },
     alignItems: { xs: "stretch", xl: "flex-end" },
@@ -236,6 +252,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   header: { gap: theme.spacing.stackXs },
   searchControl: { flex: 1 },
-  results: { gap: theme.spacing.stackMd },
+  results: { gap: theme.spacing.stackMd, minWidth: 0 },
   attribution: { textAlign: "center", marginTop: theme.spacing.stackMd },
 }));

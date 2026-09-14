@@ -17,6 +17,9 @@ import {
   buildAudiusPickInput,
   fallbackAudiusPickCaption,
 } from "../../supabase/functions/generate-mix/audius-drop";
+import * as audiusDropModule from "../../supabase/functions/generate-mix/audius-drop";
+import type { CreativeUsageEvent } from "../../supabase/functions/_shared/creative-telemetry";
+import type { NormalizedPrediction } from "../../supabase/functions/_shared/replicate";
 
 function check(cond: boolean, msg: string) {
   if (!cond) {
@@ -98,4 +101,70 @@ check(none.index === 0, "no PICK -> index 0");
 check(none.caption === null, "no CAPTION -> null");
 check(parsePickResponse("PICK: 2\nCAPTION: " + "x".repeat(200), 3).caption!.length === 140, "caption capped at 140");
 
-console.log("✓ audius-drop helpers OK");
+async function checkObservedAudiusPick() {
+  const events: CreativeUsageEvent[] = [];
+  const timestamps = [3_000, 3_220];
+  const pickObserved = (audiusDropModule as unknown as {
+    pickAudiusDropWithDependencies?: (
+      dj: unknown,
+      localHour: unknown,
+      language: "en" | "es",
+      dependencies: Record<string, unknown>,
+    ) => Promise<{ pick: { id: string }; caption: string } | null>;
+  }).pickAudiusDropWithDependencies;
+  const picked = pickObserved
+    ? await pickObserved(dj, 21, "es", {
+      fetchCandidates: async () => [
+        { id: "track-1", title: "Luz Azul", user: { name: "Mara" } },
+        { id: "track-2", title: "Mar de Vidrio", user: { name: "Nilo" } },
+      ],
+      predict: async () => ({
+        output: "PICK: 2\nCAPTION: El pulso de Nilo convierte cada síncopa en un horizonte nuevo.",
+        predictionId: "audius-pick-1",
+        modelId: "meta/llama-4-scout-instruct",
+        startedAt: null,
+        completedAt: null,
+        metrics: {
+          inputTokens: 300,
+          outputTokens: 40,
+          inputCharacters: null,
+          outputSeconds: null,
+          predictSeconds: 0.2,
+        },
+      } satisfies NormalizedPrediction<string>),
+      recordUsage: (event: CreativeUsageEvent) => events.push(event),
+      now: () => timestamps.shift() ?? 3_220,
+    })
+    : null;
+
+  assert.equal(picked?.pick.id, "track-2");
+  assert.equal(
+    picked?.caption,
+    "El pulso de Nilo convierte cada síncopa en un horizonte nuevo.",
+  );
+  assert.deepEqual(events, [{
+    role: "creative_shortform",
+    modelId: "meta/llama-4-scout-instruct",
+    status: "succeeded",
+    promptVersion: "audius-pick-v2.es",
+    briefVersion: 0,
+    language: "es",
+    outcome: "generated",
+    repaired: false,
+    latencyMs: 220,
+    estimatedCostUsd: 0.000077,
+    inputUnits: 300,
+    outputUnits: 40,
+  }]);
+  assert.doesNotMatch(
+    JSON.stringify(events),
+    /Luz Azul|Mar de Vidrio|Mara|Nilo|horizonte nuevo/,
+  );
+}
+
+checkObservedAudiusPick()
+  .then(() => console.log("✓ audius-drop helpers OK"))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

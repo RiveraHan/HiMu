@@ -8,13 +8,19 @@
  */
 
 import { streamUrl } from "../_shared/audius.ts";
-import { generateCoverImage } from "../_shared/cover.ts";
+import { generateCoverImage, type CoverContext } from "../_shared/cover.ts";
+import { resolveCreativeModel } from "../_shared/creative-models.ts";
+import { runObservedCreativePrediction } from "../_shared/creative-telemetry.ts";
 import { json } from "../_shared/http.ts";
 import { r2Delete, r2Put } from "../_shared/r2.ts";
-import { replicateRun, replicateText } from "../_shared/replicate.ts";
+import {
+  replicateMediaPrediction,
+  replicateTextPrediction,
+} from "../_shared/replicate.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import { pickAudiusDrop } from "./audius-drop.ts";
+import { buildGenerationSeasoning } from "./generation-seasoning.ts";
 import {
   handleGenerateMixRequest,
   mapDailyJobReservation,
@@ -30,83 +36,62 @@ async function generateCover(
   objectKey: string,
   dj: any,
   instrumental: boolean,
+  context?: Pick<
+    CoverContext,
+    "seed" | "visualPlan" | "language" | "briefVersion"
+  >,
 ): Promise<string | null> {
   try {
     return await generateCoverImage(objectKey, {
       genre: dj.genre_specialties?.[0] ?? "",
       moods: dj.mood_tags ?? [],
       instrumental,
+      seed: context?.seed,
+      visualPlan: context?.visualPlan ?? null,
+      language: context?.language,
+      briefVersion: context?.briefVersion,
     });
   } catch (_error) {
     return dj.avatar_url ?? null;
   }
 }
 
-const TOP_GENRE_DAYS = 14;
-
-// Catalog-only clauses: the user's taste nudges the mix; the DJ's base_prompt
-// still leads. No user-provided free text enters the prompt here.
 async function buildSeasoning(
   userId: string,
   dj: any,
   localHour: unknown,
 ): Promise<string[]> {
-  const clauses: string[] = [];
-
-  try {
-    const since = new Date(Date.now() - TOP_GENRE_DAYS * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
-
-    const [{ data: prefs }, { data: stats }] = await Promise.all([
-      admin
-        .from("music_preferences")
-        .select("genres")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      admin
-        .from("listening_stats")
-        .select("top_genre")
-        .eq("user_id", userId)
-        .gte("date", since)
-        .not("top_genre", "is", null),
-    ]);
-
-    const counts = new Map<string, number>();
-    for (const row of stats ?? []) {
-      counts.set(row.top_genre, (counts.get(row.top_genre) ?? 0) + 1);
-    }
-    const topGenre =
-      [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-
-    const djGenres: string[] = dj?.genre_specialties ?? [];
-    const candidates = [topGenre, ...(prefs?.genres ?? [])].filter(
-      (genre): genre is string => typeof genre === "string",
-    );
-    const emphasis = candidates.find((genre) => djGenres.includes(genre));
-    if (emphasis) clauses.push(`emphasis on ${emphasis.toLowerCase()}`);
-  } catch (error) {
-    console.error("[generate-mix] seasoning skipped:", error);
-  }
-
-  const hour =
-    typeof localHour === "number" &&
-      Number.isInteger(localHour) &&
-      localHour >= 0 &&
-      localHour <= 23
-      ? localHour
-      : new Date().getUTCHours();
-
-  clauses.push(
-    hour >= 5 && hour <= 11
-      ? "fresh morning feel"
-      : hour >= 12 && hour <= 17
-        ? "steady daytime flow"
-        : hour >= 18 && hour <= 22
-          ? "evening warmth"
-          : "late night atmosphere",
+  return await buildGenerationSeasoning(
+    {
+      userId,
+      djGenres: Array.isArray(dj?.genre_specialties)
+        ? dj.genre_specialties
+        : [],
+      localHour,
+    },
+    {
+      loadPreferences: async (lookupUserId) => {
+        const { data, error } = await admin
+          .from("music_preferences")
+          .select("genres,atmosphere")
+          .eq("user_id", lookupUserId)
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      loadTopGenres: async (lookupUserId, since) => {
+        const { data, error } = await admin
+          .from("listening_stats")
+          .select("top_genre")
+          .eq("user_id", lookupUserId)
+          .gte("date", since)
+          .not("top_genre", "is", null);
+        if (error) throw error;
+        return (data ?? []).map((row) => row.top_genre);
+      },
+      now: () => new Date(),
+    },
   );
-  return clauses;
 }
 
 const generationDependencies = {
@@ -230,8 +215,30 @@ const generationDependencies = {
     return data;
   },
   pickAudiusDrop,
-  replicateRun,
-  replicateText,
+  replicateRun: async (endpoint, body, observation) => {
+    const model = resolveCreativeModel(observation.role);
+    if (model.endpoint !== endpoint) throw new Error("creative_model_endpoint_mismatch");
+    return await runObservedCreativePrediction(
+      { model, ...observation },
+      () =>
+        replicateMediaPrediction(endpoint, body, {
+          pollIntervalMs: 3_000,
+          maxPolls: 80,
+        }),
+    );
+  },
+  replicateText: async (endpoint, body, observation) => {
+    const model = resolveCreativeModel(observation.role);
+    if (model.endpoint !== endpoint) throw new Error("creative_model_endpoint_mismatch");
+    return await runObservedCreativePrediction(
+      { model, ...observation },
+      () =>
+        replicateTextPrediction(endpoint, body, {
+          pollIntervalMs: 1_500,
+          maxPolls: 40,
+        }),
+    );
+  },
   fetchMedia: (url: string) => fetch(url),
   r2Put,
   r2Delete,

@@ -11,6 +11,11 @@ import {
   MusicPreferences,
 } from "@/src/types/music-preferences";
 import { useCurrentUser } from "./use-auth";
+import { isBetaSmokeUser } from "@/src/beta-smoke";
+import {
+  readBetaSmokeMusicPreferences,
+  writeBetaSmokeMusicPreferences,
+} from "@/src/beta-smoke-storage";
 
 export function useMusicPreferences() {
   const user = useCurrentUser();
@@ -19,9 +24,12 @@ export function useMusicPreferences() {
     queryKey: queryKeys.musicPreferences.me(user?.id ?? null),
     enabled: !!user,
     queryFn: async (): Promise<MusicPreferences> => {
+      if (isBetaSmokeUser(user?.id)) {
+        return readBetaSmokeMusicPreferences(user!.id);
+      }
       const { data, error } = await supabase
         .from("music_preferences")
-        .select("genres, moods, vibe_mapping, ai_frequency, discovery_depth")
+        .select("genres, moods, atmosphere")
         .eq("user_id", user!.id)
         .maybeSingle();
 
@@ -39,6 +47,10 @@ export function useUpdateMusicPreferences() {
   return useMutation({
     mutationKey: authMutationKey("update-music-preferences", userId),
     mutationFn: async (next: MusicPreferences) => {
+      if (isBetaSmokeUser(userId)) {
+        await writeBetaSmokeMusicPreferences(userId, next);
+        return;
+      }
       const scope = captureAuthScope(userId);
       const { error } = await setAuthScopeHeader(
         supabase.from("music_preferences").upsert(
@@ -46,12 +58,7 @@ export function useUpdateMusicPreferences() {
             user_id: scope.userId,
             genres: next.genres,
             moods: next.excludedMoods,
-            vibe_mapping: {
-              organic_electronic: next.vibeMapping.organicElectronic,
-              melancholic_euphoric: next.vibeMapping.melancholicEuphoric,
-            },
-            ai_frequency: next.aiFrequency,
-            discovery_depth: next.discoveryDepth,
+            atmosphere: next.atmosphere,
           },
           { onConflict: "user_id" },
         ),

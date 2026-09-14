@@ -17,8 +17,12 @@ import { useGenerateMix } from "@/src/hooks/use-generate-mix";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
 import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useTrackPrivateDetails } from "@/src/hooks/use-track-private-details";
+import { BETA_SMOKE_TRACK, isBetaSmokeUser } from "@/src/beta-smoke";
+import { markBetaSmokeTrackReady } from "@/src/beta-smoke-storage";
+import { usePlayerStore } from "@/src/stores/player-store";
 import { useLocale } from "@/src/i18n/use-locale";
 import type {
+  CreativeProductionPlanV1,
   CreativeDraftResponse,
   DjTraitSnapshot,
   GenerationBriefDraft,
@@ -71,13 +75,23 @@ function mergeInitialDraft(
   base: GenerationBriefDraft,
   response: CreativeDraftResponse,
   preserveLyrics: boolean,
-): GenerationBriefDraft {
+): {
+  draft: GenerationBriefDraft;
+  productionPlan: CreativeProductionPlanV1 | null;
+  planStatus: "missing" | "fresh" | "stale";
+} {
   if (response.kind !== "track-brief") throw new Error("invalid_track_brief");
-  return base.mode === "instrumental"
-    ? { ...base, ...response.draft, lyricTheme: null, lyrics: null }
+  const { productionPlan, ...suggested } = response.draft;
+  const draft = base.mode === "instrumental"
+    ? { ...base, ...suggested, lyricTheme: null, lyrics: null }
     : preserveLyrics
-      ? { ...base, ...response.draft, lyrics: base.lyrics }
-      : { ...base, ...response.draft };
+      ? { ...base, ...suggested, lyrics: base.lyrics }
+      : { ...base, ...suggested };
+  return {
+    draft,
+    productionPlan: productionPlan ?? null,
+    planStatus: productionPlan ? preserveLyrics ? "stale" : "fresh" : "missing",
+  };
 }
 
 function sameSnapshot(left: DjTraitSnapshot, right: DjTraitSnapshot): boolean {
@@ -106,6 +120,7 @@ export default function CreateTrackScreen() {
   const paddingBottom = useMiniPlayerPadding();
   const online = useOnlineStatus();
   const user = useCurrentUser();
+  const setNowPlaying = usePlayerStore((store) => store.setNowPlaying);
   const djQuery = useDJ(djId);
   const dj = djQuery.data;
   const owned = !!dj && !!user?.id && dj.owner_id === user.id;
@@ -160,12 +175,16 @@ export default function CreateTrackScreen() {
   const recordChanged = previousRecordKey.current !== recordKey;
   const language = resolvedLanguage.startsWith("es") ? "es" as const : "en" as const;
 
-  const installDraft = useCallback((draft: GenerationBriefDraft) => {
+  const installDraft = useCallback((
+    draft: GenerationBriefDraft,
+    productionPlan: CreativeProductionPlanV1 | null = null,
+    planStatus: "missing" | "fresh" | "stale" = productionPlan ? "fresh" : "missing",
+  ) => {
     draftRevision.current += 1;
     fieldEpoch.current.title += 1;
     fieldEpoch.current.creativeDirection += 1;
     fieldEpoch.current.lyrics += 1;
-    setState(createBriefDraft(draft));
+    setState({ ...createBriefDraft(draft, productionPlan), planStatus });
   }, []);
 
   const prepare = useCallback(async () => {
@@ -191,7 +210,12 @@ export default function CreateTrackScreen() {
         editEpoch.current === requestedAtEpoch &&
         latestBaseKey.current === requestedBaseKey
       ) {
-        installDraft(mergeInitialDraft(baseDraft, response, !!sourceTrackId));
+        const prepared = mergeInitialDraft(baseDraft, response, !!sourceTrackId);
+        installDraft(
+          prepared.draft,
+          prepared.productionPlan,
+          prepared.planStatus,
+        );
       }
     } catch {
       if (
@@ -371,7 +395,13 @@ export default function CreateTrackScreen() {
         sourceTrackId: sourceTrackId ?? null,
       });
       if (submitFlight.current !== flight) return;
-      router.replace({ pathname: "/dj/[id]", params: { id: djId } });
+      if (isBetaSmokeUser(user?.id) && djId === "beta-smoke-dj") {
+        await markBetaSmokeTrackReady(user?.id ?? "");
+        setNowPlaying(BETA_SMOKE_TRACK, [BETA_SMOKE_TRACK], 0);
+        router.replace("/player");
+      } else {
+        router.replace({ pathname: "/dj/[id]", params: { id: djId } });
+      }
     } catch {
       if (submitFlight.current === flight) {
         setSubmitError(true);
@@ -407,6 +437,14 @@ export default function CreateTrackScreen() {
         form: null,
         review: (
           <View style={styles.confirmation}>
+            {submitError ? (
+              <StateNotice
+                compact
+                kind="error"
+                testID="create-track-validation"
+                title={t("dj.profile.genericError")}
+              />
+            ) : null}
             <GenerationConfirmation
               brief={state.confirmed}
               disabled={!online || generationBlocked || isStarting || isSubmitting}
@@ -419,9 +457,6 @@ export default function CreateTrackScreen() {
               }}
               onGenerate={() => void onGenerate()}
             />
-            {submitError ? (
-              <StateNotice kind="error" title={t("dj.profile.genericError")} compact />
-            ) : null}
           </View>
         ),
         footer: null,

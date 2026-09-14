@@ -1,6 +1,7 @@
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { useCurrentUser } from "@/src/hooks/use-auth";
+import { isBetaSmokeTrack } from "@/src/beta-smoke";
 import type { PlayerTrack } from "@/src/stores/player-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -48,9 +49,12 @@ export function useFavorites() {
 // the player's heart icon.
 export function useIsFavorited(trackId: string | undefined) {
   const user = useCurrentUser();
+  const isSmokeFixture = isBetaSmokeTrack(user?.id, trackId);
   return useQuery({
     queryKey: queryKeys.favorites.isFavorited(user?.id ?? null, trackId ?? ""),
-    enabled: !!trackId && !!user,
+    // Do not query a real favorites row while exercising the local fixture.
+    enabled: !!trackId && !!user && !isSmokeFixture,
+    initialData: isSmokeFixture ? false : undefined,
     queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
         .from("favorites")
@@ -80,6 +84,10 @@ export function useToggleFavorite() {
       track: PlayerTrack;
       isFavorited: boolean;
     }) => {
+      // A press on the visible heart in the smoke Player is intentionally a
+      // local no-op. This check is exact so ordinary development sessions and
+      // all production tracks still use the normal mutation path.
+      if (isBetaSmokeTrack(userId, track.id)) return;
       const scope = captureAuthScope(userId);
 
       if (isFavorited) {
@@ -110,6 +118,7 @@ export function useToggleFavorite() {
       }
     },
     onMutate: async ({ track, isFavorited }) => {
+      if (isBetaSmokeTrack(userId, track.id)) return undefined;
       const key = queryKeys.favorites.isFavorited(userId, track.id);
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<boolean>(key);
@@ -121,7 +130,8 @@ export function useToggleFavorite() {
         qc.setQueryData(context.key, context.previous);
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, { track }) => {
+      if (isBetaSmokeTrack(userId, track.id)) return;
       if (!isCurrentMutationUser(userId)) return;
       qc.invalidateQueries({ queryKey: queryKeys.favorites.all(userId) });
     },

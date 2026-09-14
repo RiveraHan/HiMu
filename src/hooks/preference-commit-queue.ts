@@ -5,17 +5,20 @@ export type PreferencePatch = (
   current: MusicPreferences,
 ) => MusicPreferences;
 
+export type PreferenceSaveStatus = "idle" | "saving" | "saved" | "error";
+
 type PendingPatch = {
   id: number;
   apply: PreferencePatch;
 };
 
-type PreferenceCommitQueueOptions = {
+export type PreferenceCommitQueueOptions = {
   baseline: MusicPreferences;
   writeOptimistic: (next: MusicPreferences) => void;
   persist: (snapshot: MusicPreferences) => Promise<void>;
   cancel: () => Promise<unknown> | void;
   invalidate: () => Promise<unknown> | void;
+  onStatus?: (status: PreferenceSaveStatus) => void;
   onFailure: (error: unknown) => void;
 };
 
@@ -86,6 +89,10 @@ export class PreferenceCommitQueue {
     }
   }
 
+  current(): MusicPreferences {
+    return replay(this.confirmedBaseline, this.pending);
+  }
+
   commit(apply: PreferencePatch): void {
     const wasIdle = this.pending.length === 0;
     const shouldStartDrain = this.drainPromise === null;
@@ -116,12 +123,14 @@ export class PreferenceCommitQueue {
   }
 
   private async drain(generation: number): Promise<void> {
+    let outcome: "none" | "success" | "failure" = "none";
     while (this.generation === generation) {
       while (this.pending.length > 0 && this.generation === generation) {
         const head = this.pending[0];
         const snapshot = head.apply(this.confirmedBaseline);
 
         try {
+          this.status(generation, "saving");
           await this.options.persist(snapshot);
         } catch (error) {
           if (this.generation !== generation) return;
@@ -129,6 +138,8 @@ export class PreferenceCommitQueue {
           this.options.writeOptimistic(
             replay(this.confirmedBaseline, this.pending),
           );
+          outcome = "failure";
+          this.status(generation, "error");
           this.options.onFailure(error);
           continue;
         }
@@ -137,14 +148,31 @@ export class PreferenceCommitQueue {
         if (this.pending[0]?.id !== head.id) continue;
         this.confirmedBaseline = snapshot;
         this.pending.shift();
+        outcome = "success";
         this.options.writeOptimistic(
           replay(this.confirmedBaseline, this.pending),
         );
       }
 
       if (this.generation !== generation) return;
-      await this.options.invalidate();
-      if (this.generation !== generation || this.pending.length === 0) return;
+      try {
+        await this.options.invalidate();
+      } catch (error) {
+        if (this.generation !== generation) return;
+        outcome = "failure";
+        this.status(generation, "error");
+        this.options.onFailure(error);
+        return;
+      }
+      if (this.generation !== generation) return;
+      if (this.pending.length === 0) {
+        if (outcome === "success") this.status(generation, "saved");
+        return;
+      }
     }
+  }
+
+  private status(generation: number, status: PreferenceSaveStatus): void {
+    if (this.generation === generation) this.options.onStatus?.(status);
   }
 }

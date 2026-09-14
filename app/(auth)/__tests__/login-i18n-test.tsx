@@ -7,6 +7,8 @@ import i18n from "@/src/i18n";
 import { darkTheme, lightTheme } from "@/src/theme/theme";
 
 const mockToastError = jest.fn();
+const mockSetSession = jest.fn();
+const mockTrackProductEvent = jest.fn();
 let mockWindowWidth = 390;
 
 function resolveAtWidth<T>(value: T | { xs?: T; xl?: T }, width: number): T | undefined {
@@ -55,6 +57,11 @@ jest.mock("@/src/api/auth", () => ({
   authApi: { signInWithGoogle: jest.fn() },
 }));
 
+jest.mock("@/src/experience", () => ({
+  PUBLIC_INTRO_VERSION: 2,
+  trackProductEvent: (...args: unknown[]) => mockTrackProductEvent(...args),
+}));
+
 jest.mock("@/src/audio/use-player", () => ({
   usePlayer: () => ({
     next: jest.fn(),
@@ -72,19 +79,44 @@ jest.mock("@/src/hooks/use-toast", () => ({
   useToast: () => ({ error: mockToastError, info: jest.fn() }),
 }));
 
+jest.mock("@/src/stores/auth-store", () => ({
+  useAuthStore: {
+    getState: () => ({ setSession: (...args: unknown[]) => mockSetSession(...args) }),
+  },
+}));
+
 describe("Login translations", () => {
   beforeEach(async () => {
     mockWindowWidth = 390;
     await i18n.changeLanguage("es");
     mockToastError.mockClear();
+    mockSetSession.mockClear();
+    mockTrackProductEvent.mockReset().mockResolvedValue(undefined);
     jest.mocked(authApi.signInWithGoogle).mockReset();
     delete process.env.EXPO_PUBLIC_TERMS_URL;
     delete process.env.EXPO_PUBLIC_PRIVACY_URL;
+    delete process.env.EXPO_PUBLIC_BETA_SMOKE;
     jest.spyOn(Linking, "openURL").mockResolvedValue(true);
   });
 
   afterEach(() => {
+    delete process.env.EXPO_PUBLIC_BETA_SMOKE;
     jest.restoreAllMocks();
+  });
+
+  it("exposes a synthetic local session only through the explicit debug smoke action", async () => {
+    const ordinary = await render(<LoginScreen />);
+    expect(ordinary.queryByRole("button", { name: "Continue beta smoke" })).toBeNull();
+    await ordinary.unmount();
+
+    process.env.EXPO_PUBLIC_BETA_SMOKE = "1";
+    const smoke = await render(<LoginScreen />);
+    await fireEvent.press(smoke.getByRole("button", { name: "Continue beta smoke" }));
+
+    expect(mockSetSession).toHaveBeenCalledTimes(1);
+    expect(mockSetSession).toHaveBeenCalledWith(
+      expect.objectContaining({ user: expect.objectContaining({ id: "beta-smoke-local-user" }) }),
+    );
   });
 
   it("renders without initializing Supabase when public configuration is absent", async () => {
@@ -125,6 +157,22 @@ describe("Login translations", () => {
     expect(screen.getByRole("link", { name: "Privacidad" })).toBeTruthy();
     expect(screen.queryByText("Iniciar sesión con correo")).toBeNull();
     expect(screen.queryByText(/Invitado|Guest/)).toBeNull();
+  });
+
+  it("keeps the product promise before sign-in action and supporting links", async () => {
+    mockWindowWidth = 1440;
+    process.env.EXPO_PUBLIC_TERMS_URL = "https://himu.app/terms";
+    process.env.EXPO_PUBLIC_PRIVACY_URL = "https://himu.app/privacy";
+    const screen = await render(<LoginScreen />);
+    const renderedTree = JSON.stringify(screen.toJSON());
+    const positions = [
+      "login-hero-promise",
+      "login-primary-actions",
+      "login-supporting-links",
+    ].map((testID) => renderedTree.indexOf(`\"testID\":\"${testID}\"`));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((left, right) => left - right)).toEqual(positions);
   });
 
   it("keeps the capped compact sign-in content-sized at 700px", async () => {
@@ -218,6 +266,23 @@ describe("Login translations", () => {
     expect(consoleError).toHaveBeenCalledWith(
       "[LoginScreen] Google sign-in error:",
       providerError,
+    );
+    expect(mockTrackProductEvent).toHaveBeenNthCalledWith(
+      1,
+      "auth_started",
+      expect.objectContaining({ flowVersion: 2, locale: "es" }),
+    );
+    expect(mockTrackProductEvent).toHaveBeenNthCalledWith(
+      2,
+      "auth_failed",
+      expect.objectContaining({
+        flowVersion: 2,
+        locale: "es",
+        errorCategory: "provider",
+      }),
+    );
+    expect(JSON.stringify(mockTrackProductEvent.mock.calls)).not.toContain(
+      "provider details must not reach the user",
     );
   });
 

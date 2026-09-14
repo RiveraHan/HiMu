@@ -4,7 +4,10 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FormStepRail } from "../FormStepRail";
 import { ResponsiveFormShell } from "../ResponsiveFormShell";
 import { StickyReviewPanel } from "../StickyReviewPanel";
-import { resolveResponsiveFormStyle } from "../form-layout";
+import {
+  resolveFormLayout,
+  resolveResponsiveFormStyle,
+} from "../form-layout";
 
 const steps = [
   { id: "traits", label: "Traits" },
@@ -46,6 +49,24 @@ function FormShellFixture({
 }
 
 describe("ResponsiveFormShell", () => {
+  it.each([
+    [390, 844, "column", "none", "relative", true, false],
+    [1024, 599, "column", "none", "relative", true, true],
+    [1024, 600, "row", "flex", "sticky", false, false],
+  ] as const)(
+    "resolves form action placement from the shared %i×%i layout contract",
+    (width, height, direction, railDisplay, reviewPosition, documentFlow, lowHeight) => {
+      expect(resolveFormLayout({ width, height })).toEqual({
+        contentDirection: direction,
+        railDisplay,
+        reviewPosition,
+        footerPosition: "relative",
+        lowHeight,
+        useDocumentFlowActions: documentFlow,
+      });
+    },
+  );
+
   it("keeps the shared back action disabled while its workflow is pending", async () => {
     const screen = await render(<FormShellFixture headerDisabled />);
 
@@ -57,7 +78,7 @@ describe("ResponsiveFormShell", () => {
     const layout = screen.getByTestId("responsive-form-content");
 
     expect(layout.children).toEqual([
-      screen.getByTestId("form-step-rail"),
+      screen.getByTestId("form-step-rail", { includeHiddenElements: true }),
       screen.getByTestId("responsive-form-editor"),
       screen.getByTestId("sticky-review-panel"),
     ]);
@@ -89,10 +110,8 @@ describe("ResponsiveFormShell", () => {
         alignItems: { xs: "stretch", xl: "flex-start" },
       }),
     );
-    expect(StyleSheet.flatten(screen.getByTestId("form-step-rail").props.style)).toEqual(
-      expect.objectContaining({
-        display: { xs: "none", xl: "flex" },
-      }),
+    expect(StyleSheet.flatten(screen.getByTestId("form-step-rail", { includeHiddenElements: true }).props.style)).toEqual(
+      expect.objectContaining({ display: { xs: "none", xl: "flex" } }),
     );
     expect(StyleSheet.flatten(screen.getByTestId("responsive-form-editor").props.style)).toEqual(
       expect.objectContaining({ flex: { xs: 0, xl: 1 }, minWidth: 0 }),
@@ -104,9 +123,9 @@ describe("ResponsiveFormShell", () => {
       <FormStepRail steps={steps} activeStep="identity" />,
     );
 
-    expect(screen.getByTestId("form-step-rail").children).toHaveLength(3);
-    expect(screen.getByText("Identity").props.accessibilityState).toEqual({ selected: true });
-    expect(screen.getByText("Traits").props.accessibilityState).toEqual({ selected: false });
+    expect(screen.getByTestId("form-step-rail", { includeHiddenElements: true }).children).toHaveLength(3);
+    expect(screen.getByText("Identity", { includeHiddenElements: true }).props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByText("Traits", { includeHiddenElements: true }).props.accessibilityState).toEqual({ selected: false });
     expect(screen.queryByRole("button")).toBeNull();
   });
 
@@ -138,7 +157,7 @@ describe("ResponsiveFormShell", () => {
         screen.getByTestId("responsive-form-content").props.style,
       );
       const railStyle = StyleSheet.flatten(
-        screen.getByTestId("form-step-rail").props.style,
+        screen.getByTestId("form-step-rail", { includeHiddenElements: true }).props.style,
       );
       const reviewStyle = StyleSheet.flatten(
         screen.getByTestId("sticky-review-panel").props.style,

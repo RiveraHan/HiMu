@@ -36,27 +36,29 @@ const WEEKDAYS: readonly Weekday[] = [
   "sun",
 ];
 
+// Listening totals are bucketed by the Supabase UTC calendar day.
+// Keep week boundaries and streaks in that same calendar on every device.
 export function toISODate(date: Date): string {
-  const y = date.getFullYear();
-  const m = (date.getMonth() + 1).toString().padStart(2, "0");
-  const day = date.getDate().toString().padStart(2, "0");
+  const y = date.getUTCFullYear();
+  const m = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+  const day = date.getUTCDate().toString().padStart(2, "0");
 
   return `${y}-${m}-${day}`;
 }
 
 function midnight(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function addDays(date: Date, n: number): Date {
   const r = midnight(date);
-  r.setDate(r.getDate() + n);
+  r.setUTCDate(r.getUTCDate() + n);
   return r;
 }
 
 function startOfWeekMonday(today: Date): Date {
   const d = midnight(today);
-  const dow = (d.getDay() + 6) % 7; // 0=Mon … 6=Sun
+  const dow = (d.getUTCDay() + 6) % 7; // 0=Mon … 6=Sun
   return addDays(d, -dow);
 }
 

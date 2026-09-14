@@ -3,6 +3,7 @@ import path from "node:path";
 
 export const WEB_ROUTE_MATRIX = [
   { label: "Login", artifacts: ["login.html", "login/index.html", "(auth)/login.html"] },
+  { label: "Welcome", artifacts: ["welcome.html", "welcome/index.html"] },
   { label: "Home", artifacts: ["index.html", "(app)/index.html"] },
   { label: "Discover", artifacts: ["discover.html", "discover/index.html", "(app)/discover.html"] },
   { label: "Profile", artifacts: ["profile.html", "profile/index.html", "(app)/profile.html"] },

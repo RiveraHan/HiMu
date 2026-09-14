@@ -278,9 +278,7 @@ test("a started A completion cannot publish cache or visible side effects into B
 const preferenceBaseline: MusicPreferences = {
   genres: [],
   excludedMoods: [],
-  vibeMapping: { organicElectronic: 0.5, melancholicEuphoric: 0.5 },
-  aiFrequency: "optimal",
-  discoveryDepth: false,
+  atmosphere: "balanced",
 };
 
 test("disposes A's preference queue before clearing its runtime at the identity boundary", async () => {

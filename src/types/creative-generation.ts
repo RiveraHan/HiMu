@@ -38,6 +38,59 @@ export type ConfirmedGenerationBriefV1 = GenerationBriefDraft & {
   version: 1;
 };
 
+export type ProductionSection = {
+  name:
+    | "intro"
+    | "verse"
+    | "pre_chorus"
+    | "chorus"
+    | "bridge"
+    | "break"
+    | "solo"
+    | "outro";
+  startSeconds: number;
+  endSeconds: number;
+  direction: string;
+};
+
+export type CreativeProductionPlanV1 = {
+  bpm: number;
+  key: string;
+  meter: "4/4" | "3/4" | "6/8";
+  sections: ProductionSection[];
+  leadInstruments: string[];
+  rhythmInstruments: string[];
+  textureInstruments: string[];
+  energyArc: string;
+  productionCharacter: string[];
+  vocalDirection: string | null;
+  visual: {
+    concept: string;
+    subject: string;
+    medium: string;
+    composition: string;
+    palette: string[];
+    lighting: string;
+    texture: string;
+  };
+  novelty: {
+    coreMotifs: string[];
+    avoidRecentMotifs: string[];
+  };
+};
+
+export type ConfirmedGenerationBriefV2 = Omit<
+  ConfirmedGenerationBriefV1,
+  "version"
+> & {
+  version: 2;
+  productionPlan: CreativeProductionPlanV1;
+};
+
+export type ConfirmedGenerationBrief =
+  | ConfirmedGenerationBriefV1
+  | ConfirmedGenerationBriefV2;
+
 export type TrackDraftKind =
   | "track-brief"
   | "track-title"
@@ -73,7 +126,7 @@ export type TrackBriefDraftResponse = {
   draft: Pick<
     GenerationBriefDraft,
     "title" | "creativeDirection" | "lyricTheme" | "lyrics"
-  >;
+  > & { productionPlan: CreativeProductionPlanV1 };
 };
 
 export type TrackTitleDraftResponse = {

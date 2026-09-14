@@ -52,6 +52,9 @@ export * from "./settings/Toggle";
 // Preferences
 export * from "./preferences/Chip";
 export * from "./preferences/GroupedChipPicker";
+export * from "./preferences/ProgressiveCatalogPicker";
+export * from "./preferences/AtmosphereChoice";
+export * from "./preferences/MusicPreferenceSkeletons";
 export * from "./preferences/PrefSection";
 export * from "./preferences/Segmented";
 export * from "./preferences/VibeSlider";
@@ -68,5 +71,8 @@ export * from "./dj/DjHero";
 export * from "./dj/GenerationBriefEditor";
 export * from "./dj/GenerationConfirmation";
 export * from "./dj/DjTraitsForm";
+export * from "./dj/DjIntensityChoice";
+export * from "./dj/CreateDjIdentityStep";
+export * from "./dj/DjSoundFields";
 export * from "./dj/GeneratingTrackCard";
 export * from "./dj/TrainDjSkeleton";

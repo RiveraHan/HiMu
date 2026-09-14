@@ -5,7 +5,10 @@ import type { PropsWithChildren } from "react";
 import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import type { ActivityItem } from "@/src/activity/types";
-import type { ConfirmedGenerationBriefV1 } from "@/src/types/creative-generation";
+import type {
+  ConfirmedGenerationBrief,
+  ConfirmedGenerationBriefV1,
+} from "@/src/types/creative-generation";
 import { LocaleContext, type LocaleContextValue } from "@/src/i18n/use-locale";
 import { useCurrentUser } from "../use-auth";
 import { useDeleteDJ } from "../use-delete-dj";
@@ -56,6 +59,11 @@ const brief: ConfirmedGenerationBriefV1 = {
   },
 };
 const generateInput = { djId: "dj-one", brief, sourceTrackId: null };
+const briefV2 = {
+  ...brief,
+  version: 2 as const,
+  productionPlan: { marker: "validated-server-plan" } as never,
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -176,6 +184,37 @@ test("seeds the persisted confirmed brief before activity invalidation settles",
   await act(async () => finishInvalidation());
 });
 
+test("accepts a persisted V2 brief and keeps it intact in activity recovery", async () => {
+  jest.mocked(supabase.functions.invoke).mockResolvedValue({
+    data: {
+      jobId: "job-v2",
+      isPublic: false,
+      brief: briefV2,
+      sourceTrackId: null,
+    },
+    error: null,
+  } as never);
+  const queryClient = client();
+  jest.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
+  const { result } = await renderHook(() => useGenerateMix(), {
+    wrapper: wrapper(queryClient),
+  });
+
+  await act(async () => {
+    await result.current.generateAsync({
+      djId: "dj-one",
+      brief: briefV2,
+      sourceTrackId: null,
+    });
+  });
+
+  expect(
+    queryClient.getQueryData<ActivityItem[]>(
+      queryKeys.generationJobs.activity("listener"),
+    )?.[0]?.retryBrief,
+  ).toEqual(briefV2);
+});
+
 test("does not downgrade a running cache item when the start response races activity polling", async () => {
   const queryClient = client();
   const running = activity("running");
@@ -235,7 +274,7 @@ test("a generate completion after rerendering A as B has no B callback effects",
   let pending!: Promise<{
     jobId: string;
     isPublic: boolean;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     sourceTrackId: string | null;
   }>;
   await act(async () => {

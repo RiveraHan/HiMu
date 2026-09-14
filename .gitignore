@@ -33,6 +33,7 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+.creative-benchmark/
 
 # typescript
 *.tsbuildinfo
@@ -54,3 +55,6 @@ docs/*
 !docs/research/*.md
 
 reference/
+
+# Disposable native QA credentials and reports
+.native-e2e/

@@ -78,6 +78,44 @@ const scenarios: Scenario[] = [
 ];
 
 const allIdentityNames = new Set<string>();
+function productionPlan(scenario: Scenario) {
+  const instrumental = scenario.context.isInstrumental;
+  return {
+    bpm: scenario.context.energy >= 8 ? 148 : scenario.context.energy <= 3 ? 82 : 116,
+    key: instrumental ? "D minor" : "F# minor",
+    meter: "4/4" as const,
+    sections: [
+      { name: "intro" as const, startSeconds: 0, endSeconds: 16, direction: "Establish one unmistakable motif with restrained texture and clear space." },
+      { name: "verse" as const, startSeconds: 16, endSeconds: 54, direction: "Develop the motif through a close, rhythmically precise first statement." },
+      { name: "chorus" as const, startSeconds: 54, endSeconds: 94, direction: "Create audible section contrast by widening harmony, dynamics, and register." },
+      { name: "outro" as const, startSeconds: 94, endSeconds: 120, direction: "Resolve the central motif deliberately without copying the opening verbatim." },
+    ],
+    leadInstruments: instrumental ? ["prepared piano", "granular bell"] : ["lead voice", "muted guitar"],
+    rhythmInstruments: ["focused kick", "textured hand percussion"],
+    textureInstruments: ["room tone", "restrained tape bloom"],
+    energyArc: scenario.direction,
+    productionCharacter: ["clear foreground depth", "controlled harmonic saturation"],
+    vocalDirection: instrumental
+      ? null
+      : scenario.language === "es"
+        ? "Español latinoamericano neutro, versos íntimos y coro claro con vocales sostenibles."
+        : "Natural contemporary English, intimate verses and a clear hook with singable stress.",
+    visual: {
+      concept: `A visual translation of ${scenario.title} through one symbolic transformation.`,
+      subject: "A single tactile form changing state inside an atmospheric space",
+      medium: "Hand-built mixed-media sculpture photographed on film",
+      composition: "Square asymmetrical frame with a strong silhouette and intentional negative space",
+      palette: ["deep mineral blue", "weathered amber", "soft bone white"],
+      lighting: "Directional side light with one restrained reflected accent",
+      texture: "Visible fibers, fine grain, and controlled surface imperfections",
+    },
+    novelty: {
+      coreMotifs: ["transforming tactile form", "three-step call and response"],
+      avoidRecentMotifs: ["generic neon tunnel", "floating chrome portrait"],
+    },
+  };
+}
+
 for (const scenario of scenarios) {
   const request: CreativeDraftRequest = {
     version: 1,
@@ -91,6 +129,10 @@ for (const scenario of scenarios) {
   assert.match(modelInput.systemPrompt, new RegExp(`locale ${scenario.language}`));
   assert.match(modelInput.prompt, new RegExp(`"energy":${scenario.context.energy}`));
   assert.match(modelInput.prompt, new RegExp(`"mode":"${scenario.context.isInstrumental ? "instrumental" : "vocal"}"`));
+
+  assert.equal(modelInput.role, "creative_longform");
+  assert.match(modelInput.systemPrompt, /concrete imagery/i);
+  assert.match(modelInput.systemPrompt, /section contrast/i);
 
   const identities = parseCreativeDraftOutput("dj-identity", JSON.stringify({
     candidates: scenario.identities.map((name, index) => ({
@@ -109,13 +151,20 @@ for (const scenario of scenarios) {
     creativeDirection: scenario.direction,
     lyricTheme: scenario.lyricTheme,
     lyrics: scenario.lyrics,
+    productionPlan: productionPlan(scenario),
   }), {
     language: scenario.language,
     exclude: [],
     djName: scenario.context.djName,
     mode: scenario.context.isInstrumental ? "instrumental" : "vocal",
+    durationSeconds: 120,
   });
   assert.equal(brief.title, scenario.title, `${scenario.label}: non-generic title`);
+  assert.equal(
+    (brief.productionPlan as { sections: unknown[] }).sections.length,
+    4,
+    `${scenario.label}: production plan`,
+  );
 
   const title = parseCreativeDraftOutput("track-title", JSON.stringify({ title: scenario.regeneratedTitle }), {
     language: scenario.language,

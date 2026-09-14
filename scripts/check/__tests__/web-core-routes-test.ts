@@ -17,6 +17,7 @@ function verifyWebCoreRoutes(exportDirectory: string) {
 const coreRouteArtifacts = [
   "index.html",
   "login.html",
+  "welcome.html",
   "discover.html",
   "profile.html",
   "player.html",
@@ -218,6 +219,15 @@ describe("web core route checker", () => {
         await expectCheckerFailure(exportDirectory, "Focus Mode route artifact is missing");
       },
       { omitRoute: "focus-mode.html" },
+    );
+  });
+
+  test("requires the public Welcome route artifact", async () => {
+    await withFixture(
+      async (exportDirectory) => {
+        await expectCheckerFailure(exportDirectory, "Welcome route artifact is missing");
+      },
+      { omitRoute: "welcome.html" },
     );
   });
 

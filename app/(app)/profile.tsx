@@ -23,7 +23,6 @@ import {
 } from "@/src/hooks/use-profile";
 import { useTabBarPadding } from "@/src/hooks/use-tab-bar-padding";
 import { useOnlineStatus } from "@/src/hooks/use-online-status";
-import { useAppTour } from "@/src/onboarding";
 import { formatCount, formatHours } from "@/src/utils/format-stats";
 import { getListeningIdentity } from "@/src/utils/listening-identity";
 import { isInitialQueryLoading } from "@/src/utils/query-state";
@@ -50,10 +49,11 @@ import {
   profileDjGridItemStyle,
 } from "@/src/components/profile/ProfileDesktopLayout";
 import { useCallback } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
 import { useTranslation } from "react-i18next";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
 
 export default function ProfileScreen() {
   const user = useCurrentUser();
@@ -61,6 +61,8 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
   const resolvedLanguage = i18n.resolvedLanguage === "es" ? "es" : "en";
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const visualLayout = resolveBetaVisualLayout({ width, height });
   const paddingBottom = useTabBarPadding();
   const online = useOnlineStatus();
   const profileQuery = useProfile();
@@ -99,11 +101,11 @@ export default function ProfileScreen() {
   const { flushListeningStats } = usePlayer();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
-  const { replayTour } = useAppTour();
-
   const onReplayTour = () => {
-    replayTour();
-    router.replace("/");
+    router.push({
+      pathname: "/welcome",
+      params: { mode: "replay", step: "1" },
+    });
   };
 
   useFocusEffect(
@@ -151,6 +153,10 @@ export default function ProfileScreen() {
         />
       ) : null}
 
+      <View
+        testID="profile-content"
+        style={[styles.surface, visualLayout.lowHeight && styles.surfaceLowHeight]}
+      >
       <ProfileDesktopLayout>
       {/*Perfil Header*/}
       <ProfileDesktopLayoutSlot slot="header">
@@ -438,7 +444,7 @@ export default function ProfileScreen() {
             ) : null}
             <SettingRow
               icon={<Compass size={20} color={theme.colors.onSurfaceVariant} />}
-              label={t("profile.replayTour")}
+              label={t("onboarding.replay.action")}
               onPress={onReplayTour}
             />
             <SettingRow
@@ -451,6 +457,7 @@ export default function ProfileScreen() {
       </View>
       </ProfileDesktopLayoutSlot>
       </ProfileDesktopLayout>
+      </View>
     </ScreenScrollView>
   );
 }
@@ -463,6 +470,13 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     paddingHorizontal: theme.spacing.pageMargin,
     gap: theme.spacing.stackLg,
+  },
+  surface: {
+    minWidth: 0,
+    width: "100%",
+  },
+  surfaceLowHeight: {
+    gap: theme.spacing.stackMd,
   },
   header: {
     flexDirection: { xs: "column", xl: "row" },

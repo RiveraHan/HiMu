@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, within } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import DJProfileScreen from "@/app/dj/[id]";
 import i18n from "@/src/i18n";
@@ -367,6 +367,15 @@ describe("DJProfileScreen", () => {
     expect(screen.getByTestId("generating-track-card")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("track-card"));
     expect(mockPlayerLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the DJ detail hierarchy inside one bounded content surface", async () => {
+    mockDjQuery = settledQuery(dj);
+    mockTracksQuery = settledQuery([]);
+
+    const screen = await render(<DJProfileScreen />);
+
+    expect(within(screen.getByTestId("dj-profile-content")).getByTestId("dj-desktop-layout")).toBeTruthy();
   });
 
   it.each([

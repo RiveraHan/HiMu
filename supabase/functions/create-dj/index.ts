@@ -5,16 +5,15 @@
  */
 
 import {
-  buildAvatarPrompt,
   buildBasePrompt,
   buildDjIdentityFields,
   parseIsPublic,
   validateDjInput,
 } from "../_shared/dj-input.ts";
+import { generateAvatarImage } from "../_shared/avatar.ts";
 import { invalid, json } from "../_shared/http.ts";
 import { mapProviderReservation } from "../_shared/provider-usage.ts";
-import { r2Delete, r2Put } from "../_shared/r2.ts";
-import { replicateRun } from "../_shared/replicate.ts";
+import { r2Delete } from "../_shared/r2.ts";
 import { serveAuthed } from "../_shared/serve.ts";
 import { admin } from "../_shared/supabase.ts";
 import {
@@ -142,25 +141,14 @@ serveAuthed(async (req, user) => {
           return mapProviderReservation(data, error);
         },
         generate: async () => {
-          const url = await replicateRun(
-            "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
-            {
-              input: {
-                prompt: buildAvatarPrompt(genres, moods, identityConcept),
-                aspect_ratio: "1:1",
-                output_format: "jpg",
-                safety_tolerance: 5,
-              },
-            },
-          );
-
-          const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-
-          const publicUrl = await r2Put(
+          const publicUrl = await generateAvatarImage(
             `avatars/generated/${dj.id}.jpg`,
-            bytes,
-            "image/jpeg",
-            "public",
+            {
+              genres,
+              moods,
+              identityConcept,
+              seed: `${dj.id}:initial-avatar-v2`,
+            },
           );
 
           await admin.from("djs").update({ avatar_url: publicUrl }).eq("id", dj.id);

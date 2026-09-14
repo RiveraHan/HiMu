@@ -42,6 +42,14 @@ describe("StateNotice", () => {
     expect(screen.getByTestId("error-notice")).toHaveProp("accessible", false);
 
     const retry = screen.getByRole("button", { name: "Retry" });
+    const action = screen.getByTestId("state-notice-action");
+    const noticeChildren = screen.getByTestId("error-notice").children;
+    expect(noticeChildren.indexOf(announcement)).toBeLessThan(
+      noticeChildren.indexOf(action),
+    );
+    expect(RNStyleSheet.flatten(action.props.style)).toEqual(
+      expect.objectContaining({ alignSelf: "stretch", minWidth: 0 }),
+    );
     expect(RNStyleSheet.flatten(retry.props.style)).toEqual(
       expect.objectContaining({ minHeight: 44, minWidth: 44 }),
     );

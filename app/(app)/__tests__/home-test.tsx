@@ -60,6 +60,7 @@ let mockCanContinue = false;
 let mockRegistrationCleanup = jest.fn();
 let mockOnline = true;
 let mockWindowWidth = 390;
+let mockWindowHeight = 900;
 const mockRouterPush = jest.fn();
 const mockToastWarning = jest.fn();
 
@@ -257,7 +258,7 @@ jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
   __esModule: true,
   default: () => ({
     width: mockWindowWidth,
-    height: 900,
+    height: mockWindowHeight,
     scale: 1,
     fontScale: 1,
   }),
@@ -277,6 +278,7 @@ describe("HomeScreen", () => {
     mockCanContinue = false;
     mockOnline = true;
     mockWindowWidth = 390;
+    mockWindowHeight = 900;
     mockLoad.mockReset();
     mockLoad.mockResolvedValue(true);
     mockSetRepeatMode.mockReset();
@@ -321,6 +323,22 @@ describe("HomeScreen", () => {
     const screen = await render(<HomeScreen />);
 
     expect(screen.getByTestId("home-desktop-grid")).toBeTruthy();
+  });
+
+  it("keeps the Home content surface bounded around the responsive grid", async () => {
+    const screen = await render(<HomeScreen />);
+
+    const content = screen.getByTestId("home-content");
+    expect(within(content).getByTestId("home-desktop-grid")).toBeTruthy();
+  });
+
+  it("keeps normal and low-height Home sections separated by the layout contract", async () => {
+    const normal = await render(<HomeScreen />);
+    expect(StyleSheet.flatten(normal.getByTestId("home-content").props.style).gap).toBe(32);
+
+    mockWindowHeight = 599;
+    const lowHeight = await render(<HomeScreen />);
+    expect(StyleSheet.flatten(lowHeight.getByTestId("home-content").props.style).gap).toBe(16);
   });
 
   it.each([

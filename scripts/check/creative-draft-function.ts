@@ -4,6 +4,12 @@ import {
   handleCreativeDraftRequest,
   type CreativeDraftDependencies,
 } from "../../supabase/functions/creative-draft/handler.ts";
+import {
+  resolveCreativeModel,
+  type ModelDefinition,
+} from "../../supabase/functions/_shared/creative-models.ts";
+import type { CreativeUsageEvent } from "../../supabase/functions/_shared/creative-telemetry.ts";
+import type { NormalizedPrediction } from "../../supabase/functions/_shared/replicate.ts";
 
 const identityOutput = JSON.stringify({
   candidates: [
@@ -13,15 +19,54 @@ const identityOutput = JSON.stringify({
   ],
 });
 const trackOutput = JSON.stringify({ title: "Glass Antennas" });
+const trackBriefOutput = JSON.stringify({
+  title: "Glass Antennas",
+  creativeDirection:
+    "A restrained nocturnal verse opens into a wide chorus led by glass mallets.",
+  lyricTheme: "Choosing wonder over certainty",
+  lyrics:
+    "[Verse 1]\nStreetlights draw a map across the rain\n[Chorus]\nWe choose the glow and start again",
+  productionPlan: {
+    bpm: 118,
+    key: "F# minor",
+    meter: "4/4",
+    sections: [
+      { name: "intro", startSeconds: 0, endSeconds: 16, direction: "Reveal one glass motif over filtered percussion." },
+      { name: "verse", startSeconds: 16, endSeconds: 54, direction: "Keep the vocal close over restrained bass and dry rim clicks." },
+      { name: "chorus", startSeconds: 54, endSeconds: 94, direction: "Widen harmony and answer the hook with bright mallets." },
+      { name: "outro", startSeconds: 94, endSeconds: 120, direction: "Dissolve the motif into rain-like delay without a hard stop." },
+    ],
+    leadInstruments: ["glass mallets", "breathy alto voice"],
+    rhythmInstruments: ["round sub bass", "dry rim clicks"],
+    textureInstruments: ["tape hiss", "rain-like delay"],
+    energyArc: "Rise from close-mic restraint to a luminous final chorus.",
+    productionCharacter: ["warm analog saturation", "precise transient detail"],
+    vocalDirection: "Natural contemporary English with intimate verses and a sustained chorus hook.",
+    visual: {
+      concept: "A fragile signal becomes a shared constellation in rain.",
+      subject: "Translucent antenna forms above a wet rooftop",
+      medium: "Layered paper sculpture photographed on film",
+      composition: "Asymmetric square frame rising from the lower third",
+      palette: ["smoked indigo", "warm amber", "frosted cyan"],
+      lighting: "Low amber side light with cyan reflections",
+      texture: "Visible paper fibers, fine rain grain, restrained halation",
+    },
+    novelty: {
+      coreMotifs: ["glass antenna response", "ascending three-note signal"],
+      avoidRecentMotifs: ["neon tunnel", "piano house hook"],
+    },
+  },
+});
 
 function dependencies(overrides: Partial<CreativeDraftDependencies> = {}) {
   const calls = {
-    generated: [] as { endpoint: string; body: object }[],
+    generated: [] as { model: ModelDefinition; body: object }[],
     reserved: [] as { userId: string; kind: string; requestId: string }[],
+    memoryLoaded: [] as string[],
   };
   const outputs = [identityOutput];
   const deps: CreativeDraftDependencies = {
-    endpoint: "https://provider.invalid/llama",
+    resolveModel: (role) => resolveCreativeModel(role),
     randomId: () => "11111111-1111-4111-8111-111111111111",
     reserveDraft: async (userId: string, kind: string, requestId: string) => {
       calls.reserved.push({ userId, kind, requestId });
@@ -37,9 +82,20 @@ function dependencies(overrides: Partial<CreativeDraftDependencies> = {}) {
       isInstrumental: false,
       vibe: "Rain-lit rooftop after midnight",
       identityConcept: "A patient selector tracing city lights through warm analog haze.",
+      durationSeconds: 120,
     }),
-    generateText: async (endpoint, body) => {
-      calls.generated.push({ endpoint, body });
+    loadRecentMemory: async (djId: string) => {
+      calls.memoryLoaded.push(djId);
+      return {
+        titles: ["Cables Beneath Rain"],
+        identityNames: [],
+        visualMotifs: ["generic neon tunnel"],
+        hooks: ["descending glass signal"],
+        productionFingerprints: ["118 BPM | F# minor | piano house"],
+      };
+    },
+    generateText: async (model, body) => {
+      calls.generated.push({ model, body });
       return outputs.shift() ?? identityOutput;
     },
     ...overrides,
@@ -73,7 +129,8 @@ async function main() {
     requestId: "11111111-1111-4111-8111-111111111111",
   }]);
   assert.equal(calls.generated.length, 1);
-  assert.equal(calls.generated[0].endpoint, deps.endpoint);
+  assert.equal(calls.generated[0].model.role, "creative_shortform");
+  assert.equal(calls.generated[0].model.id, "meta/llama-4-scout-instruct");
   assert.doesNotMatch(JSON.stringify(calls.generated[0].body), /base_prompt|service_role/i);
 }
 
@@ -91,6 +148,72 @@ async function main() {
   });
   assert.match(JSON.stringify(calls.generated[0].body), /House/);
   assert.match(JSON.stringify(calls.generated[0].body), /Static Bloom/);
+}
+
+{
+  const { deps, outputs, calls } = dependencies();
+  outputs.splice(0, outputs.length, trackBriefOutput);
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    deps,
+  );
+  assert.equal(result.status, 200);
+  assert.equal(
+    ((result.body.draft as Record<string, unknown>).productionPlan as {
+      bpm: number;
+    }).bpm,
+    118,
+  );
+  assert.equal(
+    ((calls.generated[0].body as { input: { max_completion_tokens: number } }).input)
+      .max_completion_tokens,
+    1_200,
+  );
+  assert.match(JSON.stringify(calls.generated[0].body), /creative-brief-v2/);
+  assert.match(JSON.stringify(calls.generated[0].body), /Cables Beneath Rain/);
+  assert.match(JSON.stringify(calls.generated[0].body), /generic neon tunnel/);
+  assert.deepEqual(calls.memoryLoaded, ["dj-1"]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [10_000, 10_050];
+  const { deps, outputs, calls } = dependencies({
+    resolveModel: (role) => role === "creative_longform"
+      ? resolveCreativeModel(role, { candidateId: "google/gemini-3-flash" })
+      : resolveCreativeModel(role),
+    now: () => timestamps.shift() ?? 10_050,
+    recordUsage: (event) => usage.push(event),
+  });
+  outputs.splice(0, outputs.length, trackBriefOutput);
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    deps,
+  );
+  assert.equal(result.status, 200);
+  assert.equal(
+    ((calls.generated[0].body as { input: { max_output_tokens: number } }).input)
+      .max_output_tokens,
+    4_096,
+  );
+  assert.equal(usage[0].modelId, "google/gemini-3-flash");
+  assert.equal(usage[0].estimatedCostUsd, 0.012838);
 }
 
 {
@@ -217,6 +340,285 @@ async function main() {
   assert.equal(result.status, 400);
   assert.deepEqual(result.body, { error: "invalid_input", code: "invalid_input" });
   assert.equal(calls.generated.length, 0);
+}
+
+{
+  const { deps, outputs } = dependencies();
+  outputs.splice(0, outputs.length, trackBriefOutput);
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [1_000, 1_250];
+  const observedDeps = {
+    ...deps,
+    now: () => timestamps.shift() ?? 1_250,
+    recordUsage: (event: CreativeUsageEvent) => usage.push(event),
+  } as CreativeDraftDependencies & {
+    now: () => number;
+    recordUsage: (event: CreativeUsageEvent) => void;
+  };
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    observedDeps,
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(usage, [{
+    role: "creative_longform",
+    modelId: "openai/gpt-5.6-luna",
+    status: "succeeded",
+    promptVersion: "creative-brief-v2.en",
+    briefVersion: 2,
+    language: "en",
+    outcome: "accepted",
+    repaired: false,
+    latencyMs: 250,
+    estimatedCostUsd: 0.0083,
+    inputUnits: null,
+    outputUnits: null,
+  }]);
+}
+
+{
+  const prediction: NormalizedPrediction<string> = {
+    output: trackBriefOutput,
+    predictionId: "prediction-1",
+    modelId: "openai/gpt-5.6-luna",
+    startedAt: "2026-08-24T08:00:00.000Z",
+    completedAt: "2026-08-24T08:00:00.420Z",
+    metrics: {
+      inputTokens: 400,
+      outputTokens: 500,
+      inputCharacters: null,
+      outputSeconds: null,
+      predictSeconds: 0.42,
+    },
+  };
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [2_000, 2_600];
+  const { deps } = dependencies({
+    generateText: async () => prediction as never,
+    now: () => timestamps.shift() ?? 2_600,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(
+    {
+      version: 1,
+      kind: "track-brief",
+      language: "en",
+      djId: "dj-1",
+      current: {},
+      exclude: [],
+    },
+    "user-1",
+    deps,
+  );
+  assert.equal(result.status, 200);
+  assert.deepEqual(usage, [{
+    role: "creative_longform",
+    modelId: "openai/gpt-5.6-luna",
+    status: "succeeded",
+    promptVersion: "creative-brief-v2.en",
+    briefVersion: 2,
+    language: "en",
+    outcome: "accepted",
+    repaired: false,
+    latencyMs: 600,
+    estimatedCostUsd: 0.0034,
+    inputUnits: 400,
+    outputUnits: 500,
+  }]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [3_000, 3_200, 3_200, 3_550];
+  const { deps, outputs } = dependencies({
+    now: () => timestamps.shift() ?? 3_550,
+    recordUsage: (event) => usage.push(event),
+  });
+  outputs.splice(0, outputs.length, "not json", identityOutput);
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 200);
+  assert.deepEqual(usage, [
+    {
+      role: "creative_shortform",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: false,
+      latencyMs: 200,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+    {
+      role: "format_repair",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "succeeded",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "accepted",
+      repaired: true,
+      latencyMs: 350,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+  ]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [4_000, 4_100];
+  const { deps } = dependencies({
+    generateText: async () => {
+      throw new Error("private upstream diagnostics");
+    },
+    now: () => timestamps.shift() ?? 4_100,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 503);
+  assert.deepEqual(usage, [{
+    role: "creative_shortform",
+    modelId: "meta/llama-4-scout-instruct",
+    status: "failed",
+    promptVersion: "creative-dj-identity-v2.en",
+    briefVersion: 0,
+    language: "en",
+    outcome: "provider_error",
+    repaired: false,
+    latencyMs: 100,
+    estimatedCostUsd: 0.000413,
+    inputUnits: null,
+    outputUnits: null,
+  }]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [5_000, 5_007];
+  const { deps } = dependencies({
+    generateText: async () => await new Promise<string>(() => undefined),
+    timeoutMs: 5,
+    now: () => timestamps.shift() ?? 5_007,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 504);
+  assert.deepEqual(usage, [{
+    role: "creative_shortform",
+    modelId: "meta/llama-4-scout-instruct",
+    status: "failed",
+    promptVersion: "creative-dj-identity-v2.en",
+    briefVersion: 0,
+    language: "en",
+    outcome: "timeout",
+    repaired: false,
+    latencyMs: 7,
+    estimatedCostUsd: 0.000413,
+    inputUnits: null,
+    outputUnits: null,
+  }]);
+}
+
+{
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [6_000, 6_100, 6_100, 6_300];
+  const { deps, outputs } = dependencies({
+    now: () => timestamps.shift() ?? 6_300,
+    recordUsage: (event) => usage.push(event),
+  });
+  outputs.splice(0, outputs.length, "not json", "still not json");
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 502);
+  assert.deepEqual(usage, [
+    {
+      role: "creative_shortform",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: false,
+      latencyMs: 100,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+    {
+      role: "format_repair",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: true,
+      latencyMs: 200,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+  ]);
+}
+
+{
+  let attempt = 0;
+  const usage: CreativeUsageEvent[] = [];
+  const timestamps = [7_000, 7_100, 7_100, 7_250];
+  const { deps } = dependencies({
+    generateText: async () => {
+      attempt += 1;
+      if (attempt === 1) return "not json";
+      throw new Error("private repair diagnostics");
+    },
+    now: () => timestamps.shift() ?? 7_250,
+    recordUsage: (event) => usage.push(event),
+  });
+  const result = await handleCreativeDraftRequest(identityRequest, "user-1", deps);
+  assert.equal(result.status, 503);
+  assert.deepEqual(usage, [
+    {
+      role: "creative_shortform",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "rejected",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "invalid_output",
+      repaired: false,
+      latencyMs: 100,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+    {
+      role: "format_repair",
+      modelId: "meta/llama-4-scout-instruct",
+      status: "failed",
+      promptVersion: "creative-dj-identity-v2.en",
+      briefVersion: 0,
+      language: "en",
+      outcome: "provider_error",
+      repaired: true,
+      latencyMs: 150,
+      estimatedCostUsd: 0.000413,
+      inputUnits: null,
+      outputUnits: null,
+    },
+  ]);
 }
 
 console.log("creative draft function checks passed");

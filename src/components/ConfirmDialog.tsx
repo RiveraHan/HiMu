@@ -1,6 +1,6 @@
 import { useConfirmStore } from "@/src/stores/confirm-store";
-import { useEffect } from "react";
-import { BackHandler, Pressable, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { AccessibilityInfo, BackHandler, findNodeHandle, Pressable, Text as RNText, View } from "react-native";
 import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
@@ -15,6 +15,7 @@ export function ConfirmDialogHost() {
   const resolve = useConfirmStore((s) => s.resolve);
   const insets = useSafeAreaInsets();
   const { theme } = useUnistyles();
+  const titleRef = useRef<RNText>(null);
 
   useEffect(() => {
     if (!pending) return;
@@ -24,6 +25,12 @@ export function ConfirmDialogHost() {
     });
     return () => sub.remove();
   }, [pending, resolve]);
+
+  useEffect(() => {
+    if (!pending) return;
+    const handle = findNodeHandle(titleRef.current);
+    if (handle !== null) AccessibilityInfo.setAccessibilityFocus(handle);
+  }, [pending]);
 
   if (!pending) return null;
 
@@ -50,8 +57,14 @@ export function ConfirmDialogHost() {
         exiting={ZoomOut.duration(150)}
         style={styles.panelWrap}
       >
-        <GlassCard level={3} style={styles.panel}>
-          <Text variant="h2">{pending.title}</Text>
+        <GlassCard
+          accessibilityViewIsModal
+          level={3}
+          role="dialog"
+          style={styles.panel}
+          testID="confirm-dialog"
+        >
+          <Text ref={titleRef} accessibilityRole="header" variant="h2">{pending.title}</Text>
           {!!pending.message && (
             <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.8}>
               {pending.message}

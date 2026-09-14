@@ -1,5 +1,9 @@
 import { DJ_MOODS, GENRES } from "./music-catalog.ts";
 import { sanitize } from "./text.ts";
+import {
+  compileVisualDirection,
+  renderVisualPrompt,
+} from "./visual-direction.ts";
 
 export type DjTraitsInput = {
   name: string;
@@ -140,11 +144,25 @@ export function buildAvatarPrompt(
   genres: string[],
   moods: string[],
   identityConcept?: string | null,
+  seed?: string,
 ): string {
-  return (
-    `stylized portrait of a fictional AI DJ persona, ` +
-    `${genres.join(" ").toLowerCase()} ${moods.join(" ").toLowerCase()} aesthetic, ` +
-    (identityConcept ? `identity concept: ${identityConcept}, ` : "") +
-    `cinematic lighting, digital art, premium, no text, no watermark`
-  );
+  return buildAvatarImageRequest(genres, moods, identityConcept, seed).prompt;
+}
+
+export function buildAvatarImageRequest(
+  genres: string[],
+  moods: string[],
+  identityConcept?: string | null,
+  seed?: string,
+): { prompt: string; seed: number } {
+  const direction = compileVisualDirection({
+    purpose: "avatar",
+    seed: seed ?? JSON.stringify([genres, moods, identityConcept]),
+    genres,
+    moods,
+    instrumental: false,
+    identityConcept: identityConcept ?? null,
+    visualPlan: null,
+  });
+  return { prompt: renderVisualPrompt(direction), seed: direction.seed };
 }

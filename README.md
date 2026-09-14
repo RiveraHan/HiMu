@@ -27,8 +27,12 @@ your habits come to life in a personal _Vibe Check_.
 
 ---
 
+- [App screenshots](#app-screenshots)
 - [Design](#design)
 - [Features](#features)
+- [Capability status](#capability-status)
+- [Testing](#testing)
+- [Security and privacy](#security-and-privacy)
 - [Tech stack](#tech-stack)
 - [Architecture](#architecture)
 - [Getting started](#getting-started)
@@ -40,15 +44,44 @@ your habits come to life in a personal _Vibe Check_.
 
 ---
 
+## App screenshots
+
+These are captures of the running Android app with real catalog data and a
+disposable QA account. Player and Vibe Check were captured from a standalone APK; Home and the DJ
+profile were captured from the development client. See [native validation](NATIVE_TESTING.md)
+for dates, build details, and test results.
+
+| Home | DJ profile | Player |
+| --- | --- | --- |
+| <img src="assets/screenshots/android-home-en.png" width="230" alt="Actual HiMu Home screen" /> | <img src="assets/screenshots/android-dj-en.png" width="230" alt="Actual Ember DJ profile" /> | <img src="assets/screenshots/android-player-en.png" width="230" alt="Actual HiMu Player playing Bruma Eléctrica" /> |
+
+| Vibe Check |
+| --- |
+| <img src="assets/screenshots/android-vibe-check-en.png" width="300" alt="Actual Vibe Check showing listening activity from the QA session" /> |
+
+### Android demo
+
+[Watch the 45-second demo](assets/demos/android-player-vibe-check.mp4): real
+playback, pause/resume from the Android lock screen, and Vibe Check with listening
+activity from the QA session. Recorded from a standalone APK at 720×1600; the
+screen recording has no audio track.
+
+<details>
+<summary>Public screens and Android media controls</summary>
+
+| Welcome | Login | System media controls |
+| --- | --- | --- |
+| <img src="assets/screenshots/android-welcome-en.png" width="230" alt="Actual Android welcome screen" /> | <img src="assets/screenshots/android-login-en.png" width="230" alt="Actual Android login screen" /> | <img src="assets/screenshots/android-media-controls-en.png" width="230" alt="Android media controls for Bruma Eléctrica by Ember" /> |
+
+The public welcome/login captures use dummy backend configuration. The media
+controls capture uses the real catalog.
+
+</details>
+
 ## Design
 
-> The images below are the product **design** (built with [Stitch](https://stitch.withgoogle.com/)) — not screenshots of the running app.
-
-|                        Home                        |                        Discover                        |                        DJ profile                        |
-| :------------------------------------------------: | :----------------------------------------------------: | :------------------------------------------------------: |
-|  <img src="assets/design/home.png" width="230" />  |  <img src="assets/design/discover.png" width="230" />  |  <img src="assets/design/dj-profile.png" width="230" />  |
-|                     **Player**                     |                     **Vibe Check**                     |                     **Live session**                     |
-| <img src="assets/design/player.png" width="230" /> | <img src="assets/design/vibe-check.png" width="230" /> | <img src="assets/design/live-session.png" width="230" /> |
+The original [design references](assets/design/) are mockups made with Stitch.
+They are kept separately from the actual app screenshots above.
 
 ---
 
@@ -78,7 +111,8 @@ your habits come to life in a personal _Vibe Check_.
 
 **🔐 Accounts**
 
-- Google Sign-In with secure, chunked session storage (Expo SecureStore)
+- Google Sign-In with chunked Expo SecureStore session storage on native;
+  browser localStorage on web
 - Profile and account settings
 
 **🛠️ Platform**
@@ -86,6 +120,54 @@ your habits come to life in a personal _Vibe Check_.
 - iOS, Android, and Web (react-native-web) from a single codebase
 - React Native New Architecture + React Compiler, with typed routes
 - Dark, glassmorphic UI: Unistyles v3, Expo Blur, linear gradients, Manrope type, Reanimated 4
+
+---
+
+## Capability status
+
+| Capability | Current status | What is needed |
+| --- | --- | --- |
+| Catalog, favorites, Vibe Check, preferences | Implemented | Configured Supabase project, migrations, authentication, and playable catalog/media |
+| Background playback and lock-screen controls | Implemented on native | Development or release build; validate on a device |
+| DJ creation/training, mixes, artwork, voice generation | Implemented, deployment-gated | Deploy the relevant `supabase/functions`, configure provider/R2 secrets and media access; quotas apply |
+| Generation jobs and automation | Backend tooling exists | Installation-specific execution/scheduling; database setup alone does not start a hosted scheduler |
+| Web | Implemented, beta | Web OAuth origin and browser playback; native audio behavior does not imply browser parity |
+| Community | Planned | Current screen only displays “coming soon” |
+| Account deletion | Missing self-service flow | Operator-managed requests; see [privacy documentation](PRIVACY.md) |
+
+AI generation is not globally disabled. Source code and client hooks are present,
+but cloning the repository does not provision providers, deploy functions, or fund
+provider usage. These capabilities remain beta and depend on the deployment.
+
+## Testing
+
+The [CI workflow](.github/workflows/ci.yml) runs lint, TypeScript, Jest, SQL retention
+checks, and a web production export on pull requests and pushes to `develop`/`master`. It uses dummy
+public configuration and no production credentials. A web export checks bundling,
+not native compilation or live backend behavior. Maintainers must configure branch
+protection separately to require the checks before merging.
+
+Jest runs without `--forceExit`; the smoke-player tests await unmount and disable
+mutation garbage-collection timers in their isolated test client.
+
+See [native testing](NATIVE_TESTING.md) for the existing Maestro flows, a public-entry smoke flow, and
+the device checklist for Google authentication, deep links, background playback,
+and lock-screen controls. The native flow is not yet enforced by hosted CI.
+
+The App screenshots section contains actual Android screens and a standalone
+playback/lock-screen demo; the Design section contains mockups. Additional public
+web captures are available in `assets/screenshots/`. See the testing guide for
+capture details and remaining device acceptance checks.
+
+## Security and privacy
+
+Read [SECURITY.md](SECURITY.md) for vulnerability reporting and supported versions,
+and [PRIVACY.md](PRIVACY.md) for current data handling and deployment responsibilities.
+The latter documents implementation, not a completed privacy notice for every
+self-hosted installation. Public deployments must supply their own legal URLs. See
+[privacy operations](PRIVACY_OPERATIONS.md) for the proposed retention policy,
+dry-run command, and account-erasure procedure. The retention migration is
+prepared but does not schedule jobs or delete existing data.
 
 ---
 
@@ -114,7 +196,7 @@ HiMu follows a layered client architecture on top of a Supabase backend:
 - **UI** — screens via Expo Router and a reusable component library, animated with Reanimated.
 - **State** — Zustand for client state (auth, player) and TanStack Query for server state and caching.
 - **Logic** — custom hooks, an auth abstraction over Google Sign-In, the data layer (`supabase-js`), and the audio engine (`expo-audio`).
-- **Storage** — sessions persisted to a chunked, secure adapter over Expo SecureStore.
+- **Storage** — native sessions use chunked Expo SecureStore; web sessions use browser localStorage.
 - **Cloud** — Supabase Postgres (with RLS), Auth (Google OAuth → JWT), Realtime, and Storage for avatars and album art.
 
 ---
@@ -123,7 +205,7 @@ HiMu follows a layered client architecture on top of a Supabase backend:
 
 ### Prerequisites
 
-- **Node.js 20+** and npm
+- **Node.js 22** and npm
 - A **Supabase** project ([supabase.com](https://supabase.com)) and the [Supabase CLI](https://supabase.com/docs/guides/cli)
 - **Google OAuth** credentials (web + iOS client IDs)
 - For native builds: **Xcode** (iOS) and/or **Android Studio** (Android)
@@ -135,9 +217,9 @@ HiMu follows a layered client architecture on top of a Supabase backend:
 
 ```bash
 # 1. Clone and install
-git clone <your-repo-url> himu
+git clone https://github.com/RiveraHan/HiMu.git himu
 cd himu
-npm install
+npm ci
 
 # 2. Configure environment
 cp .env.example .env
@@ -153,8 +235,11 @@ npm run db:types     # regenerate src/types/database.ts
 npm run ios          # or: npm run android
 ```
 
-In Supabase, enable the **Google** provider under _Auth → Providers_ and add the deep
-link `com.himu.app://callback` under _Auth → URL Configuration_.
+In Supabase, enable the **Google** provider under _Auth → Providers_. Native
+authentication exchanges a Google ID token with Supabase; configure the matching
+OAuth client IDs and replace the placeholder Google `iosUrlScheme` in `app.json`.
+For web OAuth, allow your web origin in Supabase redirect URLs. The app deep-link
+scheme is `himu://`; the native bundle/package identifier is `com.himu.app`.
 
 ---
 
@@ -225,7 +310,8 @@ HiMu/
 
 Contributions are welcome. Before opening a pull request:
 
-- Make sure `npm run lint` and `npx tsc --noEmit` pass
+- Run `npm run lint`, `npm run typecheck`, `npm test -- --ci`, and `npm run build:web`
+- Target `develop` for contributions
 - Follow the existing module structure and the design tokens in `src/theme`
 - Open an issue first to discuss larger changes
 

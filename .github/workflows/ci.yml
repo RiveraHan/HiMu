@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [lint, typecheck, test, web-export, privacy-retention]
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_KEY: ci-public-placeholder
+      EXPO_PUBLIC_API_URL: https://example.supabase.co/rest/v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - if: matrix.check == 'lint'
+        run: npm run lint
+      - if: matrix.check == 'typecheck'
+        run: npm run typecheck
+      - if: matrix.check == 'test'
+        run: npm test -- --ci
+      - if: matrix.check == 'web-export'
+        run: npm run build:web
+      - if: matrix.check == 'privacy-retention'
+        run: npm run check:privacy-retention

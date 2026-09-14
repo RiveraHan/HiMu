@@ -42,8 +42,8 @@ export function ScreenHeader({
   };
 
   return (
-    <View style={styles.root}>
-      <View style={styles.row}>
+    <View style={styles.root} testID="screen-header">
+      <View style={styles.leading} testID="screen-header-leading">
         <IconButton
           variant="glass"
           icon={<Icon size={24} color={theme.colors.onSurface} />}
@@ -55,10 +55,9 @@ export function ScreenHeader({
               : t("common.actions.close")
           }
         />
-        {actions && <View style={styles.actions}>{actions}</View>}
       </View>
       {(kicker || title || subtitle) && (
-        <View style={styles.text}>
+        <View style={styles.text} testID="screen-header-copy">
           {!!kicker && (
             <Text variant="labelCaps" color="outline">
               {kicker}
@@ -72,6 +71,11 @@ export function ScreenHeader({
           )}
         </View>
       )}
+      {actions ? (
+        <View style={styles.actions} testID="screen-header-actions">
+          {actions}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -80,16 +84,24 @@ const styles = StyleSheet.create((theme) => ({
   root: {
     gap: theme.spacing.stackMd,
   },
-  row: {
+  leading: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    alignSelf: "stretch",
   },
   actions: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "stretch",
+    alignSelf: "stretch",
+    maxWidth: "100%",
+    minWidth: 0,
     gap: theme.spacing.stackSm,
   },
   text: {
     gap: theme.spacing.stackXs,
+    minWidth: 0,
+    maxWidth: "100%",
+    flexShrink: 1,
   },
 }));

@@ -1,23 +1,24 @@
 import { GlassCard } from "@/src/components/GlassCard";
 import { Text } from "@/src/components/Text";
-import { ReactNode } from "react";
-import { View } from "react-native";
+import { ReactNode, type Ref } from "react";
+import { Text as RNText, View } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 type Props = {
   title: string;
   icon?: ReactNode;
   subtitle?: string;
+  titleRef?: Ref<RNText>;
   children: ReactNode;
 };
 
-export function PrefSection({ title, icon, subtitle, children }: Props) {
+export function PrefSection({ title, icon, subtitle, titleRef, children }: Props) {
   return (
     <GlassCard style={styles.card}>
       <View style={styles.header}>
         {!!icon && <View style={styles.icon}>{icon}</View>}
         <View style={styles.headerText}>
-          <Text variant="bodyLg">{title}</Text>
+          <Text ref={titleRef} variant="bodyLg" accessibilityRole="header">{title}</Text>
           {!!subtitle && (
             <Text variant="bodyMd" color="onSurfaceVariant" opacity={0.7}>
               {subtitle}

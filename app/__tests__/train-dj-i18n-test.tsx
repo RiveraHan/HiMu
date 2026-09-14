@@ -136,7 +136,7 @@ jest.mock("@/src/components", () => {
     Avatar: () => React.createElement(View),
     DjTraitsForm: ({ values, onChange, disabled }: {
       values: { name: string; genres: string[]; moods: string[]; energy: number; mode: string; vibe: string };
-      onChange: (patch: { name?: string }) => void;
+      onChange: (patch: { name?: string; vibe?: string }) => void;
       disabled?: boolean;
     }) => React.createElement(View, { testID: "dj-traits-form" },
       React.createElement(TextInput, {
@@ -144,6 +144,12 @@ jest.mock("@/src/components", () => {
         value: values.name,
         editable: !disabled,
         onChangeText: (name: string) => onChange({ name }),
+      }),
+      React.createElement(TextInput, {
+        accessibilityLabel: "Vibe",
+        value: values.vibe,
+        editable: !disabled,
+        onChangeText: (vibe: string) => onChange({ vibe }),
       }),
       React.createElement(Text, null, values.genres.join(", ")),
       React.createElement(Text, null, values.moods.join(", ")),
@@ -345,6 +351,22 @@ test("keeps Back available while an update is pending", async () => {
   const screen = await render(<TrainDJScreen />);
 
   expect(screen.getByRole("button", { name: "Back" }).props.accessibilityState.disabled).toBeFalsy();
+});
+
+test("keeps a saved historical energy when Train edits only the vibe", async () => {
+  mockDjQuery = settledDjQuery({
+    ...ownedDj,
+    personality_traits: { energy: 7, vibe: "", isInstrumental: true },
+  });
+  const screen = await render(<TrainDJScreen />);
+
+  await fireEvent.changeText(screen.getByLabelText("Vibe"), "Warm vinyl haze");
+  await fireEvent.press(screen.getByRole("button", { name: "Save changes" }));
+
+  expect(mockUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({ energy: 7, vibe: "Warm vinyl haze" }),
+    expect.any(Object),
+  );
 });
 
 test.each([390, 1440])(

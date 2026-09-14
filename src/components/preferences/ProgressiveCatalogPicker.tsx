@@ -1,0 +1,273 @@
+import { useMemo, useState } from "react";
+import { Platform, Pressable, View } from "react-native";
+import { useTranslation } from "react-i18next";
+
+import { Button } from "@/src/components/Button";
+import { Chip } from "@/src/components/preferences/Chip";
+import { Text } from "@/src/components/Text";
+import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { CatalogPickerSurface as NativeCatalogPickerSurface } from "./CatalogPickerSurface.native";
+import { CatalogPickerSurface as WebCatalogPickerSurface } from "./CatalogPickerSurface.web";
+import type { ProgressiveCatalogPickerProps } from "./progressive-catalog-types";
+
+export type { CatalogPickerSurfaceProps, ProgressiveCatalogPickerProps } from "./progressive-catalog-types";
+
+/** Explicit platform imports prevent Metro source-extension ordering from bypassing web. */
+export function resolveCatalogPickerSurface(platform: string) {
+  return platform === "web" ? WebCatalogPickerSurface : NativeCatalogPickerSurface;
+}
+
+const CatalogPickerSurface = resolveCatalogPickerSurface(Platform.OS);
+
+export function nextCatalogSelection(
+  selected: readonly string[],
+  value: string,
+  min: number,
+  max: number,
+): { next: string[]; rejected: boolean } {
+  if (selected.includes(value)) {
+    if (selected.length <= min) return { next: [...selected], rejected: true };
+    return { next: selected.filter((item) => item !== value), rejected: false };
+  }
+  if (selected.length >= max) return { next: [...selected], rejected: true };
+  return { next: [...selected, value], rejected: false };
+}
+
+export function ProgressiveCatalogPicker({
+  title,
+  chooseLabel,
+  editLabel,
+  emptyDescription,
+  groups,
+  selected,
+  min,
+  max,
+  getGroupLabel,
+  getItemLabel,
+  onChange,
+  disabled = false,
+}: ProgressiveCatalogPickerProps) {
+  const { t } = useTranslation();
+  const [visible, setVisible] = useState(false);
+  const [query, setQuery] = useState("");
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [statusAnnouncement, setStatusAnnouncement] = useState("");
+
+  const selectedLabels = useMemo(
+    () => selected.map(getItemLabel),
+    [getItemLabel, selected],
+  );
+
+  const open = () => {
+    if (disabled) return;
+    setQuery("");
+    setExpandedGroup(groups[0]?.label ?? null);
+    setStatusAnnouncement("");
+    setVisible(true);
+  };
+
+  const close = () => setVisible(false);
+  const toggle = (value: string) => {
+    if (disabled) return;
+    const removing = selected.includes(value);
+    const result = nextCatalogSelection(selected, value, min, max);
+    if (result.rejected) {
+      setStatusAnnouncement(
+        removing
+          ? t("common.catalogPicker.minimum", { min })
+          : t("common.catalogPicker.maximum", { max }),
+      );
+      return;
+    }
+    const change = onChange(result.next);
+    if (change && !change.accepted) {
+      setStatusAnnouncement(t(
+        change.reason === "offline"
+          ? "common.catalogPicker.offlineAnnouncement"
+          : "common.catalogPicker.changeRejected",
+      ));
+      return;
+    }
+    setStatusAnnouncement(t(
+      removing
+        ? "common.catalogPicker.removedAnnouncement"
+        : "common.catalogPicker.selectedAnnouncement",
+      {
+        item: getItemLabel(value),
+        count: result.next.length,
+        max,
+      },
+    ));
+  };
+
+  return (
+    <View style={styles.root}>
+      <Button
+        label={selected.length === 0
+          ? chooseLabel ?? editLabel ?? t("common.catalogPicker.edit", { title })
+          : editLabel ?? t("common.catalogPicker.edit", { title })}
+        variant="glass"
+        onPress={open}
+        disabled={disabled}
+      />
+      {selectedLabels.length > 0 ? (
+        <Text
+          accessibilityLabel={t("common.catalogPicker.selected", { items: selectedLabels.join(", ") })}
+          testID="catalog-picker-selection"
+          variant="bodyMd"
+        >
+          {t("common.catalogPicker.selected", { items: selectedLabels.join(", ") })}
+        </Text>
+      ) : emptyDescription ? (
+        <Text color="onSurfaceVariant" variant="bodyMd">
+          {emptyDescription}
+        </Text>
+      ) : null}
+      <CatalogPickerSurface
+        visible={visible}
+        title={title}
+        groups={groups}
+        selected={selected}
+        min={min}
+        max={max}
+        query={query}
+        expandedGroup={expandedGroup}
+        getGroupLabel={getGroupLabel}
+        getItemLabel={getItemLabel}
+        onChange={onChange}
+        onQueryChange={setQuery}
+        onExpandedGroupChange={setExpandedGroup}
+        onToggle={toggle}
+        onDone={close}
+        onRequestClose={close}
+      >
+        <CatalogPickerContents
+          groups={groups}
+          selected={selected}
+          query={query}
+          expandedGroup={expandedGroup}
+          getGroupLabel={getGroupLabel}
+          getItemLabel={getItemLabel}
+          onExpandedGroupChange={setExpandedGroup}
+          onToggle={toggle}
+          statusAnnouncement={statusAnnouncement}
+        />
+      </CatalogPickerSurface>
+    </View>
+  );
+}
+
+type ContentsProps = Pick<ProgressiveCatalogPickerProps, "groups" | "selected" | "getGroupLabel" | "getItemLabel"> & {
+  query: string;
+  expandedGroup: string | null;
+  onExpandedGroupChange(group: string | null): void;
+  onToggle(value: string): void;
+  statusAnnouncement: string;
+};
+
+function CatalogPickerContents({
+  groups,
+  selected,
+  query,
+  expandedGroup,
+  getGroupLabel,
+  getItemLabel,
+  onExpandedGroupChange,
+  onToggle,
+  statusAnnouncement,
+}: ContentsProps) {
+  const { t } = useTranslation();
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const matchingGroups = groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) =>
+      getItemLabel(item).toLocaleLowerCase().includes(normalizedQuery),
+    ),
+  })).filter((group) => group.items.length > 0);
+
+  return (
+    <View style={styles.contents}>
+      <Text
+        accessibilityLiveRegion="polite"
+        testID="catalog-picker-status"
+        style={styles.srOnly}
+      >
+        {statusAnnouncement}
+      </Text>
+      {selected.length > 0 ? (
+        <View style={styles.tray}>
+          <Text variant="labelCaps" color="onSurfaceVariant">
+            {t("common.catalogPicker.selectedHeading")}
+          </Text>
+          <View style={styles.trayChips}>
+            {selected.map((value) => (
+              <Chip key={value} label={getItemLabel(value)} onRemove={() => onToggle(value)} />
+            ))}
+          </View>
+        </View>
+      ) : null}
+      {matchingGroups.map((group) => {
+        const expanded = expandedGroup === group.label;
+        const label = getGroupLabel(group.label);
+        return (
+          <View key={group.label} style={styles.group}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={{ expanded }}
+              onPress={() => onExpandedGroupChange(expandedGroup === group.label ? null : group.label)}
+              style={styles.groupButton}
+            >
+              <Text variant="labelCaps">{label}</Text>
+            </Pressable>
+            {expanded ? (
+              <View style={styles.items}>
+                {group.items.map((item) => {
+                  const checked = selected.includes(item);
+                  return (
+                    <Pressable
+                      key={item}
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={getItemLabel(item)}
+                      accessibilityState={{ checked }}
+                      onPress={() => onToggle(item)}
+                      style={[styles.item, checked && styles.itemChecked]}
+                    >
+                      <Text variant="bodyMd">{getItemLabel(item)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create((theme) => ({
+  root: { gap: theme.spacing.stackSm },
+  contents: { gap: theme.spacing.stackSm },
+  tray: { gap: theme.spacing.stackXs },
+  trayChips: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.stackSm },
+  group: { gap: theme.spacing.stackXs },
+  groupButton: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.stackSm,
+    backgroundColor: theme.colors.surfaceContainerHigh,
+    borderRadius: theme.borderRadius.md,
+  },
+  items: { gap: theme.spacing.stackXs },
+  item: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.stackMd,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.glassBorder,
+    borderRadius: theme.borderRadius.md,
+  },
+  itemChecked: { backgroundColor: theme.colors.primaryContainer },
+  srOnly: { height: 1, width: 1, opacity: 0 },
+}));

@@ -1,6 +1,7 @@
 import { Text } from "@/src/components/Text";
 import { Pressable, View } from "react-native";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+import { useRovingRadioGroup } from "./use-roving-radio-group";
 
 type Option<T extends string> = {
   label: string;
@@ -12,6 +13,7 @@ type Props<T extends string> = {
   value: T;
   onChange(value: T): void;
   disabled?: boolean;
+  accessibilityLabel?: string;
 };
 
 export function Segmented<T extends string>({
@@ -19,18 +21,27 @@ export function Segmented<T extends string>({
   value,
   onChange,
   disabled,
+  accessibilityLabel,
 }: Props<T>) {
+  const radioProps = useRovingRadioGroup(
+    options.map((option) => option.value),
+    value,
+    Boolean(disabled),
+    onChange,
+  );
+
   return (
-    <View style={[styles.track, disabled && styles.disabled]}>
-      {options.map((option) => {
+    <View testID="segmented-radiogroup" accessibilityRole="radiogroup" accessibilityLabel={accessibilityLabel} style={[styles.track, disabled && styles.disabled]}>
+      {options.map((option, index) => {
         const active = option.value === value;
         return (
           <Pressable
+            {...radioProps(index)}
             key={option.value}
             onPress={() => onChange(option.value)}
             disabled={disabled}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active, disabled: Boolean(disabled) }}
             style={[styles.segment, active && styles.segmentActive]}
           >
             <Text

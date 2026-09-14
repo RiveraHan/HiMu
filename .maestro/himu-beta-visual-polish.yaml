@@ -1,0 +1,45 @@
+appId: com.himu.app
+---
+# Manual release workflow. Start with an authenticated English beta account.
+# It does not clear application data because authentication is a prerequisite.
+- launchApp
+- tapOn: "Profile"
+- assertVisible: "Music Preferences"
+- tapOn: "Music Preferences"
+- assertVisible: "Music Preferences"
+- setOrientation: LANDSCAPE
+- tapOn: "Edit genres"
+- assertVisible: "Favorite genres"
+- tapOn: "Done"
+- tapOn: "Edit genres"
+- assertVisible: "Favorite genres"
+- pressKey: BACK
+- assertVisible: "Music Preferences"
+- setOrientation: PORTRAIT
+- pressKey: BACK
+- tapOn: "Home"
+- assertVisible: "Personalized Library"
+
+# Change the same authenticated account to Spanish through product UI, then
+# repeat the Preferences dialog and route-Back path with localized labels.
+- tapOn: "Profile"
+- tapOn: "Account Details"
+- assertVisible: "Settings"
+- tapOn: "Language"
+- tapOn: "Español"
+- assertVisible: "Ajustes"
+- pressKey: BACK
+- tapOn: "Preferencias musicales"
+- assertVisible: "Preferencias musicales"
+- tapOn: "Editar géneros"
+- assertVisible: "Géneros favoritos"
+- tapOn: "Listo"
+- pressKey: BACK
+- tapOn: "Inicio"
+- assertVisible: "Biblioteca personalizada"
+
+# EXTERNAL_ANDROID_GATE: requires physical phone and tablet, portrait/landscape,
+# font scale 1.5/2.0, keyboard/safe-area, Back ordering, and TalkBack.
+# Run this file only on a release host with a generated android/Gradle project,
+# working ADB phone/tablet targets, and Maestro. This development host has none
+# of those prerequisites, so the workflow is committed but not reported as run.

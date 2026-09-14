@@ -41,7 +41,13 @@ function musicInput(
 
 const vocal = musicInput("es", false, lyrics);
 assert.equal(vocal.endpoint, LYRIA_ENDPOINT);
-assert.deepEqual(Object.keys(vocal.body.input).sort(), ["prompt"]);
+assert.deepEqual(Object.keys(vocal.body.input).sort(), ["prompt", "seed"]);
+assert.match(vocal.body.input.prompt, /CREATIVE INTENT/);
+assert.match(vocal.body.input.prompt, /MUSICAL SPECIFICATION/);
+assert.match(vocal.body.input.prompt, /ARRANGEMENT TIMELINE/);
+assert.match(vocal.body.input.prompt, /PERFORMANCE AND PRODUCTION/);
+assert.match(vocal.body.input.prompt, /ORIGINALITY/);
+assert.equal(typeof vocal.body.input.seed, "number");
 assert.match(vocal.body.input.prompt, /español latinoamericano neutro/i);
 assert.ok(vocal.body.input.prompt.includes(lyrics));
 
@@ -49,9 +55,10 @@ const promptContractFailures: string[] = [];
 for (const language of ["en", "es"] as const) {
   for (const instrumental of [false, true]) {
     const automatic = musicInput(language, instrumental, null).body.input.prompt;
-    if (!/copyrighted song/i.test(automatic)) {
+    if (!/Build a distinct composition from the specification above/i.test(automatic) ||
+      /copyrighted/i.test(automatic)) {
       promptContractFailures.push(
-        `${language} ${instrumental ? "instrumental" : "automatic vocal"} prompt must prohibit reproducing copyrighted songs`,
+        `${language} ${instrumental ? "instrumental" : "automatic vocal"} prompt must request a distinct composition without safety-sensitive legal phrasing`,
       );
     }
     if (instrumental) {
@@ -92,7 +99,7 @@ for (const language of ["en", "es"] as const) {
         lyrics: hostileLyrics,
       }).body.input.prompt;
       const framed = supplied.match(
-        /<<<(HIMU_LYRICS_\d+)_START>>>\n([\s\S]*)\n<<<\1_END>>>$/,
+        /<<<(HIMU_LYRICS_\d+)_START>>>\n([\s\S]*?)\n<<<\1_END>>>/,
       );
       const boundary = framed?.[1];
       const boundaryIsAbsentFromUntrustedSections = boundary != null &&
@@ -112,9 +119,10 @@ for (const language of ["en", "es"] as const) {
           `${language} supplied lyrics must use one exact frame absent from lyrics, base prompt, and seasoning`,
         );
       }
-      if (!/copyrighted song/i.test(supplied)) {
+      if (!/Build a distinct composition from the specification above/i.test(supplied) ||
+        /copyrighted/i.test(supplied)) {
         promptContractFailures.push(
-          `${language} supplied vocal prompt must prohibit reproducing copyrighted songs`,
+          `${language} supplied vocal prompt must request a distinct composition without safety-sensitive legal phrasing`,
         );
       }
       const wrapperIsLocalized = language === "es"
@@ -192,18 +200,14 @@ const spanishTitles = spanishTitleRandomValues.map((value) =>
   creativeTitle("es", () => value)
 );
 const reviewFailures: string[] = [];
-if (!/neutral Latin American Spanish/i.test(caption.body.input.system_prompt)) {
+if (!/español latinoamericano neutro/i.test(caption.body.input.system_prompt)) {
   reviewFailures.push("Spanish captions must require neutral Latin American Spanish");
 }
-if (JSON.stringify(spanishTitles) !== JSON.stringify([
-  "Neón Pulsante",
-  "Medianoche Dorada",
-  "Bruma Eléctrica",
-  "Deriva Lunar",
-  "Eco de Terciopelo",
-  "Horizonte Luminoso",
-])) {
-  reviewFailures.push("Spanish titles must use fixed grammatically compatible pairs");
+if (new Set(spanishTitles).size !== spanishTitles.length) {
+  reviewFailures.push("Spanish title fallbacks must provide broad deterministic variety");
+}
+if (spanishTitles.some((title) => /^(Neón Pulsante|Eco de Terciopelo)$/.test(title))) {
+  reviewFailures.push("Spanish title fallbacks must avoid the retired generic title pool");
 }
 assert.deepEqual(reviewFailures, []);
 
@@ -213,7 +217,8 @@ assert.equal(tts.body.input.language, "es");
 assert.equal(tts.body.input.audio_format, "mp3");
 assert.equal(tts.body.input.sample_rate, 48000);
 assert.equal(tts.body.input.voice_id, "Ashley");
-assert.match(tts.body.input.text, /^\[say with upbeat radio energy\]/);
+assert.match(tts.body.input.text, /^\[di con energía luminosa y una sonrisa audible\]/);
+assert.ok(tts.body.input.text.length <= 200);
 
 const hostileCaption =
   "Subimos [scream] Luz [laugh] con [whisper] Mara; esto queda visible.";

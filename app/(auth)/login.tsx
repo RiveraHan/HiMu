@@ -2,12 +2,30 @@ import { authApi } from "@/src/api/auth";
 import { Button, Text } from "@/src/components";
 import { LoginHero } from "@/src/components/auth/LoginHero";
 import { GoogleIcon } from "@/src/components/icons";
+import {
+  PUBLIC_INTRO_VERSION,
+  trackProductEvent,
+} from "@/src/experience";
 import { useToast } from "@/src/hooks/use-toast";
+import i18n from "@/src/i18n";
+import { useAuthStore } from "@/src/stores/auth-store";
 import { publicHttpsUrl } from "@/src/utils/public-url";
 import { Fragment, useState } from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Linking, Platform, Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "@/src/theme/react-native-unistyles";
+
+function authEventProperties() {
+  return {
+    flowVersion: PUBLIC_INTRO_VERSION,
+    platform: Platform.OS === "web"
+      ? "web" as const
+      : Platform.OS === "android"
+        ? "android" as const
+        : "ios" as const,
+    locale: i18n.resolvedLanguage === "es" ? "es" as const : "en" as const,
+  };
+}
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -17,10 +35,15 @@ export default function LoginScreen() {
   const handleGoogleSignIn = async () => {
     if (loading) return;
     setLoading(true);
+    void trackProductEvent("auth_started", authEventProperties());
 
     try {
       await authApi.signInWithGoogle();
     } catch (error) {
+      void trackProductEvent("auth_failed", {
+        ...authEventProperties(),
+        errorCategory: "provider",
+      });
       console.error("[LoginScreen] Google sign-in error:", error);
       toast.error(
         t("common.auth.signInFailedTitle"),
@@ -52,7 +75,7 @@ export default function LoginScreen() {
 
   return (
     <LoginHero>
-      <View style={styles.methods}>
+      <View style={styles.methods} testID="login-primary-actions">
         <Button
           variant="glass"
           loading={loading}
@@ -61,10 +84,21 @@ export default function LoginScreen() {
           loadingLabel={t("common.auth.signingIn")}
           onPress={handleGoogleSignIn}
         />
+        {__DEV__ && process.env.EXPO_PUBLIC_BETA_SMOKE === "1" ? (
+          <Button
+            variant="ghost"
+            label="Continue beta smoke"
+            onPress={() => {
+              useAuthStore.getState().setSession({
+                user: { id: "beta-smoke-local-user" },
+              } as never);
+            }}
+          />
+        ) : null}
       </View>
 
       {legalLinks.length > 0 ? (
-        <View style={styles.footer}>
+        <View style={styles.footer} testID="login-supporting-links">
           <View style={styles.legal}>
             {legalLinks.map((item, index) => (
               <Fragment key={item.url}>

@@ -7,6 +7,7 @@ import {
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { PropsWithChildren } from "react";
 
+import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { activityMutationKeys } from "@/src/activity/mutation-keys";
 import { useSessionActivities } from "@/src/activity/use-session-activities";
@@ -27,7 +28,7 @@ jest.mock("@/src/api/auth-scope", () => {
       userId,
       authorization: `Bearer fixture-${userId}`,
     }),
-    isCurrentMutationUser: () => true,
+    isCurrentMutationUser: (userId: string) => userId === mockCurrentUserId,
   };
 });
 jest.mock("@/src/stores/player-store", () => ({
@@ -35,7 +36,7 @@ jest.mock("@/src/stores/player-store", () => ({
     selector({ setCoverForTrack: jest.fn() }),
 }));
 
-let currentUserId = "user-a";
+let mockCurrentUserId = "user-a";
 
 function client() {
   return new QueryClient({
@@ -63,9 +64,9 @@ function mutationFor(queryClient: QueryClient, root: readonly unknown[]) {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, "error").mockImplementation(() => undefined);
-  currentUserId = "user-a";
+  mockCurrentUserId = "user-a";
   jest.mocked(useCurrentUser).mockImplementation(
-    () => ({ id: currentUserId }) as never,
+    () => ({ id: mockCurrentUserId }) as never,
   );
   notifyManager.setScheduler((callback) => callback());
 });
@@ -81,7 +82,7 @@ test("stores create identity, variables, submission context, and returned DJ ID"
     error: null,
   } as never);
   const queryClient = client();
-  jest
+  const invalidate = jest
     .spyOn(queryClient, "invalidateQueries")
     .mockReturnValue(new Promise(() => undefined));
   const { result } = await renderHook(() => useCreateDJ(), {
@@ -113,6 +114,7 @@ test("stores create identity, variables, submission context, and returned DJ ID"
     avatarReady: true,
   });
   expect(mutation.state.status).toBe("success");
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.djs.all });
 });
 
 test("stores update identity and returned DJ target", async () => {
@@ -196,6 +198,7 @@ test("keeps an in-flight A mutation keyed and contextualized as A after the hook
     () => new Promise((resolve) => (finish = resolve)) as never,
   );
   const queryClient = client();
+  const invalidate = jest.spyOn(queryClient, "invalidateQueries");
   const rendered = await renderHook(() => useCreateDJ(), {
     wrapper: wrapper(queryClient),
   });
@@ -220,7 +223,7 @@ test("keeps an in-flight A mutation keyed and contextualized as A after the hook
     expect.objectContaining({ kind: "create-dj", status: "running" }),
   ]);
 
-  currentUserId = "user-b";
+  mockCurrentUserId = "user-b";
   await rendered.rerender(undefined);
   await observer.rerender(undefined);
   const mutation = mutationFor(queryClient, activityMutationKeys.createDjRoot);
@@ -236,8 +239,9 @@ test("keeps an in-flight A mutation keyed and contextualized as A after the hook
     await mutationPromise;
   });
   expect(observer.result.current).toEqual([]);
+  expect(invalidate).not.toHaveBeenCalled();
 
-  currentUserId = "user-a";
+  mockCurrentUserId = "user-a";
   await observer.rerender(undefined);
   expect(observer.result.current).toEqual([
     expect.objectContaining({

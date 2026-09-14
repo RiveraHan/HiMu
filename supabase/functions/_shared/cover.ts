@@ -1,73 +1,132 @@
-import { r2Put } from "./r2.ts";
-import { replicateRun } from "./replicate.ts";
-
-// Varied aesthetics so covers don't all look alike. Palettes lean *limited*
-// (duotone/mono/single-accent) so a cover rarely uses the whole spectrum.
-const COVER_STYLES = [
-  "minimalist", "surreal collage", "risograph print", "dreamy double exposure",
-  "geometric abstraction", "organic flowing forms", "brutalist graphic",
-  "grainy vintage film", "iridescent liquid metal", "hand-painted gouache",
-  "macro texture photography", "bauhaus poster", "cyanotype", "art deco",
-  "glitch art", "ink wash", "collaged paper cutouts", "long-exposure light trails",
-];
-const COVER_PALETTES = [
-  "a bold duotone palette", "monochrome with a single accent color",
-  "high-contrast black and white with one accent", "a muted pastel palette",
-  "warm analogous tones", "cool moody tones", "a single-color wash",
-  "earthy natural tones", "a restrained two-color palette",
-];
-const COVER_COMPOSITIONS = [
-  "a strong central focal point", "off-center with generous negative space",
-  "a dynamic diagonal composition", "layered depth", "flat graphic shapes",
-  "radial symmetry",
-];
+import { buildImageProviderBody } from "./creative-provider-adapters.ts";
+import {
+  assertWithinModelBudget,
+  estimateModelCost,
+  resolveCreativeModel,
+  type CreativeModelRole,
+  type ModelDefinition,
+} from "./creative-models.ts";
+import {
+  logCreativeUsageEvent,
+  runObservedCreativePrediction,
+  type CreativeUsageEvent,
+} from "./creative-telemetry.ts";
+import {
+  compileVisualDirection,
+  renderVisualPrompt,
+  type VisualPlan,
+} from "./visual-direction.ts";
+import {
+  replicateMediaPrediction,
+  type NormalizedPrediction,
+} from "./replicate.ts";
 
 export type CoverContext = {
   genre: string;
   moods: string[];
   instrumental: boolean;
+  seed?: string;
+  visualPlan?: VisualPlan | null;
+  language?: "en" | "es";
+  briefVersion?: 0 | 1 | 2;
 };
 
-// A varied style/palette, tied to the track's actual context: its genre, all
-// its moods, and whether it's instrumental or vocal.
+export type CoverGenerationDependencies = {
+  resolveModel: (role: CreativeModelRole) => ModelDefinition;
+  predict: (
+    endpoint: string,
+    body: object,
+  ) => Promise<NormalizedPrediction<string>>;
+  fetchMedia: (url: string) => Promise<Response>;
+  put: (
+    key: string,
+    bytes: Uint8Array,
+    contentType: string,
+    access: "public",
+  ) => Promise<string>;
+  recordUsage: (event: CreativeUsageEvent) => void;
+  now: () => number;
+};
+
 export function coverPrompt(ctx: CoverContext): string {
-  const r = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
-  const genre = ctx.genre.trim().toLowerCase();
-  const moods = ctx.moods
-    .filter(Boolean)
-    .map((m) => m.toLowerCase());
-  const feel = ctx.instrumental
-    ? "atmospheric, textural, wordless and instrumental"
-    : "intimate and expressive, with a human vocal warmth";
-  return [
-    `${r(COVER_STYLES)} album cover art`,
-    genre ? `for a ${genre} track` : "for a music track",
-    moods.length ? `evoking a ${moods.join(", ")} mood` : "evoking an abstract mood",
-    feel,
-    r(COVER_PALETTES),
-    r(COVER_COMPOSITIONS),
-    "striking, original, rich detail",
-    "no text, no words, no letters, no faces, no watermark",
-  ].join(", ");
+  return renderVisualPrompt(compileVisualDirection({
+    purpose: "cover",
+    seed: ctx.seed ?? JSON.stringify([
+      ctx.genre,
+      ctx.moods,
+      ctx.instrumental,
+      ctx.visualPlan,
+    ]),
+    genres: ctx.genre.trim() ? [ctx.genre] : [],
+    moods: ctx.moods,
+    instrumental: ctx.instrumental,
+    identityConcept: null,
+    visualPlan: ctx.visualPlan ?? null,
+  }));
 }
 
-// Generate a cover with flux-1.1-pro and store it at `key` in R2. Returns the
-// public URL. Throws on failure (callers decide whether to swallow it).
+export async function generateCoverAsset(
+  key: string,
+  ctx: CoverContext,
+  deps: CoverGenerationDependencies,
+): Promise<string> {
+  const model = deps.resolveModel("image_cover");
+  const direction = compileVisualDirection({
+    purpose: "cover",
+    seed: ctx.seed ?? key,
+    genres: ctx.genre.trim() ? [ctx.genre] : [],
+    moods: ctx.moods,
+    instrumental: ctx.instrumental,
+    identityConcept: null,
+    visualPlan: ctx.visualPlan ?? null,
+  });
+  assertWithinModelBudget(
+    "image_cover",
+    estimateModelCost(model, { input: 0, output: 1 }),
+  );
+  const body = buildImageProviderBody(model, {
+      prompt: renderVisualPrompt(direction),
+      aspectRatio: "1:1",
+      outputFormat: "jpg",
+      seed: direction.seed,
+    });
+  const language = ctx.language ?? "en";
+  const url = await runObservedCreativePrediction(
+    {
+      model,
+      promptVersion: `cover-v2.${language}`,
+      briefVersion: ctx.briefVersion ?? 0,
+      language,
+      outcome: "generated",
+      repaired: false,
+      fallbackUnits: { output: 1 },
+    },
+    () => deps.predict(model.endpoint, body),
+    deps.recordUsage,
+    deps.now,
+  );
+  const response = await deps.fetchMedia(url);
+  if (!response.ok) throw new Error(`cover download failed (${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength === 0) throw new Error("cover download returned empty bytes");
+  return await deps.put(key, bytes, "image/jpeg", "public");
+}
+
 export async function generateCoverImage(
   key: string,
   ctx: CoverContext,
 ): Promise<string> {
-  const url = await replicateRun(
-    "https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions",
-    {
-      input: {
-        prompt: coverPrompt(ctx),
-        aspect_ratio: "1:1",
-        output_format: "jpg",
-        safety_tolerance: 5,
-      },
-    },
-  );
-  const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
-  return await r2Put(key, bytes, "image/jpeg", "public");
+  const { r2Put } = await import("./r2.ts");
+  return await generateCoverAsset(key, ctx, {
+    resolveModel: resolveCreativeModel,
+    predict: (endpoint, body) =>
+      replicateMediaPrediction(endpoint, body, {
+        pollIntervalMs: 3_000,
+        maxPolls: 80,
+      }),
+    fetchMedia: (url) => fetch(url),
+    put: r2Put,
+    recordUsage: logCreativeUsageEvent,
+    now: Date.now,
+  });
 }

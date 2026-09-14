@@ -3,7 +3,6 @@ import {
   buildCaptionInput,
   buildCaptionTtsInput,
   buildMusicInput,
-  creativeTitle,
   type GenerationLanguage,
   parseGenerationLanguage,
   persistedAudiusArtistName,
@@ -11,13 +10,21 @@ import {
 import {
   validateConfirmedBrief,
   type AuthoritativeDjTraits,
-  type ConfirmedGenerationBriefV1,
+  type ConfirmedGenerationBrief,
 } from "../_shared/creative-generation.ts";
+import {
+  assertWithinModelBudget,
+  estimateModelCost,
+  resolveCreativeModel,
+  type CreativeModelRole,
+} from "../_shared/creative-models.ts";
+import { deterministicCreativeTitle } from "../_shared/creative-titles.ts";
+import type { VisualPlan } from "../_shared/visual-direction.ts";
 import type { R2Access } from "../_shared/r2-contract.ts";
 
 type JobSummary = { id: string; status: string; isPublic: boolean };
 type ManualJobSummary = JobSummary & {
-  brief: ConfirmedGenerationBriefV1 | null;
+  brief: ConfirmedGenerationBrief | null;
   sourceTrackId: string | null;
 };
 type DailyJobSummary = JobSummary & { djId: string; updatedAt: string };
@@ -42,7 +49,7 @@ export type ManualJobReservation =
     dailyLimit: number;
     queuedAt: string;
     isPublic: boolean;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     sourceTrackId: string | null;
   }
   | {
@@ -50,7 +57,7 @@ export type ManualJobReservation =
     jobId: string;
     dailyLimit: number;
     isPublic: boolean;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     sourceTrackId: string | null;
   }
   | { outcome: "quota"; jobId: null; dailyLimit: number };
@@ -162,14 +169,21 @@ export function mapDailyJobReservation(
   throw new Error("invalid daily job reservation result");
 }
 
-function reservationBrief(value: unknown): ConfirmedGenerationBriefV1 {
+function reservationBrief(value: unknown): ConfirmedGenerationBrief {
+  const version = value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>).version
+    : null;
   if (
     value == null || typeof value !== "object" || Array.isArray(value) ||
-    (value as Record<string, unknown>).version !== 1
+    (version !== 1 && version !== 2) ||
+    (version === 2 &&
+      (typeof (value as Record<string, unknown>).productionPlan !== "object" ||
+        (value as Record<string, unknown>).productionPlan == null ||
+        Array.isArray((value as Record<string, unknown>).productionPlan)))
   ) {
     throw new Error("invalid manual job reservation result");
   }
-  return value as ConfirmedGenerationBriefV1;
+  return value as ConfirmedGenerationBrief;
 }
 
 function reservationSourceTrackId(value: unknown): string | null {
@@ -219,7 +233,7 @@ export type RunGenerationInput = {
   isPublic: boolean;
   cfg: any;
   lyrics: string | null;
-  brief?: ConfirmedGenerationBriefV1 | null;
+  brief?: ConfirmedGenerationBrief | null;
   seasoning: string[];
   language: GenerationLanguage;
   drop?: { localHour: unknown };
@@ -255,7 +269,7 @@ export type RequestDependencies = {
   reserveManualJob: (input: {
     userId: string;
     djId: unknown;
-    brief: ConfirmedGenerationBriefV1;
+    brief: ConfirmedGenerationBrief;
     isPublic: boolean;
     sourceTrackId: string | null;
   }) => Promise<ManualJobReservation>;
@@ -551,7 +565,7 @@ export async function handleGenerateMixRequest(
     });
   }
 
-  let brief: ConfirmedGenerationBriefV1;
+  let brief: ConfirmedGenerationBrief;
   try {
     brief = validateConfirmedBrief(
       rawBrief,
@@ -663,6 +677,16 @@ type GenerationErrorStage =
   | "terminal_ambiguous"
   | "job_failure_persist";
 
+export type PredictionObservation = {
+  role: CreativeModelRole;
+  promptVersion: string;
+  briefVersion: 0 | 1 | 2;
+  language: GenerationLanguage;
+  outcome: string;
+  repaired: boolean;
+  fallbackUnits?: { input?: number; output?: number };
+};
+
 export type RunDependencies = {
   updateJob: (
     jobId: string,
@@ -705,8 +729,16 @@ export type RunDependencies = {
     localHour: unknown,
     language: GenerationLanguage,
   ) => Promise<{ pick: any; caption: string } | null>;
-  replicateRun: (endpoint: string, body: object) => Promise<string>;
-  replicateText: (endpoint: string, body: object) => Promise<string>;
+  replicateRun: (
+    endpoint: string,
+    body: object,
+    observation: PredictionObservation,
+  ) => Promise<string>;
+  replicateText: (
+    endpoint: string,
+    body: object,
+    observation: PredictionObservation,
+  ) => Promise<string>;
   fetchMedia: (url: string) => Promise<MediaResponse>;
   r2Put: (
     key: string,
@@ -719,6 +751,12 @@ export type RunDependencies = {
     objectKey: string,
     dj: any,
     instrumental: boolean,
+    context?: {
+      seed: string;
+      visualPlan: VisualPlan | null;
+      language: GenerationLanguage;
+      briefVersion: 0 | 1 | 2;
+    },
   ) => Promise<string | null>;
   streamUrl: (trackId: string) => string;
   logModel: (event: ModelEvent) => void;
@@ -779,10 +817,18 @@ async function buildCaptionAudio(
     input.language,
     dj?.voice_style,
     dj?.mood_tags,
-    caption.slice(0, 300),
+    caption.slice(0, 140),
   );
   observe(deps, "tts", input.language);
-  const tempUrl = await deps.replicateRun(request.endpoint, request.body);
+  const tempUrl = await deps.replicateRun(request.endpoint, request.body, {
+    role: "voice_caption",
+    promptVersion: `caption-tts-v2.${input.language}`,
+    briefVersion: input.brief?.version ?? 0,
+    language: input.language,
+    outcome: "generated",
+    repaired: false,
+    fallbackUnits: { input: request.body.input.text.length },
+  });
   const bytes = await downloadProviderMedia(tempUrl, deps.fetchMedia);
   return await deps.r2Put(
     objectKey,
@@ -900,32 +946,77 @@ export async function runGeneration(
       language: input.language,
       lyrics: input.brief?.lyrics ?? input.lyrics ??
         boundedDefaultLyrics(input.cfg.default_lyrics),
+      productionPlan: input.brief?.version === 2
+        ? input.brief.productionPlan
+        : null,
+      seed: `${input.jobId}:${attemptStartedAt}:music-v2`,
+      genres: Array.isArray(input.cfg.djs?.genre_specialties)
+        ? input.cfg.djs.genre_specialties
+        : [],
+      moods: Array.isArray(input.cfg.djs?.mood_tags)
+        ? input.cfg.djs.mood_tags
+        : [],
+      energy: Number.isInteger(input.cfg.djs?.personality_traits?.energy)
+        ? input.cfg.djs.personality_traits.energy
+        : undefined,
     });
+    const musicModel = resolveCreativeModel("music_full");
+    assertWithinModelBudget(
+      "music_full",
+      estimateModelCost(musicModel, {
+        input: musicRequest.body.input.prompt.length,
+        output: 1,
+      }),
+    );
+    const dj = input.cfg.djs;
     observe(deps, "music", input.language);
-    const musicUrl = await deps.replicateRun(
+    observe(deps, "cover", input.language);
+    const audioPromise = deps.replicateRun(
       musicRequest.endpoint,
       musicRequest.body,
-    );
-    const musicBytes = await downloadProviderMedia(
-      musicUrl,
-      deps.fetchMedia,
-    );
-    const audioReference = await deps.r2Put(
-      objectKeys.track,
-      musicBytes,
-      "audio/mpeg",
-      audioAccess,
-    );
-
-    const dj = input.cfg.djs;
-    observe(deps, "cover", input.language);
-    const cover = await deps.generateCover(
+      {
+        role: "music_full",
+        promptVersion: `music-production-v2.${input.language}`,
+        briefVersion: input.brief?.version ?? 0,
+        language: input.language,
+        outcome: "generated",
+        repaired: false,
+        fallbackUnits: { output: 1 },
+      },
+    ).then((musicUrl) => downloadProviderMedia(musicUrl, deps.fetchMedia))
+      .then((musicBytes) =>
+        deps.r2Put(
+          objectKeys.track,
+          musicBytes,
+          "audio/mpeg",
+          audioAccess,
+        )
+      );
+    const coverPromise = deps.generateCover(
       objectKeys.cover,
       dj,
       input.cfg.is_instrumental ?? true,
+      {
+        seed: `${input.jobId}:${attemptStartedAt}:cover-v2`,
+        visualPlan: input.brief?.version === 2
+          ? input.brief.productionPlan.visual
+          : null,
+        language: input.language,
+        briefVersion: input.brief?.version ?? 0,
+      },
     );
+    const [audioReference, cover] = await Promise.all([
+      audioPromise,
+      coverPromise,
+    ]);
     const trackId = deps.randomId();
-    const title = input.brief?.title ?? creativeTitle(input.language, deps.random);
+    const title = input.brief?.title ?? deterministicCreativeTitle({
+      language: input.language,
+      seed: `${input.jobId}:${attemptStartedAt}:title-v1`,
+      genres: Array.isArray(dj?.genre_specialties) ? dj.genre_specialties : [],
+      moods: Array.isArray(dj?.mood_tags) ? dj.mood_tags : [],
+      recentTitles: [],
+    });
 
     let caption: string | null = null;
     let captionAudioUrl: string | null = null;
@@ -938,9 +1029,22 @@ export async function runGeneration(
           language: input.language,
         });
         observe(deps, "caption", input.language);
+        const captionModel = resolveCreativeModel("creative_shortform");
         const raw = await deps.replicateText(
           captionRequest.endpoint,
           captionRequest.body,
+          {
+            role: "creative_shortform",
+            promptVersion: `caption-v2.${input.language}`,
+            briefVersion: input.brief?.version ?? 0,
+            language: input.language,
+            outcome: "generated",
+            repaired: false,
+            fallbackUnits: {
+              input: captionModel.limits.input,
+              output: 60,
+            },
+          },
         );
         caption = parseCaption(raw);
         if (caption) {

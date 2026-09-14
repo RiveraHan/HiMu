@@ -1,4 +1,6 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
+import { Button } from "@/src/components/Button";
 import { ScreenHeader } from "@/src/components/ScreenHeader";
 
 const mockBack = jest.fn();
@@ -48,4 +50,27 @@ test("keeps a custom left action authoritative", async () => {
   expect(onLeftPress).toHaveBeenCalledTimes(1);
   expect(mockBack).not.toHaveBeenCalled();
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+test("keeps navigation, wrapped copy, and actions in reachable source order", async () => {
+  const screen = await render(
+    <ScreenHeader
+      kicker="Now playing"
+      title="A deliberately long title that must wrap at enlarged text"
+      subtitle="A subtitle that remains readable without competing with the action."
+      actions={<Button label="Save changes" onPress={jest.fn()} />}
+    />,
+  );
+
+  expect(screen.getByTestId("screen-header").children).toEqual([
+    screen.getByTestId("screen-header-leading"),
+    screen.getByTestId("screen-header-copy"),
+    screen.getByTestId("screen-header-actions"),
+  ]);
+  expect(screen.getAllByRole("button").map((button) => button.props.accessibilityLabel))
+    .toEqual(["Back", "Save changes"]);
+  expect(StyleSheet.flatten(screen.getByTestId("screen-header-copy").props.style))
+    .toEqual(expect.objectContaining({ minWidth: 0, maxWidth: "100%" }));
+  expect(StyleSheet.flatten(screen.getByTestId("screen-header-actions").props.style))
+    .toEqual(expect.objectContaining({ flexWrap: "wrap", maxWidth: "100%" }));
 });

@@ -1,4 +1,5 @@
-import { resolveLayoutMode, type LayoutMode } from "@/src/theme/layout";
+import { resolveBetaVisualLayout } from "@/src/components/beta-visual-layout";
+import { Dimensions } from "react-native";
 
 const compactFormLayout = {
   contentDirection: "column",
@@ -34,9 +35,29 @@ type ResponsiveFormStyle<Compact, Desktop> = {
 export function resolveResponsiveFormStyle<Compact, Desktop>(
   style: ResponsiveFormStyle<Compact, Desktop>,
   width: number,
+  height = Dimensions.get("window").height,
 ): Compact | Desktop {
-  const mode: LayoutMode = resolveLayoutMode(width);
-  return style[mode === "desktop" ? "xl" : "xs"];
+  const layout = resolveBetaVisualLayout({ width, height });
+  return style[layout.useDocumentFlowActions ? "xs" : "xl"];
+}
+
+export function resolveFormLayout({
+  width,
+  height,
+}: Readonly<{
+  width: number;
+  height: number;
+}>) {
+  const layout = resolveBetaVisualLayout({ width, height });
+  const presentation = layout.useDocumentFlowActions
+    ? compactFormLayout
+    : desktopFormLayout;
+
+  return {
+    ...presentation,
+    lowHeight: layout.lowHeight,
+    useDocumentFlowActions: layout.useDocumentFlowActions,
+  } as const;
 }
 
 /**

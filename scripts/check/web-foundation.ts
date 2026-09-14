@@ -8,6 +8,7 @@ type ExportFile = {
 
 const REQUIRED_ROUTES = [
   { label: "Login", artifacts: ["login.html", "login/index.html", "(auth)/login.html"] },
+  { label: "Welcome", artifacts: ["welcome.html", "welcome/index.html"] },
   { label: "Home", artifacts: ["index.html"] },
   { label: "Profile", artifacts: ["profile.html", "profile/index.html", "(app)/profile.html"] },
   { label: "Player", artifacts: ["player.html", "player/index.html"] },

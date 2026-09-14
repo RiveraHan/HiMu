@@ -76,6 +76,8 @@ export type CoverDependencies = {
     genre: string;
     moods: string[];
     instrumental: boolean;
+    seed: string;
+    visualPlan: null;
   }) => Promise<string>;
   finalizeCover: (input: {
     reservationId: string;
@@ -189,6 +191,8 @@ export async function handleRegenerateCoverRequest(
       genre: track.genre ?? "",
       moods: track.moodTags ?? [],
       instrumental: cfg?.isInstrumental ?? true,
+      seed: `${trackId}:${reservation.reservationId}:cover-v2`,
+      visualPlan: null,
     });
     const oldUrl = await deps.finalizeCover({
       reservationId: reservation.reservationId,

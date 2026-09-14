@@ -3,6 +3,7 @@ export const queryKeys = {
   djs: {
     all: ["djs"] as const,
     list: (userId: string | null) => ["djs", "list", userId] as const,
+    owned: (userId: string | null) => ["djs", "owned", userId] as const,
     details: (userId: string | null, id: string) =>
       ["djs", "detail", userId, id] as const,
   },
@@ -28,6 +29,16 @@ export const queryKeys = {
       ["tracks", "ownership", userId, id] as const,
     privateDetails: (userId: string | null, id: string) =>
       ["tracks", "private-details", userId, id] as const,
+  },
+  publicTracks: {
+    detail: (id: string) => ["public-track", id] as const,
+  },
+  trackMoments: {
+    all: (userId: string | null) => ["track-moments", userId] as const,
+    owner: (userId: string | null, id: string) =>
+      ["track-moments", userId, "owner", id] as const,
+    feedback: (userId: string | null, id: string) =>
+      ["track-moments", userId, "feedback", id] as const,
   },
   generationJobs: {
     detail: (userId: string | null, jobId: string | null) =>
@@ -68,6 +79,9 @@ export const queryKeys = {
   },
   musicPreferences: {
     me: (userId: string | null) => ["music-preferences", userId] as const,
+  },
+  experienceState: {
+    me: (userId: string | null) => ["experience-state", "me", userId] as const,
   },
   onboarding: {
     current: (userId: string, version: number) =>

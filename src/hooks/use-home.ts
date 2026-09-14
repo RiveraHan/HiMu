@@ -2,6 +2,7 @@ import { queryKeys } from "@/src/api/queries";
 import { supabase } from "@/src/api/supabase";
 import { activityMutationKeys } from "@/src/activity/mutation-keys";
 import { useCurrentUser } from "@/src/hooks/use-auth";
+import { isBetaSmokeTrack } from "@/src/beta-smoke";
 import { usePlayerStore, type PlayerTrack } from "@/src/stores/player-store";
 import { FOCUS_MOODS } from "@/src/types/music-preferences";
 import {
@@ -29,7 +30,10 @@ export type PlayableTrack = {
   is_public?: boolean;
 };
 
-export type ContextualTrack = PlayableTrack & { mood_tags: string[] | null };
+export type ContextualTrack = PlayableTrack & {
+  mood_tags: string[] | null;
+  energy_level: number | null;
+};
 
 export type RecentTrack = PlayableTrack & {
   mood_tags: string[] | null;
@@ -102,7 +106,7 @@ export function useAIMixTracks() {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
+          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, mood_tags, owner_id, is_public",
         )
         .eq("is_ai_generated", true)
         .not("audio_url", "is", null)
@@ -179,7 +183,7 @@ export function useTimeOfDayShelf() {
       const { data, error } = await supabase
         .from("tracks")
         .select(
-          "id, title, artist, audio_url, album_art_url, duration, genre, mood_tags, owner_id, is_public",
+          "id, title, artist, audio_url, album_art_url, duration, genre, energy_level, mood_tags, owner_id, is_public",
         )
         .overlaps("mood_tags", moods)
         .not("audio_url", "is", null)
@@ -276,9 +280,13 @@ export function useOnAirHero(): { data: OnAirHero | null; isLoading: boolean } {
 export function useTrackOwnership(trackId: string | undefined) {
   const user = useCurrentUser();
   const isExternal = trackId?.startsWith("audius:") ?? false;
+  const isSmokeFixture = isBetaSmokeTrack(user?.id, trackId);
   return useQuery({
     queryKey: queryKeys.tracks.ownership(user?.id ?? null, trackId ?? ""),
-    enabled: !!trackId && !!user && !isExternal,
+    // The executable smoke Player uses only a synthetic local track. It must
+    // never consult the production ownership boundary.
+    enabled: !!trackId && !!user && !isExternal && !isSmokeFixture,
+    initialData: isSmokeFixture ? false : undefined,
     queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase
         .from("tracks")

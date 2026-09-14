@@ -102,6 +102,34 @@ async function main() {
       sourceTrackId: null,
     },
   );
+  const persistedReservationBriefV2 = {
+    version: 2,
+    title: "Persisted V2 brief",
+    productionPlan: { bpm: 118 },
+  };
+  assert.deepEqual(
+    mapManualJobReservation(
+      [{
+        outcome: "created",
+        job_id: "job-v2",
+        daily_limit: 10,
+        queued_at: "2026-07-29T12:00:00.000Z",
+        is_public: false,
+        generation_brief: persistedReservationBriefV2,
+        source_track_id: null,
+      }],
+      null,
+    ),
+    {
+      outcome: "created",
+      jobId: "job-v2",
+      dailyLimit: 10,
+      queuedAt: "2026-07-29T12:00:00.000Z",
+      isPublic: false,
+      brief: persistedReservationBriefV2,
+      sourceTrackId: null,
+    },
+  );
   assert.deepEqual(
     mapManualJobReservation(
       [{
@@ -269,6 +297,40 @@ async function main() {
       energy: 7,
       vibe: "warm",
       identityConcept: "A sunrise selector shaping hopeful nocturnal pop.",
+    },
+  };
+  const validBriefV2 = {
+    ...validBrief,
+    version: 2 as const,
+    productionPlan: {
+      bpm: 118,
+      key: "F# minor",
+      meter: "4/4" as const,
+      sections: [
+        { name: "intro" as const, startSeconds: 0, endSeconds: 16, direction: "Reveal one glass motif over filtered percussion." },
+        { name: "verse" as const, startSeconds: 16, endSeconds: 54, direction: "Keep the vocal close above restrained bass." },
+        { name: "chorus" as const, startSeconds: 54, endSeconds: 94, direction: "Widen harmony and answer the hook with bright mallets." },
+        { name: "outro" as const, startSeconds: 94, endSeconds: 120, direction: "Dissolve the motif into rain-like delay." },
+      ],
+      leadInstruments: ["glass mallets", "breathy alto voice"],
+      rhythmInstruments: ["round sub bass", "dry rim clicks"],
+      textureInstruments: ["tape hiss", "rain-like delay"],
+      energyArc: "Rise from close-mic restraint to a luminous final chorus.",
+      productionCharacter: ["warm analog saturation", "precise transient detail"],
+      vocalDirection: "Natural contemporary English with intimate verses and a sustained chorus hook.",
+      visual: {
+        concept: "A fragile signal becomes a shared constellation in rain.",
+        subject: "Translucent antenna forms above a wet rooftop",
+        medium: "Layered paper sculpture photographed on film",
+        composition: "Asymmetric square frame rising from the lower third",
+        palette: ["smoked indigo", "warm amber", "frosted cyan"],
+        lighting: "Low amber side light with cyan reflections",
+        texture: "Visible paper fibers, fine rain grain, restrained halation",
+      },
+      novelty: {
+        coreMotifs: ["glass antenna response", "ascending three-note signal"],
+        avoidRecentMotifs: ["neon tunnel", "piano house hook"],
+      },
     },
   };
   const manualRequest = (
@@ -733,7 +795,12 @@ async function main() {
     );
   }
 
-  for (const malformedBrief of [undefined, null, "brief", { version: 2 }]) {
+  for (const [malformedBrief, expectedError] of [
+    [undefined, "brief_type"],
+    [null, "brief_type"],
+    ["brief", "brief_type"],
+    [{ version: 2 }, "brief_mode"],
+  ] as const) {
     const { calls, deps } = requestDeps();
     const response = await handleGenerateMixRequest(
       { djId: "dj-1", brief: malformedBrief, language: "en" },
@@ -743,9 +810,7 @@ async function main() {
     assert.deepEqual(response, {
       status: 400,
       body: {
-        error: malformedBrief && typeof malformedBrief === "object"
-          ? "version"
-          : "brief_type",
+        error: expectedError,
         code: "invalid_input",
       },
     });
@@ -1280,11 +1345,16 @@ async function main() {
       access: "public" | "private";
     }> = [];
     const coverInputs: string[] = [];
+    const coverContexts: unknown[] = [];
     const deletes: string[][] = [];
     const deleteAccesses: Array<"public" | "private"> = [];
     const modelEvents: ModelEvent[] = [];
     const errorEvents: unknown[][] = [];
-    const replicateInputs: Array<{ endpoint: string; body: any }> = [];
+    const replicateInputs: Array<{
+      endpoint: string;
+      body: any;
+      observation?: unknown;
+    }> = [];
     const insertedAudius: Array<Record<string, unknown>> = [];
     const deps = {
       updateJob: async (
@@ -1322,14 +1392,20 @@ async function main() {
         return { id: "audius-track" };
       },
       pickAudiusDrop: async () => null,
-      replicateRun: async (endpoint: string, body: any) => {
-        replicateInputs.push({ endpoint, body });
+      replicateRun: async (endpoint: string, body: any, observation?: unknown) => {
+        replicateInputs.push({ endpoint, body, observation });
         return endpoint === LYRIA_ENDPOINT
           ? "https://media.test/music"
           : "https://media.test/tts";
       },
-      replicateText: async () =>
-        "[CAPTION_START]\nTurn it up [scream], then [laugh].\n[CAPTION_END]",
+      replicateText: async (
+        endpoint: string,
+        body: any,
+        observation?: unknown,
+      ) => {
+        replicateInputs.push({ endpoint, body, observation });
+        return "[CAPTION_START]\nTurn it up [scream], then [laugh].\n[CAPTION_END]";
+      },
       fetchMedia: async (url: string) =>
         mediaResponse(200, url.endsWith("/music") ? [1, 2, 3] : [4, 5]),
       r2Put: async (
@@ -1345,8 +1421,14 @@ async function main() {
         deletes.push(keys);
         deleteAccesses.push(access);
       },
-      generateCover: async (objectKey: string) => {
+      generateCover: async (
+        objectKey: string,
+        _dj: unknown,
+        _instrumental: boolean,
+        context?: unknown,
+      ) => {
         coverInputs.push(objectKey);
+        coverContexts.push(context);
         return `https://r2.test/${objectKey}`;
       },
       streamUrl: (trackId: string) => `https://stream.test/${trackId}`,
@@ -1358,6 +1440,7 @@ async function main() {
       ...overrides,
     };
     return {
+      coverContexts,
       coverInputs,
       deleteAccesses,
       deletes,
@@ -1431,7 +1514,9 @@ async function main() {
         queuedAt: defaultQueuedAt,
         cfg: persistedCfg,
         lyrics: null,
-        seasoning: ["persisted seasoning"],
+        seasoning: [
+          "listener preference: driving dynamics, pronounced contrast, and a high-energy arc",
+        ],
         language: "en",
         drop: { localHour: 12 },
       },
@@ -1439,6 +1524,11 @@ async function main() {
     );
     assert.equal(state.insertedAudius[0]?.dj_id, "dj-persisted");
     assert.equal(state.updates[0]?.jobId, "job-persisted-dj-audius");
+    assert.equal(
+      state.replicateInputs.some(({ endpoint }) => endpoint === LYRIA_ENDPOINT),
+      false,
+      "Audius candidate selection must not use preference seasoning to generate or rank music",
+    );
   }
 
   {
@@ -1458,6 +1548,42 @@ async function main() {
   }
 
   {
+    let releaseMusic!: (url: string) => void;
+    const music = new Promise<string>((resolve) => {
+      releaseMusic = resolve;
+    });
+    let coverStarted = false;
+    const state = runDeps({
+      replicateRun: async (endpoint: string) =>
+        endpoint === LYRIA_ENDPOINT ? music : "https://media.test/tts",
+      generateCover: async () => {
+        coverStarted = true;
+        return "https://r2.test/covers/generated/parallel.jpg";
+      },
+    });
+    const pending = runGeneration(
+      {
+        jobId: "job-parallel-media",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: null,
+        seasoning: [],
+        language: "en",
+      },
+      state.deps,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(
+      coverStarted,
+      true,
+      "cover generation must overlap music generation so the promoted image model stays off the critical path",
+    );
+    releaseMusic("https://media.test/music");
+    await pending;
+  }
+
+  {
     const state = runDeps();
     await runGeneration(
       {
@@ -1465,16 +1591,65 @@ async function main() {
         queuedAt: defaultQueuedAt,
         cfg,
         lyrics: validBrief.lyrics,
-        brief: validBrief,
-        seasoning: ["late night atmosphere"],
+        brief: validBriefV2,
+        seasoning: [
+          "listener preference: balanced dynamics, controlled contrast, and a moderate energy arc",
+          "late night atmosphere",
+        ],
         language: "en",
       },
       state.deps,
     );
     assert.equal(state.finalizations[0]?.title, validBrief.title);
     const prompt = String(state.replicateInputs[0]?.body?.input?.prompt ?? "");
+    assert.ok(
+      prompt.includes(
+        "listener preference: balanced dynamics, controlled contrast, and a moderate energy arc",
+      ),
+      "manual generation must receive atmosphere seasoning through the shared music input",
+    );
     assert.ok(prompt.includes(validBrief.creativeDirection));
     assert.ok(prompt.includes(validBrief.lyrics));
+    assert.match(prompt, /Tempo: 118 BPM/);
+    assert.match(prompt, /Key: F# minor/);
+    assert.match(prompt, /glass mallets/);
+    assert.match(prompt, /ARRANGEMENT TIMELINE/);
+    assert.deepEqual(state.replicateInputs[0]?.observation, {
+      role: "music_full",
+      promptVersion: "music-production-v2.en",
+      briefVersion: 2,
+      language: "en",
+      outcome: "generated",
+      repaired: false,
+      fallbackUnits: { output: 1 },
+    });
+    assert.deepEqual(state.coverContexts[0], {
+      seed: "job-confirmed-brief:2026-07-22T12:00:00.000Z:cover-v2",
+      visualPlan: validBriefV2.productionPlan.visual,
+      language: "en",
+      briefVersion: 2,
+    });
+    const firstSeed = state.replicateInputs[0]?.body?.input?.seed;
+    assert.equal(typeof firstSeed, "number");
+
+    const otherState = runDeps();
+    await runGeneration(
+      {
+        jobId: "job-confirmed-brief-other",
+        queuedAt: defaultQueuedAt,
+        cfg,
+        lyrics: validBrief.lyrics,
+        brief: validBriefV2,
+        seasoning: ["late night atmosphere"],
+        language: "en",
+      },
+      otherState.deps,
+    );
+    assert.notEqual(
+      otherState.replicateInputs[0]?.body?.input?.seed,
+      firstSeed,
+      "different generation jobs must receive different stable music seeds",
+    );
     assert.equal(
       state.modelEvents.some(({ role }) => role === "caption"),
       false,
@@ -1945,11 +2120,19 @@ async function main() {
         queuedAt: defaultQueuedAt,
         cfg,
         lyrics: null,
-        seasoning: [],
+        seasoning: [
+          "listener preference: restrained dynamics, softer transients, and a gentle energy arc",
+        ],
         language: "es",
         drop: { localHour: 21 },
       },
       state.deps,
+    );
+    assert.ok(
+      String(state.replicateInputs[0]?.body?.input?.prompt ?? "").includes(
+        "listener preference: restrained dynamics, softer transients, and a gentle energy arc",
+      ),
+      "generated Daily Drop fallback must receive atmosphere seasoning through the shared music input",
     );
     const ready = state.finalizations.at(-1);
     assert.equal(ready?.caption, "Turn it up [scream], then [laugh].");
@@ -1963,8 +2146,31 @@ async function main() {
     const tts = state.replicateInputs.find(
       (input) => input.endpoint === INWORLD_TTS_ENDPOINT,
     );
+    const captionText = state.replicateInputs.find(
+      (input) =>
+        (input.observation as { role?: string } | undefined)?.role ===
+          "creative_shortform",
+    );
+    assert.deepEqual(captionText?.observation, {
+      role: "creative_shortform",
+      promptVersion: "caption-v2.es",
+      briefVersion: 0,
+      language: "es",
+      outcome: "generated",
+      repaired: false,
+      fallbackUnits: { input: 900, output: 60 },
+    });
     assert.ok(tts);
     assert.doesNotMatch(tts.body.input.text, /\[(?:scream|laugh)\]/i);
+    assert.deepEqual(tts.observation, {
+      role: "voice_caption",
+      promptVersion: "caption-tts-v2.es",
+      briefVersion: 0,
+      language: "es",
+      outcome: "generated",
+      repaired: false,
+      fallbackUnits: { input: 82 },
+    });
   }
 
   {

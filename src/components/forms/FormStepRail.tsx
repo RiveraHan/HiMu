@@ -6,7 +6,7 @@ import { StyleSheet } from "@/src/theme/react-native-unistyles";
 
 import {
   formLayoutContract,
-  resolveResponsiveFormStyle,
+  resolveFormLayout,
 } from "./form-layout";
 
 export type FormStep = {
@@ -22,7 +22,9 @@ type Props = {
 };
 
 export function FormStepRail({ steps, activeStep, children }: Props) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const layout = resolveFormLayout({ width, height });
+  const resolvedLayoutStyle = layout.lowHeight || Platform.OS === "web";
 
   return (
     <View
@@ -31,10 +33,12 @@ export function FormStepRail({ steps, activeStep, children }: Props) {
       accessibilityLabel="Form steps"
       style={[
         styles.rail,
-        Platform.OS === "web" ? {
-          display: resolveResponsiveFormStyle(formLayoutContract.railDisplay, width),
-          flex: resolveResponsiveFormStyle(formLayoutContract.railFlex, width),
-        } : undefined,
+        resolvedLayoutStyle
+          ? {
+              display: layout.railDisplay,
+              flex: layout.useDocumentFlowActions ? 0 : 1,
+            }
+          : undefined,
       ]}
     >
       {steps.map((step, index) => {

@@ -51,6 +51,8 @@ let mockOnline = true;
 let mockCanGoBack = true;
 let mockReducedMotion = false;
 let mockExcludedMoods = new Set<string>();
+let mockAtmosphere: "calm" | "balanced" | "intense" = "balanced";
+const mockPlayerLoad = jest.fn();
 let mockFocusQuery: MockFocusQuery = {
   data: [focusTrack],
   isPending: false,
@@ -103,10 +105,13 @@ jest.mock("@/src/hooks/use-focus-timer", () => ({
 jest.mock("@/src/hooks/use-home", () => ({ useFocusTracks: () => mockFocusQuery }));
 jest.mock("@/src/hooks/use-online-status", () => ({ useOnlineStatus: () => mockOnline }));
 jest.mock("@/src/hooks/use-taste-profile", () => ({
-  useTasteProfile: () => ({ excludedMoods: mockExcludedMoods }),
+  useTasteProfile: () => ({
+    excludedMoods: mockExcludedMoods,
+    atmosphere: mockAtmosphere,
+  }),
 }));
 jest.mock("@/src/audio/use-player", () => ({
-  usePlayer: () => ({ toggle: jest.fn(), next: jest.fn(), prev: jest.fn(), load: jest.fn() }),
+  usePlayer: () => ({ toggle: jest.fn(), next: jest.fn(), prev: jest.fn(), load: mockPlayerLoad }),
 }));
 jest.mock("@/src/stores/player-store", () => {
   const state = { currentTrack: null, isPlaying: false, setRepeatMode: jest.fn() };
@@ -142,6 +147,8 @@ beforeEach(() => {
   mockCanGoBack = true;
   mockReducedMotion = false;
   mockExcludedMoods = new Set<string>();
+  mockAtmosphere = "balanced";
+  mockPlayerLoad.mockReset();
   mockFocusQuery = {
     data: [focusTrack],
     isPending: false,
@@ -152,6 +159,13 @@ beforeEach(() => {
 });
 
 describe("FocusModeScreen data states", () => {
+  it("keeps the immersive stage rooted in a scrollable surface", async () => {
+    const screen = await render(<FocusModeScreen />);
+
+    expect(screen.getByTestId("focus-surface")).toBeTruthy();
+    expect(screen.getByTestId("focus-content-scroll")).toBeTruthy();
+  });
+
   it.each([
     [false, "paused", false, "You're offline"],
     [true, "idle", true, "Focus audio is unavailable"],
@@ -186,6 +200,65 @@ describe("FocusModeScreen data states", () => {
     expect(screen.getByRole("button", { name: "Discover music" })).toBeTruthy();
     expect(screen.queryByTestId("focus-orb")).toBeNull();
     expect(screen.getByRole("button", { name: "Start focus session" })).toBeDisabled();
+  });
+
+  it("uses exclusions without applying atmosphere weighting to the Focus queue", async () => {
+    mockAtmosphere = "intense";
+    mockFocusQuery = {
+      data: [
+        { ...focusTrack, id: "quiet", energy_level: 2, bpm: 70 },
+        { ...focusTrack, id: "intense", energy_level: 9, bpm: 70 },
+      ],
+      isPending: false,
+      isError: false,
+      fetchStatus: "idle",
+      refetch: mockFocusRefetch,
+    };
+    const screen = await render(<FocusModeScreen />);
+
+    await fireEvent.press(screen.getByRole("button", { name: "Start focus session" }));
+
+    expect(mockPlayerLoad).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "quiet" }),
+      [expect.objectContaining({ id: "quiet" }), expect.objectContaining({ id: "intense" })],
+      0,
+    );
+  });
+
+  it("keeps an energy and BPM tie stable when only atmosphere changes", async () => {
+    mockFocusQuery = {
+      data: [
+        { ...focusTrack, id: "first", energy_level: 5, bpm: 90 },
+        { ...focusTrack, id: "second", energy_level: 5, bpm: 90 },
+      ],
+      isPending: false,
+      isError: false,
+      fetchStatus: "idle",
+      refetch: mockFocusRefetch,
+    };
+    const random = jest.spyOn(Math, "random")
+      .mockReturnValueOnce(0.1)
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.1);
+    const screen = await render(<FocusModeScreen />);
+
+    try {
+      await fireEvent.press(screen.getByRole("button", { name: "Start focus session" }));
+      const initialQueue = mockPlayerLoad.mock.calls[0][1];
+
+      mockAtmosphere = "intense";
+      await screen.rerender(<FocusModeScreen />);
+      await fireEvent.press(screen.getByRole("button", { name: "Start focus session" }));
+
+      expect(initialQueue.map((track: { id: string }) => track.id)).toEqual(["first", "second"]);
+      expect(mockPlayerLoad.mock.calls[1][1].map((track: { id: string }) => track.id)).toEqual([
+        "first",
+        "second",
+      ]);
+    } finally {
+      random.mockRestore();
+    }
   });
 
   it.each([

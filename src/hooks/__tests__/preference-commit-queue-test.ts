@@ -42,9 +42,7 @@ function deferred<T>() {
 const baseline: MusicPreferences = {
   genres: [],
   excludedMoods: [],
-  vibeMapping: { organicElectronic: 0.5, melancholicEuphoric: 0.5 },
-  aiFrequency: "optimal",
-  discoveryDepth: false,
+  atmosphere: "balanced",
 };
 
 const ensureGenre = (genre: string, present: boolean): PreferencePatch =>
@@ -78,15 +76,16 @@ test("optimistically replays rapid edits but persists one cumulative head at a t
     persist,
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
   queue.commit(ensureGenre("Ambient", true));
-  queue.commit((current) => ({ ...current, discoveryDepth: true }));
+  queue.commit((current) => ({ ...current, atmosphere: "intense" }));
 
   expect(writes.at(-1)).toMatchObject({
     genres: ["Ambient"],
-    discoveryDepth: true,
+    atmosphere: "intense",
   });
   expect(persist).toHaveBeenCalledTimes(1);
   first.resolve();
@@ -95,7 +94,7 @@ test("optimistically replays rapid edits but persists one cumulative head at a t
   expect(persist).toHaveBeenCalledTimes(2);
   expect(persisted[1]).toMatchObject({
     genres: ["Ambient"],
-    discoveryDepth: true,
+    atmosphere: "intense",
   });
   second.resolve();
   await queue.whenIdle();
@@ -114,6 +113,7 @@ test("a failed head rolls back only itself and preserves a newer same-chip inten
       .mockImplementationOnce(() => second.promise),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure,
   });
 
@@ -140,6 +140,7 @@ test("dispose makes an old user's deferred completion invisible", async () => {
     persist: () => save.promise,
     cancel: jest.fn(),
     invalidate,
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -164,6 +165,7 @@ test("a same-user remount reuses the writer but refreshes callbacks for queued w
     writeOptimistic: jest.fn(),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   };
   const queue = getOrCreatePreferenceCommitQueue(client, "A", {
@@ -172,7 +174,7 @@ test("a same-user remount reuses the writer but refreshes callbacks for queued w
   });
 
   queue.commit(ensureGenre("Ambient", true));
-  queue.commit((current) => ({ ...current, discoveryDepth: true }));
+  queue.commit((current) => ({ ...current, atmosphere: "intense" }));
   const remountedQueue = getOrCreatePreferenceCommitQueue(client, "A", {
     ...options,
     persist: remountedPersist,
@@ -187,7 +189,7 @@ test("a same-user remount reuses the writer but refreshes callbacks for queued w
   expect(remountedPersist).toHaveBeenCalledWith(
     expect.objectContaining({
       genres: ["Ambient"],
-      discoveryDepth: true,
+      atmosphere: "intense",
     }),
   );
 
@@ -211,6 +213,7 @@ test("drains a commit queued while the idle invalidation is still pending", asyn
     persist,
     cancel,
     invalidate,
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -219,7 +222,7 @@ test("drains a commit queued while the idle invalidation is still pending", asyn
   await Promise.resolve();
   expect(invalidate).toHaveBeenCalledTimes(1);
 
-  queue.commit((current) => ({ ...current, discoveryDepth: true }));
+  queue.commit((current) => ({ ...current, atmosphere: "intense" }));
   expect(cancel).toHaveBeenCalledTimes(2);
   expect(persist).toHaveBeenCalledTimes(1);
 
@@ -230,7 +233,7 @@ test("drains a commit queued while the idle invalidation is still pending", asyn
   expect(persist).toHaveBeenLastCalledWith(
     expect.objectContaining({
       genres: ["Ambient"],
-      discoveryDepth: true,
+      atmosphere: "intense",
     }),
   );
   expect(invalidate).toHaveBeenCalledTimes(2);
@@ -256,20 +259,21 @@ test("first failure preserves and persists a newer unrelated preference", async 
       }),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
   queue.commit(ensureGenre("Ambient", true));
-  queue.commit((current) => ({ ...current, discoveryDepth: true }));
+  queue.commit((current) => ({ ...current, atmosphere: "intense" }));
   first.reject(new Error("first failed"));
   await Promise.resolve();
   await Promise.resolve();
 
-  expect(writes.at(-1)).toMatchObject({ genres: [], discoveryDepth: true });
-  expect(persisted[1]).toMatchObject({ genres: [], discoveryDepth: true });
+  expect(writes.at(-1)).toMatchObject({ genres: [], atmosphere: "intense" });
+  expect(persisted[1]).toMatchObject({ genres: [], atmosphere: "intense" });
   second.resolve();
   await queue.whenIdle();
-  expect(writes.at(-1)).toMatchObject({ genres: [], discoveryDepth: true });
+  expect(writes.at(-1)).toMatchObject({ genres: [], atmosphere: "intense" });
 });
 
 test("second failure rolls back only itself after the first preference commits", async () => {
@@ -286,11 +290,12 @@ test("second failure rolls back only itself after the first preference commits",
       .mockImplementationOnce(() => second.promise),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure,
   });
 
   queue.commit(ensureGenre("Ambient", true));
-  queue.commit((current) => ({ ...current, discoveryDepth: true }));
+  queue.commit((current) => ({ ...current, atmosphere: "intense" }));
   first.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -299,7 +304,7 @@ test("second failure rolls back only itself after the first preference commits",
 
   expect(writes.at(-1)).toMatchObject({
     genres: ["Ambient"],
-    discoveryDepth: false,
+    atmosphere: "balanced",
   });
   expect(onFailure).toHaveBeenCalledTimes(1);
 });
@@ -313,6 +318,7 @@ test("ignores a stale refetch baseline while a local commit is pending", async (
     persist: () => save.promise,
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -337,6 +343,7 @@ test("rolls back a failed second same-chip toggle to the first committed intent"
       .mockImplementationOnce(() => second.promise),
     cancel: jest.fn(),
     invalidate: jest.fn(),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 
@@ -394,6 +401,7 @@ test("a real deferred refetch cannot overwrite an optimistic serialized save", a
     writeOptimistic: (next) => client.setQueryData(key, next),
     persist: () => save.promise,
     invalidate: () => client.invalidateQueries({ queryKey: key }),
+    onStatus: jest.fn(),
     onFailure: jest.fn(),
   });
 

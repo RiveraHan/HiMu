@@ -1,222 +1,350 @@
-import {
-  Button,
-  canSubmitDjTraits,
-  DjTraitsForm,
-  ResponsiveFormShell,
-  type DjTraits,
-} from "@/src/components";
-import { VisibilityField } from "@/src/components/content/VisibilityField";
-import {
-  DjIdentityDraftStep,
-  type DjIdentityDraftValue,
-} from "@/src/components/dj/DjIdentityDraftStep";
-import { useCreateDJ } from "@/src/hooks/use-create-dj";
-import { useMiniPlayerPadding } from "@/src/hooks/use-tab-bar-padding";
-import { PrefSection } from "@/src/components/preferences/PrefSection";
-import { Text } from "@/src/components/Text";
-import {
-  DEFAULT_VISIBILITY,
-  visibilityToIsPublic,
-  type Visibility,
-} from "@/src/types/content-visibility";
-import { router } from "expo-router";
-import { Sparkles } from "lucide-react-native";
-import { useState } from "react";
-import { View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { StyleSheet, useUnistyles } from "@/src/theme/react-native-unistyles";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { BackHandler, Platform } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
+
+import { getEdgeErrorPayload, type EdgeErrorPayload } from "@/src/api/edge-errors";
+import { isCurrentMutationUser } from "@/src/api/auth-scope";
+import { Button } from "@/src/components/Button";
+import { StateNotice } from "@/src/components/StateNotice";
+import { CreateDjIdentityStep } from "@/src/components/dj/CreateDjIdentityStep";
+import { CreateDjReview } from "@/src/components/dj/CreateDjReview";
+import { CreateDjWizardLayout } from "@/src/components/dj/CreateDjWizardLayout";
+import { DjSoundFields } from "@/src/components/dj/DjSoundFields";
+import {
+  canEnterCreateDjStep,
+  createDjTraitsFingerprint,
+  createInitialCreateDjWizardState,
+  intensityToEnergy,
+  isCreateDjWizardValid,
+  reduceCreateDjWizard,
+  toCreateDjInput,
+  type CreateDjStep,
+  type CreateDjWizardState,
+} from "@/src/components/dj/create-dj-wizard-state";
+import {
+  pendingIntentStore,
+  trackProductEvent,
+  type FirstTrackReturnIntent,
+} from "@/src/experience";
+import { useCurrentUser } from "@/src/hooks/use-auth";
+import { useConfirm } from "@/src/hooks/use-confirm";
+import { useCreateDJ } from "@/src/hooks/use-create-dj";
+import { useDjIdentityController } from "@/src/hooks/use-dj-identity-controller";
+import { useLocale } from "@/src/i18n/use-locale";
+
+export type CreateDjErrorCategory = "quota" | "validation" | "provider" | "unknown";
+
+export function mapCreateDjErrorCategory(
+  payload: EdgeErrorPayload,
+): CreateDjErrorCategory {
+  switch (payload.code) {
+    case "dj_quota_reached":
+      return "quota";
+    case "invalid_input":
+      return "validation";
+    case "provider_error":
+    case "provider_unavailable":
+    case "generation_failed":
+      return "provider";
+    default:
+      return "unknown";
+  }
+}
+
+function errorMessageKey(category: CreateDjErrorCategory) {
+  switch (category) {
+    case "quota":
+      return "dj.create.quotaError" as const;
+    case "validation":
+      return "dj.create.invalidError" as const;
+    case "provider":
+      return "dj.create.providerError" as const;
+    case "unknown":
+      return "dj.create.genericError" as const;
+  }
+}
+
+function single(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parseReturnIntent(
+  value: string | string[] | undefined,
+): FirstTrackReturnIntent {
+  return value === "first_track" ? "first_track" : null;
+}
+
+function parseStep(value: string | string[] | undefined): CreateDjStep | null {
+  const candidate = single(value);
+  return candidate === "sound" || candidate === "identity" || candidate === "review"
+    ? candidate
+    : null;
+}
+
+function completedSteps(state: CreateDjWizardState): CreateDjStep[] {
+  const completed: CreateDjStep[] = [];
+  if (canEnterCreateDjStep(state, "identity")) completed.push("sound");
+  if (canEnterCreateDjStep(state, "review")) completed.push("identity");
+  return completed;
+}
 
 export default function CreateDJScreen() {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const paddingBottom = useMiniPlayerPadding();
-  const { theme } = useUnistyles();
-
-  const [traits, setTraits] = useState<DjTraits>({
-    name: "",
-    genres: [],
-    moods: [],
-    energy: 5,
-    mode: "instrumental",
-    vibe: "",
-  });
-  const [visibility, setVisibility] = useState<Visibility>(DEFAULT_VISIBILITY);
-  const [identity, setIdentity] = useState<DjIdentityDraftValue>({
-    name: "",
-    identityConcept: "",
-    provenance: "custom",
-    confirmed: false,
-  });
-
+  const { resolvedLanguage } = useLocale();
+  const userId = useCurrentUser()?.id ?? "";
   const { mutate: createDJ, isPending } = useCreateDJ();
+  const params = useLocalSearchParams<{
+    step?: string | string[];
+    returnIntent?: string | string[];
+  }>();
+  const confirm = useConfirm();
+  const initialReturnIntent = useRef<FirstTrackReturnIntent>(
+    parseReturnIntent(params.returnIntent),
+  ).current;
+  const [state, dispatch] = useReducer(
+    reduceCreateDjWizard,
+    initialReturnIntent,
+    createInitialCreateDjWizardState,
+  );
+  const stateRef = useRef(state);
+  const backInFlight = useRef(false);
+  const intentAdopted = useRef(false);
+  const submitInFlight = useRef(false);
+  const isPendingRef = useRef(isPending);
+  const [submitAccepted, setSubmitAccepted] = useState(false);
+  const [submitError, setSubmitError] = useState<CreateDjErrorCategory | null>(null);
+  const submissionPending = submitAccepted || isPending;
+  stateRef.current = state;
+  isPendingRef.current = isPending;
 
-  const patch = (p: Partial<DjTraits>) => setTraits((t) => ({ ...t, ...p }));
-  const displayName = identity.name.trim() || t("dj.create.defaultName");
-  const traitsReady = canSubmitDjTraits(traits, false);
-  const visibilityDescription = visibility === "public"
-    ? t("dj.visibility.publicDescription")
-    : t("dj.visibility.privateDescription");
-  const steps = [
-    {
-      id: "traits",
-      label: t("dj.traits.genres"),
-      description: t("dj.traits.vibeSubtitle"),
-    },
-    {
-      id: "identity",
-      label: t("dj.identity.title"),
-      description: t("dj.identity.subtitle"),
-    },
-    {
-      id: "review",
-      label: t("dj.visibility.title"),
-      description: visibilityDescription,
-    },
-  ] as const;
-  const activeStep = !traitsReady
-    ? "traits"
-    : !identity.confirmed
-      ? "identity"
-      : "review";
+  useEffect(() => {
+    if (intentAdopted.current) return;
+    intentAdopted.current = true;
+    if (initialReturnIntent !== "first_track") return;
+    void pendingIntentStore.consume("first_track").catch(() => undefined);
+  }, [initialReturnIntent]);
 
-  function onSubmit() {
-    if (!identity.confirmed) return;
-    createDJ(
-      {
-        name: identity.name.trim(),
-        identityConcept: identity.identityConcept.trim(),
-        genres: traits.genres,
-        moods: traits.moods,
-        energy: traits.energy,
-        isInstrumental: traits.mode === "instrumental",
-        vibe: traits.vibe.trim() || undefined,
-        isPublic: visibilityToIsPublic(visibility),
+  const identityController = useDjIdentityController({
+    active: state.step === "identity",
+    fingerprint: createDjTraitsFingerprint(state.sound),
+    traits: {
+      genres: state.sound.genres,
+      moods: state.sound.moods,
+      energy: intensityToEnergy(state.sound.intensity),
+      isInstrumental: state.sound.mode === "instrumental",
+      vibe: state.sound.vibe.trim() || null,
+    },
+    value: state.identity,
+    onChange: (value) => dispatch({ type: "identity_changed", value }),
+  });
+
+  const pushWebStep = useCallback((step: CreateDjStep) => {
+    if (Platform.OS !== "web") return;
+    router.push({
+      pathname: "/create-dj",
+      params: initialReturnIntent === "first_track"
+        ? { step, returnIntent: initialReturnIntent }
+        : { step },
+    });
+  }, [initialReturnIntent]);
+
+  const requestStep = useCallback((step: CreateDjStep) => {
+    dispatch({ type: "step_requested", step });
+    pushWebStep(step);
+  }, [pushWebStep]);
+
+  const requestEditableStep = useCallback((step: CreateDjStep) => {
+    if (isPendingRef.current || submitInFlight.current) return;
+    requestStep(step);
+  }, [requestStep]);
+
+  useEffect(() => {
+    if (isPendingRef.current || submitInFlight.current) return;
+    const requested = parseStep(params.step);
+    if (requested && canEnterCreateDjStep(stateRef.current, requested)) {
+      dispatch({ type: "step_requested", step: requested });
+      return;
+    }
+    if (Platform.OS === "web") router.setParams({ step: "sound" });
+    dispatch({ type: "step_requested", step: "sound" });
+  }, [params.step]);
+
+  const exitRoute = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(app)");
+  }, []);
+
+  const handleBack = useCallback(async () => {
+    if (isPendingRef.current || submitInFlight.current) {
+      exitRoute();
+      return;
+    }
+    const current = stateRef.current;
+    if (current.step === "review") {
+      requestStep("identity");
+      return;
+    }
+    if (current.step === "identity") {
+      requestStep("sound");
+      return;
+    }
+    if (!current.dirty) {
+      exitRoute();
+      return;
+    }
+    if (backInFlight.current) return;
+    backInFlight.current = true;
+    try {
+      const discard = await confirm({
+        title: t("dj.create.abandon.title"),
+        message: t("dj.create.abandon.message"),
+        confirmLabel: t("dj.create.abandon.discard"),
+        cancelLabel: t("dj.create.abandon.stay"),
+        destructive: true,
+      });
+      if (!discard) return;
+      dispatch({ type: "discard" });
+      dispatch({ type: "return_intent_consumed" });
+      exitRoute();
+    } finally {
+      backInFlight.current = false;
+    }
+  }, [confirm, exitRoute, requestStep, t]);
+
+  const submit = useCallback(() => {
+    const current = stateRef.current;
+    if (
+      current.step !== "review" ||
+      isPendingRef.current ||
+      submitInFlight.current ||
+      !isCreateDjWizardValid(current)
+    ) {
+      return;
+    }
+
+    submitInFlight.current = true;
+    setSubmitAccepted(true);
+    setSubmitError(null);
+    const input = toCreateDjInput(current);
+    const submittedUserId = userId;
+    const submittedReturnIntent = current.returnIntent;
+    const eventContext = {
+      flowVersion: 1,
+      platform: Platform.OS === "web" ? "web" : "android",
+      locale: resolvedLanguage,
+    } as const;
+
+    void trackProductEvent("dj_creation_started", eventContext);
+    createDJ(input, {
+      onSuccess: ({ djId }) => {
+        if (!isCurrentMutationUser(submittedUserId)) return;
+        void trackProductEvent("dj_created", eventContext);
+        router.replace(
+          submittedReturnIntent === "first_track"
+            ? { pathname: "/create-track", params: { djId } }
+            : `/dj/${djId}`,
+        );
       },
-      {
-        onSuccess: ({ djId }) => router.replace(`/dj/${djId}`),
+      onError: async (error) => {
+        if (!isCurrentMutationUser(submittedUserId)) return;
+        const payload = await getEdgeErrorPayload(error);
+        if (!isCurrentMutationUser(submittedUserId)) return;
+        const errorCategory = mapCreateDjErrorCategory(payload);
+        submitInFlight.current = false;
+        setSubmitAccepted(false);
+        setSubmitError(errorCategory);
+        void trackProductEvent("dj_creation_failed", {
+          ...eventContext,
+          errorCategory,
+        });
       },
-    );
-  }
+    });
+  }, [createDJ, resolvedLanguage, userId]);
 
-  return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <ResponsiveFormShell
-        title={t("dj.create.title")}
-        description={t("dj.create.subtitle")}
-        steps={steps}
-        activeStep={activeStep}
-        form={
-          <View style={styles.editor}>
-            <DjTraitsForm
-              values={traits}
-              onChange={patch}
-              disabled={isPending}
-              showName={false}
-            />
-            <DjIdentityDraftStep
-              traits={{
-                genres: traits.genres,
-                moods: traits.moods,
-                energy: traits.energy,
-                isInstrumental: traits.mode === "instrumental",
-                vibe: traits.vibe.trim() || null,
-              }}
-              value={identity}
-              onChange={setIdentity}
-              disabled={isPending}
-            />
-            <VisibilityField
-              value={visibility}
-              onChange={setVisibility}
-              disabled={isPending}
-            />
-          </View>
-        }
-        review={
-          <View testID="create-dj-review" style={styles.review}>
-            <PrefSection
-              title={t("dj.identity.title")}
-              subtitle={identity.confirmed
-                ? t("dj.identity.confirmed")
-                : t("dj.identity.draft")}
-            >
-              <Text variant="h2">{displayName}</Text>
-              {identity.identityConcept.trim() ? (
-                <Text color="onSurfaceVariant">
-                  {identity.identityConcept.trim()}
-                </Text>
-              ) : null}
-            </PrefSection>
-            <PrefSection
-              title={t("dj.traits.genres")}
-              subtitle={traits.genres.join(", ") || t("dj.traits.pickRange", { max: 3 })}
-            >
-              <SummaryRow label={t("dj.traits.moods")} value={traits.moods.join(", ")} />
-              <SummaryRow label={t("dj.traits.energy")} value={`${traits.energy}/10`} />
-              <SummaryRow
-                label={t("dj.traits.sound")}
-                value={t(`dj.traits.${traits.mode}`)}
-              />
-              {traits.vibe.trim() ? (
-                <SummaryRow label={t("dj.traits.vibe")} value={traits.vibe.trim()} />
-              ) : null}
-            </PrefSection>
-            <View testID="create-dj-visibility-summary">
-              <PrefSection
-                title={t("dj.visibility.title")}
-                subtitle={visibilityDescription}
-              >
-                <Text>{t(`dj.visibility.${visibility}`)}</Text>
-              </PrefSection>
-            </View>
-          </View>
-        }
-        footer={
-          <View style={[styles.footer, { paddingBottom }]}>
-            <Button
-              label={t("dj.create.submit")}
-              loadingLabel={t("dj.create.loading", { name: displayName })}
-              loading={isPending}
-              disabled={!traitsReady || !identity.confirmed}
-              onPress={onSubmit}
-              leftIcon={
-                !isPending && (
-                  <Sparkles size={20} color={theme.colors.onPrimaryContainer} />
-                )
-              }
-            />
-          </View>
-        }
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === "web") return;
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        void handleBack();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [handleBack]),
+  );
+
+  const editor = state.step === "sound" ? (
+    <DjSoundFields
+      {...state.sound}
+      onChange={(patch) => dispatch({ type: "sound_changed", patch })}
+    />
+  ) : state.step === "identity" ? (
+    <CreateDjIdentityStep
+      active
+      controller={identityController}
+      value={state.identity}
+      onContinue={() => requestStep("review")}
+    />
+  ) : (
+    <CreateDjReview
+      readOnly={submissionPending}
+      sound={state.sound}
+      identity={state.identity}
+      visibility={state.visibility}
+      onVisibilityChange={(visibility) => dispatch({ type: "visibility_changed", visibility })}
+      onEdit={requestEditableStep}
+    />
+  );
+
+  const action = state.step === "sound" ? (
+    <Button
+      testID="create-dj-sound-action"
+      label={t("dj.create.continue")}
+      disabled={!canEnterCreateDjStep(state, "identity")}
+      onPress={() => requestStep("identity")}
+    />
+  ) : state.step === "review" ? (
+    <>
+      {submitError ? (
+        <StateNotice
+          compact
+          kind="error"
+          message={t(errorMessageKey(submitError))}
+          testID="create-dj-validation"
+          title={t("dj.create.errorTitle")}
+        />
+      ) : null}
+      <Button
+        testID="create-dj-submit"
+        label={t("dj.create.submit")}
+        loadingLabel={t("dj.create.loading", { name: state.identity.name.trim() })}
+        loading={submissionPending}
+        disabled={submissionPending || !isCreateDjWizardValid(state)}
+        onPress={submit}
       />
-    </View>
-  );
-}
+    </>
+  ) : null;
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.summaryRow}>
-      <Text color="outline">{label}</Text>
-      <Text>{value || "—"}</Text>
-    </View>
+    <CreateDjWizardLayout
+      step={state.step}
+      completedSteps={completedSteps(state)}
+      title={t("dj.create.title")}
+      description={t("dj.create.subtitle")}
+      editor={editor}
+      summary={state.step === "review" ? null : (
+        <CreateDjReview
+          readOnly
+          sound={state.sound}
+          identity={state.identity}
+          visibility={state.visibility}
+          onVisibilityChange={() => undefined}
+          onEdit={requestStep}
+        />
+      )}
+      action={action}
+      onStepPress={requestEditableStep}
+      onBack={() => void handleBack()}
+    />
   );
 }
-
-const styles = StyleSheet.create((theme) => ({
-  root: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  editor: {
-    gap: theme.spacing.stackLg,
-  },
-  review: {
-    gap: theme.spacing.stackLg,
-  },
-  summaryRow: {
-    gap: theme.spacing.stackXs,
-  },
-  footer: {
-    width: "100%",
-  },
-}));

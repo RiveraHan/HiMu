@@ -6,6 +6,9 @@ import { ArtworkAtmosphereController } from "@/app/player";
 jest.mock("@/src/api/supabase", () => ({ supabase: {} }));
 jest.mock("@/src/audio/use-player", () => ({ usePlayer: () => ({}) }));
 jest.mock("@/src/components", () => ({}));
+jest.mock("@/src/experience", () => ({
+  PostTrackExperience: () => null,
+}));
 jest.mock("@/src/hooks/use-favorites", () => ({}));
 jest.mock("@/src/hooks/use-home", () => ({}));
 jest.mock("@/src/hooks/use-track-private-details", () => ({}));

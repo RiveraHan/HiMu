@@ -3,6 +3,7 @@ import { supabase } from "@/src/api/supabase";
 import { useQuery } from "@tanstack/react-query";
 
 import { useCurrentUser } from "./use-auth";
+import { isBetaSmokeTrack } from "@/src/beta-smoke";
 
 export type TrackPrivateDetails = {
   trackId: string;
@@ -15,9 +16,13 @@ export function useTrackPrivateDetails(
   isOwner: boolean,
 ) {
   const user = useCurrentUser();
+  const isSmokeFixture = isBetaSmokeTrack(user?.id, trackId);
   return useQuery({
     queryKey: queryKeys.tracks.privateDetails(user?.id ?? null, trackId ?? ""),
-    enabled: !!user?.id && !!trackId && isOwner,
+    // Ownership and lyrics for the smoke fixture are local-only. Never use
+    // its placeholder id to query a real private-details row.
+    enabled: !!user?.id && !!trackId && isOwner && !isSmokeFixture,
+    initialData: isSmokeFixture ? null : undefined,
     queryFn: async (): Promise<TrackPrivateDetails | null> => {
       const { data: privateDetails, error: privateError } = await supabase
         .from("track_private_details")

@@ -1,0 +1,59 @@
+appId: com.himu.app
+---
+- launchApp:
+    clearState: true
+- assertVisible: "From an emotion to a track"
+- tapOn: "Continue"
+- tapOn: "Continue"
+- tapOn: "Create my first track"
+- assertVisible: "Welcome to HiMu"
+- tapOn: "Continue beta smoke"
+- assertVisible: "Create your DJ"
+- setOrientation: LANDSCAPE
+- assertVisible: "Create your DJ"
+- setOrientation: PORTRAIT
+- tapOn: "Edit Genres"
+- tapOn: "Chill & Ambient"
+- tapOn: "Ambient"
+- tapOn: "Done"
+- tapOn: "Edit Moods"
+- tapOn: "Calm"
+- tapOn: "Focus"
+- tapOn: "Done"
+- tapOn:
+    id: "create-dj-sound-action"
+- assertVisible: "Choose your DJ's identity"
+- tapOn: "Write my own"
+- tapOn: "DJ name"
+- inputText: "Night Cartographer"
+- tapOn: "Identity concept"
+- inputText: "Maps patient rhythms into luminous shared journeys."
+- tapOn:
+    id: "create-dj-identity-action"
+- assertVisible: "Review your DJ"
+- tapOn: "Bring my DJ to life"
+- assertVisible: "Confirm your track"
+- tapOn: "Confirm and generate"
+- assertVisible: "Make the next track feel more like you"
+- assertVisible: "Play"
+- tapOn: "Choose my preferences"
+- assertVisible: "Music Preferences"
+- tapOn: "Balanced"
+- tapOn: "Choose genres"
+- tapOn: "Chill & Ambient"
+- tapOn: "Ambient"
+- tapOn: "Done"
+- tapOn: "Choose moods"
+- tapOn: "Focus"
+- tapOn: "Done"
+- assertVisible: "Saved"
+
+# Pending manual Android release gate: this executable flow still requires a
+# generated Android project, working ADB/emulators, and Maestro on the release
+# host before its native evidence can be recorded.
+# Run on compact-phone and tablet emulators in portrait and landscape. Repeat
+# the picker with its search keyboard open; verify safe-area clearance and
+# TalkBack labels; repeat the critical nudge/preferences path at font scales 1.5
+# and 2.0; relaunch after Saved and verify the completed nudge stays absent.
+# Host prerequisites: generated android/Gradle project, working ADB/emulators,
+# and Maestro. None is available on this host, so this is a manual release gate.

@@ -408,3 +408,12 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
 [functions.private-media-url]
 verify_jwt = true
+
+[functions.track-moment]
+verify_jwt = true
+
+[functions.public-track]
+verify_jwt = false
+
+[functions.product-events]
+verify_jwt = false
