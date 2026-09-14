@@ -15,7 +15,7 @@ export function useVibeCheck() {
     staleTime: 30_000,
     queryFn: async () => {
       const since = new Date();
-      since.setDate(since.getDate() - (WINDOW_DAYS - 1));
+      since.setUTCDate(since.getUTCDate() - (WINDOW_DAYS - 1));
 
       const { data, error } = await supabase
         .from("listening_stats")
